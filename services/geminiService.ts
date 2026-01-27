@@ -4,7 +4,7 @@ import { Vehicle } from "../types";
 
 export const getGeminiInsights = async (vehicle: Vehicle): Promise<string> => {
   // Always use process.env.API_KEY directly when initializing the GoogleGenAI client instance
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
   
   const prompt = `
     Como un experto asesor automotriz en Colombia, analiza el estado de los documentos de este vehículo:
