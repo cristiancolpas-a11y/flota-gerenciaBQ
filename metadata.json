@@ -1,0 +1,7 @@
+{
+  "name": "Flota Gerencia Barranquilla - Seguimiento Vehicular",
+  "description": "Una aplicación avanzada para el seguimiento de documentos críticos del vehículo como SOAT, Revisión Tecnomecánica y vencimiento de extintores por placa.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
