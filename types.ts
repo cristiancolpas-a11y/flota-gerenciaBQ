@@ -9,6 +9,19 @@ export interface VehicleDocument {
   daysPending?: number;
 }
 
+export interface Calibration {
+  id: string;
+  plate: string;
+  equipment: string;
+  cd?: string;
+  contractor?: string;
+  calibrationDate: string;
+  expiryDate: string;
+  certificateUrl?: string;
+  status: DocumentStatus;
+  daysPending?: number;
+}
+
 export interface Driver {
   id: string;
   name: string;

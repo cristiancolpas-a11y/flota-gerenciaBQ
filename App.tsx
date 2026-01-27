@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Vehicle, Driver, Report, MileageLog, FiveSReport } from './types';
+import { Vehicle, Driver, Report, MileageLog, FiveSReport, Calibration } from './types';
 import DocumentCard from './components/DocumentCard';
 import DriverCard from './components/DriverCard';
 import ReportCard from './components/ReportCard';
 import FiveSCard from './components/FiveSCard';
+import CalibrationCard from './components/CalibrationCard';
 import DocumentViewer from './components/DocumentViewer';
 import MileageEntryForm from './components/MileageEntryForm';
 import ReportForm from './components/ReportForm';
@@ -18,6 +19,7 @@ import {
   fetchReportsFromSheet, 
   fetchMileageLogsFromSheet,
   fetchFiveSReportsFromSheet,
+  fetchCalibrationsFromSheet,
   submitReportToSheet, 
   submitMileageToSheet,
   submitFiveSToSheet
@@ -49,14 +51,15 @@ import {
   Filter,
   MapPin,
   Briefcase,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Scale
 } from 'lucide-react';
 
-type ActiveView = 'vehiculos' | 'conductores' | 'novedades' | 'kilometrajes' | '5s_camiones';
+type ActiveView = 'vehiculos' | 'conductores' | 'novedades' | 'kilometrajes' | '5s_camiones' | 'calibraciones';
 type StatusFilter = 'all' | 'completed' | 'pending';
 
 const MONTHS = [
-  "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+  "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYOS", "JUNIO",
   "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
 ];
 
@@ -74,6 +77,7 @@ const App: React.FC = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [mileageLogs, setMileageLogs] = useState<MileageLog[]>([]);
   const [fiveSReports, setFiveSReports] = useState<FiveSReport[]>([]);
+  const [calibrations, setCalibrations] = useState<Calibration[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   
   const [isSyncing, setIsSyncing] = useState(false);
@@ -94,18 +98,20 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      const [vRes, dRes, rRes, mRes, fRes] = await Promise.all([
+      const [vRes, dRes, rRes, mRes, fRes, cRes] = await Promise.all([
         fetchVehiclesFromSheet(),
         fetchDriversFromSheet(),
         fetchReportsFromSheet(),
         fetchMileageLogsFromSheet(),
-        fetchFiveSReportsFromSheet()
+        fetchFiveSReportsFromSheet(),
+        fetchCalibrationsFromSheet()
       ]);
       setVehicles(vRes || []);
       setDrivers(dRes || []);
       setReports(rRes || []);
       setMileageLogs(mRes || []);
       setFiveSReports(fRes || []);
+      setCalibrations(cRes || []);
     } catch (error) {
       console.error('Error sincronizando datos');
     } finally {
@@ -171,6 +177,16 @@ const App: React.FC = () => {
     });
   }, [drivers, searchTerm, selectedCd, selectedContractor]);
 
+  const filteredCalibrations = useMemo(() => {
+    const nSearch = normalizePlate(searchTerm);
+    return calibrations.filter(c => {
+      const matchCd = selectedCd === 'all' || normalizeStr(c.cd || "") === normalizeStr(selectedCd);
+      const matchContractor = selectedContractor === 'all' || normalizeStr(c.contractor || "") === normalizeStr(selectedContractor);
+      const matchSearch = nSearch === '' || normalizePlate(c.plate).includes(nSearch) || c.equipment.includes(nSearch);
+      return matchCd && matchContractor && matchSearch;
+    });
+  }, [calibrations, searchTerm, selectedCd, selectedContractor]);
+
   const filteredReports = useMemo(() => {
     const nSearch = normalizePlate(searchTerm);
     return reports.filter(r => {
@@ -202,7 +218,6 @@ const App: React.FC = () => {
     return { total, completed, pending, percentage };
   }, [vehicles, mileageLogs, selectedWeek, selectedCd, selectedContractor]);
 
-  // Registros de kilometraje filtrados para la vista de historial y exportación
   const filteredMileageLogs = useMemo(() => {
     return (mileageLogs || []).filter(log => {
       const matchWeek = extractNumber(log.week) === selectedWeek;
@@ -220,6 +235,14 @@ const App: React.FC = () => {
     const percentage = total > 0 ? Math.round((closed / total) * 100) : 0;
     return { total, closed, open, percentage };
   }, [filteredReports]);
+
+  const calibrationStats = useMemo(() => {
+    const total = filteredCalibrations.length;
+    const active = filteredCalibrations.filter(c => c.status === 'active').length;
+    const warning = filteredCalibrations.filter(c => c.status === 'warning').length;
+    const expired = filteredCalibrations.filter(c => c.status === 'expired').length;
+    return { total, active, warning, expired };
+  }, [filteredCalibrations]);
 
   const fiveSStats = useMemo(() => {
     const contextVehicles = vehicles.filter(v => {
@@ -293,10 +316,11 @@ const App: React.FC = () => {
               <p className="text-[9px] text-indigo-400 font-black uppercase tracking-[0.2em] mt-2">GERENCIA CONTROL</p>
             </div>
           </div>
-          <nav className="space-y-3">
+          <nav className="space-y-3 overflow-y-auto pr-2 custom-scrollbar">
             {[
               { id: 'vehiculos', icon: <Car size={22} />, label: 'Vehículos' },
               { id: 'conductores', icon: <Users size={22} />, label: 'Conductores' },
+              { id: 'calibraciones', icon: <Scale size={22} />, label: 'NEUMATICOS(CALIBRACIONES)' },
               { id: 'kilometrajes', icon: <Gauge size={22} />, label: 'Kilometrajes' },
               { id: 'novedades', icon: <ClipboardList size={22} />, label: 'Novedades' },
               { id: '5s_camiones', icon: <ShieldCheck size={22} />, label: '5S Camiones' }
@@ -436,6 +460,57 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {activeView === 'calibraciones' && (
+            <div className="space-y-12 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
+              {/* Dashboard de Calibraciones */}
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <div className="bg-[#0f172a] rounded-[2.5rem] p-8 text-white flex flex-col justify-center items-center text-center shadow-xl border-4 border-white/5">
+                   <Scale size={32} className="text-indigo-400 mb-3" />
+                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Total Equipos</span>
+                   <p className="text-4xl font-black">{calibrationStats.total}</p>
+                </div>
+                <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl flex flex-col justify-center items-center text-center">
+                   <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-3"><CheckCircle2 size={24}/></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Vigentes</span>
+                   <p className="text-3xl font-black text-emerald-600">{calibrationStats.active}</p>
+                </div>
+                <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl flex flex-col justify-center items-center text-center">
+                   <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-3"><Clock size={24}/></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Por Vencer</span>
+                   <p className="text-3xl font-black text-amber-600">{calibrationStats.warning}</p>
+                </div>
+                <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl flex flex-col justify-center items-center text-center">
+                   <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mb-3"><AlertCircle size={24}/></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Vencidos</span>
+                   <p className="text-3xl font-black text-rose-600">{calibrationStats.expired}</p>
+                </div>
+              </div>
+
+              {/* Título de Sección */}
+              <div className="flex items-center gap-4 mb-8">
+                <div className="p-4 bg-indigo-50 text-indigo-600 rounded-3xl">
+                   <Scale size={28} />
+                </div>
+                <div>
+                   <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-800">NEUMATICOS(CALIBRACIONES)</h2>
+                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Seguimiento de Certificados y Calibraciones</p>
+                </div>
+              </div>
+
+              {/* Lista de Calibraciones */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 pb-12">
+                {filteredCalibrations.length > 0 ? filteredCalibrations.map((cal) => (
+                  <CalibrationCard key={cal.id} calibration={cal} onViewDoc={(url, title) => setViewerDoc({url, title})} />
+                )) : (
+                  <div className="col-span-full text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
+                    <Scale size={64} className="mx-auto text-slate-200 mb-4" />
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-[0.4em]">No se encontraron equipos para calibración</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {activeView === 'novedades' && (
             <div className="space-y-12 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
@@ -552,7 +627,6 @@ const App: React.FC = () => {
                   onWeekChange={setSelectedWeek} 
                />
 
-               {/* SECCIÓN DE HISTORIAL Y EXPORTACIÓN */}
                <div className="bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-xl space-y-8 mt-12">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-50 pb-8">
                     <div className="flex items-center gap-4">

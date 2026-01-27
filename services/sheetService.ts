@@ -1,6 +1,6 @@
 
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, FiveSReport } from '../types';
+import { Vehicle, Driver, Report, MileageLog, FiveSReport, Calibration } from '../types';
 import { calculateStatus, normalizePlate, getWeekNumber, normalizeStr } from '../utils';
 
 // URL del Web App de Google Apps Script para recibir POSTs
@@ -20,7 +20,8 @@ const BASE_URL_OPERATION = `https://docs.google.com/spreadsheets/d/${OPERATION_D
 const VEHICLES_TAB_GID = '1506825194'; 
 const DRIVERS_TAB_GID = '1834987510'; 
 const MILEAGE_LOGS_GID = '1929496440'; 
-const FIVES_TAB_GID = '393618683'; // GID exacto de la pestaña 5S CAMIONES según captura
+const FIVES_TAB_GID = '393618683'; 
+const CALIBRATIONS_TAB_GID = '0'; // Se asume GID 0 o el correspondiente en la hoja Maestra
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
@@ -132,6 +133,47 @@ export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
             };
           });
           resolve(drivers);
+        }
+      });
+    });
+  } catch (e) { return []; }
+};
+
+export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
+  try {
+    // Si la pestaña de calibraciones está en el maestro, usamos BASE_URL_MASTER
+    const url = `${BASE_URL_MASTER}&gid=${CALIBRATIONS_TAB_GID}${getCacheBuster()}`;
+    const response = await fetch(url);
+    const csvText = await response.text();
+    if (csvText.includes('<!DOCTYPE html>')) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const rows = results.data as any[];
+          // Estructura esperada: CD, Contratista, Placa, Equipo, Fecha Calib, Fecha Venc, Días, Link
+          const calibrations = rows.filter(row => {
+            const plateVal = cleanSheetValue(row[2]).toUpperCase();
+            return plateVal && !plateVal.includes("PLACA") && plateVal.length >= 3;
+          }).map((row): Calibration => {
+            const expDate = parseFlexibleDate(row[5]);
+            const calDate = parseFlexibleDate(row[4]);
+            return {
+              id: `cal-${cleanSheetValue(row[2])}-${cleanSheetValue(row[3])}`,
+              cd: cleanSheetValue(row[0]),
+              contractor: cleanSheetValue(row[1]),
+              plate: normalizePlate(cleanSheetValue(row[2])),
+              equipment: cleanSheetValue(row[3]).toUpperCase(),
+              calibrationDate: calDate,
+              expiryDate: expDate,
+              certificateUrl: cleanSheetValue(row[7]),
+              status: calculateStatus(expDate),
+              daysPending: parseInt(cleanSheetValue(row[6])) || undefined
+            };
+          });
+          resolve(calibrations);
         }
       });
     });
