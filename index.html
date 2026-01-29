@@ -11,6 +11,8 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f8fafc;
+            margin: 0;
+            padding: 0;
         }
         @keyframes spin {
             from { transform: rotate(0deg); }
@@ -19,7 +21,25 @@
         .animate-spin-slow {
             animation: spin 3s linear infinite;
         }
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.05);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(79, 70, 229, 0.2);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(79, 70, 229, 0.4);
+        }
     </style>
+    <script>
+        // Prevenir errores de 'process is not defined' en el navegador
+        window.process = { env: { API_KEY: "" } };
+    </script>
 <script type="importmap">
 {
   "imports": {
@@ -36,5 +56,7 @@
 </head>
 <body>
     <div id="root"></div>
+    <!-- Punto de entrada de la aplicación -->
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>

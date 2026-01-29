@@ -53,32 +53,39 @@ import {
   Settings2,
   Rocket,
   Clock,
-  TrendingUp,
-  CheckCircle2,
-  AlertCircle,
   BarChart3
 } from 'lucide-react';
 
 type ActiveView = 'vehiculos' | 'conductores' | 'novedades' | 'kilometrajes' | '5s_camiones' | 'calibraciones';
 type StatusFilter = 'all' | 'completed' | 'pending';
 
-const MONTHS = [
-  "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
-  "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
-];
-
 const App: React.FC = () => {
-  const [activeView, setActiveView] = useState<ActiveView>(() => (localStorage.getItem('activeView') as ActiveView) || 'vehiculos');
+  const [activeView, setActiveView] = useState<ActiveView>(() => {
+    try {
+      return (localStorage.getItem('activeView') as ActiveView) || 'vehiculos';
+    } catch (e) {
+      return 'vehiculos';
+    }
+  });
+  
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showPublishGuide, setShowPublishGuide] = useState(false);
   
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
-    const saved = localStorage.getItem('expandedSections');
-    return saved ? JSON.parse(saved) : { 'DOCUMENTOS': true, 'NEUMATICOS': true, 'GESTION': true };
+    try {
+      const saved = localStorage.getItem('expandedSections');
+      return saved ? JSON.parse(saved) : { 'DOCUMENTOS': true, 'NEUMATICOS': true, 'GESTION': true };
+    } catch (e) {
+      return { 'DOCUMENTOS': true, 'NEUMATICOS': true, 'GESTION': true };
+    }
   });
   
-  const [selectedCd, setSelectedCd] = useState<string>(() => localStorage.getItem('selectedCd') || 'all');
-  const [selectedContractor, setSelectedContractor] = useState<string>(() => localStorage.getItem('selectedContractor') || 'all');
+  const [selectedCd, setSelectedCd] = useState<string>(() => {
+    try { return localStorage.getItem('selectedCd') || 'all'; } catch(e) { return 'all'; }
+  });
+  const [selectedContractor, setSelectedContractor] = useState<string>(() => {
+    try { return localStorage.getItem('selectedContractor') || 'all'; } catch(e) { return 'all'; }
+  });
   
   const [mileageStatusFilter, setMileageStatusFilter] = useState<StatusFilter>('all');
   const [selectedWeek, setSelectedWeek] = useState<number>(getWeekNumber(new Date()));
@@ -102,10 +109,14 @@ const App: React.FC = () => {
 
   const vehicleRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
-  useEffect(() => { localStorage.setItem('activeView', activeView); }, [activeView]);
-  useEffect(() => { localStorage.setItem('selectedCd', selectedCd); }, [selectedCd]);
-  useEffect(() => { localStorage.setItem('selectedContractor', selectedContractor); }, [selectedContractor]);
-  useEffect(() => { localStorage.setItem('expandedSections', JSON.stringify(expandedSections)); }, [expandedSections]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('activeView', activeView);
+      localStorage.setItem('selectedCd', selectedCd);
+      localStorage.setItem('selectedContractor', selectedContractor);
+      localStorage.setItem('expandedSections', JSON.stringify(expandedSections));
+    } catch (e) { /* ignore localStorage errors */ }
+  }, [activeView, selectedCd, selectedContractor, expandedSections]);
 
   useEffect(() => {
     handleSyncData();
@@ -117,6 +128,7 @@ const App: React.FC = () => {
   };
 
   const handleSyncData = async () => {
+    if (isSyncing) return;
     setIsSyncing(true);
     try {
       const [vRes, dRes, rRes, mRes, fRes, cRes] = await Promise.all([
@@ -180,7 +192,7 @@ const App: React.FC = () => {
 
   const filteredVehicles = useMemo(() => {
     const nSearch = normalizePlate(searchTerm);
-    return vehicles.filter(v => {
+    return (vehicles || []).filter(v => {
       const matchCd = selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd);
       const matchContractor = selectedContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(selectedContractor);
       const matchSearch = nSearch === '' || normalizePlate(v.plate).includes(nSearch);
@@ -190,7 +202,7 @@ const App: React.FC = () => {
 
   const filteredDrivers = useMemo(() => {
     const s = searchTerm.toUpperCase().trim();
-    return drivers.filter(d => {
+    return (drivers || []).filter(d => {
       const matchSearch = s === '' || d.name.toUpperCase().includes(s) || d.identification.includes(s);
       const matchCd = selectedCd === 'all' || normalizeStr(d.cd || "") === normalizeStr(selectedCd);
       const matchContractor = selectedContractor === 'all' || normalizeStr(d.contractor || "") === normalizeStr(selectedContractor);
@@ -200,7 +212,7 @@ const App: React.FC = () => {
 
   const filteredCalibrations = useMemo(() => {
     const nSearch = normalizePlate(searchTerm);
-    return calibrations.filter(c => {
+    return (calibrations || []).filter(c => {
       const matchCd = selectedCd === 'all' || normalizeStr(c.cd || "") === normalizeStr(selectedCd);
       const matchContractor = selectedContractor === 'all' || normalizeStr(c.contractor || "") === normalizeStr(selectedContractor);
       const matchSearch = nSearch === '' || normalizePlate(c.plate).includes(nSearch) || c.equipment.includes(nSearch);
@@ -208,10 +220,9 @@ const App: React.FC = () => {
     });
   }, [calibrations, searchTerm, selectedCd, selectedContractor]);
 
-  // KPIs DE NOVEDADES
   const filteredReports = useMemo(() => {
     const nSearch = normalizePlate(searchTerm);
-    return reports.filter(r => {
+    return (reports || []).filter(r => {
       const reportDate = new Date(r.date + 'T12:00:00');
       const matchMonth = reportDate.getMonth() === selectedReportMonth;
       const matchSearch = nSearch === '' || normalizePlate(r.plate).includes(nSearch);
@@ -227,7 +238,6 @@ const App: React.FC = () => {
     return { total, closed, open: total - closed, percentage };
   }, [filteredReports]);
 
-  // KPIs DE KILOMETRAJES
   const filteredMileageLogs = useMemo(() => {
     return (mileageLogs || []).filter(log => {
       const matchWeek = extractNumber(log.week) === selectedWeek;
@@ -239,21 +249,16 @@ const App: React.FC = () => {
   }, [mileageLogs, selectedWeek, selectedCd, selectedContractor, searchTerm]);
 
   const mileageCompliance = useMemo(() => {
-    // Total vehículos que deberían reportar en esta sección
     const totalVehiclesInSection = vehicles.filter(v => 
       selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd)
     ).length;
-    
-    // Cuántos de esos vehículos tienen al menos un log en la semana seleccionada
     const vehiclesWithLogs = new Set(filteredMileageLogs.map(log => normalizePlate(log.plate))).size;
-    
     const percentage = totalVehiclesInSection > 0 ? Math.round((vehiclesWithLogs / totalVehiclesInSection) * 100) : 0;
     return { total: totalVehiclesInSection, done: vehiclesWithLogs, percentage };
   }, [vehicles, filteredMileageLogs, selectedCd]);
 
-  // KPIs DE 5S CAMIONES
   const filteredFiveS = useMemo(() => {
-    return fiveSReports.filter(f => {
+    return (fiveSReports || []).filter(f => {
       const matchCd = selectedCd === 'all' || normalizeStr(f.cd || "") === normalizeStr(selectedCd);
       const matchSearch = searchTerm === '' || normalizePlate(f.plate).includes(normalizePlate(searchTerm));
       return matchCd && matchSearch;
@@ -264,10 +269,8 @@ const App: React.FC = () => {
     const totalVehiclesInSection = vehicles.filter(v => 
       selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd)
     ).length;
-    
     const uniqueAuditedPlates = new Set(filteredFiveS.map(f => normalizePlate(f.plate))).size;
     const percentage = totalVehiclesInSection > 0 ? Math.round((uniqueAuditedPlates / totalVehiclesInSection) * 100) : 0;
-    
     return { total: totalVehiclesInSection, audited: uniqueAuditedPlates, percentage };
   }, [vehicles, filteredFiveS, selectedCd]);
 
@@ -399,6 +402,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-grow p-10 overflow-y-auto bg-[#f8fafc]">
+          {/* FILTROS GLOBALES */}
           <div className="max-w-[1600px] mx-auto mb-10 bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-wrap items-center gap-8">
              <div className="flex items-center gap-3 border-r border-slate-100 pr-8">
                <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl"><Filter size={20}/></div>
@@ -529,7 +533,7 @@ const App: React.FC = () => {
                   )) : (
                     <div className="col-span-full text-center py-40 opacity-40">
                       <ClipboardList size={64} className="mx-auto mb-6" />
-                      <p className="text-sm font-black uppercase tracking-[0.4em]">Sin reportes en este mes/sección</p>
+                      <p className="text-sm font-black uppercase tracking-[0.4em]">Sin reportes registrados</p>
                     </div>
                   )}
                </div>
@@ -593,7 +597,7 @@ const App: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredMileageLogs.map((log, idx) => (
+                          {(filteredMileageLogs || []).map((log, idx) => (
                             <tr key={idx} className="bg-slate-50/50 hover:bg-white hover:shadow-xl transition-all group rounded-[2rem]">
                               <td className="py-6 px-8 rounded-l-[2rem]">
                                 <span className="text-[11px] font-bold text-slate-500">{formatDate(log.date)}</span>
