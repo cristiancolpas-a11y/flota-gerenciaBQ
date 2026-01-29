@@ -96,6 +96,7 @@ export interface FiveSReport {
   closureDate?: string;
   closureEvidenceUrl?: string;
   closureObservations?: string;
+  cd?: string;
 }
 
 export interface MaintenanceInsight {
