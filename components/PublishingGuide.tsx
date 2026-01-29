@@ -28,7 +28,7 @@ const PublishingGuide: React.FC<PublishingGuideProps> = ({ onClose }) => {
             <div className="space-y-3">
                <h3 className="font-black text-slate-800 text-sm uppercase tracking-widest">1. Configurar Base de Datos (Sheets)</h3>
                <p className="text-xs text-slate-500 leading-relaxed font-bold">
-                 Crea un Google Sheet y ve a <span className="text-indigo-600">Extensiones > Apps Script</span>. Pega el código de <span className="font-mono">GOOGLE_APPS_SCRIPT.gs</span> proporcionado. Implementa como <b>Aplicación Web</b> con acceso para "Cualquier persona".
+                 Crea una hoja de Google y tienes <span className="text-indigo-600">Extensiones &gt; Apps Script</span>. Pegue el código de <span className="font-mono">GOOGLE_APPS_SCRIPT.gs</span> proporcionado. Implementa como <b>Aplicación Web</b> con acceso para "Cualquier persona".
                </p>
             </div>
           </div>

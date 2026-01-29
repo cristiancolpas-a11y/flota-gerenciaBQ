@@ -187,8 +187,8 @@ const App: React.FC = () => {
     } catch (error) { throw error; }
   };
 
-  const cds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
-  const contractors = useMemo(() => Array.from(new Set(vehicles.map(v => v.contractor || 'GENERAL'))).sort(), [vehicles]);
+  const cds = useMemo(() => Array.from(new Set((vehicles || []).map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
+  const contractors = useMemo(() => Array.from(new Set((vehicles || []).map(v => v.contractor || 'GENERAL'))).sort(), [vehicles]);
 
   const filteredVehicles = useMemo(() => {
     const nSearch = normalizePlate(searchTerm);
@@ -249,10 +249,10 @@ const App: React.FC = () => {
   }, [mileageLogs, selectedWeek, selectedCd, selectedContractor, searchTerm]);
 
   const mileageCompliance = useMemo(() => {
-    const totalVehiclesInSection = vehicles.filter(v => 
+    const totalVehiclesInSection = (vehicles || []).filter(v => 
       selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd)
     ).length;
-    const vehiclesWithLogs = new Set(filteredMileageLogs.map(log => normalizePlate(log.plate))).size;
+    const vehiclesWithLogs = new Set((filteredMileageLogs || []).map(log => normalizePlate(log.plate))).size;
     const percentage = totalVehiclesInSection > 0 ? Math.round((vehiclesWithLogs / totalVehiclesInSection) * 100) : 0;
     return { total: totalVehiclesInSection, done: vehiclesWithLogs, percentage };
   }, [vehicles, filteredMileageLogs, selectedCd]);
@@ -266,10 +266,10 @@ const App: React.FC = () => {
   }, [fiveSReports, selectedCd, searchTerm]);
 
   const fiveSCompliance = useMemo(() => {
-    const totalVehiclesInSection = vehicles.filter(v => 
+    const totalVehiclesInSection = (vehicles || []).filter(v => 
       selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd)
     ).length;
-    const uniqueAuditedPlates = new Set(filteredFiveS.map(f => normalizePlate(f.plate))).size;
+    const uniqueAuditedPlates = new Set((filteredFiveS || []).map(f => normalizePlate(f.plate))).size;
     const percentage = totalVehiclesInSection > 0 ? Math.round((uniqueAuditedPlates / totalVehiclesInSection) * 100) : 0;
     return { total: totalVehiclesInSection, audited: uniqueAuditedPlates, percentage };
   }, [vehicles, filteredFiveS, selectedCd]);
