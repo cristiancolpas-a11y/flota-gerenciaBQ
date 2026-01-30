@@ -18,26 +18,6 @@ export const normalizeStr = (str: string): string => {
     .trim();
 };
 
-/**
- * Compara si un valor de mes (texto o número) coincide con el mes seleccionado
- */
-export const monthMatches = (val: string, targetMonthIdx: number, monthList: string[]): boolean => {
-  const normVal = normalizeStr(val);
-  const targetName = normalizeStr(monthList[targetMonthIdx]);
-  const targetNum = (targetMonthIdx + 1).toString();
-  const targetNumPad = (targetMonthIdx + 1).toString().padStart(2, '0');
-
-  // Coincide con nombre (ENERO), incluye el nombre (ENERO 2024) o es el número (1 o 01)
-  return normVal === targetName || normVal.includes(targetName) || normVal === targetNum || normVal === targetNumPad;
-};
-
-export const extractNumber = (val: any): number => {
-  if (val === null || val === undefined || val === '') return 0;
-  if (typeof val === 'number') return Math.floor(val);
-  const cleaned = String(val).replace(/[^0-9]/g, '');
-  return cleaned ? parseInt(cleaned, 10) : 0;
-};
-
 export const calculateStatus = (expiryDate: string): DocumentStatus => {
   if (!expiryDate) return 'active';
   const now = new Date();
@@ -82,6 +62,94 @@ export const getDriveDirectLink = (url: string): string => {
 export const isImageLink = (url: string): boolean => {
   if (!url) return false;
   return url.startsWith('data:image') || url.includes('drive.google.com') || /\.(jpeg|jpg|gif|png|webp|bmp)$/i.test(url);
+};
+
+/**
+ * Procesa una imagen base64 añadiendo una marca de agua profesional con Fecha, Hora y Coordenadas GPS
+ */
+export const processImageWithWatermark = (
+  base64Str: string, 
+  plate: string, 
+  coords?: { lat: number, lng: number }
+): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxWidth = 1200; // Calidad profesional
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > maxWidth) {
+        height = (maxWidth / width) * height;
+        width = maxWidth;
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return resolve(base64Str);
+
+      // 1. Dibujar imagen base
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // 2. Configurar estilo de marca de agua
+      const padding = width * 0.03;
+      const boxWidth = width * 0.35;
+      const boxHeight = height * 0.15;
+      const x = width - boxWidth - padding;
+      const y = height - boxHeight - padding;
+
+      // Dibujar fondo semi-transparente para la marca de agua
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'; // Navy oscuro
+      ctx.beginPath();
+      ctx.roundRect(x, y, boxWidth, boxHeight, width * 0.015);
+      ctx.fill();
+      
+      // Borde de la marca de agua
+      ctx.strokeStyle = 'rgba(79, 70, 229, 0.5)'; // Indigo
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 3. Escribir Texto
+      const now = new Date();
+      const timestamp = now.toLocaleString('es-CO', { 
+        day: '2-digit', month: '2-digit', year: 'numeric', 
+        hour: '2-digit', minute: '2-digit', second: '2-digit' 
+      });
+
+      ctx.fillStyle = '#ffffff';
+      ctx.textBaseline = 'top';
+      
+      // Placa (Resaltada)
+      ctx.font = `black ${Math.round(width * 0.02)}px Inter, sans-serif`;
+      ctx.fillText(`PLACA: ${plate.toUpperCase()}`, x + 20, y + 20);
+
+      // Fecha y Hora
+      ctx.font = `bold ${Math.round(width * 0.014)}px Inter, sans-serif`;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fillText(timestamp, x + 20, y + 50);
+
+      // Ubicación GPS
+      if (coords) {
+        ctx.fillStyle = '#6366f1'; // Indigo claro
+        ctx.fillText(`GPS: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`, x + 20, y + 80);
+        
+        // Simulación de icono de ubicación
+        ctx.fillStyle = '#10b981'; // Emerald
+        ctx.beginPath();
+        ctx.arc(x + boxWidth - 30, y + 30, 5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#f43f5e'; // Rose
+        ctx.fillText('GPS: NO DISPONIBLE', x + 20, y + 80);
+      }
+
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => resolve(base64Str);
+  });
 };
 
 export const compressImage = (base64Str: string, maxWidth = 800): Promise<string> => {
@@ -160,4 +228,11 @@ export const createMosaic = async (base64Array: string[]): Promise<string> => {
 
 export const generateId = (): string => {
   return Math.random().toString(36).substring(2, 11);
+};
+
+export const extractNumber = (val: any): number => {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return Math.floor(val);
+  const cleaned = String(val).replace(/[^0-9]/g, '');
+  return cleaned ? parseInt(cleaned, 10) : 0;
 };

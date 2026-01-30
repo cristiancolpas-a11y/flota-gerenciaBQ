@@ -3,8 +3,8 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, FiveSReport, Calibration } from '../types';
 import { calculateStatus, normalizePlate, getWeekNumber, normalizeStr } from '../utils';
 
-// URL del Web App de Google Apps Script (Debe ser actualizada por el usuario tras seguir la guía)
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwaGa_f0iifWYPaxCBNgohqASD7lowTFEuFjzYCSXpam3QQoLerVudzdmm4c10g5qGV/exec'; 
+// URL del Web App de Google Apps Script actualizada con la nueva implementación
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxVZvjX3vIoXosr0_sppbWAMSAD4H4k-bbrg3i58U_he9AI-_YqziD0CQ5kzM43OmPM/exec'; 
 
 const MASTER_SPREADSHEET_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${MASTER_SPREADSHEET_ID}/export?format=csv`;
@@ -167,7 +167,6 @@ export const fetchReportsFromSheet = async (): Promise<Report[]> => {
             daysInShop: parseInt(cleanSheetValue(row[12])) || 0, 
             closureComments: cleanSheetValue(row[13]), 
             workshop: cleanSheetValue(row[14]),
-            // Fix: Map sheet section to cd property of Report
             cd: cleanSheetValue(row[15]) 
           }));
           resolve(reports);
@@ -201,7 +200,6 @@ export const fetchFiveSReportsFromSheet = async (): Promise<FiveSReport[]> => {
             evidenceUrl: cleanSheetValue(row[5]),
             status: (cleanSheetValue(row[6]).toUpperCase().includes('CERRADO') ? 'CERRADO' : 'ABIERTO') as 'ABIERTO' | 'CERRADO',
             closureEvidenceUrl: cleanSheetValue(row[7]),
-            // Fix: Map sheet section to cd property of FiveSReport
             cd: cleanSheetValue(row[8]),
             inspector: 'AUDITORÍA 5S', 
             totalScore: cleanSheetValue(row[6]).toUpperCase().includes('CERRADO') ? 100 : 0
@@ -211,21 +209,6 @@ export const fetchFiveSReportsFromSheet = async (): Promise<FiveSReport[]> => {
       });
     });
   } catch (e) { return []; }
-};
-
-export const submitReportToSheet = async (report: Report): Promise<void> => {
-  if (!GOOGLE_SCRIPT_WEB_APP_URL) return;
-  await fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ method: 'POST_REPORT', data: report }) });
-};
-
-export const submitMileageToSheet = async (mileageData: any): Promise<void> => {
-  if (!GOOGLE_SCRIPT_WEB_APP_URL) return;
-  await fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ method: 'POST_MILEAGE', data: mileageData }) });
-};
-
-export const submitFiveSToSheet = async (fiveSData: any): Promise<void> => {
-  if (!GOOGLE_SCRIPT_WEB_APP_URL) return;
-  await fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ method: 'POST_FIVES', data: fiveSData }) });
 };
 
 export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
@@ -242,22 +225,21 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
         complete: (results) => {
           const rows = results.data as any[];
           const calibrations = rows.filter(row => {
-            const plateVal = cleanSheetValue(row[2]).toUpperCase();
+            // Estructura: MES(0), FECHA(1), SEMANA(2), PLACA(3), TALLER(4), EVIDENCIA(5)
+            const plateVal = cleanSheetValue(row[3]).toUpperCase();
             return plateVal && !plateVal.includes("PLACA") && plateVal.length >= 3;
           }).map((row): Calibration => {
-            const expDate = parseFlexibleDate(row[5]);
-            const calDate = parseFlexibleDate(row[4]);
+            const calDate = parseFlexibleDate(row[1]);
+            // Dashboard: Vencimiento a 1 año de la calibración si no hay dato
+            const expDate = calDate ? new Date(new Date(calDate).setFullYear(new Date(calDate).getFullYear() + 1)).toISOString().split('T')[0] : '';
             return {
-              id: `cal-${cleanSheetValue(row[2])}-${cleanSheetValue(row[3])}`,
-              cd: cleanSheetValue(row[0]),
-              contractor: cleanSheetValue(row[1]),
-              plate: normalizePlate(cleanSheetValue(row[2])),
-              equipment: cleanSheetValue(row[3]).toUpperCase(),
+              id: `cal-${cleanSheetValue(row[3])}-${cleanSheetValue(row[4])}-${row[1]}`,
+              plate: normalizePlate(cleanSheetValue(row[3])),
+              equipment: cleanSheetValue(row[4]).toUpperCase(), // Taller como Identificador
               calibrationDate: calDate,
               expiryDate: expDate,
-              certificateUrl: cleanSheetValue(row[7]),
-              status: calculateStatus(expDate),
-              daysPending: parseInt(cleanSheetValue(row[6])) || undefined
+              certificateUrl: cleanSheetValue(row[5]),
+              status: calculateStatus(expDate)
             };
           });
           resolve(calibrations);
@@ -295,4 +277,24 @@ export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
       });
     });
   } catch (e) { return []; }
+};
+
+export const submitReportToSheet = async (report: Report): Promise<void> => {
+  if (!GOOGLE_SCRIPT_WEB_APP_URL) return;
+  await fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ method: 'POST_REPORT', data: report }) });
+};
+
+export const submitMileageToSheet = async (mileageData: any): Promise<void> => {
+  if (!GOOGLE_SCRIPT_WEB_APP_URL) return;
+  await fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ method: 'POST_MILEAGE', data: mileageData }) });
+};
+
+export const submitFiveSToSheet = async (fiveSData: any): Promise<void> => {
+  if (!GOOGLE_SCRIPT_WEB_APP_URL) return;
+  await fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ method: 'POST_FIVES', data: fiveSData }) });
+};
+
+export const submitCalibrationToSheet = async (calibrationData: any): Promise<void> => {
+  if (!GOOGLE_SCRIPT_WEB_APP_URL) return;
+  await fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ method: 'POST_CALIBRATION', data: calibrationData }) });
 };

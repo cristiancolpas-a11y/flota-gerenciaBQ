@@ -6,6 +6,7 @@ import DriverCard from './components/DriverCard';
 import ReportCard from './components/ReportCard';
 import FiveSCard from './components/FiveSCard';
 import CalibrationCard from './components/CalibrationCard';
+import CalibrationForm from './components/CalibrationForm';
 import DocumentViewer from './components/DocumentViewer';
 import MileageEntryForm from './components/MileageEntryForm';
 import ReportForm from './components/ReportForm';
@@ -22,7 +23,8 @@ import {
   fetchCalibrationsFromSheet,
   submitReportToSheet, 
   submitMileageToSheet,
-  submitFiveSToSheet
+  submitFiveSToSheet,
+  submitCalibrationToSheet
 } from './services/sheetService';
 import { formatDate, getWeekNumber, normalizePlate, extractNumber, normalizeStr } from './utils';
 import { 
@@ -63,13 +65,16 @@ import {
   CreditCard,
   ListChecks,
   Target,
-  History
+  History,
+  Activity,
+  AlertCircle
 } from 'lucide-react';
 
 type ActiveView = 'vehiculos' | 'conductores' | 'novedades' | 'kilometrajes' | '5s_camiones' | 'calibraciones';
 type StatusFilter = 'all' | 'completed' | 'pending';
 type VehicleStatusFilter = 'all' | 'soat' | 'rtm' | 'plc' | 'ext';
 type DriverStatusFilter = 'all' | 'license' | 'driving' | 'medical';
+type CalibrationStatusFilter = 'all' | 'done' | 'pending';
 
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>(() => {
@@ -82,7 +87,6 @@ const App: React.FC = () => {
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // Estado para controlar qué sección del acordeón está abierta (solo una a la vez)
   const [openSectionId, setOpenSectionId] = useState<string | null>(() => {
     try {
       const saved = localStorage.getItem('openSectionId');
@@ -102,6 +106,7 @@ const App: React.FC = () => {
   const [mileageStatusFilter, setMileageStatusFilter] = useState<StatusFilter>('all');
   const [vehicleStatusFilter, setVehicleStatusFilter] = useState<VehicleStatusFilter>('all');
   const [driverStatusFilter, setDriverStatusFilter] = useState<DriverStatusFilter>('all');
+  const [calibrationStatusFilter, setCalibrationStatusFilter] = useState<CalibrationStatusFilter>('all');
   const [selectedWeek, setSelectedWeek] = useState<number>(getWeekNumber(new Date()));
   const [selectedReportMonth, setSelectedReportMonth] = useState<number>(new Date().getMonth());
   
@@ -117,6 +122,7 @@ const App: React.FC = () => {
   const [viewerDoc, setViewerDoc] = useState<{url: string, title: string} | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
   const [showFiveSForm, setShowFiveSForm] = useState(false);
+  const [showCalibrationForm, setShowCalibrationForm] = useState(false);
   const [selectedPlateForFiveS, setSelectedPlateForFiveS] = useState<string | undefined>(undefined);
   const [closureReport, setClosureReport] = useState<Report | null>(null);
   const [fiveSClosureReport, setFiveSClosureReport] = useState<FiveSReport | null>(null);
@@ -137,7 +143,6 @@ const App: React.FC = () => {
     if (window.innerWidth >= 1280) setIsSidebarOpen(true);
   }, []);
 
-  // Función de acordeón: cierra las demás al abrir una
   const toggleSection = (section: string) => {
     setOpenSectionId(prev => (prev === section ? null : section));
   };
@@ -195,6 +200,13 @@ const App: React.FC = () => {
     } catch (error) { throw error; }
   };
 
+  const handleCalibrationSubmit = async (calData: any) => {
+    try {
+      await submitCalibrationToSheet(calData);
+      await handleSyncData();
+    } catch (error) { throw error; }
+  };
+
   const handleMileageSubmit = async (data: any) => {
     try {
       await submitMileageToSheet(data);
@@ -205,7 +217,6 @@ const App: React.FC = () => {
   const cds = useMemo(() => Array.from(new Set((vehicles || []).map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
   const contractors = useMemo(() => Array.from(new Set((vehicles || []).map(v => v.contractor || 'GENERAL'))).sort(), [vehicles]);
 
-  // Vehículos filtrados solo por el contexto global (CD y Contratista) para estadísticas
   const vehiclesInGlobalContext = useMemo(() => {
     return (vehicles || []).filter(v => {
       const matchCd = selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd);
@@ -225,7 +236,6 @@ const App: React.FC = () => {
     };
   }, [vehiclesInGlobalContext]);
 
-  // Conductores filtrados solo por el contexto global para estadísticas
   const driversInGlobalContext = useMemo(() => {
     return (drivers || []).filter(d => {
       const matchCd = selectedCd === 'all' || normalizeStr(d.cd || "") === normalizeStr(selectedCd);
@@ -273,15 +283,38 @@ const App: React.FC = () => {
     });
   }, [driversInGlobalContext, searchTerm, driverStatusFilter]);
 
-  const filteredCalibrations = useMemo(() => {
+  const calibrationStats = useMemo(() => {
+    const totalFleet = vehiclesInGlobalContext.length;
     const nSearch = normalizePlate(searchTerm);
-    return (calibrations || []).filter(c => {
-      const matchCd = selectedCd === 'all' || normalizeStr(c.cd || "") === normalizeStr(selectedCd);
-      const matchContractor = selectedContractor === 'all' || normalizeStr(c.contractor || "") === normalizeStr(selectedContractor);
-      const matchSearch = nSearch === '' || normalizePlate(c.plate).includes(nSearch) || c.equipment.includes(nSearch);
-      return matchCd && matchContractor && matchSearch;
+    
+    const calsByPlate: Record<string, Calibration[]> = {};
+    (calibrations || []).forEach(c => {
+      const plate = normalizePlate(c.plate);
+      if (!calsByPlate[plate]) calsByPlate[plate] = [];
+      calsByPlate[plate].push(c);
     });
-  }, [calibrations, searchTerm, selectedCd, selectedContractor]);
+
+    let doneCount = 0;
+    const fleetStatus = vehiclesInGlobalContext.map(v => {
+      const plate = normalizePlate(v.plate);
+      const vehicleCals = calsByPlate[plate] || [];
+      const isDone = vehicleCals.length > 0 && vehicleCals.every(c => c.status !== 'expired');
+      if (isDone) doneCount++;
+      return { ...v, isCalibrationDone: isDone, calibrations: vehicleCals };
+    });
+
+    const pendingCount = totalFleet - doneCount;
+    const percentage = totalFleet > 0 ? Math.round((doneCount / totalFleet) * 100) : 0;
+
+    const filteredFleet = fleetStatus.filter(v => {
+      const matchSearch = nSearch === '' || normalizePlate(v.plate).includes(nSearch);
+      if (calibrationStatusFilter === 'done') return v.isCalibrationDone && matchSearch;
+      if (calibrationStatusFilter === 'pending') return !v.isCalibrationDone && matchSearch;
+      return matchSearch;
+    });
+
+    return { totalFleet, doneCount, pendingCount, percentage, filteredFleet };
+  }, [vehiclesInGlobalContext, calibrations, calibrationStatusFilter, searchTerm]);
 
   const filteredReports = useMemo(() => {
     const nSearch = normalizePlate(searchTerm);
@@ -313,16 +346,10 @@ const App: React.FC = () => {
 
   const mileageCompliance = useMemo(() => {
     const total = vehiclesInGlobalContext.length;
-
-    // Contar cuántos de ESTOS vehículos tienen al menos un log en la semana seleccionada
     const doneCount = vehiclesInGlobalContext.filter(v => {
       const vPlate = normalizePlate(v.plate);
-      return (mileageLogs || []).some(log => 
-        normalizePlate(log.plate) === vPlate && 
-        extractNumber(log.week) === selectedWeek
-      );
+      return (mileageLogs || []).some(log => normalizePlate(log.plate) === vPlate && extractNumber(log.week) === selectedWeek);
     }).length;
-
     const percentage = total > 0 ? Math.round((doneCount / total) * 100) : 0;
     return { total, done: doneCount, percentage };
   }, [vehiclesInGlobalContext, mileageLogs, selectedWeek]);
@@ -336,9 +363,7 @@ const App: React.FC = () => {
   }, [fiveSReports, selectedCd, searchTerm]);
 
   const fiveSCompliance = useMemo(() => {
-    const totalVehiclesInSection = (vehicles || []).filter(v => 
-      selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd)
-    ).length;
+    const totalVehiclesInSection = (vehicles || []).filter(v => selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd)).length;
     const uniqueAuditedPlates = new Set((filteredFiveS || []).map(f => normalizePlate(f.plate))).size;
     const percentage = totalVehiclesInSection > 0 ? Math.round((uniqueAuditedPlates / totalVehiclesInSection) * 100) : 0;
     return { total: totalVehiclesInSection, audited: uniqueAuditedPlates, percentage };
@@ -357,7 +382,7 @@ const App: React.FC = () => {
       id: 'NEUMATICOS',
       icon: <Scale size={16} />,
       items: [
-        { id: 'calibraciones', icon: <Settings2 size={14} />, label: 'Neumáticos(Calibraciones)' }
+        { id: 'calibraciones', icon: <Settings2 size={14} />, label: 'Calibraciones' }
       ]
     },
     {
@@ -400,7 +425,6 @@ const App: React.FC = () => {
                   </div>
                   {openSectionId === section.id ? <ChevronDown size={14} className="text-slate-500" /> : <ChevronRight size={14} className="text-slate-500" />}
                 </button>
-                
                 <div className={`transition-all duration-300 ease-in-out ${openSectionId === section.id ? 'max-h-96 opacity-100 py-2' : 'max-h-0 opacity-0 overflow-hidden py-0'}`}>
                   <nav className="space-y-1 px-3 pb-2">
                     {section.items.map((item) => (
@@ -421,16 +445,6 @@ const App: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
-          
-          <div className="mt-auto pt-4 border-t border-white/10 px-2">
-             <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl">
-                <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-white font-black text-[10px]">AD</div>
-                <div>
-                   <p className="text-[9px] font-black text-white uppercase tracking-tight leading-none mb-1">Gerencia BQA</p>
-                   <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest">CONTROL ACTIVO</p>
-                </div>
-             </div>
           </div>
         </div>
       </aside>
@@ -453,10 +467,6 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-             <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
-               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-               <span className="text-[9px] font-black uppercase tracking-widest">ONLINE</span>
-             </div>
              <button onClick={handleSyncData} className={`p-2.5 ${isSyncing ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 border border-slate-200'} rounded-xl transition-all`}>
                <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
              </button>
@@ -464,13 +474,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-grow p-8 overflow-y-auto bg-[#f8fafc] custom-scrollbar">
-          {/* FILTROS GLOBALES COMPACTOS */}
           <div className="max-w-[1600px] mx-auto mb-8 bg-white p-4 rounded-3xl border border-slate-200 shadow-lg flex flex-wrap items-center gap-4">
-             <div className="flex items-center gap-3 border-r border-slate-100 pr-6">
-               <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Filter size={16}/></div>
-               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Filtros</span>
-             </div>
-             
              <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 cursor-pointer">
                <Building2 className="text-indigo-500 mr-2" size={16} />
                <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer" value={selectedCd} onChange={(e) => setSelectedCd(e.target.value)}>
@@ -478,7 +482,6 @@ const App: React.FC = () => {
                  {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
                </select>
              </div>
-
              <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 cursor-pointer">
                <UserCircle className="text-indigo-500 mr-2" size={16} />
                <select className="bg-transparent text-[10px] font-black uppercase outline-none cursor-pointer" value={selectedContractor} onChange={(e) => setSelectedContractor(e.target.value)}>
@@ -489,11 +492,10 @@ const App: React.FC = () => {
           </div>
 
           {activeView === 'vehiculos' && (
-            <div className="space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
-              {/* PANEL VEHÍCULOS COMPACTO */}
+            <div className="space-y-12 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                  <button onClick={() => setVehicleStatusFilter('all')} className={`flex flex-col items-center justify-center gap-3 p-6 rounded-3xl border transition-all duration-300 ${vehicleStatusFilter === 'all' ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-xl' : 'bg-white border-slate-200 hover:border-indigo-300'}`}>
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${vehicleStatusFilter === 'all' ? 'bg-indigo-600' : 'bg-indigo-50 text-indigo-600'}`}><Truck size={24} /></div>
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${vehicleStatusFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'}`}><Truck size={24} /></div>
                     <div className="text-center"><h4 className="text-3xl font-black tracking-tighter leading-none">{vehicleStats.total}</h4><p className={`text-[8px] font-black uppercase tracking-[0.2em] mt-1 ${vehicleStatusFilter === 'all' ? 'text-indigo-400' : 'text-slate-400'}`}>TODOS</p></div>
                  </button>
                  <button onClick={() => setVehicleStatusFilter('soat')} className={`flex flex-col items-center justify-center gap-3 p-6 rounded-3xl border transition-all duration-300 ${vehicleStatusFilter === 'soat' ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-xl' : 'bg-white border-slate-200 hover:border-blue-300'}`}>
@@ -515,12 +517,26 @@ const App: React.FC = () => {
               </div>
 
               {filteredVehicles.length > 0 ? filteredVehicles.map((vehicle) => (
-                <div key={vehicle.id} ref={el => { vehicleRefs.current[vehicle.plate] = el; }} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-lg overflow-hidden flex flex-col xl:flex-row transition-all hover:border-indigo-300">
-                  <div className="xl:w-[380px] bg-slate-50 p-10 flex flex-col justify-center items-center border-r border-slate-100 shrink-0">
-                    <div className="w-full px-6 py-10 bg-[#0f172a] text-white rounded-3xl font-mono font-black text-5xl tracking-tighter shadow-xl text-center mb-8 border-8 border-white">{vehicle.plate}</div>
+                <div key={vehicle.id} ref={el => { vehicleRefs.current[vehicle.plate] = el; }} className="bg-white rounded-[3.5rem] border border-slate-200 shadow-xl overflow-hidden flex flex-col xl:flex-row transition-all hover:border-indigo-100 p-2">
+                  <div className="xl:w-[400px] bg-[#f8fafc] rounded-[3rem] p-10 flex flex-col items-center shrink-0">
+                    <div className="w-full bg-[#0f172a] p-10 rounded-[2.5rem] flex items-center justify-center shadow-2xl border-[10px] border-white mb-10">
+                      <h2 className="text-5xl md:text-6xl font-mono font-black text-white tracking-tighter uppercase leading-none">{vehicle.plate}</h2>
+                    </div>
                     <div className="space-y-4 w-full px-2">
-                       <div className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100"><MapPin size={18} className="text-indigo-500"/><div className="flex flex-col leading-none"><span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">C.D.</span><span className="text-xs font-black text-slate-800 uppercase">{vehicle.cd || 'GENERAL'}</span></div></div>
-                       <div className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-100"><Briefcase size={18} className="text-indigo-500"/><div className="flex flex-col leading-none"><span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-1">Contratista</span><span className="text-xs font-black text-slate-800 uppercase truncate max-w-[150px]">{vehicle.contractor || 'GENERAL'}</span></div></div>
+                       <div className="flex items-center gap-5 bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
+                         <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600"><MapPin size={22}/></div>
+                         <div className="flex flex-col leading-none">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">C.D.</span>
+                            <span className="text-sm font-black text-slate-800 uppercase">{vehicle.cd || 'GENERAL'}</span>
+                         </div>
+                       </div>
+                       <div className="flex items-center gap-5 bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
+                         <div className="p-2.5 bg-indigo-50 rounded-xl text-indigo-600"><Briefcase size={22}/></div>
+                         <div className="flex flex-col leading-none">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Contratista</span>
+                            <span className="text-sm font-black text-slate-800 uppercase truncate max-w-[180px]">{vehicle.contractor || 'GENERAL'}</span>
+                         </div>
+                       </div>
                     </div>
                   </div>
                   <div className="p-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-6 flex-grow bg-white items-stretch">
@@ -573,7 +589,6 @@ const App: React.FC = () => {
 
           {activeView === 'kilometrajes' && (
             <div className="max-w-[1600px] mx-auto pb-24 space-y-8 animate-in fade-in duration-500">
-               {/* PANEL ANALÍTICA KILOMETRAJES */}
                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <button onClick={() => setMileageStatusFilter(prev => prev === 'completed' ? 'all' : 'completed')} className={`flex flex-col items-center justify-center gap-4 p-6 rounded-[2.5rem] border-2 transition-all duration-300 ${mileageStatusFilter === 'completed' ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-2xl' : 'bg-white border-slate-200 hover:border-emerald-300'}`}>
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${mileageStatusFilter === 'completed' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'}`}><ListChecks size={28} /></div>
@@ -595,18 +610,12 @@ const App: React.FC = () => {
                     </div>
                   </div>
                </div>
-
                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-lg flex items-center justify-between">
                   <div className="flex items-center bg-indigo-600 text-white rounded-xl px-4 py-2 shadow-md">
                      <Calendar className="mr-2" size={16} />
                      <div className="flex flex-col"><span className="text-[7px] font-black uppercase tracking-widest opacity-80">Reporte</span><select className="bg-transparent text-[11px] font-black outline-none cursor-pointer" value={selectedWeek} onChange={(e) => setSelectedWeek(parseInt(e.target.value))}>{Array.from({length: 53}, (_, i) => i + 1).map(w => <option key={w} value={w} className="text-slate-800">SEMANA {String(w).padStart(2, '0')}</option>)}</select></div>
                   </div>
-                  <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                     <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
-                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">KILOMETRAJE S{selectedWeek}</span>
-                  </div>
                </div>
-
                <MileageEntryForm vehicles={vehicles} mileageLogs={mileageLogs} onSubmit={handleMileageSubmit} externalCd={selectedCd} setExternalCd={setSelectedCd} externalContractor={selectedContractor} setExternalContractor={setSelectedContractor} searchTerm={searchTerm} setSearchTerm={setSearchTerm} statusFilter={mileageStatusFilter} setStatusFilter={setMileageStatusFilter} selectedWeek={selectedWeek} onWeekChange={setSelectedWeek} />
             </div>
           )}
@@ -656,14 +665,54 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'calibraciones' && (
-            <div className="space-y-8 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-12">
-                {filteredCalibrations.length > 0 ? filteredCalibrations.map((cal) => (
-                  <CalibrationCard key={cal.id} calibration={cal} onViewDoc={(url, title) => setViewerDoc({url, title})} />
+            <div className="space-y-12 animate-in fade-in duration-500 max-w-[1600px] mx-auto pb-24">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                 <button onClick={() => setCalibrationStatusFilter('all')} className={`flex flex-col items-center justify-center gap-3 p-8 rounded-[2.5rem] border-2 transition-all duration-300 ${calibrationStatusFilter === 'all' ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-2xl' : 'bg-white border-slate-200 hover:border-indigo-300 shadow-sm'}`}>
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${calibrationStatusFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600'}`}><Activity size={28} /></div>
+                    <div className="text-center"><h4 className="text-4xl font-black tracking-tighter leading-none">{calibrationStats.totalFleet}</h4><p className={`text-[9px] font-black uppercase tracking-[0.2em] mt-2 ${calibrationStatusFilter === 'all' ? 'text-indigo-400' : 'text-slate-400'}`}>FLOTA TOTAL</p></div>
+                 </button>
+                 <button onClick={() => setCalibrationStatusFilter('done')} className={`flex flex-col items-center justify-center gap-3 p-8 rounded-[2.5rem] border-2 transition-all duration-300 ${calibrationStatusFilter === 'done' ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-2xl' : 'bg-white border-slate-200 hover:border-emerald-300 shadow-sm'}`}>
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${calibrationStatusFilter === 'done' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-600'}`}><CheckCircle size={28} /></div>
+                    <div className="text-center"><h4 className="text-4xl font-black tracking-tighter leading-none">{calibrationStats.doneCount}</h4><p className={`text-[9px] font-black uppercase tracking-[0.2em] mt-2 ${calibrationStatusFilter === 'done' ? 'text-emerald-400' : 'text-slate-400'}`}>REALIZADO (AL DÍA)</p></div>
+                 </button>
+                 <button onClick={() => setCalibrationStatusFilter('pending')} className={`flex flex-col items-center justify-center gap-3 p-8 rounded-[2.5rem] border-2 transition-all duration-300 ${calibrationStatusFilter === 'pending' ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-2xl' : 'bg-white border-slate-200 hover:border-rose-300 shadow-sm'}`}>
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${calibrationStatusFilter === 'pending' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-600'}`}><AlertCircle size={28} /></div>
+                    <div className="text-center"><h4 className="text-4xl font-black tracking-tighter leading-none">{calibrationStats.pendingCount}</h4><p className={`text-[9px] font-black uppercase tracking-[0.2em] mt-2 ${calibrationStatusFilter === 'pending' ? 'text-rose-400' : 'text-slate-400'}`}>PENDIENTE (FALTA)</p></div>
+                 </button>
+                 <div className="bg-[#0f172a] p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden flex flex-col justify-center border-2 border-indigo-500/20">
+                    <button onClick={() => setShowCalibrationForm(true)} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3"><Plus size={20} /> NUEVA CALIBRACIÓN</button>
+                    <div className="mt-4 flex items-center justify-between">
+                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{calibrationStats.doneCount} DE {calibrationStats.totalFleet} CAMIONES</p>
+                       <span className="text-xl font-black text-indigo-400">{calibrationStats.percentage}%</span>
+                    </div>
+                 </div>
+              </div>
+              <div className="space-y-6">
+                {calibrationStats.filteredFleet.length > 0 ? calibrationStats.filteredFleet.map((vehicle) => (
+                  <div key={vehicle.id} className="bg-white rounded-[3.5rem] border border-slate-200 shadow-xl overflow-hidden flex flex-col xl:flex-row transition-all hover:border-indigo-100 p-2">
+                    <div className="xl:w-[320px] bg-[#f8fafc] rounded-[3rem] p-8 flex flex-col items-center shrink-0 justify-center">
+                      <div className="bg-[#0f172a] px-10 py-8 rounded-[2rem] border-[8px] border-white shadow-xl mb-4">
+                        <h2 className="text-3xl font-mono font-black text-white tracking-tighter uppercase leading-none">{vehicle.plate}</h2>
+                      </div>
+                      <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${vehicle.isCalibrationDone ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {vehicle.isCalibrationDone ? 'SISTEMA AL DÍA' : 'PENDIENTE'}
+                      </div>
+                    </div>
+                    <div className="p-8 flex-grow grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-white">
+                      {vehicle.calibrations.length > 0 ? vehicle.calibrations.map(cal => (
+                        <CalibrationCard key={cal.id} calibration={cal} onViewDoc={(url, title) => setViewerDoc({url, title})} />
+                      )) : (
+                        <div className="col-span-full flex flex-col items-center justify-center py-12 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] text-slate-400">
+                          <Activity size={32} className="mb-2 opacity-30" />
+                          <p className="text-[10px] font-black uppercase tracking-widest">Sin certificados registrados</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )) : (
-                  <div className="col-span-full text-center py-24 opacity-40">
-                    <Scale size={48} className="mx-auto mb-4" />
-                    <p className="text-[10px] font-black uppercase tracking-widest">Sin calibraciones</p>
+                  <div className="text-center py-40 bg-white rounded-[4rem] border-2 border-dashed border-slate-200 opacity-40">
+                    <Scale size={64} className="mx-auto mb-6 text-slate-300" />
+                    <p className="text-[12px] font-black uppercase tracking-[0.4em]">Sin resultados en la flota</p>
                   </div>
                 )}
               </div>
@@ -675,6 +724,7 @@ const App: React.FC = () => {
       {viewerDoc && <DocumentViewer url={viewerDoc.url} title={viewerDoc.title} onClose={() => setViewerDoc(null)} />}
       {showReportForm && <ReportForm vehicles={vehicles} onClose={() => setShowReportForm(false)} onSubmit={handleReportSubmit} />}
       {showFiveSForm && <FiveSForm vehicles={vehicles} preSelectedPlate={selectedPlateForFiveS} onClose={() => { setShowFiveSForm(false); setSelectedPlateForFiveS(undefined); }} onSubmit={handleFiveSSubmit} />}
+      {showCalibrationForm && <CalibrationForm vehicles={vehicles} onClose={() => setShowCalibrationForm(false)} onSubmit={handleCalibrationSubmit} />}
       {closureReport && <ClosureForm report={closureReport} onClose={() => setClosureReport(null)} onSubmit={handleReportClosure} />}
       {fiveSClosureReport && <FiveSClosureForm report={fiveSClosureReport} onClose={() => setFiveSClosureReport(null)} onSubmit={handleFiveSClosure} />}
     </div>
