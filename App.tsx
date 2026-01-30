@@ -205,32 +205,48 @@ const App: React.FC = () => {
   const cds = useMemo(() => Array.from(new Set((vehicles || []).map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
   const contractors = useMemo(() => Array.from(new Set((vehicles || []).map(v => v.contractor || 'GENERAL'))).sort(), [vehicles]);
 
-  const vehicleStats = useMemo(() => {
-    const total = vehicles.length;
-    return {
-      total,
-      soat: vehicles.filter(v => v.soat.status === 'expired').length,
-      rtm: vehicles.filter(v => v.rtm.status === 'expired').length,
-      plc: vehicles.filter(v => v.plc.status === 'expired').length,
-      ext: vehicles.filter(v => v.extinguisher.status === 'expired').length,
-    };
-  }, [vehicles]);
-
-  const driverStats = useMemo(() => {
-    const total = drivers.length;
-    return {
-      total,
-      license: drivers.filter(d => d.license.status === 'expired').length,
-      driving: drivers.filter(d => d.defensiveDriving.status === 'expired').length,
-      medical: drivers.filter(d => d.medicalExam.status === 'expired').length
-    };
-  }, [drivers]);
-
-  const filteredVehicles = useMemo(() => {
-    const nSearch = normalizePlate(searchTerm);
+  // Vehículos filtrados solo por el contexto global (CD y Contratista) para estadísticas
+  const vehiclesInGlobalContext = useMemo(() => {
     return (vehicles || []).filter(v => {
       const matchCd = selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd);
       const matchContractor = selectedContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(selectedContractor);
+      return matchCd && matchContractor;
+    });
+  }, [vehicles, selectedCd, selectedContractor]);
+
+  const vehicleStats = useMemo(() => {
+    const total = vehiclesInGlobalContext.length;
+    return {
+      total,
+      soat: vehiclesInGlobalContext.filter(v => v.soat.status === 'expired').length,
+      rtm: vehiclesInGlobalContext.filter(v => v.rtm.status === 'expired').length,
+      plc: vehiclesInGlobalContext.filter(v => v.plc.status === 'expired').length,
+      ext: vehiclesInGlobalContext.filter(v => v.extinguisher.status === 'expired').length,
+    };
+  }, [vehiclesInGlobalContext]);
+
+  // Conductores filtrados solo por el contexto global para estadísticas
+  const driversInGlobalContext = useMemo(() => {
+    return (drivers || []).filter(d => {
+      const matchCd = selectedCd === 'all' || normalizeStr(d.cd || "") === normalizeStr(selectedCd);
+      const matchContractor = selectedContractor === 'all' || normalizeStr(d.contractor || "") === normalizeStr(selectedContractor);
+      return matchCd && matchContractor;
+    });
+  }, [drivers, selectedCd, selectedContractor]);
+
+  const driverStats = useMemo(() => {
+    const total = driversInGlobalContext.length;
+    return {
+      total,
+      license: driversInGlobalContext.filter(d => d.license.status === 'expired').length,
+      driving: driversInGlobalContext.filter(d => d.defensiveDriving.status === 'expired').length,
+      medical: driversInGlobalContext.filter(d => d.medicalExam.status === 'expired').length
+    };
+  }, [driversInGlobalContext]);
+
+  const filteredVehicles = useMemo(() => {
+    const nSearch = normalizePlate(searchTerm);
+    return vehiclesInGlobalContext.filter(v => {
       const matchSearch = nSearch === '' || normalizePlate(v.plate).includes(nSearch);
       
       let matchStatus = true;
@@ -239,25 +255,23 @@ const App: React.FC = () => {
       else if (vehicleStatusFilter === 'plc') matchStatus = v.plc.status === 'expired';
       else if (vehicleStatusFilter === 'ext') matchStatus = v.extinguisher.status === 'expired';
       
-      return matchCd && matchContractor && matchSearch && matchStatus;
+      return matchSearch && matchStatus;
     });
-  }, [vehicles, searchTerm, selectedCd, selectedContractor, vehicleStatusFilter]);
+  }, [vehiclesInGlobalContext, searchTerm, vehicleStatusFilter]);
 
   const filteredDrivers = useMemo(() => {
     const s = searchTerm.toUpperCase().trim();
-    return (drivers || []).filter(d => {
+    return driversInGlobalContext.filter(d => {
       const matchSearch = s === '' || d.name.toUpperCase().includes(s) || d.identification.includes(s);
-      const matchCd = selectedCd === 'all' || normalizeStr(d.cd || "") === normalizeStr(selectedCd);
-      const matchContractor = selectedContractor === 'all' || normalizeStr(d.contractor || "") === normalizeStr(selectedContractor);
       
       let matchStatus = true;
       if (driverStatusFilter === 'license') matchStatus = d.license.status === 'expired';
       else if (driverStatusFilter === 'driving') matchStatus = d.defensiveDriving.status === 'expired';
       else if (driverStatusFilter === 'medical') matchStatus = d.medicalExam.status === 'expired';
       
-      return matchSearch && matchCd && matchContractor && matchStatus;
+      return matchSearch && matchStatus;
     });
-  }, [drivers, searchTerm, selectedCd, selectedContractor, driverStatusFilter]);
+  }, [driversInGlobalContext, searchTerm, driverStatusFilter]);
 
   const filteredCalibrations = useMemo(() => {
     const nSearch = normalizePlate(searchTerm);
@@ -298,18 +312,20 @@ const App: React.FC = () => {
   }, [mileageLogs, selectedWeek, selectedCd, selectedContractor, searchTerm]);
 
   const mileageCompliance = useMemo(() => {
-    const totalVehiclesInSection = (vehicles || []).filter(v => 
-      selectedCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(selectedCd)
-    ).length;
-    const logsInWeek = (mileageLogs || []).filter(log => {
-        const matchWeek = extractNumber(log.week) === selectedWeek;
-        const matchCd = selectedCd === 'all' || normalizeStr(log.cd || "") === normalizeStr(selectedCd);
-        return matchWeek && matchCd;
-    });
-    const uniqueDonePlates = new Set(logsInWeek.map(log => normalizePlate(log.plate))).size;
-    const percentage = totalVehiclesInSection > 0 ? Math.round((uniqueDonePlates / totalVehiclesInSection) * 100) : 0;
-    return { total: totalVehiclesInSection, done: uniqueDonePlates, percentage };
-  }, [vehicles, mileageLogs, selectedWeek, selectedCd]);
+    const total = vehiclesInGlobalContext.length;
+
+    // Contar cuántos de ESTOS vehículos tienen al menos un log en la semana seleccionada
+    const doneCount = vehiclesInGlobalContext.filter(v => {
+      const vPlate = normalizePlate(v.plate);
+      return (mileageLogs || []).some(log => 
+        normalizePlate(log.plate) === vPlate && 
+        extractNumber(log.week) === selectedWeek
+      );
+    }).length;
+
+    const percentage = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+    return { total, done: doneCount, percentage };
+  }, [vehiclesInGlobalContext, mileageLogs, selectedWeek]);
 
   const filteredFiveS = useMemo(() => {
     return (fiveSReports || []).filter(f => {
