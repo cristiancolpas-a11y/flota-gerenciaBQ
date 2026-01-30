@@ -48,9 +48,6 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
     if (entryDateOverride) setEntryDate(entryDateOverride);
   }, [entryDateOverride]);
 
-  const cds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
-  const contractors = useMemo(() => Array.from(new Set(vehicles.map(v => v.contractor || 'GENERAL'))).sort(), [vehicles]);
-
   const isVehicleDone = (vehicle: Vehicle) => {
     const vPlate = normalizePlate(vehicle.plate);
     return (mileageLogs || []).some(log => {
@@ -68,15 +65,6 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
       return matchCd && matchContractor && matchPlate;
     });
   }, [vehicles, externalCd, externalContractor, searchTerm]);
-
-  const counts = useMemo(() => {
-    const completedCount = baseFiltered.filter(v => isVehicleDone(v)).length;
-    return {
-      all: baseFiltered.length,
-      completed: completedCount,
-      pending: Math.max(0, baseFiltered.length - completedCount)
-    };
-  }, [baseFiltered, mileageLogs, selectedWeek]);
 
   const filteredVehicles = useMemo(() => {
     return baseFiltered.filter(v => {
@@ -117,55 +105,9 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-wrap items-center justify-between gap-6">
-        <div className="flex flex-wrap items-center gap-4">
-           <div className="flex items-center bg-indigo-600 text-white rounded-2xl px-5 py-2.5">
-             <CalendarDays className="mr-3" size={20} />
-             <div className="flex flex-col">
-               <span className="text-[8px] font-black uppercase tracking-widest opacity-80">Semana</span>
-               <select className="bg-transparent text-[11px] font-black outline-none" value={selectedWeek} onChange={(e) => onWeekChange(parseInt(e.target.value))}>
-                 {Array.from({length: 53}, (_, i) => i + 1).map(w => <option key={w} value={w} className="text-slate-800">SEMANA {w}</option>)}
-               </select>
-             </div>
-           </div>
-           
-           <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 hover:border-indigo-300 transition-all">
-             <Building2 className="text-indigo-500 mr-3" size={18} />
-             <select className="bg-transparent text-[11px] font-black uppercase outline-none" value={externalCd} onChange={(e) => setExternalCd(e.target.value)}>
-               <option value="all">TODOS LOS C.D.</option>
-               {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-             </select>
-           </div>
-
-           <div className="flex items-center bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 hover:border-indigo-300 transition-all">
-             <Briefcase className="text-indigo-500 mr-3" size={18} />
-             <select className="bg-transparent text-[11px] font-black uppercase outline-none" value={externalContractor} onChange={(e) => setExternalContractor(e.target.value)}>
-               <option value="all">TODOS LOS CONTRATISTAS</option>
-               {contractors.map(cnt => <option key={cnt} value={cnt}>{cnt}</option>)}
-             </select>
-           </div>
-        </div>
-        
-        <div className="flex items-center bg-emerald-50 border border-emerald-100 rounded-2xl px-5 py-2.5">
-          <Calendar className="text-emerald-600 mr-3" size={18} />
-          <input type="date" className="bg-transparent text-[11px] font-black text-emerald-700 outline-none" value={entryDate} onChange={(e) => { setEntryDate(e.target.value); onDateChange?.(e.target.value); }} />
-        </div>
-      </div>
-
       <div className="bg-white rounded-[4rem] shadow-2xl overflow-hidden border border-slate-100">
         {!activeVehicle ? (
-          <div className="p-10 space-y-12">
-            <div className="flex flex-col md:flex-row gap-6 items-center justify-center p-3 bg-slate-50 rounded-[3rem] shadow-inner max-w-5xl mx-auto border border-slate-100">
-              <button onClick={() => setStatusFilter('all')} className={`flex-1 flex items-center justify-center gap-4 py-5 px-10 rounded-full text-[11px] font-black transition-all ${statusFilter === 'all' ? 'bg-[#0f172a] text-white shadow-xl scale-105' : 'text-slate-400 hover:text-indigo-600'}`}>
-                TODOS <span>{counts.all}</span>
-              </button>
-              <button onClick={() => setStatusFilter('completed')} className={`flex-1 flex items-center justify-center gap-4 py-5 px-10 rounded-full text-[11px] font-black transition-all ${statusFilter === 'completed' ? 'bg-emerald-600 text-white shadow-xl scale-105' : 'text-emerald-500 hover:text-emerald-600'}`}>
-                <ListChecks size={20} /> REALIZADOS <span>{counts.completed}</span>
-              </button>
-              <button onClick={() => setStatusFilter('pending')} className={`flex-1 flex items-center justify-center gap-4 py-5 px-10 rounded-full text-[11px] font-black transition-all ${statusFilter === 'pending' ? 'bg-rose-600 text-white shadow-xl scale-105' : 'text-rose-50 hover:text-rose-600'}`}>
-                <Clock size={20} /> PENDIENTES <span>{counts.pending}</span>
-              </button>
-            </div>
+          <div className="p-10">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 py-6">
               {filteredVehicles.length > 0 ? filteredVehicles.map((v) => {
                 const isDone = isVehicleDone(v);
