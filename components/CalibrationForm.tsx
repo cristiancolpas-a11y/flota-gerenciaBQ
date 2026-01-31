@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Vehicle } from '../types';
 import { compressImage, createMosaic, processImageWithWatermark } from '../utils';
@@ -13,14 +12,14 @@ interface CalibrationFormProps {
 const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, vehicles }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  // Fix: Removed broken isProcessingPhoto state and kept isProcessingPhotoLocal which is actually used
+  const [isProcessingPhotoLocal, setIsProcessingPhotoLocal] = useState(false);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
   
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     plate: '',
     taller: '',
-    equipment: 'MANÓMETRO', // Por defecto para reporte rápido
     calibrationDate: new Date().toISOString().split('T')[0],
     certificateUrl: '',
   });
@@ -32,7 +31,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
       return;
     }
 
-    setIsProcessingPhoto(true);
+    setIsProcessingPhotoLocal(true);
     
     const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
       return new Promise((resolve) => {
@@ -50,7 +49,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
     reader.onloadend = async () => {
       const watermarked = await processImageWithWatermark(reader.result as string, formData.plate, coords);
       setCapturedPhotos(prev => [...prev, watermarked]);
-      setIsProcessingPhoto(false);
+      setIsProcessingPhotoLocal(false);
     };
     reader.readAsDataURL(file);
   };
@@ -101,7 +100,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
               <Scale size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter">CALIBRACIÓN (INDICE 1-6)</h2>
+              <h2 className="text-xl font-black uppercase tracking-tighter">REGISTRO CALIBRACIÓN</h2>
               <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Sello de agua GPS Activo</p>
             </div>
           </div>
@@ -113,59 +112,55 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
             <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
               <Plus size={14} /> Placa Vehicular (Indice 4)
             </label>
-            <select required className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none" value={formData.plate} onChange={e => setFormData({ ...formData, plate: e.target.value })}>
+            <select required className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-400" value={formData.plate} onChange={e => setFormData({ ...formData, plate: e.target.value })}>
               <option value="">-- SELECCIONE PLACA --</option>
               {vehicles.sort((a, b) => a.plate.localeCompare(b.plate)).map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <Wrench size={14} /> Taller / Empresa (Indice 5)
-            </label>
-            <select required className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800" value={formData.taller} onChange={e => setFormData({ ...formData, taller: e.target.value })}>
-              <option value="">SELECCIONE TALLER</option>
-              <option value="AUTECO">AUTECO</option>
-              <option value="AUTOMUNDIAL">AUTOMUNDIAL</option>
-              <option value="DIVERMOTORS">DIVERMOTORS</option>
-              <option value="OTROS">OTROS</option>
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Wrench size={14} /> Taller / Empresa (Indice 5)
+              </label>
+              <input 
+                required 
+                type="text"
+                placeholder="Nombre del taller..."
+                className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-400 uppercase" 
+                value={formData.taller} 
+                onChange={e => setFormData({ ...formData, taller: e.target.value.toUpperCase() })} 
+              />
+            </div>
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <Calendar size={14} /> Fecha (Indice 2)
               </label>
-              <input type="date" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-3 text-sm font-black text-slate-800" value={formData.calibrationDate} onChange={e => setFormData({ ...formData, calibrationDate: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                <Settings2 size={14} /> Equipo
-              </label>
-              <select className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-3 text-sm font-black text-slate-800" value={formData.equipment} onChange={e => setFormData({ ...formData, equipment: e.target.value })}>
-                <option value="MANÓMETRO">MANÓMETRO</option>
-                <option value="TORQUÍMETRO">TORQUÍMETRO</option>
-                <option value="CALIBRADOR">CALIBRADOR</option>
-              </select>
+              <input 
+                required
+                type="date" 
+                className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-400" 
+                value={formData.calibrationDate} 
+                onChange={e => setFormData({ ...formData, calibrationDate: e.target.value })} 
+              />
             </div>
           </div>
 
           <div className="space-y-4">
             <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest flex items-center justify-between">
               Evidencia (Indice 6 - Sello GPS)
-              {isProcessingPhoto && <span className="text-amber-500 text-[9px] animate-pulse">ESTAMPANDO...</span>}
+              {isProcessingPhotoLocal && <span className="text-amber-500 text-[9px] animate-pulse">ESTAMPANDO...</span>}
             </label>
             
             <div className="grid grid-cols-2 gap-4">
               {capturedPhotos.map((photo, index) => (
                 <div key={index} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-indigo-100 shadow-sm">
                   <img src={photo} className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg shadow-lg"><Trash2 size={14} /></button>
+                  <button type="button" onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg shadow-lg hover:bg-rose-600 transition-colors"><Trash2 size={14} /></button>
                 </div>
               ))}
               {capturedPhotos.length < 2 && (
-                <button type="button" disabled={!formData.plate || isProcessingPhoto} onClick={() => evidenceInputRef.current?.click()} className="aspect-square rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all disabled:opacity-40">
+                <button type="button" disabled={!formData.plate || isProcessingPhotoLocal} onClick={() => evidenceInputRef.current?.click()} className="aspect-square rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all disabled:opacity-40">
                   <Camera size={32} />
                   <span className="text-[9px] font-black uppercase tracking-widest">Tomar Foto</span>
                 </button>
@@ -174,7 +169,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
             <input type="file" accept="image/*" capture="environment" ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
           </div>
 
-          <button type="submit" disabled={isSubmitting || isProcessingPhoto} className="w-full py-6 bg-[#0f172a] text-white font-black rounded-[2rem] text-sm uppercase shadow-2xl hover:bg-indigo-600 disabled:opacity-50 transition-all flex items-center justify-center gap-4 group">
+          <button type="submit" disabled={isSubmitting || isProcessingPhotoLocal} className="w-full py-6 bg-[#0f172a] text-white font-black rounded-[2rem] text-sm uppercase shadow-2xl hover:bg-indigo-600 disabled:opacity-50 transition-all flex items-center justify-center gap-4 group">
             {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <CheckCircle size={24} />}
             {isSubmitting ? 'ENVIANDO...' : 'REGISTRAR CALIBRACIÓN'}
           </button>

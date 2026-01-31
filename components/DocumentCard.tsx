@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { VehicleDocument } from '../types';
 import { calculateStatus, formatDate } from '../utils';
@@ -59,7 +58,8 @@ const DocumentCard: React.FC<DocumentCardProps> = ({ title, doc, icon, onViewDoc
 
       <div className="flex justify-between items-start mb-8">
         <div className={`p-4 rounded-2xl transition-all duration-500 shadow-xl ${currentStyle.iconBg}`}>
-          {React.cloneElement(icon as React.ReactElement, { size: 24 })}
+          {/* Fix: casting to any to allow size prop on cloned element */}
+          {React.cloneElement(icon as React.ReactElement<any>, { size: 24 })}
         </div>
         <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase shadow-sm ${currentStyle.badge}`}>
           {currentStyle.label}

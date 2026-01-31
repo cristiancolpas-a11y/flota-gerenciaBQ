@@ -3,11 +3,12 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, FiveSReport, Calibration } from '../types';
 import { calculateStatus, normalizePlate, getWeekNumber, normalizeStr } from '../utils';
 
-// URL del Web App de Google Apps Script actualizada con la nueva implementación
+// URL del Web App de Google Apps Script
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxVZvjX3vIoXosr0_sppbWAMSAD4H4k-bbrg3i58U_he9AI-_YqziD0CQ5kzM43OmPM/exec'; 
 
-const MASTER_SPREADSHEET_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
-const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${MASTER_SPREADSHEET_ID}/export?format=csv`;
+const MASTER_SPREADSHEET_ID = '1GPfhWOUM8As4vVRirzWgSzFwv (01I6EAc14uGoWc98U'; // ID corregido de la Maestra
+const MASTER_DOC_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
+const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${MASTER_DOC_ID}/export?format=csv`;
 
 const PUBLISHED_REPORTS_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUVn_15h-QFUfkpJr8-tpnW1RHt-lgjrzGjzu8g5_sy6px7WukL_z8Him-V5qRl9ZJiYAUYP7ISzMh/pub?output=csv&gid=0';
 
@@ -18,7 +19,7 @@ const VEHICLES_TAB_GID = '1506825194';
 const DRIVERS_TAB_GID = '1834987510'; 
 const MILEAGE_LOGS_GID = '1929496440'; 
 const FIVES_TAB_GID = '393618683'; 
-const CALIBRATIONS_TAB_GID = '0'; 
+const CALIBRATIONS_TAB_GID = '1480036306'; 
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
@@ -62,28 +63,62 @@ export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
         skipEmptyLines: true,
         complete: (results) => {
           const rows = results.data as any[];
+          // Filtramos filas que no tengan placa o sean encabezados
           const vehicles = rows.filter(row => {
             const rawPlateValue = cleanSheetValue(row[2]).toUpperCase();
             return rawPlateValue && !rawPlateValue.includes("PLACA") && normalizePlate(rawPlateValue).length >= 3;
           }).map((row): Vehicle => {
             const plateValue = normalizePlate(cleanSheetValue(row[2]));
+            
+            // Mapeo según estructura estándar de la Maestra
+            // Col 0: CD, Col 1: Contratista, Col 2: Placa, Col 3: SOAT Exp, Col 4: SOAT Días
+            // Col 5: RTM Exp, Col 6: RTM Días, Col 7: PLC Exp, Col 8: PLC Días
+            // Col 9: EXT Exp, Col 10: EXT Días
             const soatExp = parseFlexibleDate(row[3]);
             const rtmExp = parseFlexibleDate(row[5]);
             const plcExp = parseFlexibleDate(row[7]);
             const extExp = parseFlexibleDate(row[9]);
 
+            const soatDays = parseInt(cleanSheetValue(row[4])) || undefined;
+            const rtmDays = parseInt(cleanSheetValue(row[6])) || undefined;
+            const plcDays = parseInt(cleanSheetValue(row[8])) || undefined;
+            const extDays = parseInt(cleanSheetValue(row[10])) || undefined;
+
             return {
               id: `v-${plateValue}`,
-              cd: cleanSheetValue(row[0]).toUpperCase(),
-              contractor: cleanSheetValue(row[1]).toUpperCase(),
+              cd: cleanSheetValue(row[0]).toUpperCase() || 'GENERAL',
+              contractor: cleanSheetValue(row[1]).toUpperCase() || 'GENERAL',
               brand: "Vehículo",
               plate: plateValue,
               model: 'Unidad',
               propertyCardUrl: cleanSheetValue(row[19]),
-              soat: { expiryDate: soatExp, lastRenewalDate: '', status: calculateStatus(soatExp), daysPending: parseInt(cleanSheetValue(row[4])) || undefined, url: cleanSheetValue(row[20]) },
-              rtm: { expiryDate: rtmExp, lastRenewalDate: '', status: calculateStatus(rtmExp), daysPending: parseInt(cleanSheetValue(row[4])) || undefined, url: cleanSheetValue(row[21]) },
-              plc: { expiryDate: plcExp, lastRenewalDate: '', status: calculateStatus(plcExp), daysPending: parseInt(cleanSheetValue(row[8])) || undefined, url: cleanSheetValue(row[22]) },
-              extinguisher: { expiryDate: extExp, lastRenewalDate: '', status: calculateStatus(extExp), daysPending: parseInt(cleanSheetValue(row[10])) || undefined },
+              soat: { 
+                expiryDate: soatExp, 
+                lastRenewalDate: '', 
+                status: calculateStatus(soatExp), 
+                daysPending: soatDays, 
+                url: cleanSheetValue(row[20]) 
+              },
+              rtm: { 
+                expiryDate: rtmExp, 
+                lastRenewalDate: '', 
+                status: calculateStatus(rtmExp), 
+                daysPending: rtmDays, 
+                url: cleanSheetValue(row[21]) 
+              },
+              plc: { 
+                expiryDate: plcExp, 
+                lastRenewalDate: '', 
+                status: calculateStatus(plcExp), 
+                daysPending: plcDays, 
+                url: cleanSheetValue(row[22]) 
+              },
+              extinguisher: { 
+                expiryDate: extExp, 
+                lastRenewalDate: '', 
+                status: calculateStatus(extExp), 
+                daysPending: extDays 
+              },
               lastUpdate: new Date().toISOString()
             };
           });
@@ -91,7 +126,10 @@ export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
         }
       });
     });
-  } catch (e) { return []; }
+  } catch (e) { 
+    console.error("Error fetching vehicles:", e);
+    return []; 
+  }
 };
 
 export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
@@ -111,14 +149,13 @@ export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
             const rawName = cleanSheetValue(row[2]).toUpperCase();
             return rawName && !rawName.includes("NOMBRE") && !rawName.includes("CONDUCTOR");
           }).map((row): Driver => {
-            const nameValue = cleanSheetValue(row[2]);
             const licExp = parseFlexibleDate(row[9]);  
             const manExp = parseFlexibleDate(row[11]); 
             const medExp = parseFlexibleDate(row[13]); 
 
             return {
               id: `d-${cleanSheetValue(row[3]) || Math.random()}`,
-              name: nameValue,
+              name: cleanSheetValue(row[2]),
               identification: cleanSheetValue(row[3]) || 'SIN ID',
               hireDate: parseFlexibleDate(row[6]),
               position: cleanSheetValue(row[4]),
@@ -213,7 +250,7 @@ export const fetchFiveSReportsFromSheet = async (): Promise<FiveSReport[]> => {
 
 export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
   try {
-    const url = `${BASE_URL_MASTER}&gid=${CALIBRATIONS_TAB_GID}${getCacheBuster()}`;
+    const url = `${BASE_URL_OPERATION}&gid=${CALIBRATIONS_TAB_GID}${getCacheBuster()}`;
     const response = await fetch(url);
     const csvText = await response.text();
     if (csvText.includes('<!DOCTYPE html>')) return [];
@@ -225,21 +262,42 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
         complete: (results) => {
           const rows = results.data as any[];
           const calibrations = rows.filter(row => {
-            // Estructura: MES(0), FECHA(1), SEMANA(2), PLACA(3), TALLER(4), EVIDENCIA(5)
-            const plateVal = cleanSheetValue(row[3]).toUpperCase();
-            return plateVal && !plateVal.includes("PLACA") && plateVal.length >= 3;
+            const plateVal3 = cleanSheetValue(row[3]).toUpperCase();
+            const plateVal4 = cleanSheetValue(row[4]).toUpperCase();
+            const isHeader = plateVal3.includes("PLACA") || plateVal4.includes("PLACA");
+            return !isHeader && (plateVal3.length >= 3 || plateVal4.length >= 3);
           }).map((row): Calibration => {
-            const calDate = parseFlexibleDate(row[1]);
-            // Dashboard: Vencimiento a 1 año de la calibración si no hay dato
-            const expDate = calDate ? new Date(new Date(calDate).setFullYear(new Date(calDate).getFullYear() + 1)).toISOString().split('T')[0] : '';
+            let plateIdx = 3;
+            let tallerIdx = 4;
+            let dateIdx = 1;
+            let evidenceIdx = 5;
+
+            if (cleanSheetValue(row[3]).length < 3 || !isNaN(Number(cleanSheetValue(row[3])))) {
+               plateIdx = 4;
+               tallerIdx = 5;
+               evidenceIdx = 6;
+               dateIdx = 3; 
+            }
+
+            const calDate = parseFlexibleDate(row[dateIdx]);
+            const expiryDateObj = calDate ? new Date(new Date(calDate).setFullYear(new Date(calDate).getFullYear() + 1)) : null;
+            const expDate = expiryDateObj ? expiryDateObj.toISOString().split('T')[0] : '';
+            
+            let daysPending = undefined;
+            if (expiryDateObj) {
+               const diff = expiryDateObj.getTime() - new Date().getTime();
+               daysPending = Math.ceil(diff / (1000 * 60 * 60 * 24));
+            }
+
             return {
-              id: `cal-${cleanSheetValue(row[3])}-${cleanSheetValue(row[4])}-${row[1]}`,
-              plate: normalizePlate(cleanSheetValue(row[3])),
-              equipment: cleanSheetValue(row[4]).toUpperCase(), // Taller como Identificador
+              id: `cal-${cleanSheetValue(row[plateIdx])}-${cleanSheetValue(row[tallerIdx])}-${row[dateIdx]}`,
+              plate: normalizePlate(cleanSheetValue(row[plateIdx])),
+              equipment: cleanSheetValue(row[tallerIdx]).toUpperCase() || 'GENERAL', 
               calibrationDate: calDate,
               expiryDate: expDate,
-              certificateUrl: cleanSheetValue(row[5]),
-              status: calculateStatus(expDate)
+              certificateUrl: cleanSheetValue(row[evidenceIdx]),
+              status: calculateStatus(expDate),
+              daysPending
             };
           });
           resolve(calibrations);
