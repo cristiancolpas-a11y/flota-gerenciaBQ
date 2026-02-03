@@ -32,70 +32,38 @@ import {
 
 import { formatDate, getWeekNumber, normalizePlate, calculateStatus } from './utils';
 import { 
-  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc
+  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase
 } from 'lucide-react';
 
-// Icono personalizado: Reporte con Gráfico y Engranaje (BASADO EN LA ÚLTIMA IMAGEN)
+// Icono personalizado: Reporte con Gráfico y Engranaje
 const ManagementReportIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 100 100" 
-    fill="none" 
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-  >
-    {/* Cuerpo de la tabla (Clipboard) */}
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
     <rect x="15" y="10" width="60" height="80" rx="8" fill="#F8FAFC" stroke="#1E293B" strokeWidth="4"/>
     <rect x="35" y="5" width="20" height="8" rx="2" fill="#FBBF24" stroke="#1E293B" strokeWidth="3"/>
-    
-    {/* Gráfico de barras interno */}
     <rect x="25" y="35" width="8" height="5" fill="#F87171" stroke="#1E293B" strokeWidth="2"/>
     <rect x="35" y="30" width="8" height="10" fill="#FBBF24" stroke="#1E293B" strokeWidth="2"/>
     <rect x="45" y="25" width="8" height="15" fill="#34D399" stroke="#1E293B" strokeWidth="2"/>
     <rect x="55" y="20" width="8" height="20" fill="#60A5FA" stroke="#1E293B" strokeWidth="2"/>
-    
-    {/* Checkboxes */}
     <rect x="25" y="50" width="12" height="12" rx="2" fill="#60A5FA" stroke="#1E293B" strokeWidth="2"/>
     <path d="M28 56L31 59L34 53" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     <line x1="42" y1="52" x2="65" y2="52" stroke="#1E293B" strokeWidth="2" strokeLinecap="round"/>
     <line x1="42" y1="58" x2="60" y2="58" stroke="#1E293B" strokeWidth="2" strokeLinecap="round"/>
-
     <rect x="25" y="68" width="12" height="12" rx="2" fill="#34D399" stroke="#1E293B" strokeWidth="2"/>
     <path d="M28 74L31 77L34 71" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     <line x1="42" y1="70" x2="65" y2="70" stroke="#1E293B" strokeWidth="2" strokeLinecap="round"/>
     <line x1="42" y1="76" x2="60" y2="76" stroke="#1E293B" strokeWidth="2" strokeLinecap="round"/>
-
-    {/* Engranaje Grande (Amarillo) overlay al frente a la derecha */}
     <g transform="translate(10, 5)">
       <circle cx="65" cy="70" r="14" fill="#FBBF24" stroke="#1E293B" strokeWidth="4"/>
       <circle cx="65" cy="70" r="4" fill="white" stroke="#1E293B" strokeWidth="3"/>
-      {/* Dientes del engranaje */}
       {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => (
-        <rect 
-          key={angle}
-          x="62.5" y="52" width="5" height="8" rx="1" 
-          fill="#FBBF24" stroke="#1E293B" strokeWidth="2"
-          transform={`rotate(${angle}, 65, 70)`}
-        />
+        <rect key={angle} x="62.5" y="52" width="5" height="8" rx="1" fill="#FBBF24" stroke="#1E293B" strokeWidth="2" transform={`rotate(${angle}, 65, 70)`}/>
       ))}
     </g>
   </svg>
 );
 
-// Icono personalizado de Montacargas animado
 const ForkliftIcon = ({ size = 24, className = "", isMoving = false }: { size?: number, className?: string, isMoving?: boolean }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2.5" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={`${className} ${isMoving ? 'animate-forklift-vibrate' : ''}`}
-  >
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`${className} ${isMoving ? 'animate-forklift-vibrate' : ''}`}>
     <path d="M12 17V7" />
     <path d="M12 7h2" />
     <path d="M5 17h12v-5l-5-1H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2z" />
@@ -110,12 +78,38 @@ const ForkliftIcon = ({ size = 24, className = "", isMoving = false }: { size?: 
 );
 
 type ActiveView = 'vehiculos' | 'conductores' | 'kilometrajes' | 'novedades' | 'fives' | 'calibraciones';
+type Category = 'DOCUMENTOS' | 'NEUMATICOS' | 'GESTION';
 
 const App: React.FC = () => {
   const [activeModule, setActiveModule] = useState<'camiones' | 'montacargas' | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>('vehiculos');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
+  // Estado para acordeones del Sidebar
+  const [expandedCats, setExpandedCats] = useState<Record<Category, boolean>>({
+    'DOCUMENTOS': true,
+    'NEUMATICOS': false,
+    'GESTION': false
+  });
+
+  const toggleCategory = (cat: Category) => {
+    setExpandedCats(prev => ({ ...prev, [cat]: !prev[cat] }));
+  };
+
+  const closeAllCategories = () => {
+    setExpandedCats({
+      'DOCUMENTOS': false,
+      'NEUMATICOS': false,
+      'GESTION': false
+    });
+  };
+
+  const handleNavigate = (view: ActiveView) => {
+    setActiveView(view);
+    closeAllCategories();
+    setIsSidebarOpen(false); // Cierra el sidebar en móvil
+  };
+
   // Data State
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -181,7 +175,6 @@ const App: React.FC = () => {
         <div className="relative z-10 flex flex-col items-center w-full max-w-4xl">
            <div className="mb-12 flex flex-col items-center text-center">
               <div className="p-10 bg-white rounded-[4rem] shadow-2xl mb-8 animate-in zoom-in duration-700 border-4 border-white/20">
-                 {/* Nuevo Logo basado en la imagen enviada: Tabla + Gráfico + Engranaje */}
                  <ManagementReportIcon size={160} />
               </div>
               <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase text-center">FLOTA BARRANQUILLA</h1>
@@ -215,7 +208,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
-      {/* SIDEBAR */}
+      {/* SIDEBAR CON ACORDEÓN AUTO-CONTRAÍBLE */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#0f172a] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform xl:relative xl:translate-x-0 border-r border-white/5`}>
         <div className="p-8 flex flex-col h-full space-y-8">
           <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActiveModule(null)}>
@@ -223,23 +216,89 @@ const App: React.FC = () => {
             <span className="text-white font-black uppercase tracking-widest text-sm">SALIR</span>
           </div>
           
-          <nav className="flex-grow space-y-1.5 custom-scrollbar overflow-y-auto pr-2">
-            {[
-              { id: 'vehiculos', label: 'Dashboard', icon: <LayoutDashboard size={18}/> },
-              { id: 'conductores', label: 'Conductores', icon: <Users size={18}/> },
-              { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
-              { id: 'novedades', label: 'Taller / Novedades', icon: <ClipboardList size={18}/> },
-              { id: 'fives', label: 'Auditoría 5S', icon: <Shield size={18}/> },
-              { id: 'calibraciones', label: 'Calibraciones', icon: <Disc size={18}/> },
-            ].map(item => (
-              <button 
-                key={item.id} 
-                onClick={() => {setActiveView(item.id as ActiveView); setIsSidebarOpen(false);}} 
-                className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-              >
-                {item.icon} {item.label}
-              </button>
-            ))}
+          <nav className="flex-grow space-y-6 custom-scrollbar overflow-y-auto pr-2">
+            
+            {/* CATEGORÍA 1: DOCUMENTOS */}
+            <div className="space-y-2">
+               <button 
+                onClick={() => toggleCategory('DOCUMENTOS')}
+                className="w-full flex items-center justify-between px-4 py-2 text-indigo-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-white transition-colors"
+               >
+                 <span className="flex items-center gap-2"><FileText size={14} /> DOCUMENTOS</span>
+                 {expandedCats.DOCUMENTOS ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+               </button>
+               {expandedCats.DOCUMENTOS && (
+                 <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                    <button 
+                      onClick={() => handleNavigate('vehiculos')} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'vehiculos' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <LayoutDashboard size={18}/> Vehículos
+                    </button>
+                    <button 
+                      onClick={() => handleNavigate('conductores')} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'conductores' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Users size={18}/> Conductores
+                    </button>
+                 </div>
+               )}
+            </div>
+
+            {/* CATEGORÍA 2: NEUMÁTICOS */}
+            <div className="space-y-2">
+               <button 
+                onClick={() => toggleCategory('NEUMATICOS')}
+                className="w-full flex items-center justify-between px-4 py-2 text-indigo-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-white transition-colors"
+               >
+                 <span className="flex items-center gap-2"><Disc size={14} /> NEUMÁTICOS</span>
+                 {expandedCats.NEUMATICOS ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+               </button>
+               {expandedCats.NEUMATICOS && (
+                 <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                    <button 
+                      onClick={() => handleNavigate('calibraciones')} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'calibraciones' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Disc size={18}/> Calibraciones
+                    </button>
+                 </div>
+               )}
+            </div>
+
+            {/* CATEGORÍA 3: GESTIÓN */}
+            <div className="space-y-2">
+               <button 
+                onClick={() => toggleCategory('GESTION')}
+                className="w-full flex items-center justify-between px-4 py-2 text-indigo-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-white transition-colors"
+               >
+                 <span className="flex items-center gap-2"><Settings2 size={14} /> GESTIÓN</span>
+                 {expandedCats.GESTION ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+               </button>
+               {expandedCats.GESTION && (
+                 <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                    <button 
+                      onClick={() => handleNavigate('kilometrajes')} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'kilometrajes' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Gauge size={18}/> Kilometrajes
+                    </button>
+                    <button 
+                      onClick={() => handleNavigate('novedades')} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'novedades' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <ClipboardList size={18}/> Novedades
+                    </button>
+                    <button 
+                      onClick={() => handleNavigate('fives')} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'fives' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Shield size={18}/> 5S Auditoría
+                    </button>
+                 </div>
+               )}
+            </div>
+
           </nav>
 
           <div className="pt-6 border-t border-white/5">
@@ -276,7 +335,7 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-grow p-6 md:p-10 overflow-y-auto custom-scrollbar bg-[#f8fafc]">
-          {/* DASHBOARD VEHICULOS */}
+          {/* VISTAS DINÁMICAS */}
           {activeView === 'vehiculos' && (
             <div className="space-y-8 max-w-7xl mx-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
@@ -317,7 +376,6 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {/* CONDUCTORES */}
           {activeView === 'conductores' && (
             <div className="space-y-8">
               {drivers.filter(d => filterCd === 'all' || d.cd === filterCd).map(d => (
@@ -326,7 +384,6 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {/* KILOMETRAJES (VISTA CORREGIDA) */}
           {activeView === 'kilometrajes' && (
             <MileageEntryForm 
               vehicles={vehicles} 
@@ -345,7 +402,6 @@ const App: React.FC = () => {
             />
           )}
 
-          {/* NOVEDADES */}
           {activeView === 'novedades' && (
             <div className="space-y-8 max-w-7xl mx-auto">
                <div className="flex justify-between items-center bg-[#0f172a] p-10 rounded-[3rem] text-white">
@@ -362,7 +418,6 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {/* 5S */}
           {activeView === 'fives' && (
             <div className="space-y-8 max-w-7xl mx-auto">
                <div className="flex justify-between items-center bg-emerald-600 p-10 rounded-[3rem] text-white">
@@ -379,7 +434,6 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {/* CALIBRACIONES */}
           {activeView === 'calibraciones' && (
             <div className="space-y-8 max-w-7xl mx-auto">
                <div className="flex justify-between items-center bg-[#0f172a] p-10 rounded-[3rem] text-white">
