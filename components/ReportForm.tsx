@@ -55,10 +55,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
     reader.onloadend = async () => {
       // Aplicar marca de agua profesional con Placa y GPS
       const watermarked = await processImageWithWatermark(reader.result as string, formData.plate, coords);
-      setCapturedPhotos(prev => [...prev, watermarked]);
+      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 6));
       setIsProcessingPhoto(false);
     };
     reader.readAsDataURL(file);
+    if (evidenceInputRef.current) evidenceInputRef.current.value = "";
   };
 
   const removePhoto = (index: number) => {
@@ -152,7 +153,22 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
                 <option value="">SELECCIONE TALLER</option>
                 <option value="AUTECO">AUTECO</option>
                 <option value="AUTOMUNDIAL">AUTOMUNDIAL</option>
+                <option value="CAMION COLOMBIA">CAMION COLOMBIA</option>
+                <option value="COUNTRY MOTORS">COUNTRY MOTORS</option>
                 <option value="DIVERMOTORS">DIVERMOTORS</option>
+                <option value="GARCILLANTAS">GARCILLANTAS</option>
+                <option value="ROINCOR">ROINCOR</option>
+                <option value="TECNIBENZ">TECNIBENZ</option>
+                <option value="TODOFIBRAS">TODOFIBRAS</option>
+                <option value="TRAMICON">TRAMICON</option>
+                <option value="VEHIPESA">VEHIPESA</option>
+                <option value="COEXITO">COEXITO</option>
+                <option value="ETM">ETM</option>
+                <option value="AUTOCARIBE">AUTOCARIBE</option>
+                <option value="NAVITRANS">NAVITRANS</option>
+                <option value="GLASS LAMINADO">GLASS LAMINADO</option>
+                <option value="COUNTRY TRUCK">COUNTRY TRUCK</option>
+                <option value="ELECTRONIC">ELECTRONIC</option>
                 <option value="OTROS">OTROS</option>
               </select>
               <select className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800" value={formData.source} onChange={e => setFormData({ ...formData, source: e.target.value })}>
@@ -164,22 +180,27 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
           </div>
 
           <div className="space-y-4">
-            <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest flex items-center justify-between">
-              Evidencia Fotográfica (Con Sello GPS)
-              {isProcessingPhoto && <span className="text-amber-500 flex items-center gap-2"><Loader2 size={12} className="animate-spin"/> Estampando...</span>}
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+                Evidencia Fotográfica (Con Sello GPS)
+              </label>
+              <div className="flex items-center gap-4">
+                {isProcessingPhoto && <span className="text-amber-500 text-[10px] font-black flex items-center gap-1.5"><Loader2 size={12} className="animate-spin"/> Estampando...</span>}
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{capturedPhotos.length} / 6</span>
+              </div>
+            </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-3 sm:grid-cols-3 gap-4">
               {capturedPhotos.map((photo, index) => (
                 <div key={index} className="relative aspect-square rounded-2xl overflow-hidden border-2 border-indigo-100 shadow-sm">
                   <img src={photo} className="w-full h-full object-cover" />
                   <button type="button" onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg shadow-lg"><Trash2 size={14} /></button>
                 </div>
               ))}
-              {capturedPhotos.length < 4 && (
-                <button type="button" disabled={!formData.plate || isProcessingPhoto} onClick={() => evidenceInputRef.current?.click()} className="aspect-square rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all disabled:opacity-40">
+              {capturedPhotos.length < 6 && (
+                <button type="button" disabled={!formData.plate || isProcessingPhoto} onClick={() => evidenceInputRef.current?.click()} className="aspect-square rounded-2xl border-2 border-dashed border-slate-400 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all disabled:opacity-40">
                   <Camera size={32} />
-                  <span className="text-[9px] font-black uppercase tracking-widest">Tomar Foto</span>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-center px-1">Tomar Foto</span>
                 </button>
               )}
             </div>

@@ -18,7 +18,7 @@ function doPost(e) {
     var d = req.data;
     var m = req.method;
     var lock = LockService.getScriptLock();
-    lock.waitLock(15000); // Esperar un poco más por seguridad
+    lock.waitLock(15000);
 
     if (m === 'POST_MILEAGE') {
       var s = getS(ss, "KILOMETRAJE");
@@ -36,18 +36,13 @@ function doPost(e) {
       var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
       var img = sImg(d.certificateUrl, "CAL_" + placa);
       
-      // DATOS: [MES(A), FECHA(B), SEMANA(C), PLACA(D), TALLER(E), FOTO(F)]
       var rowData = [mes, dt, getW(dObj), placa, (d.taller || "GENERAL").toUpperCase(), img];
       
-      // MEJORA: Buscar primera fila vacía basada en la columna D (PLACA)
-      // para evitar saltos por culpa de fórmulas en la columna G
       var colD = s.getRange("D:D").getValues();
       var targetRow = 1;
       while (targetRow <= colD.length && colD[targetRow - 1][0] !== "") {
         targetRow++;
       }
-      
-      // Escribir los datos en la fila encontrada
       s.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
     }
 
@@ -65,7 +60,8 @@ function doPost(e) {
       if (idx === -1) {
         var uI = sImg(d.initialEvidence, "INI_" + placa);
         var uM = sImg(d.entryMap, "MAP_" + placa);
-        s.appendRow([d.id, d.date, placa, d.source, d.novelty, uI, uM, "ABIERTO", "", "", "", "", "", "", (d.workshop || "").toUpperCase(), d.cd || "G"]);
+        // Columnas: A:ID, B:FECHA, C:PLACA, D:FUENTE, E:FOTOS, F:NOVEDAD, G:MAPA...
+        s.appendRow([d.id, d.date, placa, d.source, uI, d.novelty, uM, "ABIERTO", "", "", "", "", "", "", (d.workshop || "").toUpperCase(), d.cd || "G"]);
       } else {
         if (d.status) s.getRange(idx, 8).setValue(d.status);
         if (d.workshopEvidence) s.getRange(idx, 9).setValue(sImg(d.workshopEvidence, "TALLER_" + placa));
@@ -129,7 +125,7 @@ function sImg(b64, n) {
     var fl = f.createFile(bl);
     fl.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return fl.getUrl();
-  } catch (e) { 
+  } catch (err) { 
     return "DRIVE_ERROR: Revise permisos."; 
   }
 }
@@ -143,7 +139,7 @@ function getW(d) {
     t.setMonth(0, 1);
     if (t.getDay() != 4) t.setMonth(0, 1 + ((4 - t.getDay()) + 7) % 7);
     return 1 + Math.ceil((f - t) / 604800000);
-  } catch(e) { return 0; }
+  } catch(err) { return 0; }
 }
 
 function today() { return new Date().toISOString().split('T')[0]; }

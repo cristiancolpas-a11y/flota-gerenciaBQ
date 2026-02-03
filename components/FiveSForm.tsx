@@ -48,10 +48,11 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
     reader.onloadend = async () => {
       // Estampar marca de agua profesional 5S
       const watermarked = await processImageWithWatermark(reader.result as string, formData.plate, coords);
-      setCapturedPhotos(prev => [...prev, watermarked]);
+      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 6));
       setIsProcessingPhoto(false);
     };
     reader.readAsDataURL(file);
+    if (evidenceInputRef.current) evidenceInputRef.current.value = "";
   };
 
   const removePhoto = (index: number) => {
@@ -130,20 +131,23 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
               <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
                  <Camera size={18} /> EVIDENCIA FOTOGRÁFICA
               </span>
-              {isProcessingPhoto && <span className="text-amber-500 text-[9px] font-black animate-pulse">ESTAMPANDO GPS...</span>}
+              <div className="flex items-center gap-4">
+                {isProcessingPhoto && <span className="text-amber-500 text-[9px] font-black animate-pulse">ESTAMPANDO GPS...</span>}
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{capturedPhotos.length} / 6</span>
+              </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               {capturedPhotos.map((photo, index) => (
                 <div key={index} className="relative aspect-square rounded-[2rem] overflow-hidden border-4 border-slate-50 shadow-md">
                   <img src={photo} className="w-full h-full object-cover" />
                   <button type="button" onClick={() => removePhoto(index)} className="absolute top-3 right-3 p-2 bg-rose-500 text-white rounded-xl shadow-lg"><Trash2 size={16} /></button>
                 </div>
               ))}
-              {capturedPhotos.length < 4 && (
+              {capturedPhotos.length < 6 && (
                 <button type="button" disabled={!formData.plate || isProcessingPhoto} onClick={() => evidenceInputRef.current?.click()} className="aspect-square rounded-[2rem] border-4 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-300 hover:border-emerald-400 hover:text-emerald-600 transition-all disabled:opacity-40">
                   <Plus size={32} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Tomar Foto</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-center px-1">Tomar Foto</span>
                 </button>
               )}
             </div>

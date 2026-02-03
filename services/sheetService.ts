@@ -3,8 +3,8 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, FiveSReport, Calibration } from '../types';
 import { calculateStatus, normalizePlate, getWeekNumber, normalizeStr } from '../utils';
 
-// URL DE TU WEB APP (ACTUALIZADA EL 02/02/2025)
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzQ9hGWW4Kt7zgpW1wygXUfGRxiSlP1C13RMHr_IkRxRqf6VTEgMHfIcfiWU2Xs1-Fi/exec'; 
+// URL DE TU WEB APP
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxV6w7hv7_BYaEtfneVrwNx2CvXkB1-aUv6yeKBEgPKv8GncwaM6aA10Stli36YWiH6/exec'; 
 
 const MASTER_DOC_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${MASTER_DOC_ID}/export?format=csv`;
@@ -17,21 +17,22 @@ const DRIVERS_TAB_GID = '1834987510';
 const MILEAGE_LOGS_GID = '1929496440'; 
 const FIVES_TAB_GID = '393618683'; 
 const CALIBRATIONS_TAB_GID = '50555789'; 
-const REPORTS_TAB_GID = '0'; // Asegúrate de que la pestaña "REPORTE" sea la primera (GID 0)
+// CAMBIO CRÍTICO: El GID 0 suele ser la primera pestaña (Kilometraje). 
+// Para la pestaña REPORTE (segunda), usamos el GID detectado o el estándar 443714574.
+const REPORTS_TAB_GID = '443714574'; 
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
 const cleanSheetValue = (val: any): string => {
   if (val === null || val === undefined) return '';
   const str = String(val).trim();
-  // Si el valor parece código CSS/HTML, limpiarlo
-  if (str.includes('{') && str.includes('}') || str.includes('<style')) return 'Error de Formato';
+  if (str.includes('{') && str.includes('}') || str.includes('<style')) return '';
   return str;
 };
 
 const parseFlexibleDate = (dateStr: any): string => {
   const cleanStr = cleanSheetValue(dateStr);
-  if (!cleanStr || cleanStr.toLowerCase().includes('fecha') || cleanStr === 'Error de Formato') return '';
+  if (!cleanStr || cleanStr.toLowerCase().includes('fecha')) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) return cleanStr;
   const digits = cleanStr.match(/\d+/g);
   if (!digits || digits.length < 3) return '';
@@ -48,12 +49,10 @@ const parseFlexibleDate = (dateStr: any): string => {
   } catch { return ''; }
 };
 
-// Función auxiliar para validar si la respuesta es CSV real o basura HTML
 const isValidCsv = (text: string): boolean => {
   if (!text) return false;
-  // Si contiene etiquetas HTML o bloques de CSS, Google nos está pidiendo login o devolviendo un error
   if (text.includes('<!DOCTYPE html>') || text.includes('display:inline-block') || text.includes('google-signin')) {
-    console.error("Acceso denegado: El Google Sheet no es público o la URL es incorrecta.");
+    console.error("Acceso denegado: Verifique que el Google Sheet esté compartido como 'Cualquiera con el enlace puede leer'.");
     return false;
   }
   return true;
@@ -154,33 +153,39 @@ export const fetchReportsFromSheet = async (): Promise<Report[]> => {
         skipEmptyLines: true,
         complete: (results) => {
           const rows = results.data as any[];
-          // Filtrar basura: Debe tener al menos una fecha o un ID válido
           const reports = rows.filter(row => {
             const id = cleanSheetValue(row[0]);
-            return id && !id.includes("ID") && id.length > 2 && !id.includes('{');
-          }).map((row): Report => ({
-            id: cleanSheetValue(row[0]),
-            date: parseFlexibleDate(row[1]),
-            plate: normalizePlate(cleanSheetValue(row[2])),
-            source: cleanSheetValue(row[3]),
-            novelty: cleanSheetValue(row[4]),
-            initialEvidence: cleanSheetValue(row[5]),
-            entryMap: cleanSheetValue(row[6]),
-            status: cleanSheetValue(row[7]) === 'CERRADO' ? 'CERRADO' : 'ABIERTO',
-            workshopEvidence: cleanSheetValue(row[8]),
-            closureDate: parseFlexibleDate(row[9]),
-            solutionEvidence: cleanSheetValue(row[10]),
-            exitMap: cleanSheetValue(row[11]),
-            daysInShop: parseInt(cleanSheetValue(row[12])) || 0,
-            closureComments: cleanSheetValue(row[13]),
-            workshop: cleanSheetValue(row[14]),
-            cd: cleanSheetValue(row[15])
-          }));
+            // Filtro más permisivo para evitar descartar filas por el nombre del CD
+            return id && !id.includes("ID") && !id.includes('{');
+          }).map((row): Report => {
+            const statusRaw = cleanSheetValue(row[7]).toUpperCase();
+            return {
+              id: cleanSheetValue(row[0]),
+              date: parseFlexibleDate(row[1]),
+              plate: normalizePlate(cleanSheetValue(row[2])),
+              source: cleanSheetValue(row[3]),
+              initialEvidence: cleanSheetValue(row[4]),
+              novelty: cleanSheetValue(row[5]),
+              entryMap: cleanSheetValue(row[6]),
+              status: statusRaw === 'CERRADO' ? 'CERRADO' : 'ABIERTO',
+              workshopEvidence: cleanSheetValue(row[8]),
+              closureDate: parseFlexibleDate(row[9]),
+              solutionEvidence: cleanSheetValue(row[10]),
+              exitMap: cleanSheetValue(row[11]),
+              daysInShop: parseInt(cleanSheetValue(row[12])) || 0,
+              closureComments: cleanSheetValue(row[13]),
+              workshop: cleanSheetValue(row[14]),
+              cd: cleanSheetValue(row[15]) || 'G'
+            };
+          });
           resolve(reports);
         }
       });
     });
-  } catch (e) { return []; }
+  } catch (e) { 
+    console.error("Error cargando reportes:", e);
+    return []; 
+  }
 };
 
 export const fetchFiveSReportsFromSheet = async (): Promise<FiveSReport[]> => {

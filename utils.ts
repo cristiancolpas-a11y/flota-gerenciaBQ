@@ -1,3 +1,4 @@
+
 import { DocumentStatus } from './types';
 
 export const normalizePlate = (plate: string): string => {
@@ -148,7 +149,8 @@ export const createMosaic = async (base64Array: string[]): Promise<string> => {
   }));
 
   const numImages = images.length;
-  const cols = numImages > 2 ? 2 : numImages;
+  // Usar hasta 3 columnas para manejar mejor hasta 6 imágenes (2 filas de 3)
+  const cols = numImages > 3 ? 3 : numImages; 
   const rows = Math.ceil(numImages / cols);
 
   const canvas = document.createElement('canvas');
