@@ -32,7 +32,7 @@ import {
 
 import { formatDate, getWeekNumber, normalizePlate, calculateStatus } from './utils';
 import { 
-  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase, FilterX
+  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase, FilterX, Package, Box, AlertTriangle
 } from 'lucide-react';
 
 // Icono personalizado: Reporte con Gráfico y Engranaje
@@ -77,7 +77,7 @@ const ForkliftIcon = ({ size = 24, className = "", isMoving = false }: { size?: 
   </svg>
 );
 
-type ActiveView = 'vehiculos' | 'conductores' | 'kilometrajes' | 'novedades' | 'fives' | 'calibraciones';
+type ActiveView = 'vehiculos' | 'conductores' | 'kilometrajes' | 'novedades' | 'fives' | 'calibraciones' | 'inventario';
 type Category = 'DOCUMENTOS' | 'NEUMATICOS' | 'GESTION';
 type StatsFilterType = 'all' | 'soat_expired' | 'rtm_warning' | 'extinguisher_alert';
 
@@ -310,6 +310,12 @@ const App: React.FC = () => {
                     >
                       <Shield size={18}/> 5S Auditoría
                     </button>
+                    <button 
+                      onClick={() => handleNavigate('inventario')} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'inventario' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Package size={18}/> Inventario
+                    </button>
                  </div>
                )}
             </div>
@@ -334,7 +340,13 @@ const App: React.FC = () => {
              <button onClick={() => setIsSidebarOpen(true)} className="xl:hidden p-2 text-slate-600"><Menu/></button>
              <div className="bg-slate-50 border rounded-xl px-4 py-3 flex items-center gap-3 w-64 md:w-96">
                <Search size={18} className="text-slate-400" />
-               <input type="text" placeholder="BUSCAR PLACA..." className="bg-transparent font-black uppercase text-xs outline-none flex-grow" value={searchTerm} onChange={e => setSearchTerm(e.target.value.toUpperCase())} />
+               <input 
+                type="text" 
+                placeholder={activeView === 'inventario' ? "BUSCAR ARTÍCULO..." : "BUSCAR PLACA..."} 
+                className="bg-transparent font-black uppercase text-xs outline-none flex-grow" 
+                value={searchTerm} 
+                onChange={e => setSearchTerm(e.target.value.toUpperCase())} 
+               />
              </div>
            </div>
            
@@ -509,6 +521,89 @@ const App: React.FC = () => {
                  {calibrations.filter(c => (filterCd === 'all' || c.cd === filterCd) && c.plate.includes(searchTerm)).map(c => (
                    <CalibrationCard key={c.id} calibration={c} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
                  ))}
+               </div>
+            </div>
+          )}
+
+          {activeView === 'inventario' && (
+            <div className="space-y-10 max-w-7xl mx-auto">
+               <div className="flex justify-between items-center bg-indigo-900 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
+                 <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <Package size={120} />
+                 </div>
+                 <div className="relative z-10">
+                   <h2 className="text-3xl font-black uppercase tracking-tighter">Gestión de Inventario</h2>
+                   <p className="text-indigo-300 text-[10px] font-black uppercase tracking-widest mt-2 flex items-center gap-2">
+                      <Box size={14} /> Control de Suministros y Activos
+                   </p>
+                 </div>
+                 <button className="px-8 py-5 bg-white text-indigo-900 rounded-2xl font-black text-xs tracking-widest flex items-center gap-3 shadow-xl hover:scale-105 transition-all">
+                   <Plus /> REGISTRAR ENTRADA
+                 </button>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  {[
+                    { title: 'Aceite 15W40', stock: 12, unit: 'Galones', status: 'warning', icon: <Flame className="text-amber-500" /> },
+                    { title: 'Llantas 295/80', stock: 4, unit: 'Unidades', status: 'critical', icon: <Disc className="text-rose-500" /> },
+                    { title: 'Filtros Aire', stock: 45, unit: 'Unidades', status: 'ok', icon: <Settings2 className="text-emerald-500" /> },
+                  ].map((item, idx) => (
+                    <div key={idx} className="bg-white p-8 rounded-[2.5rem] border shadow-sm flex flex-col items-center text-center">
+                       <div className="p-4 bg-slate-50 rounded-2xl mb-4">{item.icon}</div>
+                       <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-2">{item.title}</h3>
+                       <div className="flex items-baseline gap-2">
+                          <span className={`text-4xl font-black ${item.status === 'critical' ? 'text-rose-600' : item.status === 'warning' ? 'text-amber-500' : 'text-emerald-600'}`}>{item.stock}</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase">{item.unit}</span>
+                       </div>
+                       {item.status === 'critical' && (
+                         <div className="mt-4 flex items-center gap-2 px-4 py-1.5 bg-rose-50 text-rose-600 rounded-xl text-[9px] font-black uppercase border border-rose-100 animate-pulse">
+                            <AlertTriangle size={12} /> Stock Crítico
+                         </div>
+                       )}
+                    </div>
+                  ))}
+               </div>
+
+               <div className="bg-white rounded-[3rem] border shadow-xl overflow-hidden">
+                  <div className="p-8 border-b bg-slate-50 flex justify-between items-center">
+                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Últimos Movimientos</span>
+                     <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Ver Todo el Kardex</button>
+                  </div>
+                  <div className="p-0 overflow-x-auto">
+                     <table className="w-full text-left">
+                        <thead>
+                           <tr className="bg-slate-100/50 border-b">
+                              <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest">Fecha</th>
+                              <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest">Artículo</th>
+                              <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Tipo</th>
+                              <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Cant.</th>
+                              <th className="px-8 py-5 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Saldo</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                           {[
+                             { date: '2025-05-15', item: 'PASTILLAS FRENO DEL', type: 'SALIDA', qty: -2, balance: 8, plate: 'ABC123' },
+                             { date: '2025-05-14', item: 'FILTRO COMBUSTIBLE', type: 'ENTRADA', qty: 20, balance: 45, plate: '-' },
+                             { date: '2025-05-14', item: 'BATERIA 12V 90AH', type: 'SALIDA', qty: -1, balance: 2, plate: 'XYZ789' },
+                           ].map((move, i) => (
+                             <tr key={i} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-8 py-6 text-xs font-bold text-slate-500">{move.date}</td>
+                                <td className="px-8 py-6">
+                                   <p className="text-sm font-black text-slate-800 uppercase">{move.item}</p>
+                                   <p className="text-[9px] font-black text-indigo-400 uppercase">Ref: {move.plate}</p>
+                                </td>
+                                <td className="px-8 py-6 text-center">
+                                   <span className={`px-4 py-1 rounded-lg text-[9px] font-black uppercase ${move.type === 'SALIDA' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                      {move.type}
+                                   </span>
+                                </td>
+                                <td className={`px-8 py-6 text-right font-black ${move.type === 'SALIDA' ? 'text-rose-600' : 'text-emerald-600'}`}>{move.qty}</td>
+                                <td className="px-8 py-6 text-right font-black text-slate-800">{move.balance}</td>
+                             </tr>
+                           ))}
+                        </tbody>
+                     </table>
+                  </div>
                </div>
             </div>
           )}
