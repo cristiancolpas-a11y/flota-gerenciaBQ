@@ -32,7 +32,7 @@ import {
 
 import { formatDate, getWeekNumber, normalizePlate, calculateStatus } from './utils';
 import { 
-  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase
+  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase, FilterX
 } from 'lucide-react';
 
 // Icono personalizado: Reporte con Gráfico y Engranaje
@@ -79,6 +79,7 @@ const ForkliftIcon = ({ size = 24, className = "", isMoving = false }: { size?: 
 
 type ActiveView = 'vehiculos' | 'conductores' | 'kilometrajes' | 'novedades' | 'fives' | 'calibraciones';
 type Category = 'DOCUMENTOS' | 'NEUMATICOS' | 'GESTION';
+type StatsFilterType = 'all' | 'soat_expired' | 'rtm_warning' | 'extinguisher_alert';
 
 const App: React.FC = () => {
   const [activeModule, setActiveModule] = useState<'camiones' | 'montacargas' | null>(null);
@@ -91,6 +92,8 @@ const App: React.FC = () => {
     'NEUMATICOS': false,
     'GESTION': false
   });
+
+  const [statsFilter, setStatsFilter] = useState<StatsFilterType>('all');
 
   const toggleCategory = (cat: Category) => {
     setExpandedCats(prev => ({ ...prev, [cat]: !prev[cat] }));
@@ -161,11 +164,23 @@ const App: React.FC = () => {
   };
 
   const filteredVehicles = useMemo(() => {
-    return vehicles.filter(v => 
-      normalizePlate(v.plate).includes(normalizePlate(searchTerm)) &&
-      (filterCd === 'all' || v.cd === filterCd)
-    );
-  }, [vehicles, searchTerm, filterCd]);
+    return vehicles.filter(v => {
+      const matchesSearch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
+      const matchesCd = filterCd === 'all' || v.cd === filterCd;
+      
+      let matchesStats = true;
+      if (statsFilter === 'soat_expired') {
+        matchesStats = calculateStatus(v.soat.expiryDate) === 'expired';
+      } else if (statsFilter === 'rtm_warning') {
+        matchesStats = calculateStatus(v.rtm.expiryDate) === 'warning' || calculateStatus(v.rtm.expiryDate) === 'expired';
+      } else if (statsFilter === 'extinguisher_alert') {
+        const extStatus = calculateStatus(v.extinguisher.expiryDate);
+        matchesStats = extStatus === 'expired' || extStatus === 'warning';
+      }
+
+      return matchesSearch && matchesCd && matchesStats;
+    });
+  }, [vehicles, searchTerm, filterCd, statsFilter, fiveSReports]);
 
   const cds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd).filter(Boolean))), [vehicles]);
 
@@ -338,27 +353,67 @@ const App: React.FC = () => {
           {/* VISTAS DINÁMICAS */}
           {activeView === 'vehiculos' && (
             <div className="space-y-8 max-w-7xl mx-auto">
+              {/* DASHBOARD CON FILTROS INTERACTIVOS */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                 <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
+                 <button 
+                  onClick={() => setStatsFilter('all')}
+                  className={`bg-white p-8 rounded-[2.5rem] border text-left transition-all hover:shadow-lg ${statsFilter === 'all' ? 'border-[#0f172a] border-4 ring-4 ring-[#0f172a]/10' : 'shadow-sm'}`}
+                 >
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Vehículos</p>
                     <p className="text-4xl font-black text-[#0f172a]">{vehicles.length}</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm border-rose-100">
+                 </button>
+                 
+                 <button 
+                  onClick={() => setStatsFilter(statsFilter === 'soat_expired' ? 'all' : 'soat_expired')}
+                  className={`bg-white p-8 rounded-[2.5rem] border text-left transition-all hover:shadow-lg ${statsFilter === 'soat_expired' ? 'border-rose-500 border-4 ring-4 ring-rose-500/10' : 'shadow-sm border-rose-100'}`}
+                 >
                     <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2">SOAT Vencidos</p>
                     <p className="text-4xl font-black text-rose-600">{vehicles.filter(v => calculateStatus(v.soat.expiryDate) === 'expired').length}</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm border-amber-100">
+                 </button>
+
+                 <button 
+                  onClick={() => setStatsFilter(statsFilter === 'rtm_warning' ? 'all' : 'rtm_warning')}
+                  className={`bg-white p-8 rounded-[2.5rem] border text-left transition-all hover:shadow-lg ${statsFilter === 'rtm_warning' ? 'border-amber-500 border-4 ring-4 ring-amber-500/10' : 'shadow-sm border-amber-100'}`}
+                 >
                     <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2">RTM por Vencer</p>
                     <p className="text-4xl font-black text-amber-600">{vehicles.filter(v => calculateStatus(v.rtm.expiryDate) === 'warning').length}</p>
-                 </div>
-                 <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl">
-                    <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-2">Revisiones 5S</p>
-                    <p className="text-4xl font-black">{fiveSReports.length}</p>
-                 </div>
+                 </button>
+
+                 <button 
+                  onClick={() => setStatsFilter(statsFilter === 'extinguisher_alert' ? 'all' : 'extinguisher_alert')}
+                  className={`p-8 rounded-[2.5rem] text-left transition-all hover:shadow-xl ${statsFilter === 'extinguisher_alert' ? 'bg-indigo-800 border-4 border-white shadow-indigo-500/50' : 'bg-indigo-600 shadow-xl'}`}
+                 >
+                    <p className="text-[10px] font-black text-indigo-200 uppercase tracking-widest mb-2">Extintores Vencidos</p>
+                    <p className="text-4xl font-black text-white">{vehicles.filter(v => calculateStatus(v.extinguisher.expiryDate) === 'expired').length}</p>
+                 </button>
               </div>
 
+              {/* INDICADOR DE FILTRO ACTIVO */}
+              {statsFilter !== 'all' && (
+                <div className="flex items-center justify-between bg-slate-100 px-6 py-4 rounded-2xl mb-6 animate-in fade-in slide-in-from-top-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <LayoutDashboard size={16} className="text-indigo-600" />
+                    </div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      Mostrando: <span className="text-[#0f172a]">
+                        {statsFilter === 'soat_expired' ? 'SOAT Vencidos' : 
+                         statsFilter === 'rtm_warning' ? 'RTM por Vencer' : 
+                         'Alerta Extintores'}
+                      </span>
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setStatsFilter('all')}
+                    className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl text-[10px] font-black text-rose-500 uppercase tracking-widest shadow-sm hover:bg-rose-500 hover:text-white transition-all"
+                  >
+                    <FilterX size={14} /> Quitar Filtro
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-8">
-                {filteredVehicles.map(v => (
+                {filteredVehicles.length > 0 ? filteredVehicles.map(v => (
                   <div key={v.id} className="bg-white p-8 rounded-[3.5rem] border shadow-xl grid grid-cols-1 lg:grid-cols-4 gap-6 group hover:border-indigo-200 transition-all">
                     <div className="flex flex-col items-center justify-center bg-slate-50 rounded-[2.5rem] p-6 relative">
                       <div className="bg-[#0f172a] px-8 py-6 rounded-2xl text-white font-mono text-3xl font-black mb-4 shadow-xl">{v.plate}</div>
@@ -371,7 +426,15 @@ const App: React.FC = () => {
                     <DocumentCard title="RTM" doc={v.rtm} icon={<Gauge />} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
                     <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Flame />} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
                   </div>
-                ))}
+                )) : (
+                  <div className="py-40 text-center flex flex-col items-center justify-center bg-white rounded-[4rem] border-2 border-dashed border-slate-200">
+                    <div className="p-10 bg-slate-50 rounded-full mb-6">
+                      <Truck size={64} className="text-slate-200" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-400 uppercase tracking-tighter">No se encontraron vehículos</h3>
+                    <p className="text-xs font-bold text-slate-400 uppercase mt-2">Intente cambiar los filtros o el criterio de búsqueda.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
