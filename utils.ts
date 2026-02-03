@@ -1,4 +1,3 @@
-
 import { DocumentStatus } from './types';
 
 export const normalizePlate = (plate: string): string => {
@@ -64,9 +63,6 @@ export const isImageLink = (url: string): boolean => {
   return url.startsWith('data:image') || url.includes('drive.google.com') || /\.(jpeg|jpg|gif|png|webp|bmp)$/i.test(url);
 };
 
-/**
- * Procesa una imagen base64 añadiendo una marca de agua profesional con Fecha, Hora y Coordenadas GPS
- */
 export const processImageWithWatermark = (
   base64Str: string, 
   plate: string, 
@@ -77,82 +73,50 @@ export const processImageWithWatermark = (
     img.src = base64Str;
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxWidth = 1200; // Calidad profesional
+      const maxWidth = 800; 
       let width = img.width;
       let height = img.height;
-      
       if (width > maxWidth) {
         height = (maxWidth / width) * height;
         width = maxWidth;
       }
-      
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve(base64Str);
-
-      // 1. Dibujar imagen base
       ctx.drawImage(img, 0, 0, width, height);
-
-      // 2. Configurar estilo de marca de agua
+      
       const padding = width * 0.03;
-      const boxWidth = width * 0.35;
-      const boxHeight = height * 0.15;
+      const boxWidth = width * 0.45;
+      const boxHeight = height * 0.18;
       const x = width - boxWidth - padding;
       const y = height - boxHeight - padding;
-
-      // Dibujar fondo semi-transparente para la marca de agua
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)'; // Navy oscuro
-      ctx.beginPath();
-      ctx.roundRect(x, y, boxWidth, boxHeight, width * 0.015);
-      ctx.fill();
       
-      // Borde de la marca de agua
-      ctx.strokeStyle = 'rgba(79, 70, 229, 0.5)'; // Indigo
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // 3. Escribir Texto
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+      ctx.fillRect(x, y, boxWidth, boxHeight);
+      
       const now = new Date();
-      const timestamp = now.toLocaleString('es-CO', { 
-        day: '2-digit', month: '2-digit', year: 'numeric', 
-        hour: '2-digit', minute: '2-digit', second: '2-digit' 
-      });
-
-      ctx.fillStyle = '#ffffff';
-      ctx.textBaseline = 'top';
+      const timestamp = now.toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       
-      // Placa (Resaltada)
-      ctx.font = `black ${Math.round(width * 0.02)}px Inter, sans-serif`;
-      ctx.fillText(`PLACA: ${plate.toUpperCase()}`, x + 20, y + 20);
-
-      // Fecha y Hora
-      ctx.font = `bold ${Math.round(width * 0.014)}px Inter, sans-serif`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.fillText(timestamp, x + 20, y + 50);
-
-      // Ubicación GPS
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${Math.round(width * 0.035)}px Inter, sans-serif`;
+      ctx.fillText(`PLACA: ${plate.toUpperCase()}`, x + 15, y + 25);
+      
+      ctx.font = `${Math.round(width * 0.025)}px Inter, sans-serif`;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillText(timestamp, x + 15, y + 55);
+      
       if (coords) {
-        ctx.fillStyle = '#6366f1'; // Indigo claro
-        ctx.fillText(`GPS: ${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`, x + 20, y + 80);
-        
-        // Simulación de icono de ubicación
-        ctx.fillStyle = '#10b981'; // Emerald
-        ctx.beginPath();
-        ctx.arc(x + boxWidth - 30, y + 30, 5, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.fillStyle = '#f43f5e'; // Rose
-        ctx.fillText('GPS: NO DISPONIBLE', x + 20, y + 80);
+        ctx.fillStyle = '#818cf8';
+        ctx.fillText(`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`, x + 15, y + 80);
       }
-
-      resolve(canvas.toDataURL('image/jpeg', 0.8));
+      resolve(canvas.toDataURL('image/jpeg', 0.4)); 
     };
     img.onerror = () => resolve(base64Str);
   });
 };
 
-export const compressImage = (base64Str: string, maxWidth = 800): Promise<string> => {
+export const compressImage = (base64Str: string, maxWidth = 600): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
@@ -165,7 +129,7 @@ export const compressImage = (base64Str: string, maxWidth = 800): Promise<string
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.6));
+      resolve(canvas.toDataURL('image/jpeg', 0.4));
     };
     img.onerror = () => resolve(base64Str);
   });
@@ -184,12 +148,12 @@ export const createMosaic = async (base64Array: string[]): Promise<string> => {
   }));
 
   const numImages = images.length;
-  const cols = numImages > 1 ? 2 : 1;
+  const cols = numImages > 2 ? 2 : numImages;
   const rows = Math.ceil(numImages / cols);
 
   const canvas = document.createElement('canvas');
-  const cellWidth = 800;
-  const cellHeight = 600;
+  const cellWidth = 400; 
+  const cellHeight = 300;
 
   canvas.width = cols * cellWidth;
   canvas.height = rows * cellHeight;
@@ -200,30 +164,13 @@ export const createMosaic = async (base64Array: string[]): Promise<string> => {
   images.forEach((img, i) => {
     const x = (i % cols) * cellWidth;
     const y = Math.floor(i / cols) * cellHeight;
-    
-    const imgRatio = img.width / img.height;
-    const cellRatio = cellWidth / cellHeight;
-    let drawW, drawH, offsetW, offsetH;
-
-    if (imgRatio > cellRatio) {
-      drawH = cellHeight;
-      drawW = cellHeight * imgRatio;
-      offsetW = (drawW - cellWidth) / 2;
-      offsetH = 0;
-    } else {
-      drawW = cellWidth;
-      drawH = cellWidth / imgRatio;
-      offsetW = 0;
-      offsetH = (drawH - cellHeight) / 2;
-    }
-
-    ctx.drawImage(img, x - offsetW, y - offsetH, drawW, drawH);
+    ctx.drawImage(img, x, y, cellWidth, cellHeight);
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 15;
+    ctx.lineWidth = 4;
     ctx.strokeRect(x, y, cellWidth, cellHeight);
   });
 
-  return canvas.toDataURL('image/jpeg', 0.7);
+  return canvas.toDataURL('image/jpeg', 0.4); 
 };
 
 export const generateId = (): string => {

@@ -1,153 +1,154 @@
 
-/**
- * GOOGLE APPS SCRIPT - SISTEMA INTEGRAL BQA
- * Este archivo consolida Novedades, 5S, Kilometraje y Calibraciones.
- * IMPORTANTE: Borra cualquier otro archivo .gs que tenga declaraciones repetidas.
- */
+// SISTEMA GESTIÓN FLOTA BQA - BACKEND UNIFICADO
+// REVISIÓN DEFINITIVA: INSERCIÓN ROBUSTA EN FILAS VACÍAS
 
-// Declaración global única
-var MONTHS_NAMES_GLOBAL = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYOR", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+var ID_HOJA = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+var MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
 
 function doPost(e) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var FOLDER_NAME = "EVIDENCIAS_FLOTA_BQA";
+  var ss;
+  try {
+    ss = SpreadsheetApp.openById(ID_HOJA);
+  } catch (err) {
+    return output("error", "Error al abrir la hoja: " + err.toString());
+  }
   
   try {
-    var request = JSON.parse(e.postData.contents);
-    var data = request.data;
-    var method = request.method;
+    var req = JSON.parse(e.postData.contents);
+    var d = req.data;
+    var m = req.method;
+    var lock = LockService.getScriptLock();
+    lock.waitLock(15000); // Esperar un poco más por seguridad
 
-    // --- 1. MANEJO DE KILOMETRAJES ---
-    if (method === 'POST_MILEAGE') {
-      var sheetMileage = ss.getSheetByName("KILOMETRAJE") || ss.insertSheet("KILOMETRAJE");
-      if (sheetMileage.getLastRow() === 0) {
-        sheetMileage.appendRow(["CD", "CONTRATISTA", "SEMANA", "FECHA", "PLACA", "KILOMETRAJE"]);
+    if (m === 'POST_MILEAGE') {
+      var s = getS(ss, "KILOMETRAJE");
+      var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      s.appendRow([d.cd || "G", d.contractor || "G", d.weekNumber || 0, d.date || today(), placa, d.mileage || 0]);
+    } 
+    
+    else if (m === 'POST_CALIBRATION') {
+      var s = getS(ss, "CALIBRACIONES");
+      var dt = d.calibrationDate || today();
+      var dObj = new Date(dt + "T12:00:00");
+      if (isNaN(dObj.getTime())) dObj = new Date();
+      
+      var mes = MESES[dObj.getMonth()];
+      var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      var img = sImg(d.certificateUrl, "CAL_" + placa);
+      
+      // DATOS: [MES(A), FECHA(B), SEMANA(C), PLACA(D), TALLER(E), FOTO(F)]
+      var rowData = [mes, dt, getW(dObj), placa, (d.taller || "GENERAL").toUpperCase(), img];
+      
+      // MEJORA: Buscar primera fila vacía basada en la columna D (PLACA)
+      // para evitar saltos por culpa de fórmulas en la columna G
+      var colD = s.getRange("D:D").getValues();
+      var targetRow = 1;
+      while (targetRow <= colD.length && colD[targetRow - 1][0] !== "") {
+        targetRow++;
       }
-      sheetMileage.appendRow([data.cd, data.contractor, data.weekNumber, data.date, data.plate, data.mileage]);
-      return responseSuccess();
+      
+      // Escribir los datos en la fila encontrada
+      s.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
     }
 
-    // --- 2. MANEJO DE CALIBRACIONES (MES, FECHA, SEMANA, PLACA, TALLER, EVIDENCIA) ---
-    if (method === 'POST_CALIBRATION') {
-      var sheetCal = ss.getSheetByName("CALIBRACIONES") || ss.insertSheet("CALIBRACIONES");
-      if (sheetCal.getLastRow() === 0) {
-        sheetCal.appendRow(["MES", "FECHA", "SEMANA", "PLACA", "TALLER", "EVIDENCIA"]);
-      }
-      
-      var calDate = data.calibrationDate || new Date().toISOString().split('T')[0];
-      var dateObj = new Date(calDate + "T12:00:00");
-      if (isNaN(dateObj.getTime())) dateObj = new Date();
+    else if (m === 'POST_REPORT') {
+      var s = getS(ss, "REPORTE");
+      var rows = s.getDataRange().getValues();
+      var idx = -1;
+      var tid = (d.id || "").toString();
+      var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-      var mes = MONTHS_NAMES_GLOBAL[dateObj.getMonth()];
-      var semana = getWeekNumberGS(dateObj);
-      
-      var urlCert = (data.certificateUrl && data.certificateUrl.indexOf('data:image') === 0) 
-        ? saveImageToDrive(data.certificateUrl, "CAL_" + data.plate + "_" + (data.taller || "GRL"), FOLDER_NAME) 
-        : (data.certificateUrl || "");
-      
-      sheetCal.appendRow([mes, calDate, semana, data.plate, data.taller || "GENERAL", urlCert]);
-      return responseSuccess();
-    }
-
-    // --- 3. MANEJO DE NOVEDADES ---
-    if (method === 'POST_REPORT') {
-      var sheetReport = ss.getSheetByName("REPORTE") || ss.insertSheet("REPORTE");
-      if (sheetReport.getLastRow() === 0) {
-        sheetReport.appendRow(["ID_Reporte", "Fecha", "Placa", "Fuente_Reporte", "Novedad", "Evidencia Inicial", "MAPA DE INGRESO TALLER", "Estado", "Evidencia en taller", "FECHA DE CIERRE", "Evidencia_Solucion", "MAPA DE SALIDA DE TALLER", "DIAS EN TALLER", "Comentarios_Cierre", "TALLER"]);
-      }
-
-      var rows = sheetReport.getDataRange().getValues();
-      var rowIndex = -1;
       for (var i = 1; i < rows.length; i++) {
-        if (rows[i][0] && rows[i][0].toString() === data.id.toString()) { rowIndex = i + 1; break; }
+        if (rows[i][0] && rows[i][0].toString() === tid) { idx = i + 1; break; }
       }
-
-      var urlF = processImageField(data.initialEvidence, "INI_" + data.plate, FOLDER_NAME);
-      var urlG = processImageField(data.entryMap, "MAPIN_" + data.plate, FOLDER_NAME);
-      var urlI = processImageField(data.workshopEvidence, "TALLER_" + data.plate, FOLDER_NAME);
-      var urlK = processImageField(data.solutionEvidence, "SOL_" + data.plate, FOLDER_NAME);
-      var urlL = processImageField(data.exitMap, "MAPOUT_" + data.plate, FOLDER_NAME);
-
-      if (rowIndex === -1) {
-        sheetReport.appendRow([data.id, data.date, data.plate, data.source, data.novelty, urlF, urlG, "ABIERTO", "", "", "", "", "", "", data.workshop || ""]);
+      
+      if (idx === -1) {
+        var uI = sImg(d.initialEvidence, "INI_" + placa);
+        var uM = sImg(d.entryMap, "MAP_" + placa);
+        s.appendRow([d.id, d.date, placa, d.source, d.novelty, uI, uM, "ABIERTO", "", "", "", "", "", "", (d.workshop || "").toUpperCase(), d.cd || "G"]);
       } else {
-        sheetReport.getRange(rowIndex, 8).setValue(data.status);
-        if(urlI) sheetReport.getRange(rowIndex, 9).setValue(urlI);
-        sheetReport.getRange(rowIndex, 10).setValue(data.closureDate);
-        if(urlK) sheetReport.getRange(rowIndex, 11).setValue(urlK);
-        if(urlL) sheetReport.getRange(rowIndex, 12).setValue(urlL);
-        sheetReport.getRange(rowIndex, 13).setValue(data.daysInShop);
-        sheetReport.getRange(rowIndex, 14).setValue(data.closureComments);
+        if (d.status) s.getRange(idx, 8).setValue(d.status);
+        if (d.workshopEvidence) s.getRange(idx, 9).setValue(sImg(d.workshopEvidence, "TALLER_" + placa));
+        if (d.closureDate) s.getRange(idx, 10).setValue(d.closureDate);
+        if (d.solutionEvidence) s.getRange(idx, 11).setValue(sImg(d.solutionEvidence, "SOL_" + placa));
+        if (d.exitMap) s.getRange(idx, 12).setValue(sImg(d.exitMap, "EXIT_" + placa));
+        if (d.daysInShop !== undefined) s.getRange(idx, 13).setValue(d.daysInShop);
+        if (d.closureComments) s.getRange(idx, 14).setValue(d.closureComments);
       }
-      return responseSuccess();
     }
 
-    // --- 4. MANEJO DE 5S ---
-    if (method === 'POST_FIVES') {
-      var sheetFiveS = ss.getSheetByName("5S CAMIONES") || ss.insertSheet("5S CAMIONES");
-      if (sheetFiveS.getLastRow() === 0) {
-        sheetFiveS.appendRow(["ID DE REPORTE", "FECHA", "MES", "SEMANA", "PLACA", "EVIDENCIA_INICIAL", "ESTADO", "EVIDENCIA_FINAL"]);
-      }
+    else if (m === 'POST_FIVES') {
+      var s = getS(ss, "5S CAMIONES");
+      var rows = s.getDataRange().getValues();
+      var idx = -1;
+      var tid = (d.id || "").toString();
+      var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-      var rows = sheetFiveS.getDataRange().getValues();
-      var rowIndex = -1;
       for (var i = 1; i < rows.length; i++) {
-        if (rows[i][0] && rows[i][0].toString() === data.id.toString()) { rowIndex = i + 1; break; }
+        if (rows[i][0] && rows[i][0].toString() === tid) { idx = i + 1; break; }
       }
-
-      var rawDate = data.date || new Date().toISOString().split('T')[0];
-      var dateObj = new Date(rawDate + "T12:00:00");
-      var mes = MONTHS_NAMES_GLOBAL[dateObj.getMonth()];
-      var semana = getWeekNumberGS(dateObj);
-
-      if (rowIndex === -1) {
-        var urlIni = processImageField(data.evidenceUrl, "5S_INI_" + data.plate, FOLDER_NAME);
-        sheetFiveS.appendRow([data.id, rawDate, mes, semana, data.plate, urlIni, "ABIERTO", ""]);
+      
+      if (idx === -1) {
+        var u = sImg(d.evidenceUrl, "5S_" + placa);
+        var dObj = new Date((d.date || today()) + "T12:00:00");
+        s.appendRow([d.id, d.date, MESES[dObj.getMonth()], getW(dObj), placa, u, "ABIERTO", "", d.cd || "G"]);
       } else {
-        var urlSol = processImageField(data.closureEvidenceUrl, "5S_SOL_" + data.plate, FOLDER_NAME);
-        sheetFiveS.getRange(rowIndex, 7).setValue("CERRADO"); 
-        sheetFiveS.getRange(rowIndex, 8).setValue(urlSol);    
+        var uS = sImg(d.closureEvidenceUrl, "5S_SOL_" + placa);
+        s.getRange(idx, 7).setValue("CERRADO"); 
+        if (uS) s.getRange(idx, 8).setValue(uS);    
       }
-      return responseSuccess();
     }
 
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: error.toString() })).setMimeType(ContentService.MimeType.JSON);
+    lock.releaseLock();
+    return output("success", "Datos procesados correctamente.");
+  } catch (e) {
+    return output("error", "Error en procesamiento: " + e.toString());
   }
 }
 
-// Funciones Auxiliares
-function responseSuccess() {
-  return ContentService.createTextOutput(JSON.stringify({ status: 'success' })).setMimeType(ContentService.MimeType.JSON);
-}
-
-function processImageField(field, prefix, folder) {
-  if (field && field.indexOf('data:image') === 0) {
-    return saveImageToDrive(field, prefix + "_" + Date.now(), folder);
+function getS(ss, n) {
+  if (!ss) return null;
+  var sheets = ss.getSheets();
+  var nameClean = n.trim().toUpperCase();
+  for(var i=0; i<sheets.length; i++){
+    var sn = sheets[i].getName().trim().toUpperCase();
+    if(sn === nameClean) return sheets[i];
   }
-  return field || "";
+  return ss.insertSheet(n);
 }
 
-function getWeekNumberGS(d) {
-  var target = new Date(d.valueOf());
-  var dayNr = (d.getDay() + 6) % 7;
-  target.setDate(target.getDate() - dayNr + 3);
-  var firstThursday = target.valueOf();
-  target.setMonth(0, 1);
-  if (target.getDay() != 4) target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
-  return 1 + Math.ceil((firstThursday - target) / 604800000);
-}
-
-function saveImageToDrive(base64Data, fileName, folderName) {
+function sImg(b64, n) {
+  if (!b64 || typeof b64 !== 'string' || b64.indexOf('data:image') !== 0) return b64 || "";
   try {
-    var splitData = base64Data.split(',');
-    var contentType = splitData[0].match(/:(.*?);/)[1];
-    var byteCharacters = Utilities.base64Decode(splitData[1]);
-    var blob = Utilities.newBlob(byteCharacters, contentType, fileName + ".jpg");
-    var folders = DriveApp.getFoldersByName(folderName);
-    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
-    var file = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return file.getUrl();
-  } catch (e) { return "ERROR_IMAGE"; }
+    var p = b64.split(',');
+    var t = p[0].match(/:(.*?);/)[1];
+    var bt = Utilities.base64Decode(p[1]);
+    var bl = Utilities.newBlob(bt, t, n + ".jpg");
+    var fds = DriveApp.getFoldersByName("EVIDENCIAS_FLOTA_BQA");
+    var f = fds.hasNext() ? fds.next() : DriveApp.createFolder("EVIDENCIAS_FLOTA_BQA");
+    var fl = f.createFile(bl);
+    fl.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return fl.getUrl();
+  } catch (e) { 
+    return "DRIVE_ERROR: Revise permisos."; 
+  }
+}
+
+function getW(d) {
+  try {
+    var t = new Date(d.valueOf());
+    var day = (d.getDay() + 6) % 7;
+    t.setDate(t.getDate() - day + 3);
+    var f = t.valueOf();
+    t.setMonth(0, 1);
+    if (t.getDay() != 4) t.setMonth(0, 1 + ((4 - t.getDay()) + 7) % 7);
+    return 1 + Math.ceil((f - t) / 604800000);
+  } catch(e) { return 0; }
+}
+
+function today() { return new Date().toISOString().split('T')[0]; }
+
+function output(s, m) {
+  var res = {status: s, message: m};
+  return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
 }

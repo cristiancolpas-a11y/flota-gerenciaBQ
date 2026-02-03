@@ -2,7 +2,7 @@
 import React from 'react';
 import { Calibration } from '../types';
 import { formatDate } from '../utils';
-import { Settings2, Calendar, Eye, Clock, ShieldCheck, Scale, MapPin } from 'lucide-react';
+import { Settings2, Calendar, Eye, Clock, ShieldCheck, Key, MapPin, Disc } from 'lucide-react';
 
 interface CalibrationCardProps {
   calibration: Calibration;
@@ -41,7 +41,7 @@ const CalibrationCard: React.FC<CalibrationCardProps> = ({ calibration, onViewDo
     <div className={`p-8 rounded-[2.5rem] border-2 transition-all hover:shadow-2xl hover:-translate-y-1 bg-white group ${s.border}`}>
       <div className="flex justify-between items-start mb-8">
         <div className={`p-4 rounded-2xl bg-slate-50 shadow-sm transition-transform group-hover:rotate-6 ${s.icon}`}>
-          <Scale size={24} />
+          <Disc size={24} />
         </div>
         <div className="flex flex-col items-end">
           <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase shadow-sm ${s.badge}`}>

@@ -18,9 +18,28 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
+        /* Animación de vibración de motor para el montacargas */
+        @keyframes forkliftVibrate {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-1px) rotate(0.5deg); }
+            75% { transform: translateY(1px) rotate(-0.5deg); }
+        }
+        /* Animación de las horquillas subiendo y bajando */
+        @keyframes forkliftLift {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+        
         .animate-spin-slow {
             animation: spin 3s linear infinite;
         }
+        .animate-forklift-vibrate {
+            animation: forkliftVibrate 0.15s linear infinite;
+        }
+        .animate-forklift-lift {
+            animation: forkliftLift 2s ease-in-out infinite;
+        }
+
         /* Custom Scrollbar */
         .custom-scrollbar::-webkit-scrollbar {
             width: 6px;
