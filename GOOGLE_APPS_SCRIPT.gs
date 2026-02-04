@@ -26,6 +26,32 @@ function doPost(e) {
       s.appendRow([d.cd || "G", d.contractor || "G", d.weekNumber || 0, d.date || today(), placa, d.mileage || 0]);
     } 
     
+    else if (m === 'POST_WASH') {
+      var s = getS(ss, "LAVADOS");
+      var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      var imgEvidencia = sImg(d.evidenceUrl, "WASH_EVI_" + placa);
+      var imgMapa = sImg(d.mapUrl, "WASH_MAP_" + placa);
+      
+      var dObj = new Date((d.date || today()) + "T12:00:00");
+      var mes = MESES[dObj.getMonth()];
+      var semana = getW(dObj);
+      
+      // ORDEN EXACTO SOLICITADO:
+      // ID (0), MES (1), SEMANA (2), FECHA (3), PLACA (4), EVIDENCIA (5), MAPA (6), TALLER (7)
+      var rowData = [
+        d.id,           // Indice 0
+        mes,            // Indice 1
+        semana,         // Indice 2
+        d.date,         // Indice 3
+        placa,          // Indice 4
+        imgEvidencia,   // Indice 5
+        imgMapa,        // Indice 6
+        (d.workshop || "").toUpperCase() // Indice 7
+      ];
+      
+      s.appendRow(rowData);
+    }
+
     else if (m === 'POST_CALIBRATION') {
       var s = getS(ss, "CALIBRACIONES");
       var dt = d.calibrationDate || today();
@@ -60,7 +86,6 @@ function doPost(e) {
       if (idx === -1) {
         var uI = sImg(d.initialEvidence, "INI_" + placa);
         var uM = sImg(d.entryMap, "MAP_" + placa);
-        // Columnas: A:ID, B:FECHA, C:PLACA, D:FUENTE, E:FOTOS, F:NOVEDAD, G:MAPA...
         s.appendRow([d.id, d.date, placa, d.source, uI, d.novelty, uM, "ABIERTO", "", "", "", "", "", "", (d.workshop || "").toUpperCase(), d.cd || "G"]);
       } else {
         if (d.status) s.getRange(idx, 8).setValue(d.status);

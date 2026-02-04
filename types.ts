@@ -99,6 +99,17 @@ export interface FiveSReport {
   cd?: string;
 }
 
+export interface WashReport {
+  id: string;
+  month: string;      // Índice 1
+  week: string;       // Índice 2
+  date: string;       // Índice 3
+  plate: string;      // Índice 4
+  evidenceUrl: string; // Índice 5
+  mapUrl: string;      // Índice 6
+  workshop: string;    // Índice 7 (Taller de lavado)
+}
+
 export interface MaintenanceInsight {
   score: number;
   recommendation: string;

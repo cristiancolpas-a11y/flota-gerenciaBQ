@@ -15,6 +15,8 @@ export const normalizeStr = (str: string): string => {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
+    .replace(/_/g, ' ') // Reemplaza guiones bajos por espacios para mejor match
+    .replace(/\s+/g, ' ') // Colapsa múltiples espacios
     .trim();
 };
 
@@ -149,7 +151,6 @@ export const createMosaic = async (base64Array: string[]): Promise<string> => {
   }));
 
   const numImages = images.length;
-  // Usar hasta 3 columnas para manejar mejor hasta 6 imágenes (2 filas de 3)
   const cols = numImages > 3 ? 3 : numImages; 
   const rows = Math.ceil(numImages / cols);
 
