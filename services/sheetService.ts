@@ -3,14 +3,14 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, FiveSReport, Calibration, WashReport } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr } from '../utils';
 
-// Nueva URL proporcionada por el usuario
+// URL del Google Script Web App
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxDEZRLFkXpeOAm0AL-2UeAF6lBAsurMl9gB_6RHfgSTzILtA2SZ-hHQeuSLrWAZLft/exec'; 
 
 // ID del documento Maestro (Vehículos/Conductores)
 const MASTER_DOC_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${MASTER_DOC_ID}/export?format=csv`;
 
-// ID y URL del documento de Operación (LAVADOS, KILOMETRAJE, ETC) proporcionado por el usuario
+// ID y URL del documento de Operación (LAVADOS, KILOMETRAJE, ETC)
 const OPERATION_PUBLISHED_ID = '2PACX-1vRA_vhJ1dLPgrVgt5zVafplHFSVUNKhUN8StKQS3ATt3C_yhyqGq-w-WKdshVQD9ryx2Kl7fdiL0iMc';
 const BASE_URL_OPERATION = `https://docs.google.com/spreadsheets/d/e/${OPERATION_PUBLISHED_ID}/pub?output=csv`;
 
@@ -42,10 +42,8 @@ const getColumnMapping = (rows: any[][], mapping: Record<string, string[]>) => {
   const result: Record<string, number> = {};
   let headerRowIdx = -1;
   
-  // Obtenemos todos los términos de búsqueda posibles para esta hoja
   const allSearchTerms = Object.values(mapping).flat().map(t => normalizeStr(t));
 
-  // Buscamos la fila que contenga al menos 2 de los términos buscados
   for (let i = 0; i < Math.min(rows.length, 20); i++) {
     const rowNormalized = rows[i].map(cell => normalizeStr(String(cell)));
     const matchCount = rowNormalized.filter(cell => 
@@ -58,7 +56,6 @@ const getColumnMapping = (rows: any[][], mapping: Record<string, string[]>) => {
     }
   }
 
-  // Si no se encuentra fila de encabezado, usamos la fila 0 por defecto
   const finalHeaderIdx = headerRowIdx === -1 ? 0 : headerRowIdx;
   const headerRow = rows[finalHeaderIdx].map(cell => normalizeStr(String(cell)));
   
@@ -77,6 +74,7 @@ const getColumnMapping = (rows: any[][], mapping: Record<string, string[]>) => {
 
 export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
   try {
+    // Usamos el gid que corresponde a la base de flota (ALERTA_CAMIONES)
     const url = `${BASE_URL_MASTER}&gid=1506825194${getCacheBuster()}`;
     const response = await fetch(url);
     const csvText = await response.text();
@@ -89,21 +87,27 @@ export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
           const rows = results.data as any[][];
           if (rows.length < 1) { resolve([]); return; }
           
+          // Mapeo dinámico para el resto de columnas, pero definiremos CD y Contratista manualmente abajo
           const { startRow, map } = getColumnMapping(rows, {
             plate: ["PLACA"], soat: ["SOAT"], rtm: ["RTM", "TECNOMECANICA"],
-            plc: ["PLC", "TARJETA CONTROL"], ext: ["EXTINTOR"], cd: ["CD"],
-            contractor: ["CONTRATISTA"], urlSoat: ["URL SOAT"], urlRtm: ["URL RTM"]
+            plc: ["PLC", "TARJETA CONTROL"], ext: ["EXTINTOR"],
+            urlSoat: ["URL SOAT"], urlRtm: ["URL RTM"]
           });
 
-          const pIdx = map.plate !== -1 ? map.plate : 4;
-          const vehicles = rows.slice(startRow).filter(row => cleanSheetValue(row[pIdx]).length >= 4).map((row): Vehicle => {
-            const plate = normalizePlate(cleanSheetValue(row[pIdx]));
+          // Según requerimiento: Columna A (0) es CD, Columna B (1) es CONTRATISTA
+          const cdIdx = 0;
+          const contractorIdx = 1;
+          const plateIdx = map.plate !== -1 ? map.plate : 4; // Por defecto suele ser la E (4)
+
+          const vehicles = rows.slice(startRow).filter(row => cleanSheetValue(row[plateIdx]).length >= 4).map((row): Vehicle => {
+            const plate = normalizePlate(cleanSheetValue(row[plateIdx]));
             const soatDate = parseFlexibleDate(row[map.soat]);
             const rtmDate = parseFlexibleDate(row[map.rtm]);
             return {
               id: `v-${plate}`,
-              cd: cleanSheetValue(row[map.cd]),
-              contractor: cleanSheetValue(row[map.contractor]),
+              // ASIGNACIÓN DIRECTA POR COLUMNAS A (0) Y B (1)
+              cd: cleanSheetValue(row[cdIdx]).toUpperCase(),
+              contractor: cleanSheetValue(row[contractorIdx]).toUpperCase(),
               brand: "Vehículo", plate: plate, model: 'Unidad',
               soat: { expiryDate: soatDate, lastRenewalDate: '', status: calculateStatus(soatDate), url: cleanSheetValue(row[map.urlSoat]) },
               rtm: { expiryDate: rtmDate, lastRenewalDate: '', status: calculateStatus(rtmDate), url: cleanSheetValue(row[map.urlRtm]) },
@@ -188,19 +192,23 @@ export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
 
           const idIdx = map.id !== -1 ? map.id : 0;
           const monthIdx = map.month !== -1 ? map.month : 1;
-          const plateIdx = map.plate !== -1 ? map.plate : 4;
+          const weekIdx = map.week !== -1 ? map.week : 2;
           const dateIdx = map.date !== -1 ? map.date : 3;
+          const plateIdx = map.plate !== -1 ? map.plate : 4;
+          const eviIdx = map.evidence !== -1 ? map.evidence : 5;
+          const mapIdx = map.map !== -1 ? map.map : 6;
+          const shopIdx = map.workshop !== -1 ? map.workshop : 7;
 
           const reports = rows.slice(startRow).map((row): WashReport => {
             return {
               id: cleanSheetValue(row[idIdx]),
               month: normalizeStr(cleanSheetValue(row[monthIdx])),
-              week: cleanSheetValue(row[2]),
+              week: cleanSheetValue(row[weekIdx]),
               date: parseFlexibleDate(row[dateIdx]),
               plate: normalizePlate(cleanSheetValue(row[plateIdx])),
-              evidenceUrl: cleanSheetValue(row[5]),
-              mapUrl: cleanSheetValue(row[6]),
-              workshop: cleanSheetValue(row[7])
+              evidenceUrl: cleanSheetValue(row[eviIdx]),
+              mapUrl: cleanSheetValue(row[mapIdx]),
+              workshop: cleanSheetValue(row[shopIdx])
             };
           }).filter(r => r.plate.length >= 3 && r.month.length > 0);
           

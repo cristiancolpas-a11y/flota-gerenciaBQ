@@ -81,7 +81,7 @@ const FiveSClosureForm: React.FC<FiveSClosureFormProps> = ({ report, onClose, on
           <div className="flex items-center gap-4">
             <CheckCircle size={24} />
             <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter">CIERRE 5S: {report.plate}</h2>
+              <h2 className="text-xl font-black uppercase tracking-tighter">CIERRE 5S CAMIONES: {report.plate}</h2>
               <p className="text-[9px] text-emerald-100 font-bold uppercase tracking-widest">Capture evidencia de la solución</p>
             </div>
           </div>

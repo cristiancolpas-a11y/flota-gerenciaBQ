@@ -68,14 +68,21 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
     setIsSubmitting(true);
     try {
       const mosaicEvidence = await createMosaic(capturedPhotos);
+      
+      // Buscar el CD y Contratista del vehículo para el reporte
+      const vehicle = vehicles.find(v => v.plate === formData.plate);
+      
       const payload = {
         ...formData,
         id: `5S-${Date.now()}`,
         inspector: 'SISTEMA 5S',
         observations: 'REPORTE RÁPIDO DE CAMIÓN',
         evidenceUrl: mosaicEvidence,
-        totalScore: 0
+        totalScore: 0,
+        cd: vehicle?.cd || 'GENERAL',
+        contractor: vehicle?.contractor || 'GENERAL'
       };
+      
       await onSubmit(payload);
       setIsSuccess(true);
       setTimeout(onClose, 1500);
@@ -107,7 +114,7 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
               <ShieldCheck size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter">SISTEMA 5S</h2>
+              <h2 className="text-xl font-black uppercase tracking-tighter">5S CAMIONES</h2>
               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Registro visual con GPS</p>
             </div>
           </div>
@@ -161,7 +168,6 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
       </div>
     </div>
   );
-};
+}
 
-// Fix: Add missing default export
 export default FiveSForm;

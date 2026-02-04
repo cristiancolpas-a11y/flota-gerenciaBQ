@@ -17,7 +17,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   const evidenceInputRef = useRef<HTMLInputElement>(null);
   const mapInputRef = useRef<HTMLInputElement>(null);
 
-  // Filtro interno por CD
+  // Filtro interno por CD para agilizar la búsqueda de placa
   const [filterCd, setFilterCd] = useState<string>('all');
 
   const [capturedPhotos, setCapturedPhotos] = useState<{url: string, type: 'ANTES' | 'DESPUES'}[]>([]);
@@ -28,25 +28,24 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
     mapUrl: '',
   });
 
-  // 1. Obtener lista única de Centros de Distribución de TODA la flota
+  // 1. Obtener lista única de Centros de Distribución de la flota maestra
   const availableCds = useMemo(() => {
-    const unique = Array.from(new Set(vehicles.map(v => (v.cd || "").trim()).filter(Boolean)));
+    const unique = Array.from(new Set(vehicles.map(v => (v.cd || "GENERAL").toUpperCase().trim()).filter(Boolean)));
     return unique.sort((a, b) => a.localeCompare(b));
   }, [vehicles]);
 
-  // 2. Obtener lista de vehículos filtrada únicamente por CD
+  // 2. Filtrar vehículos del CD seleccionado para el menú desplegable de placas
   const filteredVehiclesList = useMemo(() => {
     return vehicles.filter(v => {
-      const vCd = v.cd || "";
+      const vCd = (v.cd || "GENERAL").toUpperCase().trim();
       const matchCd = filterCd === 'all' || normalizeStr(vCd) === normalizeStr(filterCd);
       return matchCd;
     }).sort((a, b) => a.plate.localeCompare(b.plate));
   }, [vehicles, filterCd]);
 
-  // Manejador de cambio de CD
   const handleCdChange = (val: string) => {
     setFilterCd(val);
-    setFormData(prev => ({ ...prev, plate: '' })); // Limpiar placa seleccionada al cambiar CD
+    setFormData(prev => ({ ...prev, plate: '' })); // Limpiar placa seleccionada al cambiar CD para evitar errores
   };
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,7 +151,6 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white">
           
-          {/* SECCIÓN DE FILTRO ÚNICO: CD */}
           <div className="bg-cyan-50/40 p-6 rounded-[2.5rem] border-2 border-cyan-100/50 shadow-inner">
             <div className="space-y-1.5">
               <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
@@ -201,7 +199,6 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
             </div>
           </div>
 
-          {/* EVIDENCIA DE UBICACIÓN */}
           <div className="space-y-4">
             <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest px-2 flex items-center gap-2">
               <MapPin size={18} /> EVIDENCIA DE UBICACIÓN (MAPA)
@@ -217,7 +214,6 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
             <input type="file" accept="image/*" capture="environment" ref={mapInputRef} className="hidden" onChange={handleMapCapture} />
           </div>
 
-          {/* EVIDENCIA FOTOGRÁFICA ANTES/DESPUÉS */}
           <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
               <span className="text-[11px] font-black text-cyan-600 uppercase tracking-widest flex items-center gap-2">
@@ -233,7 +229,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
               {capturedPhotos.map((photo, index) => (
                 <div key={index} className="relative aspect-video rounded-[2rem] overflow-hidden border-4 border-slate-50 shadow-md">
                   <img src={photo.url} className="w-full h-full object-cover" />
-                  <div className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[7px] font-black text-white ${photo.type === 'ANTES' ? 'bg-amber-500' : 'bg-emerald-500'}`}>
+                  <div className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[7px] font-black text-white ${photo.type === 'ANTES' ? 'bg-amber-50' : 'bg-emerald-50'}`}>
                     {photo.type}
                   </div>
                   <button type="button" onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={12} /></button>
