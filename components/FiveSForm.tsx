@@ -46,7 +46,6 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
 
     const reader = new FileReader();
     reader.onloadend = async () => {
-      // Estampar marca de agua profesional 5S
       const watermarked = await processImageWithWatermark(reader.result as string, formData.plate, coords);
       setCapturedPhotos(prev => [...prev, watermarked].slice(0, 6));
       setIsProcessingPhoto(false);
@@ -72,7 +71,7 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
       const payload = {
         ...formData,
         id: `5S-${Date.now()}`,
-        inspector: 'AUDITORÍA 5S',
+        inspector: 'SISTEMA 5S',
         observations: 'REPORTE RÁPIDO DE CAMIÓN',
         evidenceUrl: mosaicEvidence,
         totalScore: 0
@@ -108,7 +107,7 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
               <ShieldCheck size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter">AUDITORÍA 5S</h2>
+              <h2 className="text-xl font-black uppercase tracking-tighter">SISTEMA 5S</h2>
               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Registro visual con GPS</p>
             </div>
           </div>
@@ -164,4 +163,5 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
   );
 };
 
+// Fix: Add missing default export
 export default FiveSForm;
