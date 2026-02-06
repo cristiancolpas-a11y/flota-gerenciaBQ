@@ -89,13 +89,12 @@ const App: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('vehiculos');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // FILTROS UNIFICADOS
   const [legalStatusFilter, setLegalStatusFilter] = useState<LegalFilterType>('all');
   const [filterCd, setFilterCd] = useState('all');
   const [filterContractor, setFilterContractor] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [rawVehicles, setRawVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [fiveSReports, setFiveSReports] = useState<FiveSReport[]>([]);
@@ -132,7 +131,7 @@ const App: React.FC = () => {
         fetchMileageLogsFromSheet()
       ]);
       
-      setVehicles(results[0].status === 'fulfilled' ? results[0].value : []);
+      setRawVehicles(results[0].status === 'fulfilled' ? results[0].value : []);
       setDrivers(results[1].status === 'fulfilled' ? results[1].value : []);
       setReports(results[2].status === 'fulfilled' ? results[2].value : []);
       setFiveSReports(results[3].status === 'fulfilled' ? results[3].value : []);
@@ -145,22 +144,43 @@ const App: React.FC = () => {
     } finally { setIsSyncing(false); }
   };
 
-  // Lógica de filtrado de flota maestra (La más importante según la solicitud del usuario)
+  /**
+   * LÓGICA DE VEHÍCULOS DINÁMICOS:
+   * Si rawVehicles (Hoja Alerta Camiones) está vacío, generamos la lista basada en el Historial de Kilometraje.
+   * Esto asegura que el "Avance" funcione siempre que haya datos históricos.
+   */
+  const vehicles = useMemo(() => {
+    if (rawVehicles.length > 0) return rawVehicles;
+
+    // Fallback: Descubrir vehículos desde logs
+    const discoveredMap = new Map<string, Vehicle>();
+    mileageLogs.forEach(log => {
+      const plate = normalizePlate(log.plate);
+      if (!discoveredMap.has(plate)) {
+        discoveredMap.set(plate, {
+          id: `discovered-${plate}`,
+          plate,
+          brand: 'Descubierto',
+          model: 'Unidad',
+          cd: log.cd || 'GENERAL',
+          contractor: log.contractor || 'GENERAL',
+          soat: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
+          rtm: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
+          plc: { expiryDate: '', lastRenewalDate: '', status: 'active' },
+          extinguisher: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
+          lastUpdate: new Date().toISOString()
+        });
+      }
+    });
+    return Array.from(discoveredMap.values());
+  }, [rawVehicles, mileageLogs]);
+
   const masterFleetFiltered = useMemo(() => {
-    if (!vehicles || vehicles.length === 0) return [];
     return vehicles.filter(v => {
-      if (!v || !v.plate) return false;
-      
-      // 1. Filtro por CD
       const matchesCd = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
-      
-      // 2. Filtro por Contratista
       const matchesContractor = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
-      
-      // 3. Filtro por Búsqueda de Placa
       const matchesSearch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
       
-      // 4. Filtro por Estado Legal (Dashboard)
       let matchesLegal = true;
       const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status];
       if (legalStatusFilter === 'expired') {
@@ -175,7 +195,6 @@ const App: React.FC = () => {
     });
   }, [vehicles, filterCd, filterContractor, searchTerm, legalStatusFilter]);
 
-  // Estadísticas para el Dashboard de Filtrado
   const fleetStats = useMemo(() => {
     const total = vehicles.length;
     let expiredCount = 0;
@@ -262,8 +281,6 @@ const App: React.FC = () => {
           
           {activeView === 'vehiculos' && (
             <div className="max-w-7xl mx-auto space-y-10 pb-20">
-              
-              {/* DASHBOARD DE FILTRADO LEGAL INTERACTIVO */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
                 {[
                   { id: 'all', label: 'Total Flota', count: fleetStats.total, icon: <Truck size={24}/>, color: 'indigo' },
@@ -288,7 +305,6 @@ const App: React.FC = () => {
                 ))}
               </div>
 
-              {/* SELECTORES DE FILTRO SECUNDARIOS */}
               <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                  <div className="flex flex-col gap-2">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 flex items-center gap-2">
@@ -310,7 +326,6 @@ const App: React.FC = () => {
                  </div>
               </div>
 
-              {/* LISTADO DE VEHÍCULOS */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                 {masterFleetFiltered.length > 0 ? masterFleetFiltered.map(v => {
                   const isCriticallyExpired = [v.soat?.status, v.rtm?.status, v.extinguisher?.status].some(s => s === 'expired');
@@ -341,7 +356,6 @@ const App: React.FC = () => {
                         <FilterX size={64} className="opacity-20" />
                      </div>
                      <p className="text-[12px] font-black uppercase tracking-[0.4em]">Sin resultados para estos filtros</p>
-                     <button onClick={() => { setLegalStatusFilter('all'); setFilterCd('all'); setFilterContractor('all'); setSearchTerm(''); }} className="mt-8 text-indigo-500 text-[10px] font-black border-b-2 border-indigo-100 hover:border-indigo-500 transition-all uppercase">Restablecer Auditoría</button>
                   </div>
                 )}
               </div>

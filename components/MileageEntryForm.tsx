@@ -28,7 +28,9 @@ import {
   PieChart,
   BarChart3,
   TrendingUp,
-  ChevronRight
+  ChevronRight,
+  HelpCircle,
+  Database
 } from 'lucide-react';
 import ExportButton from './ExportButton';
 
@@ -77,13 +79,11 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
     if (entryDateOverride) setEntryDate(entryDateOverride);
   }, [entryDateOverride]);
 
-  // Función para obtener el último kilometraje registrado de un vehículo (de cualquier semana)
   const getLastMileage = (plate: string) => {
     const vPlate = normalizePlate(plate);
     const logs = (mileageLogs || [])
       .filter(log => normalizePlate(log.plate) === vPlate)
       .sort((a, b) => {
-        // Ordenar por semana descendente
         const weekA = extractNumber(a.week);
         const weekB = extractNumber(b.week);
         if (weekA !== weekB) return weekB - weekA;
@@ -180,7 +180,6 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* HEADER DE CONTROL */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
         <div className="flex flex-col gap-1">
           <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
@@ -232,7 +231,6 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
               <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl -mr-40 -mt-40"></div>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative z-10">
-                {/* MÉTRICA DE CUMPLIMIENTO */}
                 <div className="flex flex-col justify-center border-r border-white/10 md:pr-10">
                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-6 flex items-center gap-2">
                      <TrendingUp size={14}/> CUMPLIMIENTO SEMANA {selectedWeek}
@@ -244,13 +242,13 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                       <div className="flex flex-col">
                         <span className="text-[10px] font-black text-emerald-400 uppercase">REPORTADOS: {stats.completed}</span>
                         <div className="w-20 h-1 bg-emerald-500/20 rounded-full mt-1 overflow-hidden">
-                           <div className="h-full bg-emerald-500" style={{width: `${(stats.completed/stats.total)*100}%`}}></div>
+                           <div className="h-full bg-emerald-500" style={{width: `${stats.total > 0 ? (stats.completed/stats.total)*100 : 0}%`}}></div>
                         </div>
                       </div>
                       <div className="flex flex-col items-end">
                         <span className="text-[10px] font-black text-rose-400 uppercase">FALTAN: {stats.pending}</span>
                         <div className="w-20 h-1 bg-rose-500/20 rounded-full mt-1 overflow-hidden">
-                           <div className="h-full bg-rose-500" style={{width: `${(stats.pending/stats.total)*100}%`}}></div>
+                           <div className="h-full bg-rose-500" style={{width: `${stats.total > 0 ? (stats.pending/stats.total)*100 : 0}%`}}></div>
                         </div>
                       </div>
                    </div>
@@ -259,7 +257,6 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                    </div>
                 </div>
 
-                {/* FILTROS DE AUDITORÍA */}
                 <div className="col-span-2 space-y-8">
                   <div className="flex items-center justify-between px-2">
                     <div className="flex items-center gap-3">
@@ -304,12 +301,20 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                       </select>
                     </div>
                   </div>
+
+                  {stats.total === 0 && (
+                    <div className="flex items-center gap-3 bg-indigo-600/20 p-4 rounded-2xl border border-indigo-500/30 animate-pulse">
+                      <Database size={18} className="text-indigo-400" />
+                      <p className="text-[9px] font-black uppercase tracking-widest text-indigo-200">
+                        Diagnóstico: Hoja Maestra no detectada. Usando autodescubrimiento histórico para generar avance.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* LISTADO DE VEHÍCULOS */}
           <div className="bg-white rounded-[4rem] shadow-xl border border-slate-100 p-10">
             {!activeVehicle ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
