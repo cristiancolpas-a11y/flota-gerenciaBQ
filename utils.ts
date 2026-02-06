@@ -15,21 +15,40 @@ export const normalizeStr = (str: string): string => {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
-    .replace(/_/g, ' ') // Reemplaza guiones bajos por espacios para mejor match
-    .replace(/\s+/g, ' ') // Colapsa múltiples espacios
+    .replace(/_/g, ' ') 
+    .replace(/\s+/g, ' ') 
     .trim();
 };
 
 export const calculateStatus = (expiryDate: string): DocumentStatus => {
-  if (!expiryDate) return 'active';
+  if (!expiryDate) return 'expired';
   const now = new Date();
   const expiry = new Date(expiryDate);
-  if (isNaN(expiry.getTime()) || expiry.getFullYear() < 1900) return 'active';
+  if (isNaN(expiry.getTime()) || expiry.getFullYear() < 1900) return 'expired';
+  
+  // Normalizar a medianoche para evitar problemas de horas
+  now.setHours(0, 0, 0, 0);
+  expiry.setHours(0, 0, 0, 0);
+  
   const diffTime = expiry.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
   if (diffDays < 0) return 'expired';
   if (diffDays <= 30) return 'warning';
   return 'active';
+};
+
+export const getDaysDiff = (expiryDate: string): number => {
+  if (!expiryDate) return 0;
+  const now = new Date();
+  const expiry = new Date(expiryDate);
+  if (isNaN(expiry.getTime())) return 0;
+  
+  now.setHours(0, 0, 0, 0);
+  expiry.setHours(0, 0, 0, 0);
+  
+  const diffTime = expiry.getTime() - now.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
 
 export const getWeekNumber = (date: Date): number => {

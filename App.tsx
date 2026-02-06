@@ -35,7 +35,7 @@ import {
 
 import { formatDate, getWeekNumber, normalizePlate, calculateStatus, normalizeStr, extractNumber } from './utils';
 import { 
-  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase, FilterX, Package, Box, AlertTriangle, Loader2, Info, Database, Percent, TrendingUp, CheckCircle2, Activity, Sparkles, Filter, Building2, UserCircle, CalendarDays, Droplets, Calendar
+  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase, FilterX, Package, Box, AlertTriangle, Loader2, Info, Database, Percent, TrendingUp, CheckCircle2, Activity, Sparkles, Filter, Building2, UserCircle, CalendarDays, Droplets, Calendar, ShieldAlert, BarChart3
 } from 'lucide-react';
 
 const MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
@@ -47,7 +47,7 @@ const ManagementReportIcon = ({ size = 24, className = "" }: { size?: number, cl
     <rect x="25" y="35" width="8" height="5" fill="#F87171" stroke="#1E293B" strokeWidth="2"/>
     <rect x="35" y="30" width="8" height="10" fill="#FBBF24" stroke="#1E293B" strokeWidth="2"/>
     <rect x="45" y="25" width="8" height="15" fill="#34D399" stroke="#1E293B" strokeWidth="2"/>
-    <rect x="55" y="20" width="8" height="20" fill="#60A5FA" stroke="#1E293B" strokeWidth="2"/>
+    <rect x="55" y="20" width="8" height="20" fill="#60A5FA" stroke="#1E293B" strokeWidth="4"/>
     <rect x="25" y="50" width="12" height="12" rx="2" fill="#60A5FA" stroke="#1E293B" strokeWidth="2"/>
     <path d="M28 56L31 59L34 53" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     <line x1="42" y1="52" x2="65" y2="52" stroke="#1E293B" strokeWidth="2" strokeLinecap="round"/>
@@ -82,16 +82,18 @@ const ForkliftIcon = ({ size = 24, className = "", isMoving = false }: { size?: 
 );
 
 type ActiveView = 'vehiculos' | 'conductores' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'calibraciones';
-type StatsFilterType = 'all' | 'soat_expired' | 'rtm_warning' | 'extinguisher_alert';
+type LegalFilterType = 'all' | 'healthy' | 'warning' | 'expired';
 
 const App: React.FC = () => {
   const [activeModule, setActiveModule] = useState<'camiones' | 'montacargas' | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>('vehiculos');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [statsFilter, setStatsFilter] = useState<StatsFilterType>('all');
-  const [activeFiveSTab, setActiveFiveSTab] = useState<'realizados' | 'pendientes'>('realizados');
-  const [activeWashTab, setActiveWashTab] = useState<'realizados' | 'pendientes'>('realizados');
-  const [preSelectedPlate, setPreSelectedPlate] = useState<string | undefined>(undefined);
+  
+  // FILTROS UNIFICADOS
+  const [legalStatusFilter, setLegalStatusFilter] = useState<LegalFilterType>('all');
+  const [filterCd, setFilterCd] = useState('all');
+  const [filterContractor, setFilterContractor] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -102,7 +104,6 @@ const App: React.FC = () => {
   const [mileageLogs, setMileageLogs] = useState<MileageLog[]>([]);
   
   const [isSyncing, setIsSyncing] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [viewDoc, setViewDoc] = useState<{ url: string, title: string } | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
   const [showFiveSForm, setShowFiveSForm] = useState(false);
@@ -111,12 +112,8 @@ const App: React.FC = () => {
   const [closingReport, setClosingReport] = useState<Report | null>(null);
   const [closingFiveS, setClosingFiveS] = useState<FiveSReport | null>(null);
 
-  const [filterCd, setFilterCd] = useState('all');
-  const [filterContractor, setFilterContractor] = useState('all');
   const [mileageStatusFilter, setMileageStatusFilter] = useState<'all' | 'completed' | 'pending'>('all');
   const [selectedWeek, setSelectedWeek] = useState(getWeekNumber(new Date()));
-  
-  const [filterTemporalMonth, setFilterTemporalMonth] = useState<string>(MESES[new Date().getMonth()]);
 
   useEffect(() => { 
     if (activeModule) handleSyncData(); 
@@ -125,160 +122,79 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      const [v, d, r, f, w, c, m] = await Promise.all([
-        fetchVehiclesFromSheet(),
-        fetchDriversFromSheet(),
+      const results = await Promise.allSettled([
+        fetchVehiclesFromSheet(), 
+        fetchDriversFromSheet(), 
         fetchReportsFromSheet(),
-        fetchFiveSReportsFromSheet(),
-        fetchWashReportsFromSheet(),
+        fetchFiveSReportsFromSheet(), 
+        fetchWashReportsFromSheet(), 
         fetchCalibrationsFromSheet(),
         fetchMileageLogsFromSheet()
       ]);
-      setVehicles(v || []);
-      setDrivers(d || []);
-      setReports(r || []);
-      setFiveSReports(f || []);
-      setWashReports(w || []);
-      setCalibrations(c || []);
-      setMileageLogs(m || []);
       
-      if (w && w.length > 0) {
-        const currentMonthNormalized = normalizeStr(filterTemporalMonth);
-        const hasDataInCurrent = w.some(item => normalizeStr(item.month) === currentMonthNormalized);
-        if (!hasDataInCurrent) {
-          const lastMonthAvailable = w[w.length - 1].month;
-          if (lastMonthAvailable) setFilterTemporalMonth(normalizeStr(lastMonthAvailable));
-        }
-      }
+      setVehicles(results[0].status === 'fulfilled' ? results[0].value : []);
+      setDrivers(results[1].status === 'fulfilled' ? results[1].value : []);
+      setReports(results[2].status === 'fulfilled' ? results[2].value : []);
+      setFiveSReports(results[3].status === 'fulfilled' ? results[3].value : []);
+      setWashReports(results[4].status === 'fulfilled' ? results[4].value : []);
+      setCalibrations(results[5].status === 'fulfilled' ? results[5].value : []);
+      setMileageLogs(results[6].status === 'fulfilled' ? results[6].value : []);
+      
+    } catch (err) {
+      console.error("Critical Sync Error:", err);
     } finally { setIsSyncing(false); }
   };
 
-  // LISTA DE CDs ÚNICOS DE LA FLOTA (Columna A de la hoja)
-  const cds = useMemo(() => Array.from(new Set(vehicles.map(v => (v.cd || 'GENERAL').toUpperCase()))).sort(), [vehicles]);
-  
-  // FILTRO DINÁMICO DE CONTRATISTAS (Columna B de la hoja)
-  const contractors = useMemo(() => {
-    if (filterCd === 'all') {
-      return Array.from(new Set(vehicles.map(v => (v.contractor || 'GENERAL').toUpperCase()))).sort();
-    }
-    
-    const normalizedCd = normalizeStr(filterCd);
-    const filteredContractors = vehicles
-      .filter(v => normalizeStr(v.cd || "") === normalizedCd)
-      .map(v => (v.contractor || 'GENERAL').toUpperCase());
-    
-    return Array.from(new Set(filteredContractors)).sort();
-  }, [vehicles, filterCd]);
-
-  const washCompliance = useMemo(() => {
-    const fleetToAnalize = vehicles.filter(v => {
-      const cdMatch = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
-      const contractorMatch = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
-      return cdMatch && contractorMatch;
-    });
-    const totalFlota = fleetToAnalize.length;
-    if (totalFlota === 0) return { percentage: 0, total: 0, compliant: 0, pending: 0 };
-    const currentMonthNorm = normalizeStr(filterTemporalMonth);
-    const platesWashedInMonth = new Set(washReports.filter(w => normalizeStr(w.month) === currentMonthNorm).map(w => normalizePlate(w.plate)));
-    const compliantCount = fleetToAnalize.filter(v => platesWashedInMonth.has(normalizePlate(v.plate))).length;
-    return { percentage: Math.round((compliantCount / totalFlota) * 100), total: totalFlota, compliant: compliantCount, pending: totalFlota - compliantCount };
-  }, [vehicles, washReports, filterCd, filterContractor, filterTemporalMonth]);
-
-  const fiveSCompliance = useMemo(() => {
-    const fleetToAnalize = vehicles.filter(v => {
-      const cdMatch = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
-      const contractorMatch = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
-      return cdMatch && contractorMatch;
-    });
-    const totalFlota = fleetToAnalize.length;
-    if (totalFlota === 0) return { percentage: 0, total: 0, compliant: 0, pending: 0 };
-    const platesAuditedInWeek = new Set(fiveSReports.filter(f => extractNumber(f.week) === selectedWeek).map(f => normalizePlate(f.plate)));
-    const compliantCount = fleetToAnalize.filter(v => platesAuditedInWeek.has(normalizePlate(v.plate))).length;
-    return { percentage: Math.round((compliantCount / totalFlota) * 100), total: totalFlota, compliant: compliantCount, pending: totalFlota - compliantCount };
-  }, [vehicles, fiveSReports, filterCd, filterContractor, selectedWeek]);
-
-  const filteredVehicles = useMemo(() => {
+  // Lógica de filtrado de flota maestra (La más importante según la solicitud del usuario)
+  const masterFleetFiltered = useMemo(() => {
+    if (!vehicles || vehicles.length === 0) return [];
     return vehicles.filter(v => {
-      const matchesSearch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
+      if (!v || !v.plate) return false;
+      
+      // 1. Filtro por CD
       const matchesCd = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
+      
+      // 2. Filtro por Contratista
       const matchesContractor = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
       
-      if (statsFilter === 'soat_expired') return matchesSearch && matchesCd && matchesContractor && calculateStatus(v.soat.expiryDate) === 'expired';
-      if (statsFilter === 'rtm_warning') return matchesSearch && matchesCd && matchesContractor && calculateStatus(v.rtm.expiryDate) !== 'active';
-      return matchesSearch && matchesCd && matchesContractor;
-    });
-  }, [vehicles, searchTerm, filterCd, filterContractor, statsFilter]);
-
-  const filteredWashList = useMemo(() => {
-    const currentMonthNorm = normalizeStr(filterTemporalMonth);
-    return washReports.filter(w => {
-      const plateMatch = normalizePlate(w.plate).includes(normalizePlate(searchTerm));
-      const monthMatch = normalizeStr(w.month) === currentMonthNorm;
+      // 3. Filtro por Búsqueda de Placa
+      const matchesSearch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
       
-      const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(w.plate));
-      const cdMatch = filterCd === 'all' || (vehicle && normalizeStr(vehicle.cd || "") === normalizeStr(filterCd));
-      const contractorMatch = filterContractor === 'all' || (vehicle && normalizeStr(vehicle.contractor || "") === normalizeStr(filterContractor));
-      
-      return plateMatch && monthMatch && cdMatch && contractorMatch;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [washReports, searchTerm, filterTemporalMonth, filterCd, filterContractor, vehicles]);
-
-  const pendingWashVehicles = useMemo(() => {
-    const currentMonthNorm = normalizeStr(filterTemporalMonth);
-    const platesWashedInMonth = new Set(washReports.filter(w => normalizeStr(w.month) === currentMonthNorm).map(w => normalizePlate(w.plate)));
-    return vehicles.filter(v => {
-      const cdMatch = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
-      const contractorMatch = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
-      const plateMatch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
-      const notWashed = !platesWashedInMonth.has(normalizePlate(v.plate));
-      return cdMatch && contractorMatch && plateMatch && notWashed;
-    }).sort((a, b) => a.plate.localeCompare(b.plate));
-  }, [vehicles, washReports, filterTemporalMonth, filterCd, filterContractor, searchTerm]);
-
-  const filteredFiveS = useMemo(() => {
-    return fiveSReports.filter(f => {
-      const plateMatch = normalizePlate(f.plate).includes(normalizePlate(searchTerm));
-      const weekMatch = extractNumber(f.week) === selectedWeek;
-      const cdMatch = filterCd === 'all' || normalizeStr(f.cd || "") === normalizeStr(filterCd);
-      const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(f.plate));
-      const contractorMatch = filterContractor === 'all' || (vehicle && normalizeStr(vehicle.contractor || "") === normalizeStr(filterContractor));
-      return plateMatch && weekMatch && cdMatch && contractorMatch;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [fiveSReports, searchTerm, selectedWeek, filterCd, filterContractor, vehicles]);
-
-  const pendingFiveSVehicles = useMemo(() => {
-    const platesAuditedInWeek = new Set(fiveSReports.filter(f => extractNumber(f.week) === selectedWeek).map(f => normalizePlate(f.plate)));
-    return vehicles.filter(v => {
-      const cdMatch = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
-      const contractorMatch = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
-      const plateMatch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
-      const notAudited = !platesAuditedInWeek.has(normalizePlate(v.plate));
-      return cdMatch && contractorMatch && plateMatch && notAudited;
-    }).sort((a, b) => a.plate.localeCompare(b.plate));
-  }, [vehicles, fiveSReports, selectedWeek, filterCd, filterContractor, searchTerm]);
-
-  const filteredReports = useMemo(() => {
-    const monthIdx = MESES.indexOf(filterTemporalMonth);
-    return reports.filter(r => {
-      const plateMatch = normalizePlate(r.plate).includes(normalizePlate(searchTerm));
-      const cdMatch = filterCd === 'all' || normalizeStr(r.cd || "") === normalizeStr(filterCd);
-      const contractorMatch = filterContractor === 'all' || vehicles.some(v => normalizePlate(v.plate) === normalizePlate(r.plate) && normalizeStr(v.contractor || "") === normalizeStr(filterContractor));
-      let monthMatch = true;
-      if (r.date) {
-        const d = new Date(r.date);
-        monthMatch = d.getMonth() === monthIdx;
+      // 4. Filtro por Estado Legal (Dashboard)
+      let matchesLegal = true;
+      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status];
+      if (legalStatusFilter === 'expired') {
+        matchesLegal = statuses.some(s => s === 'expired');
+      } else if (legalStatusFilter === 'warning') {
+        matchesLegal = !statuses.some(s => s === 'expired') && statuses.some(s => s === 'warning');
+      } else if (legalStatusFilter === 'healthy') {
+        matchesLegal = statuses.every(s => s === 'active');
       }
-      return plateMatch && cdMatch && contractorMatch && monthMatch;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [reports, searchTerm, filterCd, filterContractor, filterTemporalMonth, vehicles]);
 
-  const novedadesStats = useMemo(() => {
-    const total = filteredReports.length;
-    if (total === 0) return { total: 0, abiertos: 0, cerrados: 0, percCerrados: 0 };
-    const cerrados = filteredReports.filter(r => r.status === 'CERRADO').length;
-    const abiertos = total - cerrados;
-    return { total, abiertos, cerrados, percCerrados: Math.round((cerrados / total) * 100) };
-  }, [filteredReports]);
+      return matchesCd && matchesContractor && matchesSearch && matchesLegal;
+    });
+  }, [vehicles, filterCd, filterContractor, searchTerm, legalStatusFilter]);
+
+  // Estadísticas para el Dashboard de Filtrado
+  const fleetStats = useMemo(() => {
+    const total = vehicles.length;
+    let expiredCount = 0;
+    let warningCount = 0;
+    
+    vehicles.forEach(v => {
+      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status];
+      if (statuses.some(s => s === 'expired')) expiredCount++;
+      else if (statuses.some(s => s === 'warning')) warningCount++;
+    });
+
+    return { total, expiredCount, warningCount, healthyCount: total - expiredCount - warningCount };
+  }, [vehicles]);
+
+  const uniqueCds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
+  const uniqueContractors = useMemo(() => {
+    const filtered = filterCd === 'all' ? vehicles : vehicles.filter(v => normalizeStr(v.cd || "") === normalizeStr(filterCd));
+    return Array.from(new Set(filtered.map(v => v.contractor || 'GENERAL'))).sort();
+  }, [vehicles, filterCd]);
 
   if (activeModule === null) {
     return (
@@ -312,7 +228,7 @@ const App: React.FC = () => {
           </div>
           <nav className="flex-grow space-y-4">
             {[
-              { id: 'vehiculos', label: 'Vehículos', icon: <LayoutDashboard size={18}/> },
+              { id: 'vehiculos', label: 'Flota Legal', icon: <Shield size={18}/> },
               { id: 'conductores', label: 'Conductores', icon: <Users size={18}/> },
               { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
               { id: 'kilometrajes', label: 'Kilómetros', icon: <Gauge size={18}/> },
@@ -344,401 +260,174 @@ const App: React.FC = () => {
 
         <div className="flex-grow p-6 md:p-10 overflow-y-auto bg-[#f8fafc] custom-scrollbar">
           
-          {/* VISTA LAVADOS */}
-          {activeView === 'lavados' && (
-            <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500 pb-20">
-               {/* Dashboard */}
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col items-center justify-center relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-full h-2 bg-cyan-500 transition-all group-hover:h-3"></div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                       <Percent size={14} className="text-cyan-500" /> 
-                       CUMPLIMIENTO {filterTemporalMonth}
-                    </p>
-                    <span className="text-6xl font-black tracking-tighter text-cyan-600">{washCompliance.percentage}%</span>
-                 </div>
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Flota Master</p>
-                    <p className="text-4xl font-black text-slate-800">{washCompliance.total}</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest mb-2">Lavadados ({filterTemporalMonth})</p>
-                    <p className="text-4xl font-black text-cyan-600">{washCompliance.compliant}</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-2">Pendientes Mes</p>
-                    <p className="text-4xl font-black text-rose-600">{washCompliance.pending}</p>
-                 </div>
-              </div>
-
-              {/* PANEL DE FILTROS */}
-              <div className="bg-[#eefcfd] p-8 rounded-[2.5rem] border border-cyan-100 shadow-sm space-y-6">
-                <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-6">
-                  <div className="flex items-center gap-4">
-                     <div className="p-3 bg-cyan-100 text-cyan-600 rounded-2xl shadow-sm">
-                        <Droplets size={32} />
-                     </div>
-                     <div>
-                        <h2 className="text-3xl font-black uppercase tracking-tighter text-slate-800">LOG DE LAVADOS</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Control Periódico de Higiene</p>
-                     </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-3 bg-white px-6 py-4 rounded-3xl border border-cyan-50 shadow-lg min-w-[180px]">
-                      <Calendar size={20} className="text-cyan-600" />
-                      <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-slate-300 uppercase">PERIODO</span>
-                        <select className="bg-transparent font-black text-slate-700 text-xs uppercase outline-none cursor-pointer" value={filterTemporalMonth} onChange={e => setFilterTemporalMonth(e.target.value)}>
-                          {MESES.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                      </div>
-                      <ChevronDown size={18} className="text-slate-300 ml-auto" />
-                    </div>
-
-                    <button onClick={() => setShowWashForm(true)} className="px-10 py-5 bg-cyan-600 rounded-[1.5rem] font-black text-xs tracking-widest text-white flex items-center gap-3 hover:bg-cyan-700 shadow-xl shadow-cyan-900/10 transition-all border-b-4 border-cyan-800/30">
-                      <Plus size={20} /> REGISTRAR LAVADO
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center gap-4 bg-white px-8 py-5 rounded-[1.8rem] border border-slate-100 shadow-sm transition-all hover:border-cyan-200">
-                    <Building2 size={20} className="text-cyan-500" />
-                    <select className="bg-transparent font-black text-slate-700 text-xs uppercase outline-none w-full cursor-pointer" 
-                      value={filterCd} 
-                      onChange={e => { 
-                        setFilterCd(e.target.value); 
-                        setFilterContractor('all'); // RESET AUTOMÁTICO DE CONTRATISTA AL CAMBIAR CD
-                      }}
-                    >
-                       <option value="all">TODOS LOS CD</option>
-                       {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-4 bg-white px-8 py-5 rounded-[1.8rem] border border-slate-100 shadow-sm transition-all hover:border-cyan-200">
-                    <UserCircle size={20} className="text-cyan-500" />
-                    <select className="bg-transparent font-black text-slate-700 text-xs uppercase outline-none w-full cursor-pointer" value={filterContractor} onChange={e => setFilterContractor(e.target.value)}>
-                       <option value="all">TODOS LOS CONTRATISTAS</option>
-                       {contractors.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* TABS SEGUIMIENTO */}
-              <div className="flex gap-4">
-                 <button onClick={() => setActiveWashTab('realizados')} className={`flex-1 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all border-2 flex items-center justify-center gap-3 ${activeWashTab === 'realizados' ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-2xl scale-[1.02]' : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'}`}>
-                   <CheckCircle2 size={18} /> Realizados ({filteredWashList.length})
-                 </button>
-                 <button onClick={() => setActiveWashTab('pendientes')} className={`flex-1 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all border-2 flex items-center justify-center gap-3 ${activeWashTab === 'pendientes' ? 'bg-[#0f172a] text-white border-[#0f172a] shadow-2xl scale-[1.02]' : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'}`}>
-                   <Clock size={18} /> Pendientes ({pendingWashVehicles.length})
-                 </button>
-              </div>
-
-              {activeWashTab === 'realizados' ? (
-                filteredWashList.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {filteredWashList.map(w => (
-                      <WashCard key={w.id} report={w} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-32 text-center bg-white rounded-[4rem] border-4 border-dashed border-slate-100">
-                    <div className="p-10 bg-slate-50 rounded-full mb-6"><Droplets size={64} className="text-slate-200" /></div>
-                    <p className="text-slate-400 font-black uppercase text-xs tracking-widest">No hay reportes de lavado en {filterTemporalMonth}</p>
-                  </div>
-                )
-              ) : (
-                pendingWashVehicles.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                    {pendingWashVehicles.map(v => (
-                      <button key={v.id} onClick={() => { setShowWashForm(true); }} className="bg-white p-8 rounded-[3rem] border-2 border-slate-100 flex flex-col items-center justify-center gap-4 transition-all hover:border-rose-400 hover:bg-rose-50 hover:scale-105 hover:shadow-2xl group shadow-sm">
-                        <div className="bg-[#0f172a] px-6 py-3 rounded-2xl text-white font-mono font-black text-lg shadow-md group-hover:bg-rose-600 transition-colors">
-                          {v.plate}
-                        </div>
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate max-w-full">{v.cd}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-32 text-center bg-white rounded-[4rem] border-4 border-dashed border-emerald-100">
-                    <div className="p-10 bg-emerald-50 rounded-full mb-6"><CheckCircle2 size={64} className="text-emerald-500" /></div>
-                    <p className="text-emerald-600 font-black uppercase text-xs tracking-widest">¡CUMPLIMIENTO TOTAL ALCANZADO!</p>
-                  </div>
-                )
-              )}
-            </div>
-          )}
-
-          {/* VISTA 5S CAMIONES */}
-          {activeView === 'fives' && (
-            <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500 pb-20">
-               {/* Dashboard */}
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col items-center justify-center relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500 transition-all group-hover:h-3"></div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                       <Percent size={14} className="text-emerald-500" /> 
-                       CUMPLIMIENTO W{selectedWeek}
-                    </p>
-                    <span className="text-6xl font-black tracking-tighter text-emerald-600">{fiveSCompliance.percentage}%</span>
-                 </div>
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Flota Master</p>
-                    <p className="text-4xl font-black text-slate-800">{fiveSCompliance.total}</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-2">Realizados (W{selectedWeek})</p>
-                    <p className="text-4xl font-black text-emerald-600">{fiveSCompliance.compliant}</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-2">Pendientes Semana</p>
-                    <p className="text-4xl font-black text-rose-600">{fiveSCompliance.pending}</p>
-                 </div>
-              </div>
-
-              {/* PANEL DE FILTROS */}
-              <div className="bg-[#eef2f6] p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
-                <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-6">
-                  <div className="flex items-center gap-4">
-                     <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl shadow-sm">
-                        <Sparkles size={32} />
-                     </div>
-                     <div>
-                        <h2 className="text-3xl font-black uppercase tracking-tighter text-[#1e293b]">5S CAMIONES</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Auditoría Visual de Estándares</p>
-                     </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-3 bg-white px-6 py-4 rounded-3xl border border-slate-100 shadow-lg min-w-[180px]">
-                      <CalendarDays size={20} className="text-emerald-600" />
-                      <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-slate-300 uppercase">W{selectedWeek}</span>
-                        <select className="bg-transparent font-black text-slate-700 text-xs uppercase outline-none cursor-pointer" value={selectedWeek} onChange={e => setSelectedWeek(parseInt(e.target.value))}>
-                          {Array.from({length: 52}, (_, i) => i + 1).map(w => (
-                            <option key={w} value={w}>SEMANA {w}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <ChevronDown size={18} className="text-slate-300 ml-auto" />
-                    </div>
-
-                    <button onClick={() => { setPreSelectedPlate(undefined); setShowFiveSForm(true); }} className="px-10 py-5 bg-[#059669] rounded-[1.5rem] font-black text-xs tracking-widest text-white flex items-center gap-3 hover:bg-emerald-700 shadow-xl shadow-emerald-900/10 transition-all border-b-4 border-emerald-800/30">
-                      <Plus size={20} /> REGISTRAR 5S
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center gap-4 bg-white px-8 py-5 rounded-[1.8rem] border border-slate-100 shadow-sm transition-all hover:border-emerald-200">
-                    <Building2 size={20} className="text-emerald-500" />
-                    <select className="bg-transparent font-black text-slate-700 text-xs uppercase outline-none w-full cursor-pointer" 
-                      value={filterCd} 
-                      onChange={e => { 
-                        setFilterCd(e.target.value); 
-                        setFilterContractor('all'); // RESET AUTOMÁTICO DE CONTRATISTA AL CAMBIAR CD
-                      }}
-                    >
-                       <option value="all">TODOS LOS CENTROS DE DISTRIBUCIÓN</option>
-                       {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-                    </select>
-                    <ChevronDown size={18} className="text-slate-300" />
-                  </div>
-                  <div className="flex items-center gap-4 bg-white px-8 py-5 rounded-[1.8rem] border border-slate-100 shadow-sm transition-all hover:border-emerald-200">
-                    <UserCircle size={20} className="text-emerald-500" />
-                    <select className="bg-transparent font-black text-slate-700 text-xs uppercase outline-none w-full cursor-pointer" value={filterContractor} onChange={e => setFilterContractor(e.target.value)}>
-                       <option value="all">TODOS LOS CONTRATISTAS / OPERADORES</option>
-                       {contractors.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <ChevronDown size={18} className="text-slate-300" />
-                  </div>
-                </div>
-              </div>
-
-              {/* TABS SEGUIMIENTO */}
-              <div className="flex gap-4">
-                 <button onClick={() => setActiveFiveSTab('realizados')} className={`flex-1 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all border-2 flex items-center justify-center gap-3 ${activeFiveSTab === 'realizados' ? 'bg-[#1e293b] text-white border-[#1e293b] shadow-2xl scale-[1.02]' : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'}`}>
-                   <CheckCircle2 size={18} /> Realizados ({filteredFiveS.length})
-                 </button>
-                 <button onClick={() => setActiveFiveSTab('pendientes')} className={`flex-1 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-[0.2em] transition-all border-2 flex items-center justify-center gap-3 ${activeFiveSTab === 'pendientes' ? 'bg-[#1e293b] text-white border-[#1e293b] shadow-2xl scale-[1.02]' : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'}`}>
-                   <Clock size={18} /> Pendientes ({pendingFiveSVehicles.length})
-                 </button>
-              </div>
-
-              {activeFiveSTab === 'realizados' ? (
-                filteredFiveS.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {filteredFiveS.map(f => (
-                      <FiveSCard key={f.id} report={f} onViewDoc={(url, t) => setViewDoc({url, title: t})} onManageClosure={setClosingFiveS} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-32 text-center bg-white rounded-[4rem] border-4 border-dashed border-slate-100">
-                    <div className="p-10 bg-slate-50 rounded-full mb-6"><Sparkles size={64} className="text-slate-200" /></div>
-                    <p className="text-slate-400 font-black uppercase text-xs tracking-widest">No hay auditorías registradas en la semana {selectedWeek}</p>
-                  </div>
-                )
-              ) : (
-                pendingFiveSVehicles.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                    {pendingFiveSVehicles.map(v => (
-                      <button key={v.id} onClick={() => { setPreSelectedPlate(v.plate); setShowFiveSForm(true); }} className="bg-white p-8 rounded-[3rem] border-2 border-slate-100 flex flex-col items-center justify-center gap-4 transition-all hover:border-rose-400 hover:bg-rose-50 hover:scale-105 hover:shadow-2xl group shadow-sm">
-                        <div className="bg-[#0f172a] px-6 py-3 rounded-2xl text-white font-mono font-black text-lg shadow-md group-hover:bg-rose-600 transition-colors">
-                          {v.plate}
-                        </div>
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate max-w-full">{v.cd}</span>
-                          <span className="text-[7px] font-bold text-slate-300 uppercase tracking-widest truncate max-w-full">{v.contractor}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-32 text-center bg-white rounded-[4rem] border-4 border-dashed border-emerald-100">
-                    <div className="p-10 bg-emerald-50 rounded-full mb-6"><CheckCircle2 size={64} className="text-emerald-500" /></div>
-                    <p className="text-emerald-600 font-black uppercase text-xs tracking-widest">¡CUMPLIMIENTO TOTAL ALCANZADO! SIN PENDIENTES.</p>
-                  </div>
-                )
-              )}
-            </div>
-          )}
-
           {activeView === 'vehiculos' && (
-            <div className="space-y-8 max-w-7xl mx-auto animate-in fade-in duration-500">
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                 <button onClick={() => setStatsFilter('all')} className={`p-8 rounded-[3rem] border text-left transition-all ${statsFilter === 'all' ? 'bg-[#0f172a] text-white shadow-2xl' : 'bg-white hover:bg-slate-50'}`}>
-                    <Truck size={24} className="text-indigo-400 mb-4" />
-                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Total Flota</p>
-                    <p className="text-4xl font-black">{filteredVehicles.length}</p>
-                 </button>
-                 <button onClick={() => setStatsFilter('soat_expired')} className={`p-8 rounded-[3rem] border text-left transition-all ${statsFilter === 'soat_expired' ? 'bg-rose-600 text-white shadow-2xl' : 'bg-white hover:bg-slate-50'}`}>
-                    <ShieldCheck size={24} className="text-rose-400 mb-4" />
-                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">SOAT Vencidos</p>
-                    <p className="text-4xl font-black">{filteredVehicles.filter(v => calculateStatus(v.soat.expiryDate) === 'expired').length}</p>
-                 </button>
-                 <button onClick={() => setStatsFilter('rtm_warning')} className={`p-8 rounded-[3rem] border text-left transition-all ${statsFilter === 'rtm_warning' ? 'bg-amber-600 text-white shadow-2xl' : 'bg-white hover:bg-slate-50'}`}>
-                    <Gauge size={24} className="text-amber-400 mb-4" />
-                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">RTM Próximos</p>
-                    <p className="text-4xl font-black">{filteredVehicles.filter(v => calculateStatus(v.rtm.expiryDate) !== 'active').length}</p>
-                 </button>
+            <div className="max-w-7xl mx-auto space-y-10 pb-20">
+              
+              {/* DASHBOARD DE FILTRADO LEGAL INTERACTIVO */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+                {[
+                  { id: 'all', label: 'Total Flota', count: fleetStats.total, icon: <Truck size={24}/>, color: 'indigo' },
+                  { id: 'healthy', label: 'Al Día', count: fleetStats.healthyCount, icon: <CheckCircle2 size={24}/>, color: 'emerald' },
+                  { id: 'warning', label: 'Por Vencer', count: fleetStats.warningCount, icon: <AlertTriangle size={24}/>, color: 'amber' },
+                  { id: 'expired', label: 'Vencidos', count: fleetStats.expiredCount, icon: <ShieldAlert size={24}/>, color: 'rose' }
+                ].map(stat => (
+                  <button 
+                    key={stat.id}
+                    onClick={() => setLegalStatusFilter(stat.id as LegalFilterType)}
+                    className={`p-8 rounded-[2.5rem] border-2 transition-all flex flex-col items-center gap-4 group relative overflow-hidden ${legalStatusFilter === stat.id ? `bg-${stat.color}-600 text-white border-${stat.color}-600 shadow-xl shadow-${stat.color}-600/20` : `bg-white border-slate-100 hover:border-${stat.color}-200`}`}
+                  >
+                    <div className={`p-4 rounded-2xl ${legalStatusFilter === stat.id ? 'bg-white/20' : `bg-${stat.color}-50 text-${stat.color}-600`}`}>
+                       {stat.icon}
+                    </div>
+                    <div className="text-center">
+                       <p className={`text-[10px] font-black uppercase tracking-widest ${legalStatusFilter === stat.id ? 'text-white/70' : 'text-slate-400'}`}>{stat.label}</p>
+                       <p className="text-4xl font-black tracking-tighter">{stat.count}</p>
+                    </div>
+                    {legalStatusFilter === stat.id && <div className="absolute top-2 right-4"><CheckCircle2 size={16} /></div>}
+                  </button>
+                ))}
               </div>
 
-              <div className="grid grid-cols-1 gap-8">
-                {filteredVehicles.map(v => {
+              {/* SELECTORES DE FILTRO SECUNDARIOS */}
+              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                 <div className="flex flex-col gap-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                       <Building2 size={12} className="text-indigo-600" /> Centro de Distribución
+                    </label>
+                    <select className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 appearance-none" value={filterCd} onChange={e => setFilterCd(e.target.value)}>
+                      <option value="all">TODOS LOS CD</option>
+                      {uniqueCds.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                 </div>
+                 <div className="flex flex-col gap-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 flex items-center gap-2">
+                       <UserCircle size={12} className="text-indigo-600" /> Contratista / Operador
+                    </label>
+                    <select className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 appearance-none" value={filterContractor} onChange={e => setFilterContractor(e.target.value)}>
+                      <option value="all">TODOS LOS OPERADORES</option>
+                      {uniqueContractors.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                 </div>
+              </div>
+
+              {/* LISTADO DE VEHÍCULOS */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                {masterFleetFiltered.length > 0 ? masterFleetFiltered.map(v => {
+                  const isCriticallyExpired = [v.soat?.status, v.rtm?.status, v.extinguisher?.status].some(s => s === 'expired');
                   return (
-                    <div key={v.id} className="bg-white p-8 rounded-[3.5rem] border shadow-xl grid grid-cols-1 lg:grid-cols-4 gap-6 relative group overflow-hidden transition-all hover:border-indigo-100">
-                      <div className="flex flex-col items-center justify-center bg-slate-50 rounded-[2.5rem] p-6 border relative transition-all group-hover:bg-white">
-                        <div className="bg-[#0f172a] px-8 py-6 rounded-2xl text-white font-mono text-3xl font-black mb-4 shadow-2xl transition-transform group-hover:scale-110">{v.plate}</div>
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{v.cd}</span>
-                        </div>
+                    <div key={v.id} className={`bg-white rounded-[3.5rem] p-8 border-2 shadow-xl relative overflow-hidden transition-all hover:shadow-2xl ${isCriticallyExpired ? 'border-rose-100 bg-rose-50/5' : 'border-slate-100'}`}>
+                      {isCriticallyExpired && <div className="absolute top-0 right-0 bg-rose-600 text-white px-6 py-2 rounded-bl-3xl text-[9px] font-black uppercase tracking-widest z-10 animate-pulse">Atención Crítica</div>}
+                      
+                      <div className="bg-[#0f172a] px-8 py-5 rounded-[2rem] text-white font-mono font-black text-4xl mb-8 text-center shadow-2xl relative">
+                        {v.plate}
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-indigo-500 rounded-full"></div>
                       </div>
-                      <DocumentCard title="SOAT" doc={v.soat} icon={<ShieldCheck />} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
-                      <DocumentCard title="RTM" doc={v.rtm} icon={<Gauge />} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
-                      <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Flame />} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
+
+                      <div className="space-y-4">
+                        <DocumentCard title="SOAT" doc={v.soat} icon={<Shield/>} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} />
+                        <DocumentCard title="RTM" doc={v.rtm} icon={<Settings2/>} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} />
+                        <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Flame/>} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} />
+                      </div>
+                      
+                      <div className="mt-8 pt-6 border-t border-slate-100 flex justify-between items-center text-[9px] font-black text-slate-300 uppercase tracking-widest px-4">
+                         <span>CD: {v.cd || 'GENERAL'}</span>
+                         <span>OP: {v.contractor || 'GENERAL'}</span>
+                      </div>
                     </div>
                   );
-                })}
+                }) : (
+                  <div className="col-span-full py-40 flex flex-col items-center justify-center text-slate-300">
+                     <div className="p-10 bg-slate-50 rounded-full mb-6 border-2 border-dashed border-slate-100">
+                        <FilterX size={64} className="opacity-20" />
+                     </div>
+                     <p className="text-[12px] font-black uppercase tracking-[0.4em]">Sin resultados para estos filtros</p>
+                     <button onClick={() => { setLegalStatusFilter('all'); setFilterCd('all'); setFilterContractor('all'); setSearchTerm(''); }} className="mt-8 text-indigo-500 text-[10px] font-black border-b-2 border-indigo-100 hover:border-indigo-500 transition-all uppercase">Restablecer Auditoría</button>
+                  </div>
+                )}
               </div>
             </div>
           )}
-
-          {activeView === 'conductores' && <div className="space-y-8 max-w-7xl mx-auto">{drivers.map(d => <DriverCard key={d.id} driver={d} onViewDoc={(url, t) => setViewDoc({url, title: t})} />)}</div>}
-          {activeView === 'kilometrajes' && <MileageEntryForm vehicles={vehicles} mileageLogs={mileageLogs} onSubmit={submitMileageToSheet} externalCd={filterCd} setExternalCd={setFilterCd} externalContractor={filterContractor} setExternalContractor={setFilterContractor} searchTerm={searchTerm} setSearchTerm={setSearchTerm} statusFilter={mileageStatusFilter} setStatusFilter={setMileageStatusFilter} selectedWeek={selectedWeek} onWeekChange={setSelectedWeek} />}
           
+          {activeView === 'conductores' && <div className="space-y-8">{drivers.map(d => <DriverCard key={d.id} driver={d} onViewDoc={(url, t) => setViewDoc({url, title: t})} />)}</div>}
+          
+          {activeView === 'lavados' && (
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+               <div className="col-span-full flex justify-between items-center mb-6">
+                 <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Historial de Lavados</h2>
+                 <button onClick={() => setShowWashForm(true)} className="px-6 py-3 bg-cyan-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-700 transition-all flex items-center gap-2">
+                   <Plus size={16} /> REGISTRAR LAVADO
+                 </button>
+               </div>
+               {washReports.filter(w => normalizePlate(w.plate).includes(normalizePlate(searchTerm))).map(w => (
+                 <WashCard key={w.id} report={w} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} />
+               ))}
+             </div>
+          )}
+
+          {activeView === 'fives' && (
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+               <div className="col-span-full flex justify-between items-center mb-6">
+                 <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Auditorías 5S Camiones</h2>
+                 <button onClick={() => setShowFiveSForm(true)} className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-emerald-700 transition-all flex items-center gap-2">
+                   <Plus size={16} /> NUEVA AUDITORÍA
+                 </button>
+               </div>
+               {fiveSReports.filter(f => normalizePlate(f.plate).includes(normalizePlate(searchTerm))).map(f => (
+                 <FiveSCard key={f.id} report={f} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} onManageClosure={setClosingFiveS} />
+               ))}
+             </div>
+          )}
+
+          {activeView === 'kilometrajes' && (
+             <MileageEntryForm 
+               vehicles={vehicles} 
+               mileageLogs={mileageLogs} 
+               onSubmit={submitMileageToSheet} 
+               externalCd={filterCd} 
+               setExternalCd={setFilterCd} 
+               externalContractor={filterContractor} 
+               setExternalContractor={setFilterContractor} 
+               searchTerm={searchTerm} 
+               setSearchTerm={setSearchTerm} 
+               statusFilter={mileageStatusFilter} 
+               setStatusFilter={setMileageStatusFilter} 
+               selectedWeek={selectedWeek} 
+               onWeekChange={setSelectedWeek} 
+             />
+          )}
+
           {activeView === 'novedades' && (
-            <div className="space-y-10 max-w-7xl mx-auto animate-in fade-in duration-500">
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col items-center justify-center relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-full h-2 bg-indigo-500 transition-all group-hover:h-3"></div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                       <Percent size={14} className="text-indigo-500" /> 
-                       EFECTIVIDAD CIERRE
-                    </p>
-                    <span className="text-6xl font-black tracking-tighter text-indigo-600">{novedadesStats.percCerrados}%</span>
-                 </div>
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Total Novedades</p>
-                    <p className="text-4xl font-black text-slate-800">{novedadesStats.total}</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-2">Abiertos / En Taller</p>
-                    <p className="text-4xl font-black text-rose-600">{novedadesStats.abiertos}</p>
-                 </div>
-                 <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col justify-center">
-                    <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-2">Cerrados / Listos</p>
-                    <p className="text-4xl font-black text-emerald-600">{novedadesStats.cerrados}</p>
-                 </div>
-              </div>
-
-              <div className="bg-slate-900/5 p-8 rounded-[3rem] border border-slate-200 space-y-6">
-                <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-6">
-                  <div className="flex flex-col gap-2">
-                     <h2 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3 text-slate-800">
-                       <ClipboardList size={32} className="text-indigo-500" /> GESTIÓN DE NOVEDADES
-                     </h2>
-                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Órdenes de trabajo y reparaciones</p>
-                  </div>
-                  <button onClick={() => setShowReportForm(true)} className="px-8 py-4 bg-indigo-600 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white flex items-center gap-3 hover:bg-indigo-700 shadow-xl transition-all border border-indigo-500/30">
-                    <Plus size={18} /> NUEVA ORDEN
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="flex items-center gap-3 bg-white px-6 py-3 rounded-2xl border border-slate-200 shadow-sm">
-                    <Calendar size={16} className="text-indigo-600" />
-                    <select className="bg-transparent font-black text-[10px] uppercase outline-none w-full" value={filterTemporalMonth} onChange={e => setFilterTemporalMonth(e.target.value)}>
-                       {MESES.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white px-6 py-3 rounded-2xl border border-slate-200 shadow-sm">
-                    <Building2 size={16} className="text-indigo-600" />
-                    <select className="bg-transparent font-black text-[10px] uppercase outline-none w-full" 
-                      value={filterCd} 
-                      onChange={e => { 
-                        setFilterCd(e.target.value); 
-                        setFilterContractor('all'); // RESET AUTOMÁTICO DE CONTRATISTA AL CAMBIAR CD
-                      }}
-                    >
-                       <option value="all">TODOS LOS CD</option>
-                       {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-3 bg-white px-6 py-3 rounded-2xl border border-slate-200 shadow-sm">
-                    <UserCircle size={16} className="text-indigo-600" />
-                    <select className="bg-transparent font-black text-[10px] uppercase outline-none w-full" value={filterContractor} onChange={e => setFilterContractor(e.target.value)}>
-                       <option value="all">TODOS LOS CONTRATISTAS</option>
-                       {contractors.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {filteredReports.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {filteredReports.map(r => (
-                    <ReportCard key={r.id} report={r} onViewDoc={(url, t) => setViewDoc({url, title: t})} onManageClosure={setClosingReport} />
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-32 text-center bg-white rounded-[3rem] border-4 border-dashed border-slate-100">
-                  <div className="p-10 bg-slate-50 rounded-full mb-6"><ClipboardList size={64} className="text-slate-200" /></div>
-                  <p className="text-slate-400 font-black uppercase text-xs tracking-widest">No hay novedades registradas con estos filtros</p>
-                </div>
-              )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-20">
+              <div className="col-span-full flex justify-between items-center mb-6">
+                 <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Gestión de Novedades</h2>
+                 <button onClick={() => setShowReportForm(true)} className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2">
+                   <Plus size={16} /> CREAR NOVEDAD
+                 </button>
+               </div>
+              {reports.filter(r => normalizePlate(r.plate).includes(normalizePlate(searchTerm))).map(r => (
+                <ReportCard key={r.id} report={r} onViewDoc={(url, t) => setViewDoc({url, title: t})} onManageClosure={setClosingReport} />
+              ))}
             </div>
           )}
 
-          {activeView === 'calibraciones' && <div className="space-y-8 max-w-7xl mx-auto"><div className="flex justify-between items-center bg-indigo-900 p-10 rounded-[3rem] text-white"><h2 className="text-3xl font-black uppercase tracking-tighter">CALIBRACIÓN</h2><button onClick={() => setShowCalibrationForm(true)} className="px-8 py-5 bg-indigo-600 rounded-2xl font-black text-xs tracking-widest flex items-center gap-3 shadow-xl"><Plus /> REGISTRAR</button></div><div className="grid grid-cols-1 md:grid-cols-3 gap-8">{calibrations.map(c => <CalibrationCard key={c.id} calibration={c} onViewDoc={(url, t) => setViewDoc({url, title: t})} />)}</div></div>}
+          {activeView === 'calibraciones' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+              <div className="col-span-full flex justify-between items-center mb-6">
+                 <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Calibración de Neumáticos</h2>
+                 <button onClick={() => setShowCalibrationForm(true)} className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-3">
+                   <Plus size={16} /> REGISTRAR CALIBRACIÓN
+                 </button>
+              </div>
+              {calibrations.filter(c => normalizePlate(c.plate).includes(normalizePlate(searchTerm))).map(c => (
+                <CalibrationCard key={c.id} calibration={c} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
+              ))}
+            </div>
+          )}
         </div>
       </main>
 
       {showReportForm && <ReportForm vehicles={vehicles} onClose={() => { setShowReportForm(false); handleSyncData(); }} onSubmit={submitReportToSheet} />}
-      {showFiveSForm && <FiveSForm vehicles={vehicles} onClose={() => { setShowFiveSForm(false); setPreSelectedPlate(undefined); handleSyncData(); }} onSubmit={submitFiveSToSheet} preSelectedPlate={preSelectedPlate} />}
+      {showFiveSForm && <FiveSForm vehicles={vehicles} onClose={() => { setShowFiveSForm(false); handleSyncData(); }} onSubmit={submitFiveSToSheet} />}
       {showWashForm && <WashForm vehicles={vehicles} onClose={() => { setShowWashForm(false); handleSyncData(); }} onSubmit={submitWashToSheet} />}
       {showCalibrationForm && <CalibrationForm vehicles={vehicles} onClose={() => { setShowCalibrationForm(false); handleSyncData(); }} onSubmit={submitCalibrationToSheet} />}
       {closingReport && <ClosureForm report={closingReport} onClose={() => { setClosingReport(null); handleSyncData(); }} onSubmit={(id, data) => submitReportToSheet({...closingReport, ...data} as any)} />}
