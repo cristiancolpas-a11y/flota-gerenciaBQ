@@ -202,7 +202,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
               onClick={() => setActiveTab('historial')}
               className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'historial' ? 'bg-[#0f172a] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
             >
-              <History size={16} /> AUDITORÍA
+              <History size={16} /> HISTORIAL
             </button>
           </div>
 
@@ -289,7 +289,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                       <p className="text-[9px] font-black text-indigo-400 uppercase mb-3 flex items-center gap-2"><Building2 size={12}/> Ubicación CD</p>
                       <select className="bg-[#1e293b] text-white text-[10px] font-black w-full px-4 py-2.5 rounded-xl outline-none uppercase cursor-pointer border border-white/5 focus:border-indigo-500" value={externalCd} onChange={e => setExternalCd(e.target.value)}>
                         <option value="all">TODOS LOS CD</option>
-                        {cds.map(c => <option key={c} value={c}>{c}</option>)}
+                        {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
                       </select>
                     </div>
 
@@ -297,7 +297,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                       <p className="text-[9px] font-black text-indigo-400 uppercase mb-3 flex items-center gap-2"><UserCircle size={12}/> Operador</p>
                       <select className="bg-[#1e293b] text-white text-[10px] font-black w-full px-4 py-2.5 rounded-xl outline-none uppercase cursor-pointer border border-white/5 focus:border-indigo-500" value={externalContractor} onChange={e => setExternalContractor(e.target.value)}>
                         <option value="all">TODOS LOS OP</option>
-                        {contractors.map(c => <option key={c} value={c}>{c}</option>)}
+                        {contractors.map(cnt => <option key={cnt} value={cnt}>{cnt}</option>)}
                       </select>
                     </div>
                   </div>

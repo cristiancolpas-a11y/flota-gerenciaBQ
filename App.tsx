@@ -22,9 +22,9 @@ import {
   fetchDriversFromSheet, 
   fetchReportsFromSheet, 
   fetchFiveSReportsFromSheet, 
+  fetchWashReportsFromSheet, 
   fetchCalibrationsFromSheet,
   fetchMileageLogsFromSheet,
-  fetchWashReportsFromSheet,
   submitDocumentUpdateToSheet,
   submitReportToSheet,
   submitMileageToSheet,
@@ -33,12 +33,10 @@ import {
   submitWashToSheet
 } from './services/sheetService';
 
-import { formatDate, getWeekNumber, normalizePlate, calculateStatus, normalizeStr, extractNumber } from './utils';
+import { formatDate, getWeekNumber, normalizePlate, calculateStatus, normalizeStr, extractNumber, getDaysDiff } from './utils';
 import { 
-  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase, FilterX, Package, Box, AlertTriangle, Loader2, Info, Database, Percent, TrendingUp, CheckCircle2, Activity, Sparkles, Filter, Building2, UserCircle, CalendarDays, Droplets, Calendar, ShieldAlert, BarChart3
+  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase, FilterX, Package, Box, AlertTriangle, Loader2, Info, Database, Percent, TrendingUp, CheckCircle2, Activity, Sparkles, Filter, Building2, UserCircle, CalendarDays, Droplets, Calendar, ShieldAlert, BarChart3, FileBadge, History
 } from 'lucide-react';
-
-const MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
 
 const ManagementReportIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
   <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
@@ -145,22 +143,49 @@ const App: React.FC = () => {
   };
 
   /**
-   * LÓGICA DE VEHÍCULOS DINÁMICOS:
-   * Si rawVehicles (Hoja Alerta Camiones) está vacío, generamos la lista basada en el Historial de Kilometraje.
-   * Esto asegura que el "Avance" funcione siempre que haya datos históricos.
+   * UNIÓN DE FLOTA DEFINITIVA:
+   * Priorizamos siempre los datos que vengan de ALERTA_CAMIONES (rawVehicles).
+   * Se añade cruce de información con Calibraciones para cada vehículo.
    */
   const vehicles = useMemo(() => {
-    if (rawVehicles.length > 0) return rawVehicles;
+    const combinedMap = new Map<string, Vehicle>();
 
-    // Fallback: Descubrir vehículos desde logs
-    const discoveredMap = new Map<string, Vehicle>();
+    // 1. Agregar vehículos de la hoja Alerta Camiones (Tienen datos legales)
+    rawVehicles.forEach(v => {
+      const p = normalizePlate(v.plate);
+      if (p) {
+        // Buscar calibración más reciente para este vehículo
+        const vCalibrations = calibrations
+          .filter(c => normalizePlate(c.plate) === p)
+          .sort((a, b) => new Date(b.calibrationDate).getTime() - new Date(a.calibrationDate).getTime());
+        
+        const latestCal = vCalibrations[0];
+        const calibrationDoc = latestCal ? {
+          expiryDate: latestCal.expiryDate,
+          lastRenewalDate: latestCal.calibrationDate,
+          status: latestCal.status,
+          url: latestCal.certificateUrl,
+          daysPending: latestCal.daysPending
+        } : {
+          expiryDate: '',
+          lastRenewalDate: '',
+          status: 'expired' as const,
+          daysPending: 0
+        };
+
+        combinedMap.set(v.id || p, { ...v, calibration: calibrationDoc });
+      }
+    });
+
+    // 2. Agregar vehículos descubiertos en el historial de Kilometraje (Fallback)
     mileageLogs.forEach(log => {
-      const plate = normalizePlate(log.plate);
-      if (!discoveredMap.has(plate)) {
-        discoveredMap.set(plate, {
-          id: `discovered-${plate}`,
-          plate,
-          brand: 'Descubierto',
+      const p = normalizePlate(log.plate);
+      const existsInMaster = Array.from(combinedMap.values()).some(v => normalizePlate(v.plate) === p);
+      if (p && !existsInMaster) {
+        combinedMap.set(`disc-${p}`, {
+          id: `disc-${p}`,
+          plate: p,
+          brand: 'Vehículo',
           model: 'Unidad',
           cd: log.cd || 'GENERAL',
           contractor: log.contractor || 'GENERAL',
@@ -168,21 +193,43 @@ const App: React.FC = () => {
           rtm: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
           plc: { expiryDate: '', lastRenewalDate: '', status: 'active' },
           extinguisher: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
+          calibration: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
           lastUpdate: new Date().toISOString()
         });
       }
     });
-    return Array.from(discoveredMap.values());
-  }, [rawVehicles, mileageLogs]);
 
-  const masterFleetFiltered = useMemo(() => {
+    return Array.from(combinedMap.values());
+  }, [rawVehicles, mileageLogs, calibrations]);
+
+  const baseFilteredVehicles = useMemo(() => {
     return vehicles.filter(v => {
       const matchesCd = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
       const matchesContractor = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
       const matchesSearch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
-      
+      return matchesCd && matchesContractor && matchesSearch;
+    });
+  }, [vehicles, filterCd, filterContractor, searchTerm]);
+
+  const fleetStats = useMemo(() => {
+    const list = baseFilteredVehicles;
+    const total = list.length;
+    let expiredCount = 0;
+    let warningCount = 0;
+    
+    list.forEach(v => {
+      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status, v.plc?.status, v.calibration?.status];
+      if (statuses.some(s => s === 'expired')) expiredCount++;
+      else if (statuses.some(s => s === 'warning')) warningCount++;
+    });
+
+    return { total, expiredCount, warningCount, healthyCount: total - expiredCount - warningCount };
+  }, [baseFilteredVehicles]);
+
+  const masterFleetFiltered = useMemo(() => {
+    return baseFilteredVehicles.filter(v => {
       let matchesLegal = true;
-      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status];
+      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status, v.plc?.status, v.calibration?.status];
       if (legalStatusFilter === 'expired') {
         matchesLegal = statuses.some(s => s === 'expired');
       } else if (legalStatusFilter === 'warning') {
@@ -190,24 +237,9 @@ const App: React.FC = () => {
       } else if (legalStatusFilter === 'healthy') {
         matchesLegal = statuses.every(s => s === 'active');
       }
-
-      return matchesCd && matchesContractor && matchesSearch && matchesLegal;
+      return matchesLegal;
     });
-  }, [vehicles, filterCd, filterContractor, searchTerm, legalStatusFilter]);
-
-  const fleetStats = useMemo(() => {
-    const total = vehicles.length;
-    let expiredCount = 0;
-    let warningCount = 0;
-    
-    vehicles.forEach(v => {
-      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status];
-      if (statuses.some(s => s === 'expired')) expiredCount++;
-      else if (statuses.some(s => s === 'warning')) warningCount++;
-    });
-
-    return { total, expiredCount, warningCount, healthyCount: total - expiredCount - warningCount };
-  }, [vehicles]);
+  }, [baseFilteredVehicles, legalStatusFilter]);
 
   const uniqueCds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
   const uniqueContractors = useMemo(() => {
@@ -247,7 +279,7 @@ const App: React.FC = () => {
           </div>
           <nav className="flex-grow space-y-4">
             {[
-              { id: 'vehiculos', label: 'Flota Legal', icon: <Shield size={18}/> },
+              { id: 'vehiculos', label: 'Vehículos', icon: <Shield size={18}/> },
               { id: 'conductores', label: 'Conductores', icon: <Users size={18}/> },
               { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
               { id: 'kilometrajes', label: 'Kilómetros', icon: <Gauge size={18}/> },
@@ -281,6 +313,7 @@ const App: React.FC = () => {
           
           {activeView === 'vehiculos' && (
             <div className="max-w-7xl mx-auto space-y-10 pb-20">
+              {/* Estadísticas */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
                 {[
                   { id: 'all', label: 'Total Flota', count: fleetStats.total, icon: <Truck size={24}/>, color: 'indigo' },
@@ -305,6 +338,7 @@ const App: React.FC = () => {
                 ))}
               </div>
 
+              {/* Filtros */}
               <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                  <div className="flex flex-col gap-2">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 flex items-center gap-2">
@@ -326,27 +360,86 @@ const App: React.FC = () => {
                  </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+              {/* Grid de Vehículos tipo 'Expediente' */}
+              <div className="space-y-12">
                 {masterFleetFiltered.length > 0 ? masterFleetFiltered.map(v => {
-                  const isCriticallyExpired = [v.soat?.status, v.rtm?.status, v.extinguisher?.status].some(s => s === 'expired');
+                  const isCriticallyExpired = [v.soat?.status, v.rtm?.status, v.extinguisher?.status, v.plc?.status, v.calibration?.status].some(s => s === 'expired');
+                  
                   return (
-                    <div key={v.id} className={`bg-white rounded-[3.5rem] p-8 border-2 shadow-xl relative overflow-hidden transition-all hover:shadow-2xl ${isCriticallyExpired ? 'border-rose-100 bg-rose-50/5' : 'border-slate-100'}`}>
-                      {isCriticallyExpired && <div className="absolute top-0 right-0 bg-rose-600 text-white px-6 py-2 rounded-bl-3xl text-[9px] font-black uppercase tracking-widest z-10 animate-pulse">Atención Crítica</div>}
-                      
-                      <div className="bg-[#0f172a] px-8 py-5 rounded-[2rem] text-white font-mono font-black text-4xl mb-8 text-center shadow-2xl relative">
-                        {v.plate}
-                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-indigo-500 rounded-full"></div>
-                      </div>
+                    <div key={v.id} className="bg-white rounded-[3.5rem] border border-slate-200 shadow-2xl overflow-hidden transition-all hover:shadow-indigo-500/10 max-w-[1400px] mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
+                      <div className="flex flex-col lg:flex-row min-h-[500px]">
+                        
+                        {/* COLUMNA 1: PERFIL DEL VEHÍCULO (OSCURO) */}
+                        <div className="lg:w-[400px] bg-[#0f172a] p-12 flex flex-col items-center shrink-0 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                          <div className="relative z-10">
+                            <div className="w-56 h-56 rounded-[3.5rem] border-[10px] border-white/10 shadow-2xl overflow-hidden bg-slate-800 flex items-center justify-center relative group">
+                              <Truck size={100} className="text-slate-600 group-hover:scale-110 transition-transform duration-500" />
+                              <div className={`absolute bottom-4 right-4 p-2 rounded-xl shadow-lg border-2 border-white ${isCriticallyExpired ? 'bg-rose-500' : 'bg-emerald-500'}`}>
+                                 {isCriticallyExpired ? <ShieldAlert size={16} className="text-white" /> : <CheckCircle2 size={16} className="text-white" />}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-center mt-10 w-full z-10">
+                            <div className="bg-white/5 px-8 py-5 rounded-[2rem] border border-white/10 shadow-2xl mb-8 relative">
+                                <h2 className="text-5xl font-mono font-black text-white tracking-tighter drop-shadow-md">{v.plate}</h2>
+                                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-indigo-500 rounded-full"></div>
+                            </div>
+                            <div className="space-y-6 text-left">
+                               {[
+                                 { label: 'Centro de Distribución', value: v.cd || 'GENERAL', icon: <Building2 className="text-indigo-400" /> },
+                                 { label: 'Contratista / Operador', value: v.contractor || 'GENERAL', icon: <UserCircle className="text-indigo-400" /> },
+                                 { label: 'Kilometraje Actual', value: `${v.currentMileage?.toLocaleString() || '---'} KM`, icon: <Gauge className="text-indigo-400" />, isHighlight: true }
+                               ].map((item, i) => (
+                                 <div key={i} className="group/item p-4 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md transition-all hover:bg-white/10">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">{item.icon} {item.label}</p>
+                                    <p className={`text-xl font-black uppercase tracking-tight ${item.isHighlight ? 'text-indigo-400' : 'text-white'}`}>{item.value}</p>
+                                    <div className="w-8 h-1 bg-white/10 mt-3 group-hover/item:w-full group-hover/item:bg-indigo-500 transition-all duration-500"></div>
+                                 </div>
+                               ))}
+                            </div>
+                          </div>
+                        </div>
 
-                      <div className="space-y-4">
-                        <DocumentCard title="SOAT" doc={v.soat} icon={<Shield/>} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} />
-                        <DocumentCard title="RTM" doc={v.rtm} icon={<Settings2/>} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} />
-                        <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Flame/>} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} />
-                      </div>
-                      
-                      <div className="mt-8 pt-6 border-t border-slate-100 flex justify-between items-center text-[9px] font-black text-slate-300 uppercase tracking-widest px-4">
-                         <span>CD: {v.cd || 'GENERAL'}</span>
-                         <span>OP: {v.contractor || 'GENERAL'}</span>
+                        {/* COLUMNA 2: EXPEDIENTE TÉCNICO Y LEGAL (CLARO) */}
+                        <div className="flex-grow p-12 bg-white flex flex-col">
+                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 border-b border-slate-100 pb-8">
+                              <div>
+                                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.4em] flex items-center gap-3 mb-2">
+                                   <History size={18} className="text-indigo-600" /> Expediente Vehicular
+                                </h3>
+                                <p className="text-xs font-bold text-slate-500">Sincronización: {formatDate(v.lastUpdate)}</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                 {isCriticallyExpired ? (
+                                   <span className="px-5 py-2 bg-rose-100 text-rose-700 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-rose-200 shadow-sm flex items-center gap-2 animate-pulse">
+                                      <AlertTriangle size={14} /> ATENCIÓN REQUERIDA
+                                   </span>
+                                 ) : (
+                                   <span className="px-5 py-2 bg-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-emerald-200 shadow-sm flex items-center gap-2">
+                                      <div className="w-2 h-2 rounded-full bg-emerald-500"></div> DOCUMENTACIÓN AL DÍA
+                                   </span>
+                                 )}
+                              </div>
+                           </div>
+
+                           <div className="mt-4">
+                              <div className="flex items-center gap-4 mb-8">
+                                <div className="h-[2px] flex-grow bg-slate-100"></div>
+                                <h4 className="text-[11px] font-black text-slate-800 uppercase tracking-[0.4em] flex items-center gap-3">
+                                   <FileBadge size={20} className="text-indigo-600" /> Soportes Digitales (Legal / Seguimiento)
+                                </h4>
+                                <div className="h-[2px] flex-grow bg-slate-100"></div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                <DocumentCard title="SOAT" doc={v.soat} icon={<Shield/>} onViewDoc={(u, t) => setViewDoc({url: u, title: `${v.plate} - ${t}`})} />
+                                <DocumentCard title="RTM" doc={v.rtm} icon={<Settings2/>} onViewDoc={(u, t) => setViewDoc({url: u, title: `${v.plate} - ${t}`})} />
+                                <DocumentCard title="CALIBRACIÓN" doc={v.calibration || { expiryDate: '', lastRenewalDate: '', status: 'expired' }} icon={<Disc/>} onViewDoc={(u, t) => setViewDoc({url: u, title: `${v.plate} - ${t}`})} />
+                                <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Flame/>} onViewDoc={(u, t) => setViewDoc({url: u, title: `${v.plate} - ${t}`})} />
+                              </div>
+                           </div>
+                        </div>
                       </div>
                     </div>
                   );

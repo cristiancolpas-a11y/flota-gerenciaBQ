@@ -48,6 +48,7 @@ export interface Vehicle {
   rtm: VehicleDocument;
   plc: VehicleDocument;
   extinguisher: VehicleDocument;
+  calibration?: VehicleDocument; // Nueva propiedad para seguimiento directo
   currentMileage?: number;
   lastMileageUpdate?: string;
   propertyCardUrl?: string;
@@ -101,13 +102,13 @@ export interface FiveSReport {
 
 export interface WashReport {
   id: string;
-  month: string;      // Índice 1
-  week: string;       // Índice 2
-  date: string;       // Índice 3
-  plate: string;      // Índice 4
-  evidenceUrl: string; // Índice 5
-  mapUrl: string;      // Índice 6
-  workshop: string;    // Índice 7 (Taller de lavado)
+  month: string;
+  week: string;
+  date: string;
+  plate: string;
+  evidenceUrl: string;
+  mapUrl: string;
+  workshop: string;
 }
 
 export interface MaintenanceInsight {

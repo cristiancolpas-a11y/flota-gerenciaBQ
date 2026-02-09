@@ -31,7 +31,8 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   // 1. Obtener lista única de Centros de Distribución de la flota maestra
   const availableCds = useMemo(() => {
     const unique = Array.from(new Set(vehicles.map(v => (v.cd || "GENERAL").toUpperCase().trim()).filter(Boolean)));
-    return unique.sort((a, b) => a.localeCompare(b));
+    // Fix: Assert unique as string[] to avoid unknown type error on sort comparison
+    return (unique as string[]).sort((a, b) => a.localeCompare(b));
   }, [vehicles]);
 
   // 2. Filtrar vehículos del CD seleccionado para el menú desplegable de placas

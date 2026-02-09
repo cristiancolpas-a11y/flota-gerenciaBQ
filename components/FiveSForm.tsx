@@ -30,7 +30,8 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
   // 1. Obtener CDs únicos de la base maestra
   const availableCds = useMemo(() => {
     const unique = Array.from(new Set(vehicles.map(v => (v.cd || "GENERAL").toUpperCase().trim()).filter(Boolean)));
-    return unique.sort((a, b) => a.localeCompare(b));
+    // Fix: Assert unique as string[] to avoid unknown type error on sort comparison
+    return (unique as string[]).sort((a, b) => a.localeCompare(b));
   }, [vehicles]);
 
   // 2. Obtener Contratistas únicos según el CD seleccionado
@@ -40,7 +41,8 @@ const FiveSForm: React.FC<FiveSFormProps> = ({ vehicles, onClose, onSubmit, preS
       : vehicles.filter(v => normalizeStr(v.cd || "") === normalizeStr(filterCd));
     
     const unique = Array.from(new Set(filteredByCd.map(v => (v.contractor || "GENERAL").toUpperCase().trim()).filter(Boolean)));
-    return unique.sort((a, b) => a.localeCompare(b));
+    // Fix: Assert unique as string[] to avoid unknown type error on sort comparison
+    return (unique as string[]).sort((a, b) => a.localeCompare(b));
   }, [vehicles, filterCd]);
 
   // 3. Filtrar vehículos según CD y Contratista
