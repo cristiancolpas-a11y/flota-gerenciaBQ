@@ -8,9 +8,10 @@ interface WashFormProps {
   vehicles: Vehicle[];
   onClose: () => void;
   onSubmit: (data: any) => Promise<void>;
+  preSelectedPlate?: string;
 }
 
-const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
+const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSelectedPlate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
@@ -22,7 +23,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
 
   const [capturedPhotos, setCapturedPhotos] = useState<{url: string, type: 'ANTES' | 'DESPUES'}[]>([]);
   const [formData, setFormData] = useState({
-    plate: '',
+    plate: preSelectedPlate || '',
     date: new Date().toISOString().split('T')[0],
     workshop: '',
     mapUrl: '',
@@ -31,7 +32,6 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   // 1. Obtener lista única de Centros de Distribución de la flota maestra
   const availableCds = useMemo(() => {
     const unique = Array.from(new Set(vehicles.map(v => (v.cd || "GENERAL").toUpperCase().trim()).filter(Boolean)));
-    // Fix: Assert unique as string[] to avoid unknown type error on sort comparison
     return (unique as string[]).sort((a, b) => a.localeCompare(b));
   }, [vehicles]);
 
@@ -46,7 +46,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
 
   const handleCdChange = (val: string) => {
     setFilterCd(val);
-    setFormData(prev => ({ ...prev, plate: '' })); // Limpiar placa seleccionada al cambiar CD para evitar errores
+    setFormData(prev => ({ ...prev, plate: '' }));
   };
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,21 +152,23 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white">
           
-          <div className="bg-cyan-50/40 p-6 rounded-[2.5rem] border-2 border-cyan-100/50 shadow-inner">
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
-                <Building2 size={12} className="text-cyan-600" /> FILTRAR POR CENTRO (C.D.)
-              </label>
-              <select 
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-4 text-[11px] font-black uppercase outline-none focus:border-cyan-500 transition-all shadow-sm" 
-                value={filterCd} 
-                onChange={(e) => handleCdChange(e.target.value)}
-              >
-                <option value="all">-- TODOS LOS CENTROS --</option>
-                {availableCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-              </select>
+          {!preSelectedPlate && (
+            <div className="bg-cyan-50/40 p-6 rounded-[2.5rem] border-2 border-cyan-100/50 shadow-inner">
+                <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                    <Building2 size={12} className="text-cyan-600" /> FILTRAR POR CENTRO (C.D.)
+                </label>
+                <select 
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-4 text-[11px] font-black uppercase outline-none focus:border-cyan-500 transition-all shadow-sm" 
+                    value={filterCd} 
+                    onChange={(e) => handleCdChange(e.target.value)}
+                >
+                    <option value="all">-- TODOS LOS CENTROS --</option>
+                    {availableCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
+                </select>
+                </div>
             </div>
-          </div>
+          )}
 
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -176,11 +178,16 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
                 className={`w-full bg-slate-50 border-2 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none appearance-none shadow-inner transition-all ${filteredVehiclesList.length === 0 ? 'border-rose-200 bg-rose-50/30' : 'border-slate-100'}`}
                 value={formData.plate} 
                 onChange={e => setFormData({ ...formData, plate: e.target.value })}
+                disabled={!!preSelectedPlate}
               >
                 <option value="">{filteredVehiclesList.length === 0 ? '-- SIN VEHÍCULOS --' : '-- SELECCIONE PLACA --'}</option>
-                {filteredVehiclesList.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
+                {preSelectedPlate ? (
+                    <option value={preSelectedPlate}>{preSelectedPlate}</option>
+                ) : (
+                    filteredVehiclesList.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)
+                )}
               </select>
-              {filteredVehiclesList.length === 0 && (
+              {filteredVehiclesList.length === 0 && !preSelectedPlate && (
                 <p className="text-[9px] font-black text-rose-500 uppercase flex items-center gap-1 mt-1 px-2">
                   <AlertCircle size={12} /> No hay vehículos registrados en este centro
                 </p>

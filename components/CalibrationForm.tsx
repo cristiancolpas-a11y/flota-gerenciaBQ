@@ -8,9 +8,10 @@ interface CalibrationFormProps {
   onClose: () => void;
   onSubmit: (calibration: any) => Promise<void>;
   vehicles: Vehicle[];
+  preSelectedPlate?: string;
 }
 
-const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, vehicles }) => {
+const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, vehicles, preSelectedPlate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhotoLocal, setIsProcessingPhotoLocal] = useState(false);
@@ -21,7 +22,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
 
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [formData, setFormData] = useState({
-    plate: '',
+    plate: preSelectedPlate || '',
     taller: '',
     calibrationDate: new Date().toISOString().split('T')[0],
     certificateUrl: '',
@@ -140,35 +141,47 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
             </div>
             <div>
               <h2 className="text-xl font-black uppercase tracking-tighter">🛞 CALIBRACIÓN NEUMÁTICOS</h2>
-              <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Compresión de datos activa</p>
+              <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">{preSelectedPlate ? `REPORTE DIRECTO: ${preSelectedPlate}` : 'Compresión de datos activa'}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2.5 bg-white/10 hover:bg-red-500 rounded-xl transition-all"><X size={24} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white">
-          <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">C.D.</label>
-              <select className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-[10px] font-black uppercase" value={filterCd} onChange={(e) => { setFilterCd(e.target.value); setFilterContractor('all'); setFormData({...formData, plate: ''}); }}>
-                <option value="all">TODOS</option>
-                {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-              </select>
+          {!preSelectedPlate && (
+            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">C.D.</label>
+                <select className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-[10px] font-black uppercase" value={filterCd} onChange={(e) => { setFilterCd(e.target.value); setFilterContractor('all'); setFormData({...formData, plate: ''}); }}>
+                  <option value="all">TODOS</option>
+                  {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">CONTRATISTA</label>
+                <select className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-[10px] font-black uppercase" value={filterContractor} onChange={(e) => { setFilterContractor(e.target.value); setFormData({...formData, plate: ''}); }}>
+                  <option value="all">TODOS</option>
+                  {contractors.map(cnt => <option key={cnt} value={cnt}>{cnt}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">CONTRATISTA</label>
-              <select className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-[10px] font-black uppercase" value={filterContractor} onChange={(e) => { setFilterContractor(e.target.value); setFormData({...formData, plate: ''}); }}>
-                <option value="all">TODOS</option>
-                {contractors.map(cnt => <option key={cnt} value={cnt}>{cnt}</option>)}
-              </select>
-            </div>
-          </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">Placa Vehicular</label>
-            <select required className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none" value={formData.plate} onChange={e => setFormData({ ...formData, plate: e.target.value })}>
+            <select 
+              required 
+              className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:bg-slate-100 disabled:text-slate-400" 
+              value={formData.plate} 
+              onChange={e => setFormData({ ...formData, plate: e.target.value })}
+              disabled={!!preSelectedPlate}
+            >
               <option value="">-- SELECCIONE --</option>
-              {filteredVehicles.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
+              {preSelectedPlate ? (
+                <option value={preSelectedPlate}>{preSelectedPlate}</option>
+              ) : (
+                filteredVehicles.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)
+              )}
             </select>
           </div>
 

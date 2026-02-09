@@ -10,7 +10,6 @@ const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/export?format=csv`;
 
 // HOJA OPERATIVA / BACKEND (Para registros de novedades, lavados, calibraciones, etc.)
-// ID proporcionado por el usuario: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU
 const BACKEND_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv`;
 
@@ -78,14 +77,7 @@ export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
             const rawPlate = cleanSheetValue(row[2]);
             const plate = normalizePlate(rawPlate);
 
-            const isHeader = 
-              plate === "PLACA" || 
-              plate === "MATRICULA" || 
-              plate === "PLACAMATRICULA" || 
-              plate === "PLACAMATRCULA" ||
-              plate.includes("PLACA") && plate.includes("MATRICULA");
-
-            if (plate && !isHeader && plate.length >= 2) {
+            if (plate && !plate.includes("PLACA") && plate.length >= 2) {
               const soatDate = parseFlexibleDate(row[3]);
               const rtmDate = parseFlexibleDate(row[5]);
               const plcDate = parseFlexibleDate(row[7]);
@@ -108,20 +100,20 @@ export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
                 rtm: { 
                   expiryDate: rtmDate, 
                   lastRenewalDate: '', 
-                  status: calculateStatus(rtmDate), 
-                  daysPending: getDaysDiff(rtmDate), 
+                  status: calculateStatus(rtmDate),
+                  daysPending: getDaysDiff(rtmDate),
                   url: cleanSheetValue(row[21])
                 },
-                plc: { 
-                  expiryDate: plcDate, 
-                  lastRenewalDate: '', 
-                  status: calculateStatus(plcDate), 
-                  daysPending: getDaysDiff(plcDate), 
+                plc: {
+                  expiryDate: plcDate,
+                  lastRenewalDate: '',
+                  status: calculateStatus(plcDate),
+                  daysPending: getDaysDiff(plcDate),
                   url: cleanSheetValue(row[22])
                 },
-                extinguisher: { 
-                  expiryDate: extDate, 
-                  lastRenewalDate: '', 
+                extinguisher: {
+                  expiryDate: extDate,
+                  lastRenewalDate: '',
                   status: calculateStatus(extDate),
                   daysPending: getDaysDiff(extDate)
                 },
@@ -196,7 +188,6 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
         skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          // Validamos que existan datos más allá del encabezado
           if (!rows || rows.length < 2) { resolve([]); return; }
           
           const calibrations = rows.slice(1)
@@ -207,7 +198,6 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
               const workshop = cleanSheetValue(row[4]);             // Col E (Indice 4)
               const evidenceUrl = cleanSheetValue(row[5]);          // Col F (Indice 5)
               
-              // Lógica de vencimiento: 1 año después de la calibración
               const expDate = calDateStr ? new Date(calDateStr) : null;
               if (expDate) expDate.setFullYear(expDate.getFullYear() + 1);
               const expDateStr = expDate ? expDate.toISOString().split('T')[0] : '';
@@ -221,7 +211,7 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
                 certificateUrl: evidenceUrl,
                 status: calculateStatus(expDateStr),
                 daysPending: getDaysDiff(expDateStr),
-                cd: 'BQA' // Centro de Distribución por defecto para Calibraciones
+                cd: 'BQA'
               };
             });
           resolve(calibrations);
@@ -277,7 +267,6 @@ export const fetchFiveSReportsFromSheet = async (): Promise<FiveSReport[]> => {
       Papa.parse(csvText, {
         header: false, skipEmptyLines: true,
         complete: (results) => {
-          // Fix: Corrected invalid Map() call on results.data
           const rows = results.data as any[][];
           if (!rows || rows.length < 2) { resolve([]); return; }
           const reports = rows.slice(1).filter(row => row && row[0]).map((row): FiveSReport => ({

@@ -8,8 +8,8 @@ import DriverCard from './components/DriverCard';
 import ReportCard from './components/ReportCard';
 import ReportForm from './components/ReportForm';
 import ClosureForm from './components/ClosureForm';
-import FiveSCard from './components/FiveSCard';
 import FiveSForm from './components/FiveSForm';
+import FiveSCard from './components/FiveSCard';
 import FiveSClosureForm from './components/FiveSClosureForm';
 import CalibrationCard from './components/CalibrationCard';
 import CalibrationForm from './components/CalibrationForm';
@@ -35,7 +35,7 @@ import {
 
 import { formatDate, getWeekNumber, normalizePlate, calculateStatus, normalizeStr, extractNumber, getDaysDiff } from './utils';
 import { 
-  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase, FilterX, Package, Box, AlertTriangle, Loader2, Info, Database, Percent, TrendingUp, CheckCircle2, Activity, Sparkles, Filter, Building2, UserCircle, CalendarDays, Droplets, Calendar, ShieldAlert, BarChart3, FileBadge, History
+  RefreshCw, Users, ClipboardList, Truck, X, Gauge, ShieldCheck, Search, Shield, Settings2, LogOut, FileText, Flame, Plus, Clock, Wrench, Key, Scale, LayoutDashboard, Menu, Disc, ChevronDown, ChevronRight, Briefcase, FilterX, Package, Box, AlertTriangle, Loader2, Info, Database, Percent, TrendingUp, CheckCircle2, Activity, Sparkles, Filter, Building2, UserCircle, CalendarDays, Droplets, Calendar, ShieldAlert, BarChart3, FileBadge, History, IdCard, ExternalLink, Hash, Eye, MapPin, Image as ImageIcon, CircleDot
 } from 'lucide-react';
 
 const ManagementReportIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
@@ -112,6 +112,27 @@ const App: React.FC = () => {
   const [mileageStatusFilter, setMileageStatusFilter] = useState<'all' | 'completed' | 'pending'>('all');
   const [selectedWeek, setSelectedWeek] = useState(getWeekNumber(new Date()));
 
+  // Estados para Dashboard de Calibraciones
+  const [calViewMode, setCalViewMode] = useState<'semanal' | 'mensual'>('mensual');
+  const [selectedCalMonth, setSelectedCalMonth] = useState(new Date().getMonth());
+  const [selectedCalWeek, setSelectedCalWeek] = useState(getWeekNumber(new Date()));
+  const [calStatusFilter, setCalStatusFilter] = useState<'all' | 'completed' | 'pending'>('all');
+  const [preSelectedCalPlate, setPreSelectedCalPlate] = useState<string | null>(null);
+
+  // Estados para Dashboard de Novedades
+  const [reportSelectedMonth, setReportSelectedMonth] = useState(new Date().getMonth());
+  const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'ABIERTO' | 'CERRADO'>('all');
+
+  // Estados para Dashboard de Lavados
+  const [washSelectedMonth, setWashSelectedMonth] = useState(new Date().getMonth());
+  const [washStatusFilter, setWashStatusFilter] = useState<'all' | 'washed' | 'pending'>('all');
+  const [preSelectedWashPlate, setPreSelectedWashPlate] = useState<string | null>(null);
+
+  const months = [
+    "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+    "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
+  ];
+
   useEffect(() => { 
     if (activeModule) handleSyncData(); 
   }, [activeModule]);
@@ -142,42 +163,13 @@ const App: React.FC = () => {
     } finally { setIsSyncing(false); }
   };
 
-  /**
-   * UNIÓN DE FLOTA DEFINITIVA:
-   * Priorizamos siempre los datos que vengan de ALERTA_CAMIONES (rawVehicles).
-   * Se añade cruce de información con Calibraciones para cada vehículo.
-   */
   const vehicles = useMemo(() => {
     const combinedMap = new Map<string, Vehicle>();
-
-    // 1. Agregar vehículos de la hoja Alerta Camiones (Tienen datos legales)
     rawVehicles.forEach(v => {
       const p = normalizePlate(v.plate);
-      if (p) {
-        // Buscar calibración más reciente para este vehículo
-        const vCalibrations = calibrations
-          .filter(c => normalizePlate(c.plate) === p)
-          .sort((a, b) => new Date(b.calibrationDate).getTime() - new Date(a.calibrationDate).getTime());
-        
-        const latestCal = vCalibrations[0];
-        const calibrationDoc = latestCal ? {
-          expiryDate: latestCal.expiryDate,
-          lastRenewalDate: latestCal.calibrationDate,
-          status: latestCal.status,
-          url: latestCal.certificateUrl,
-          daysPending: latestCal.daysPending
-        } : {
-          expiryDate: '',
-          lastRenewalDate: '',
-          status: 'expired' as const,
-          daysPending: 0
-        };
-
-        combinedMap.set(v.id || p, { ...v, calibration: calibrationDoc });
-      }
+      if (p) combinedMap.set(v.id || p, { ...v });
     });
 
-    // 2. Agregar vehículos descubiertos en el historial de Kilometraje (Fallback)
     mileageLogs.forEach(log => {
       const p = normalizePlate(log.plate);
       const existsInMaster = Array.from(combinedMap.values()).some(v => normalizePlate(v.plate) === p);
@@ -191,16 +183,15 @@ const App: React.FC = () => {
           contractor: log.contractor || 'GENERAL',
           soat: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
           rtm: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
-          plc: { expiryDate: '', lastRenewalDate: '', status: 'active' },
+          plc: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
           extinguisher: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
-          calibration: { expiryDate: '', lastRenewalDate: '', status: 'expired' },
           lastUpdate: new Date().toISOString()
         });
       }
     });
 
     return Array.from(combinedMap.values());
-  }, [rawVehicles, mileageLogs, calibrations]);
+  }, [rawVehicles, mileageLogs]);
 
   const baseFilteredVehicles = useMemo(() => {
     return vehicles.filter(v => {
@@ -211,6 +202,97 @@ const App: React.FC = () => {
     });
   }, [vehicles, filterCd, filterContractor, searchTerm]);
 
+  // Lógica de Auditoría Novedades Mensual
+  const reportStats = useMemo(() => {
+    const monthReports = reports.filter(r => {
+      const rDate = new Date(r.date);
+      return rDate.getMonth() === reportSelectedMonth;
+    });
+    const total = monthReports.length;
+    const closed = monthReports.filter(r => r.status === 'CERRADO').length;
+    const open = total - closed;
+    const percentage = total > 0 ? Math.round((closed / total) * 100) : 0;
+    return { total, closed, open, percentage, monthReports };
+  }, [reports, reportSelectedMonth]);
+
+  const filteredReports = useMemo(() => {
+    return reportStats.monthReports.filter(r => {
+      const matchesStatus = reportStatusFilter === 'all' || r.status === reportStatusFilter;
+      const matchesSearch = normalizePlate(r.plate).includes(normalizePlate(searchTerm));
+      return matchesStatus && matchesSearch;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [reportStats, reportStatusFilter, searchTerm]);
+
+  // Lógica de Auditoría Lavados Mensual
+  const washStats = useMemo(() => {
+    const monthWashReports = washReports.filter(w => {
+      const wDate = new Date(w.date);
+      return wDate.getMonth() === washSelectedMonth;
+    });
+
+    const vehiclesWithWash = new Set(monthWashReports.map(w => normalizePlate(w.plate)));
+    
+    const totalFleet = baseFilteredVehicles.length;
+    const washedInFleet = baseFilteredVehicles.filter(v => vehiclesWithWash.has(normalizePlate(v.plate))).length;
+    
+    const percentage = totalFleet > 0 ? Math.round((washedInFleet / totalFleet) * 100) : 0;
+    
+    return { totalFleet, washedInFleet, pending: totalFleet - washedInFleet, percentage, monthWashReports, vehiclesWithWash };
+  }, [washReports, washSelectedMonth, baseFilteredVehicles]);
+
+  const pendingWashVehicles = useMemo(() => {
+    return baseFilteredVehicles.filter(v => !washStats.vehiclesWithWash.has(normalizePlate(v.plate)));
+  }, [baseFilteredVehicles, washStats.vehiclesWithWash]);
+
+  const filteredWashReports = useMemo(() => {
+    return washStats.monthWashReports.filter(w => {
+      return normalizePlate(w.plate).includes(normalizePlate(searchTerm));
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [washStats, searchTerm]);
+
+  // LÓGICA DE AUDITORÍA DE CALIBRACIÓN POR VEHÍCULO
+  const calComplianceData = useMemo(() => {
+    return baseFilteredVehicles.map(v => {
+      const p = normalizePlate(v.plate);
+      // Buscar si este vehículo tiene una calibración en el periodo seleccionado
+      const calibrationRecord = calibrations.find(c => {
+        const cPlate = normalizePlate(c.plate);
+        const cDate = new Date(c.calibrationDate);
+        const matchesTime = calViewMode === 'semanal' 
+          ? getWeekNumber(cDate) === selectedCalWeek 
+          : cDate.getMonth() === selectedCalMonth;
+        return cPlate === p && matchesTime;
+      });
+
+      return {
+        vehicle: v,
+        calibration: calibrationRecord || null,
+        isCompleted: !!calibrationRecord
+      };
+    });
+  }, [baseFilteredVehicles, calibrations, calViewMode, selectedCalMonth, selectedCalWeek]);
+
+  const calStats = useMemo(() => {
+    const total = calComplianceData.length;
+    const completed = calComplianceData.filter(d => d.isCompleted).length;
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { total, completed, pending: total - completed, percentage };
+  }, [calComplianceData]);
+
+  const filteredCalCompliance = useMemo(() => {
+    return calComplianceData.filter(d => {
+      if (calStatusFilter === 'completed') return d.isCompleted;
+      if (calStatusFilter === 'pending') return !d.isCompleted;
+      return true;
+    }).sort((a, b) => {
+      // Mostrar primero los completados si estamos en vista 'all'
+      if (calStatusFilter === 'all') {
+        if (a.isCompleted !== b.isCompleted) return a.isCompleted ? -1 : 1;
+      }
+      return a.vehicle.plate.localeCompare(b.vehicle.plate);
+    });
+  }, [calComplianceData, calStatusFilter]);
+
   const fleetStats = useMemo(() => {
     const list = baseFilteredVehicles;
     const total = list.length;
@@ -218,7 +300,7 @@ const App: React.FC = () => {
     let warningCount = 0;
     
     list.forEach(v => {
-      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status, v.plc?.status, v.calibration?.status];
+      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status, v.plc?.status];
       if (statuses.some(s => s === 'expired')) expiredCount++;
       else if (statuses.some(s => s === 'warning')) warningCount++;
     });
@@ -229,7 +311,7 @@ const App: React.FC = () => {
   const masterFleetFiltered = useMemo(() => {
     return baseFilteredVehicles.filter(v => {
       let matchesLegal = true;
-      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status, v.plc?.status, v.calibration?.status];
+      const statuses = [v.soat?.status, v.rtm?.status, v.extinguisher?.status, v.plc?.status];
       if (legalStatusFilter === 'expired') {
         matchesLegal = statuses.some(s => s === 'expired');
       } else if (legalStatusFilter === 'warning') {
@@ -363,13 +445,10 @@ const App: React.FC = () => {
               {/* Grid de Vehículos tipo 'Expediente' */}
               <div className="space-y-12">
                 {masterFleetFiltered.length > 0 ? masterFleetFiltered.map(v => {
-                  const isCriticallyExpired = [v.soat?.status, v.rtm?.status, v.extinguisher?.status, v.plc?.status, v.calibration?.status].some(s => s === 'expired');
-                  
+                  const isCriticallyExpired = [v.soat?.status, v.rtm?.status, v.extinguisher?.status, v.plc?.status].some(s => s === 'expired');
                   return (
                     <div key={v.id} className="bg-white rounded-[3.5rem] border border-slate-200 shadow-2xl overflow-hidden transition-all hover:shadow-indigo-500/10 max-w-[1400px] mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
                       <div className="flex flex-col lg:flex-row min-h-[500px]">
-                        
-                        {/* COLUMNA 1: PERFIL DEL VEHÍCULO (OSCURO) */}
                         <div className="lg:w-[400px] bg-[#0f172a] p-12 flex flex-col items-center shrink-0 relative overflow-hidden">
                           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
                           <div className="relative z-10">
@@ -392,7 +471,7 @@ const App: React.FC = () => {
                                  { label: 'Kilometraje Actual', value: `${v.currentMileage?.toLocaleString() || '---'} KM`, icon: <Gauge className="text-indigo-400" />, isHighlight: true }
                                ].map((item, i) => (
                                  <div key={i} className="group/item p-4 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-md transition-all hover:bg-white/10">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">{item.icon} {item.label}</p>
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{item.icon} {item.label}</p>
                                     <p className={`text-xl font-black uppercase tracking-tight ${item.isHighlight ? 'text-indigo-400' : 'text-white'}`}>{item.value}</p>
                                     <div className="w-8 h-1 bg-white/10 mt-3 group-hover/item:w-full group-hover/item:bg-indigo-500 transition-all duration-500"></div>
                                  </div>
@@ -401,7 +480,6 @@ const App: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* COLUMNA 2: EXPEDIENTE TÉCNICO Y LEGAL (CLARO) */}
                         <div className="flex-grow p-12 bg-white flex flex-col">
                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12 border-b border-slate-100 pb-8">
                               <div>
@@ -433,10 +511,10 @@ const App: React.FC = () => {
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                                <DocumentCard title="SOAT" doc={v.soat} icon={<Shield/>} onViewDoc={(u, t) => setViewDoc({url: u, title: `${v.plate} - ${t}`})} />
-                                <DocumentCard title="RTM" doc={v.rtm} icon={<Settings2/>} onViewDoc={(u, t) => setViewDoc({url: u, title: `${v.plate} - ${t}`})} />
-                                <DocumentCard title="CALIBRACIÓN" doc={v.calibration || { expiryDate: '', lastRenewalDate: '', status: 'expired' }} icon={<Disc/>} onViewDoc={(u, t) => setViewDoc({url: u, title: `${v.plate} - ${t}`})} />
-                                <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Flame/>} onViewDoc={(u, t) => setViewDoc({url: u, title: `${v.plate} - ${t}`})} />
+                                <DocumentCard title="SOAT" doc={v.soat} icon={<Shield/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} />
+                                <DocumentCard title="RTM" doc={v.rtm} icon={<Settings2/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} />
+                                <DocumentCard title="PLC" doc={v.plc} icon={<IdCard/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} />
+                                <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Flame/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} />
                               </div>
                            </div>
                         </div>
@@ -458,16 +536,150 @@ const App: React.FC = () => {
           {activeView === 'conductores' && <div className="space-y-8">{drivers.map(d => <DriverCard key={d.id} driver={d} onViewDoc={(url, t) => setViewDoc({url, title: t})} />)}</div>}
           
           {activeView === 'lavados' && (
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
-               <div className="col-span-full flex justify-between items-center mb-6">
-                 <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Historial de Lavados</h2>
-                 <button onClick={() => setShowWashForm(true)} className="px-6 py-3 bg-cyan-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-700 transition-all flex items-center gap-2">
-                   <Plus size={16} /> REGISTRAR LAVADO
-                 </button>
+             <div className="max-w-7xl mx-auto space-y-8 pb-20">
+               {/* HEADER Y CONTROL DE LAVADOS */}
+               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
+                 <div>
+                   <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+                     <Droplets size={32} className="text-cyan-600" /> Historial de Lavados
+                   </h2>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Cumplimiento de Higiene y Limpieza</p>
+                 </div>
+                 
+                 <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-4 bg-white px-6 py-2.5 rounded-2xl border border-slate-200 shadow-sm group hover:border-cyan-300 transition-all">
+                        <Calendar size={18} className="text-cyan-600" />
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">PERIODO MENSUAL</span>
+                            <select 
+                                className="bg-transparent font-black text-slate-800 text-xs outline-none cursor-pointer uppercase"
+                                value={washSelectedMonth}
+                                onChange={(e) => setWashSelectedMonth(parseInt(e.target.value))}
+                            >
+                                {months.map((m, idx) => (
+                                    <option key={idx} value={idx}>{m} - 2025</option>
+                                ))}
+                            </select>
+                        </div>
+                        <ChevronDown size={14} className="text-slate-400 ml-1" />
+                    </div>
+                    
+                    <button onClick={() => { setPreSelectedWashPlate(null); setShowWashForm(true); }} className="px-8 py-4 bg-cyan-600 text-white rounded-[2rem] text-[11px] font-black uppercase tracking-widest shadow-xl hover:bg-cyan-700 transition-all flex items-center gap-3 active:scale-95 group">
+                        <Plus size={20} className="group-hover:rotate-90 transition-transform" /> REGISTRAR LAVADO
+                    </button>
+                 </div>
                </div>
-               {washReports.filter(w => normalizePlate(w.plate).includes(normalizePlate(searchTerm))).map(w => (
-                 <WashCard key={w.id} report={w} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} />
-               ))}
+
+               {/* DASHBOARD COMPACTO DE LAVADOS INTERACTIVO */}
+               <div className="bg-[#0f172a] rounded-[3rem] p-6 text-white shadow-2xl relative overflow-hidden mb-10 border-b-[8px] border-cyan-500/20">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+                  
+                  {/* Porcentaje Circular */}
+                  <div className="lg:col-span-3 flex items-center gap-5 border-r border-white/10 pr-6">
+                    <div 
+                        onClick={() => setWashStatusFilter('all')}
+                        className="relative flex items-center justify-center shrink-0 cursor-pointer group"
+                    >
+                       <svg className="w-24 h-24 transform -rotate-90 group-hover:scale-105 transition-transform">
+                          <circle cx="48" cy="48" r="42" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-white/5" />
+                          <circle cx="48" cy="48" r="42" stroke="currentColor" strokeWidth="6" fill="transparent" 
+                                  strokeDasharray={263.89} 
+                                  strokeDashoffset={263.89 - (263.89 * washStats.percentage) / 100}
+                                  className="text-cyan-400 transition-all duration-1000 ease-out" 
+                                  strokeLinecap="round" />
+                       </svg>
+                       <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-xl font-black tracking-tighter leading-none">{washStats.percentage}%</span>
+                       </div>
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">CUMPLIMIENTO</p>
+                        <p className="text-[10px] font-bold text-white/50">{months[washSelectedMonth]}</p>
+                    </div>
+                  </div>
+
+                  {/* Burbujas de Estadísticas Pequeñas */}
+                  <div className="lg:col-span-9 grid grid-cols-2 md:grid-cols-4 gap-3">
+                     {[
+                       { id: 'all', label: 'TOTAL FLOTA', count: washStats.totalFleet, icon: <Truck size={14}/>, color: 'indigo' },
+                       { id: 'washed', label: 'LAVADOS', count: washStats.washedInFleet, icon: <CheckCircle2 size={14}/>, color: 'emerald' },
+                       { id: 'pending', label: 'PENDIENTES', count: washStats.pending, icon: <Clock size={14}/>, color: 'rose' },
+                       { id: 'search', label: 'BÚSQUEDA', count: washStatusFilter === 'pending' ? pendingWashVehicles.length : filteredWashReports.length, icon: <Search size={14}/>, color: 'slate' }
+                     ].map(stat => (
+                       <button 
+                         key={stat.id}
+                         onClick={() => { if(stat.id !== 'search' && stat.id !== 'all') setWashStatusFilter(stat.id as any); else if(stat.id === 'all') setWashStatusFilter('all'); }}
+                         className={`p-3 rounded-2xl border transition-all flex items-center gap-3 text-left ${washStatusFilter === stat.id ? `bg-${stat.color}-600/90 border-${stat.color}-400 text-white shadow-lg` : 'bg-white/5 border-white/5 hover:border-white/20'}`}
+                       >
+                         <div className={`p-2 rounded-xl shrink-0 ${washStatusFilter === stat.id ? 'bg-white/20' : `bg-${stat.color}-500/10 text-${stat.color}-400`}`}>
+                            {stat.icon}
+                         </div>
+                         <div className="truncate">
+                            <p className={`text-[7px] font-black uppercase tracking-widest truncate ${washStatusFilter === stat.id ? 'text-white/70' : 'text-slate-400'}`}>{stat.label}</p>
+                            <p className="text-lg font-black leading-none mt-0.5">{stat.count}</p>
+                         </div>
+                       </button>
+                     ))}
+                  </div>
+                </div>
+              </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                 {/* SI EL FILTRO ES PENDIENTES, MOSTRAR VEHÍCULOS QUE FALTAN */}
+                 {washStatusFilter === 'pending' ? (
+                    pendingWashVehicles.length > 0 ? pendingWashVehicles.map(v => (
+                        <div key={v.id} className="bg-white rounded-[2.5rem] border-2 border-dashed border-rose-200 p-8 flex flex-col items-center text-center shadow-xl animate-in zoom-in duration-300">
+                           <div className="p-5 bg-rose-50 rounded-full text-rose-500 mb-6">
+                              <AlertTriangle size={32} />
+                           </div>
+                           <h3 className="text-4xl font-mono font-black text-slate-800 mb-2">{v.plate}</h3>
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Falta Lavado Mes {months[washSelectedMonth]}</p>
+                           
+                           <div className="w-full space-y-3 mb-8">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 px-2 uppercase">
+                                 <span>CD:</span>
+                                 <span className="text-slate-800">{v.cd || 'GENERAL'}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 px-2 uppercase">
+                                 <span>Operador:</span>
+                                 <span className="text-slate-800 truncate max-w-[150px]">{v.contractor || 'GENERAL'}</span>
+                              </div>
+                           </div>
+
+                           <button 
+                             onClick={() => {
+                                setPreSelectedWashPlate(v.plate);
+                                setShowWashForm(true);
+                             }}
+                             className="w-full py-4 bg-[#0f172a] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-cyan-600 transition-all flex items-center justify-center gap-2"
+                           >
+                             <Plus size={16} /> REGISTRAR AHORA
+                           </button>
+                        </div>
+                    )) : (
+                        <div className="col-span-full py-40 flex flex-col items-center justify-center text-slate-300">
+                            <div className="p-10 bg-emerald-50 rounded-full mb-6 border-2 border-dashed border-emerald-100">
+                                <CheckCircle2 size={64} className="text-emerald-500" />
+                            </div>
+                            <p className="text-[12px] font-black uppercase tracking-[0.4em]">¡Flota completa al 100%!</p>
+                        </div>
+                    )
+                 ) : (
+                    /* VISTA NORMAL DE REPORTES (LAVADOS REALIZADOS) */
+                    filteredWashReports.length > 0 ? filteredWashReports.map(w => (
+                      <WashCard key={w.id} report={w} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
+                    )) : (
+                      <div className="col-span-full py-40 flex flex-col items-center justify-center text-slate-300">
+                         <div className="p-10 bg-slate-50 rounded-full mb-6 border-2 border-dashed border-slate-100">
+                            <FilterX size={64} className="opacity-20" />
+                         </div>
+                         <p className="text-[12px] font-black uppercase tracking-[0.4em]">Sin registros de lavado este mes</p>
+                         <button onClick={() => setWashStatusFilter('pending')} className="mt-4 text-rose-500 text-[10px] font-black uppercase underline tracking-widest">Ver vehículos pendientes</button>
+                      </div>
+                    )
+                 )}
+               </div>
              </div>
           )}
 
@@ -480,7 +692,7 @@ const App: React.FC = () => {
                  </button>
                </div>
                {fiveSReports.filter(f => normalizePlate(f.plate).includes(normalizePlate(searchTerm))).map(f => (
-                 <FiveSCard key={f.id} report={f} onViewDoc={(u, t) => setViewDoc({url: u, title: t})} onManageClosure={setClosingFiveS} />
+                 <FiveSCard key={f.id} report={f} onViewDoc={(url, t) => setViewDoc({url, title: t})} onManageClosure={setClosingFiveS} />
                ))}
              </div>
           )}
@@ -504,30 +716,363 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'novedades' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-20">
-              <div className="col-span-full flex justify-between items-center mb-6">
-                 <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Gestión de Novedades</h2>
-                 <button onClick={() => setShowReportForm(true)} className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2">
-                   <Plus size={16} /> CREAR NOVEDAD
-                 </button>
-               </div>
-              {reports.filter(r => normalizePlate(r.plate).includes(normalizePlate(searchTerm))).map(r => (
-                <ReportCard key={r.id} report={r} onViewDoc={(url, t) => setViewDoc({url, title: t})} onManageClosure={setClosingReport} />
-              ))}
+            <div className="max-w-7xl mx-auto space-y-8 pb-20">
+              {/* HEADER Y CONTROL DE NOVEDADES */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8">
+                 <div>
+                   <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+                     <ClipboardList size={32} className="text-indigo-600" /> Gestión de Novedades
+                   </h2>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Control Mensual de Operaciones de Taller</p>
+                 </div>
+                 
+                 <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-4 bg-white px-6 py-2.5 rounded-2xl border border-slate-200 shadow-sm group hover:border-indigo-300 transition-all">
+                        <Calendar size={18} className="text-indigo-600" />
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">PERIODO MENSUAL</span>
+                            <select 
+                                className="bg-transparent font-black text-slate-800 text-xs outline-none cursor-pointer uppercase"
+                                value={reportSelectedMonth}
+                                onChange={(e) => setReportSelectedMonth(parseInt(e.target.value))}
+                            >
+                                {months.map((m, idx) => (
+                                    <option key={idx} value={idx}>{m} - 2025</option>
+                                ))}
+                            </select>
+                        </div>
+                        <ChevronDown size={14} className="text-slate-400 ml-1" />
+                    </div>
+                    
+                    <button onClick={() => setShowReportForm(true)} className="px-8 py-4 bg-indigo-600 text-white rounded-[2rem] text-[11px] font-black uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-3 active:scale-95 group">
+                        <Plus size={20} className="group-hover:rotate-90 transition-transform" /> CREAR NOVEDAD
+                    </button>
+                 </div>
+              </div>
+
+              {/* DASHBOARD COMPACTO DE NOVEDADES */}
+              <div className="bg-[#0f172a] rounded-[3rem] p-6 text-white shadow-2xl relative overflow-hidden mb-10 border-b-[8px] border-indigo-500/20">
+                <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+                  
+                  {/* Porcentaje Circular Pequeño */}
+                  <div className="lg:col-span-3 flex items-center gap-5 border-r border-white/10 pr-6">
+                    <div 
+                        onClick={() => setReportStatusFilter('all')}
+                        className="relative flex items-center justify-center shrink-0 cursor-pointer group"
+                    >
+                       <svg className="w-20 h-20 transform -rotate-90 group-hover:scale-105 transition-transform">
+                          <circle cx="40" cy="40" r="34" stroke="currentColor" strokeWidth="6" fill="transparent" className="text-white/5" />
+                          <circle cx="40" cy="40" r="34" stroke="currentColor" strokeWidth="6" fill="transparent" 
+                                  strokeDasharray={213.63} 
+                                  strokeDashoffset={213.63 - (213.63 * reportStats.percentage) / 100}
+                                  className="text-emerald-500 transition-all duration-1000 ease-out" 
+                                  strokeLinecap="round" />
+                       </svg>
+                       <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-xl font-black tracking-tighter leading-none">{reportStats.percentage}%</span>
+                       </div>
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">CUMPLIMIENTO</p>
+                        <p className="text-[10px] font-bold text-white/50">{months[reportSelectedMonth]}</p>
+                    </div>
+                  </div>
+
+                  {/* Burbujas de Estadísticas Pequeñas */}
+                  <div className="lg:col-span-9 grid grid-cols-2 md:grid-cols-4 gap-3">
+                     {[
+                       { id: 'all', label: 'TOTAL MES', count: reportStats.total, icon: <ClipboardList size={14}/>, color: 'indigo' },
+                       { id: 'CERRADO', label: 'GESTIONADOS', count: reportStats.closed, icon: <CheckCircle2 size={14}/>, color: 'emerald' },
+                       { id: 'ABIERTO', label: 'EN TALLER', count: reportStats.open, icon: <Clock size={14}/>, color: 'amber' },
+                       { id: 'filtered', label: 'BÚSQUEDA', count: filteredReports.length, icon: <Search size={14}/>, color: 'slate' }
+                     ].map(stat => (
+                       <button 
+                         key={stat.id}
+                         onClick={() => { if(stat.id !== 'filtered') setReportStatusFilter(stat.id as any); }}
+                         className={`p-3 rounded-2xl border transition-all flex items-center gap-3 text-left ${reportStatusFilter === stat.id ? `bg-${stat.color}-600/90 border-${stat.color}-400 text-white shadow-lg` : 'bg-white/5 border-white/5 hover:border-white/20'}`}
+                       >
+                         <div className={`p-2 rounded-xl shrink-0 ${reportStatusFilter === stat.id ? 'bg-white/20' : `bg-${stat.color}-50/10 text-${stat.color}-400`}`}>
+                            {stat.icon}
+                         </div>
+                         <div className="truncate">
+                            <p className={`text-[7px] font-black uppercase tracking-widest truncate ${reportStatusFilter === stat.id ? 'text-white/70' : 'text-slate-400'}`}>{stat.label}</p>
+                            <p className="text-lg font-black leading-none mt-0.5">{stat.count}</p>
+                         </div>
+                       </button>
+                     ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* LISTA DE NOVEDADES FILTRADA */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {filteredReports.length > 0 ? filteredReports.map(r => (
+                  <ReportCard 
+                    key={r.id} 
+                    report={r} 
+                    onViewDoc={(url, t) => setViewDoc({url, title: t})} 
+                    onManageClosure={setClosingReport} 
+                  />
+                )) : (
+                  <div className="col-span-full py-40 flex flex-col items-center justify-center text-slate-300">
+                     <div className="p-10 bg-slate-50 rounded-full mb-6 border-2 border-dashed border-slate-100">
+                        <FilterX size={64} className="opacity-20" />
+                     </div>
+                     <p className="text-[12px] font-black uppercase tracking-[0.4em]">Sin novedades para este periodo</p>
+                     <button onClick={() => setReportStatusFilter('all')} className="mt-4 text-indigo-600 text-[10px] font-black uppercase underline tracking-widest">Ver todo el mes</button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {activeView === 'calibraciones' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
-              <div className="col-span-full flex justify-between items-center mb-6">
-                 <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Calibración de Neumáticos</h2>
-                 <button onClick={() => setShowCalibrationForm(true)} className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-3">
-                   <Plus size={16} /> REGISTRAR CALIBRACIÓN
-                 </button>
+            <div className="max-w-7xl mx-auto space-y-8 pb-20">
+              {/* HEADER DE CONTROL */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-10">
+                 <div>
+                   <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+                     <Disc size={32} className="text-indigo-600" /> Auditoría de Calibraciones
+                   </h2>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Cumplimiento de Mantenimiento de Neumáticos</p>
+                 </div>
+                 
+                 <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-4 bg-white px-6 py-2.5 rounded-2xl border border-slate-200 shadow-sm group hover:border-indigo-300 transition-all">
+                        <CalendarDays size={18} className="text-indigo-600" />
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">PERIODO DE AUDITORÍA</span>
+                            <div className="flex items-center gap-2">
+                                <select 
+                                    className="bg-transparent font-black text-slate-800 text-xs outline-none cursor-pointer uppercase"
+                                    value={calViewMode}
+                                    onChange={(e) => setCalViewMode(e.target.value as any)}
+                                >
+                                    <option value="semanal">SEMANA</option>
+                                    <option value="mensual">MES</option>
+                                </select>
+                                <span className="text-slate-300 text-xs">|</span>
+                                {calViewMode === 'semanal' ? (
+                                    <select 
+                                        className="bg-transparent font-black text-slate-800 text-xs outline-none cursor-pointer uppercase"
+                                        value={selectedCalWeek}
+                                        onChange={(e) => setSelectedCalWeek(parseInt(e.target.value))}
+                                    >
+                                        {Array.from({length: 52}, (_, i) => i + 1).map(w => (
+                                            <option key={w} value={w}>{w} - 2025</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <select 
+                                        className="bg-transparent font-black text-slate-800 text-xs outline-none cursor-pointer uppercase"
+                                        value={selectedCalMonth}
+                                        onChange={(e) => setSelectedCalMonth(parseInt(e.target.value))}
+                                    >
+                                        {months.map((m, idx) => (
+                                            <option key={idx} value={idx}>{m}</option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
+                        </div>
+                        <ChevronDown size={14} className="text-slate-400 ml-1" />
+                    </div>
+                    
+                    <button onClick={() => { setPreSelectedCalPlate(null); setShowCalibrationForm(true); }} className="px-8 py-4 bg-indigo-600 text-white rounded-[2rem] text-[11px] font-black uppercase tracking-widest shadow-xl hover:bg-indigo-700 transition-all flex items-center gap-3 active:scale-95 group">
+                        <Plus size={20} className="group-hover:rotate-90 transition-transform" /> REGISTRAR CALIBRACIÓN
+                    </button>
+                 </div>
               </div>
-              {calibrations.filter(c => normalizePlate(c.plate).includes(normalizePlate(searchTerm))).map(c => (
-                <CalibrationCard key={c.id} calibration={c} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
-              ))}
+
+              {/* DASHBOARD DE CUMPLIMIENTO INTERACTIVO */}
+              <div className="bg-[#0f172a] rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden border-b-[12px] border-indigo-600/30 mb-10">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-40 -mt-40"></div>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center relative z-10">
+                  
+                  {/* PORCENTAJE (Botón Reset) */}
+                  <div className="lg:col-span-4 flex flex-col items-center justify-center border-r border-white/10 pr-10">
+                    <button 
+                        onClick={() => setCalStatusFilter('all')}
+                        className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-8 text-center flex items-center gap-2 hover:text-white transition-colors"
+                    >
+                       <TrendingUp size={14}/> CUMPLIMIENTO {calViewMode === 'semanal' ? `W${selectedCalWeek}` : months[selectedCalMonth]}
+                    </button>
+                    
+                    <div 
+                        onClick={() => setCalStatusFilter('all')}
+                        className="relative flex items-center justify-center mb-8 cursor-pointer group"
+                    >
+                       <svg className="w-48 h-48 transform -rotate-90 group-hover:scale-105 transition-transform">
+                          <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-white/5" />
+                          <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" 
+                                  strokeDasharray={552.92} 
+                                  strokeDashoffset={552.92 - (552.92 * calStats.percentage) / 100}
+                                  className="text-indigo-500 transition-all duration-1000 ease-out" 
+                                  strokeLinecap="round" />
+                       </svg>
+                       <div className="absolute inset-0 flex flex-col items-center justify-center">
+                          <span className="text-7xl font-black tracking-tighter leading-none">{calStats.percentage}</span>
+                          <span className="text-xl font-black text-indigo-400 mt-1">%</span>
+                       </div>
+                    </div>
+
+                    <div className="w-full flex justify-between gap-4">
+                        <button 
+                            onClick={() => setCalStatusFilter('completed')}
+                            className={`flex-1 p-4 rounded-[1.5rem] border transition-all text-center ${calStatusFilter === 'completed' ? 'bg-emerald-500 border-emerald-400 shadow-lg shadow-emerald-500/20' : 'bg-white/5 border-white/5 hover:border-emerald-500/30'}`}
+                        >
+                            <p className={`text-[8px] font-black uppercase tracking-widest ${calStatusFilter === 'completed' ? 'text-white' : 'text-emerald-400'}`}>CALIBRADOS</p>
+                            <p className="text-2xl font-black mt-1">{calStats.completed}</p>
+                        </button>
+                        <button 
+                            onClick={() => setCalStatusFilter('pending')}
+                            className={`flex-1 p-4 rounded-[1.5rem] border transition-all text-center ${calStatusFilter === 'pending' ? 'bg-rose-500 border-rose-400 shadow-lg shadow-rose-500/20' : 'bg-white/5 border-white/5 hover:border-rose-500/30'}`}
+                        >
+                            <p className={`text-[8px] font-black uppercase tracking-widest ${calStatusFilter === 'pending' ? 'text-white' : 'text-rose-400'}`}>PENDIENTES</p>
+                            <p className="text-2xl font-black mt-1">{calStats.pending}</p>
+                        </button>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-8 flex flex-col justify-center gap-8">
+                     <div className="flex items-center gap-3">
+                        <Filter size={18} className="text-indigo-400" />
+                        <span className="text-[11px] font-black uppercase tracking-[0.3em] text-white/50">Panel de Auditoría de Neumáticos</span>
+                     </div>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-md">
+                           <p className="text-[9px] font-black text-indigo-400 uppercase mb-4 flex items-center gap-2"><Building2 size={14}/> FILTRADO POR C.D.</p>
+                           <div className="relative">
+                                <select className="bg-[#1e293b] text-white text-[11px] font-black w-full px-5 py-3.5 rounded-2xl outline-none appearance-none border border-white/10" value={filterCd} onChange={e => setFilterCd(e.target.value)}>
+                                    <option value="all">TODOS LOS CD</option>
+                                    {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
+                                </select>
+                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" size={16} />
+                           </div>
+                        </div>
+                        <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-md">
+                           <p className="text-[9px] font-black text-indigo-400 uppercase mb-4 flex items-center gap-2"><UserCircle size={14}/> OPERADOR RESPONSABLE</p>
+                           <div className="relative">
+                                <select className="bg-[#1e293b] text-white text-[11px] font-black w-full px-5 py-3.5 rounded-2xl outline-none appearance-none border border-white/10" value={filterContractor} onChange={e => setFilterContractor(e.target.value)}>
+                                    <option value="all">TODOS LOS OPERADORES</option>
+                                    {uniqueContractors.map(cnt => <option key={cnt} value={cnt}>{cnt}</option>)}
+                                </select>
+                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" size={16} />
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* TABLA DE AUDITORÍA FLOTA */}
+              <div className="bg-white rounded-[3rem] shadow-xl border border-slate-100 overflow-hidden">
+                <div className="hidden lg:grid grid-cols-7 gap-6 px-10 py-6 bg-slate-50 border-b border-slate-100 text-[11px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                  <span className="col-span-1">MES / FECHA</span>
+                  <span className="col-span-1 text-center">SEMANA</span>
+                  <span className="col-span-1 text-center">PLACA</span>
+                  <span className="col-span-1 text-center">C.D.</span>
+                  <span className="col-span-1">TALLER / ENTIDAD</span>
+                  <span className="col-span-1 text-center">ESTADO</span>
+                  <span className="col-span-1 text-right">EVIDENCIA</span>
+                </div>
+
+                <div className="divide-y divide-slate-50">
+                  {filteredCalCompliance.length > 0 ? 
+                   filteredCalCompliance.map((item, idx) => {
+                    const { vehicle, calibration, isCompleted } = item;
+                    const cDate = calibration ? new Date(calibration.calibrationDate) : null;
+                    
+                    return (
+                      <div key={idx} className={`grid grid-cols-2 lg:grid-cols-7 items-center gap-6 px-10 py-8 transition-colors group ${!isCompleted ? 'bg-rose-50/20' : 'hover:bg-slate-50/50'}`}>
+                        
+                        <div className="col-span-1 flex items-center gap-4">
+                           <div className={`w-1.5 h-10 rounded-full transition-colors ${isCompleted ? 'bg-emerald-100 group-hover:bg-emerald-500' : 'bg-rose-200 group-hover:bg-rose-500'}`}></div>
+                           <div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                                {cDate ? months[cDate.getMonth()] : months[selectedCalMonth]}
+                              </p>
+                              <p className={`text-sm font-black uppercase ${isCompleted ? 'text-slate-800' : 'text-rose-400'}`}>
+                                {cDate ? formatDate(calibration!.calibrationDate) : 'SIN REPORTE'}
+                              </p>
+                           </div>
+                        </div>
+
+                        <div className="col-span-1 text-center hidden lg:block">
+                           <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black border transition-all ${isCompleted ? 'bg-white text-slate-600 border-slate-200' : 'bg-rose-50 text-rose-300 border-rose-100'}`}>
+                             SEMANA {cDate ? getWeekNumber(cDate) : '--'}
+                           </span>
+                        </div>
+
+                        <div className="col-span-1 flex justify-center">
+                           {isCompleted ? (
+                             <div className="bg-[#0f172a] px-6 py-2.5 rounded-2xl text-white font-mono font-black text-xl tracking-wider shadow-lg group-hover:bg-indigo-600 transition-all">
+                                {vehicle.plate}
+                             </div>
+                           ) : (
+                             <button 
+                               onClick={() => {
+                                 setPreSelectedCalPlate(vehicle.plate);
+                                 setShowCalibrationForm(true);
+                               }}
+                               className="bg-white text-slate-400 border-2 border-slate-200 border-dashed px-6 py-2.5 rounded-2xl font-mono font-black text-xl tracking-wider shadow-sm hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-95 group/btn relative"
+                             >
+                                {vehicle.plate}
+                                <div className="absolute -top-2 -right-2 bg-indigo-600 text-white p-1 rounded-full opacity-0 group-hover/btn:opacity-100 transition-opacity">
+                                  <Plus size={10} />
+                                </div>
+                             </button>
+                           )}
+                        </div>
+
+                        <div className="col-span-1 text-center hidden lg:block">
+                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
+                              <MapPin size={12} className="text-indigo-400" /> {vehicle.cd || 'BQA'}
+                           </span>
+                        </div>
+
+                        <div className="col-span-1 hidden lg:block">
+                           <p className={`text-[10px] font-black uppercase truncate leading-none ${isCompleted ? 'text-slate-800' : 'text-slate-300 italic'}`}>
+                              {calibration?.equipment || 'PENDIENTE DE ASIGNACIÓN'}
+                           </p>
+                        </div>
+
+                        <div className="col-span-1 flex justify-center">
+                           <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 border shadow-sm ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-rose-100 text-rose-700 border-rose-200 animate-pulse'}`}>
+                              <div className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                              {isCompleted ? 'CALIBRADO' : 'FALTANTE'}
+                           </div>
+                        </div>
+
+                        <div className="col-span-1 flex justify-end">
+                          {calibration?.certificateUrl ? (
+                            <button 
+                              onClick={() => setViewDoc({ url: calibration.certificateUrl!, title: `${vehicle.plate} - Calibración` })}
+                              className="p-3 bg-white text-indigo-600 rounded-2xl border-2 border-slate-100 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-sm active:scale-90"
+                              title="Ver Certificado de Calibración"
+                            >
+                               <Eye size={20} />
+                            </button>
+                          ) : (
+                            <div className="p-3 bg-slate-50 text-slate-200 rounded-2xl border-2 border-dashed border-slate-100">
+                               <ImageIcon size={20} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }) : (
+                    <div className="py-40 text-center flex flex-col items-center">
+                       <div className="p-10 bg-slate-50 rounded-full mb-8 border-4 border-dashed border-slate-100">
+                          <FilterX size={64} className="text-slate-200" />
+                       </div>
+                       <p className="text-sm font-black text-slate-300 uppercase tracking-[0.4em]">Sin registros que coincidan con el filtro</p>
+                       <button onClick={() => setCalStatusFilter('all')} className="mt-6 text-indigo-600 text-[10px] font-black uppercase underline tracking-widest">Ver toda la flota</button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -535,8 +1080,30 @@ const App: React.FC = () => {
 
       {showReportForm && <ReportForm vehicles={vehicles} onClose={() => { setShowReportForm(false); handleSyncData(); }} onSubmit={submitReportToSheet} />}
       {showFiveSForm && <FiveSForm vehicles={vehicles} onClose={() => { setShowFiveSForm(false); handleSyncData(); }} onSubmit={submitFiveSToSheet} />}
-      {showWashForm && <WashForm vehicles={vehicles} onClose={() => { setShowWashForm(false); handleSyncData(); }} onSubmit={submitWashToSheet} />}
-      {showCalibrationForm && <CalibrationForm vehicles={vehicles} onClose={() => { setShowCalibrationForm(false); handleSyncData(); }} onSubmit={submitCalibrationToSheet} />}
+      {showWashForm && (
+        <WashForm 
+          vehicles={vehicles} 
+          onClose={() => { 
+            setShowWashForm(false); 
+            setPreSelectedWashPlate(null);
+            handleSyncData(); 
+          }} 
+          onSubmit={submitWashToSheet} 
+          preSelectedPlate={preSelectedWashPlate || undefined}
+        />
+      )}
+      {showCalibrationForm && (
+        <CalibrationForm 
+          vehicles={vehicles} 
+          preSelectedPlate={preSelectedCalPlate || undefined}
+          onClose={() => { 
+            setShowCalibrationForm(false); 
+            setPreSelectedCalPlate(null);
+            handleSyncData(); 
+          }} 
+          onSubmit={submitCalibrationToSheet} 
+        />
+      )}
       {closingReport && <ClosureForm report={closingReport} onClose={() => { setClosingReport(null); handleSyncData(); }} onSubmit={(id, data) => submitReportToSheet({...closingReport, ...data} as any)} />}
       {closingFiveS && <FiveSClosureForm report={closingFiveS} onClose={() => { setClosingFiveS(null); handleSyncData(); }} onSubmit={(id, data) => submitFiveSToSheet({...closingFiveS, ...data} as any)} />}
       {viewDoc && <DocumentViewer url={viewDoc.url} title={viewDoc.title} onClose={() => setViewDoc(null)} />}
