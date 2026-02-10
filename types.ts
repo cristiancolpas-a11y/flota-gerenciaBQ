@@ -1,5 +1,5 @@
 
-export type DocumentStatus = 'active' | 'warning' | 'expired';
+export type DocumentStatus = 'active' | 'warning' | 'critical' | 'expired';
 
 export interface VehicleDocument {
   expiryDate: string;
@@ -48,7 +48,7 @@ export interface Vehicle {
   rtm: VehicleDocument;
   plc: VehicleDocument;
   extinguisher: VehicleDocument;
-  calibration?: VehicleDocument; // Nueva propiedad para seguimiento directo
+  calibration?: VehicleDocument;
   currentMileage?: number;
   lastMileageUpdate?: string;
   propertyCardUrl?: string;
@@ -81,6 +81,7 @@ export interface Report {
   closureComments?: string;
   workshop?: string;
   cd?: string;
+  week?: string;
 }
 
 export interface FiveSReport {

@@ -36,19 +36,7 @@ function doPost(e) {
       var mes = MESES[dObj.getMonth()];
       var semana = getW(dObj);
       
-      // ORDEN EXACTO SOLICITADO:
-      // ID (0), MES (1), SEMANA (2), FECHA (3), PLACA (4), EVIDENCIA (5), MAPA (6), TALLER (7)
-      var rowData = [
-        d.id,           // Indice 0
-        mes,            // Indice 1
-        semana,         // Indice 2
-        d.date,         // Indice 3
-        placa,          // Indice 4
-        imgEvidencia,   // Indice 5
-        imgMapa,        // Indice 6
-        (d.workshop || "").toUpperCase() // Indice 7
-      ];
-      
+      var rowData = [d.id, mes, semana, d.date, placa, imgEvidencia, imgMapa, (d.workshop || "").toUpperCase()];
       s.appendRow(rowData);
     }
 
@@ -95,6 +83,32 @@ function doPost(e) {
         if (d.exitMap) s.getRange(idx, 12).setValue(sImg(d.exitMap, "EXIT_" + placa));
         if (d.daysInShop !== undefined) s.getRange(idx, 13).setValue(d.daysInShop);
         if (d.closureComments) s.getRange(idx, 14).setValue(d.closureComments);
+      }
+    }
+
+    else if (m === 'POST_WORKSHOP_VISIT_UPDATE') {
+      var s = getS(ss, "VISITAS A TALLER");
+      var rows = s.getDataRange().getValues();
+      var tid = (d.id || "").toString(); // Columna H es el Hash
+      var idx = -1;
+
+      // Buscar por ID único en Columna H (Índice 7)
+      for (var i = 1; i < rows.length; i++) {
+        if (rows[i][7] && rows[i][7].toString() === tid) { 
+          idx = i + 1; 
+          break; 
+        }
+      }
+
+      if (idx !== -1) {
+        // Col D (4): Taller
+        s.getRange(idx, 4).setValue(d.workshop.toUpperCase());
+        // Col E (5): Fecha de Vis
+        s.getRange(idx, 5).setValue(d.visitDate);
+        // Col F (6): Evidencia
+        s.getRange(idx, 6).setValue(sImg(d.evidence, "VIS_EVI_" + d.plate));
+        // Col G (7): Estado
+        s.getRange(idx, 7).setValue(d.status || "COMPLETADO");
       }
     }
 

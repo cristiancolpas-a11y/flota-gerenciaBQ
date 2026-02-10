@@ -26,7 +26,6 @@ export const calculateStatus = (expiryDate: string): DocumentStatus => {
   const expiry = new Date(expiryDate);
   if (isNaN(expiry.getTime()) || expiry.getFullYear() < 1900) return 'expired';
   
-  // Normalizar a medianoche para evitar problemas de horas
   now.setHours(0, 0, 0, 0);
   expiry.setHours(0, 0, 0, 0);
   
@@ -34,7 +33,8 @@ export const calculateStatus = (expiryDate: string): DocumentStatus => {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
   if (diffDays < 0) return 'expired';
-  if (diffDays <= 30) return 'warning';
+  if (diffDays >= 0 && diffDays <= 14) return 'critical';
+  if (diffDays >= 15 && diffDays <= 29) return 'warning';
   return 'active';
 };
 
@@ -87,7 +87,7 @@ export const isImageLink = (url: string): boolean => {
 
 export const processImageWithWatermark = (
   base64Str: string, 
-  plate: string, 
+  text: string, 
   coords?: { lat: number, lng: number }
 ): Promise<string> => {
   return new Promise((resolve) => {
@@ -122,7 +122,7 @@ export const processImageWithWatermark = (
       
       ctx.fillStyle = '#ffffff';
       ctx.font = `bold ${Math.round(width * 0.035)}px Inter, sans-serif`;
-      ctx.fillText(`PLACA: ${plate.toUpperCase()}`, x + 15, y + 25);
+      ctx.fillText(text.toUpperCase(), x + 15, y + 25);
       
       ctx.font = `${Math.round(width * 0.025)}px Inter, sans-serif`;
       ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';

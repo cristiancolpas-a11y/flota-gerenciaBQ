@@ -3,13 +3,13 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, FiveSReport, Calibration, WashReport } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxcfgvOknMjDgALRLqQfWDOj4TVkcQ9TbfRwuzvkeqc8xtYnF3GNxbc6CT0OhnOlhXR/exec'; 
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxDEZRLFkXpeOAm0AL-2UeAF6lBAsurMl9gB_6RHfgSTzILtA2SZ-hHQeuSLrWAZLft/exec'; 
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/export?format=csv`;
 
-// HOJA OPERATIVA / BACKEND
+// HOJA OPERATIVA / BACKEND (Para registros de novedades, lavados, calibraciones, etc.)
 const BACKEND_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv`;
 
@@ -43,9 +43,6 @@ const parseFlexibleDate = (dateStr: any): string => {
   } catch { return ''; }
 };
 
-/**
- * VEHÍCULOS (Hoja ALERTA_CAMIONES - GID 1506825194)
- */
 export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
   try {
     const url = `${BASE_URL_MASTER}&gid=1506825194${getCacheBuster()}`;
@@ -132,72 +129,20 @@ export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
   }
 };
 
-/**
- * VISITAS A TALLER (GID 239875479 - Hoja Operativa)
- */
-export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
-  try {
-    const url = `${BASE_URL_BACKEND}&gid=239875479${getCacheBuster()}`;
-    const response = await fetch(url);
-    const csvText = await response.text();
-    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
-
-    return new Promise((resolve) => {
-      Papa.parse(csvText, {
-        header: false, skipEmptyLines: true,
-        complete: (results) => {
-          const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          
-          const visits = rows.slice(1)
-            .filter(row => row && row[2]) 
-            .map((row, i): Report => {
-              const week = cleanSheetValue(row[0]);
-              const dateProg = parseFlexibleDate(row[1]);
-              const identifier = cleanSheetValue(row[2]);
-              const workshop = cleanSheetValue(row[3]);
-              const dateVis = parseFlexibleDate(row[4]);
-              const evidence = cleanSheetValue(row[5]);
-              const statusRaw = cleanSheetValue(row[6]).toUpperCase();
-              const hashId = cleanSheetValue(row[7]); // Columna H es la llave única
-              
-              return {
-                id: hashId || `vprog-${i}`,
-                week: week,
-                date: dateProg,
-                plate: normalizePlate(identifier),
-                workshop: workshop,
-                closureDate: dateVis, // Usamos esto para mapear la fecha de visita real
-                status: statusRaw.includes('PENDIENTE') ? 'ABIERTO' : 'CERRADO',
-                novelty: 'VISITA TÉCNICA PROGRAMADA',
-                source: 'CALENDARIO',
-                initialEvidence: evidence,
-                cd: 'GENERAL'
-              };
-            });
-          resolve(visits);
-        },
-        error: () => resolve([])
-      });
-    });
-  } catch (e) { return []; }
-};
-
-/**
- * KILOMETRAJE (GID 1929496440)
- */
 export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
   try {
     const url = `${BASE_URL_BACKEND}&gid=1929496440${getCacheBuster()}`;
     const response = await fetch(url);
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+
     return new Promise((resolve) => {
       Papa.parse(csvText, {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
           if (!rows || rows.length < 2) { resolve([]); return; }
+          
           const logs = rows.slice(1).filter(row => row && row[4]).map((row): MileageLog => ({
             cd: cleanSheetValue(row[0]),          
             contractor: cleanSheetValue(row[1]),  
@@ -214,41 +159,45 @@ export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
   } catch (e) { return []; }
 };
 
-/**
- * CALIBRACIONES (GID 505557891)
- */
 export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
   try {
     const url = `${BASE_URL_BACKEND}&gid=505557891${getCacheBuster()}`;
     const response = await fetch(url);
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
     return new Promise((resolve) => {
       Papa.parse(csvText, {
-        header: false, skipEmptyLines: 'greedy',
+        header: false, 
+        skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
           if (!rows || rows.length < 2) { resolve([]); return; }
-          const calibrations = rows.slice(1).filter(row => row && row[3]).map((row, index): Calibration => {
-            const plate = normalizePlate(cleanSheetValue(row[3])); 
-            const calDateStr = parseFlexibleDate(row[1]);         
-            const workshop = cleanSheetValue(row[4]);             
-            const evidenceUrl = cleanSheetValue(row[5]);          
-            const expDate = calDateStr ? new Date(calDateStr) : null;
-            if (expDate) expDate.setFullYear(expDate.getFullYear() + 1);
-            const expDateStr = expDate ? expDate.toISOString().split('T')[0] : '';
-            return {
-              id: `cal-${plate}-${calDateStr}-${index}`,
-              plate,
-              equipment: workshop || 'TALLER NO ESPECIFICADO',
-              calibrationDate: calDateStr,
-              expiryDate: expDateStr,
-              certificateUrl: evidenceUrl,
-              status: calculateStatus(expDateStr),
-              daysPending: getDaysDiff(expDateStr),
-              cd: 'GENERAL'
-            };
-          });
+          
+          const calibrations = rows.slice(1)
+            .filter(row => row && row[3]) 
+            .map((row, index): Calibration => {
+              const plate = normalizePlate(cleanSheetValue(row[3])); 
+              const calDateStr = parseFlexibleDate(row[1]);         
+              const workshop = cleanSheetValue(row[4]);             
+              const evidenceUrl = cleanSheetValue(row[5]);          
+              
+              const expDate = calDateStr ? new Date(calDateStr) : null;
+              if (expDate) expDate.setFullYear(expDate.getFullYear() + 1);
+              const expDateStr = expDate ? expDate.toISOString().split('T')[0] : '';
+              
+              return {
+                id: `cal-${plate}-${calDateStr}-${index}`,
+                plate,
+                equipment: workshop || 'TALLER NO ESPECIFICADO',
+                calibrationDate: calDateStr,
+                expiryDate: expDateStr,
+                certificateUrl: evidenceUrl,
+                status: calculateStatus(expDateStr),
+                daysPending: getDaysDiff(expDateStr),
+                cd: 'GENERAL'
+              };
+            });
           resolve(calibrations);
         },
         error: () => resolve([])
@@ -257,9 +206,39 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
   } catch (e) { return []; }
 };
 
-/**
- * LAVADOS (GID 1668814480)
- */
+export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
+  try {
+    // Usamos el GID 505557891 según instrucción, asumiendo una hoja con estructura similar a Reporte
+    const url = `${BASE_URL_BACKEND}&gid=505557891${getCacheBuster()}`;
+    const response = await fetch(url);
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: true,
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          // Mapeamos los datos asumiendo la estructura de la hoja VISITAS A TALLER
+          const visits = rows.slice(1).filter(row => row && row[3]).map((row, i): Report => ({
+            id: `visit-${i}`,
+            date: parseFlexibleDate(row[1]),
+            plate: normalizePlate(cleanSheetValue(row[3])),
+            workshop: cleanSheetValue(row[4]),
+            status: 'CERRADO',
+            novelty: 'VISITA REGISTRADA',
+            source: 'TALLER',
+            initialEvidence: cleanSheetValue(row[5]),
+            daysInShop: 1, // Por defecto si no hay fecha de salida
+            cd: 'GENERAL'
+          }));
+          resolve(visits);
+        }
+      });
+    });
+  } catch (e) { return []; }
+};
+
 export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
   try {
     const url = `${BASE_URL_BACKEND}&gid=1668814480${getCacheBuster()}`;
@@ -289,9 +268,6 @@ export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
   } catch (e) { return []; }
 };
 
-/**
- * 5S CAMIONES (GID 393618683)
- */
 export const fetchFiveSReportsFromSheet = async (): Promise<FiveSReport[]> => {
   try {
     const url = `${BASE_URL_BACKEND}&gid=393618683${getCacheBuster()}`;
@@ -324,9 +300,6 @@ export const fetchFiveSReportsFromSheet = async (): Promise<FiveSReport[]> => {
   } catch (e) { return []; }
 };
 
-/**
- * CONDUCTORES (GID 1834987510)
- */
 export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
   try {
     const url = `${BASE_URL_MASTER}&gid=1834987510${getCacheBuster()}`;
@@ -362,9 +335,6 @@ export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
   } catch (e) { return []; }
 };
 
-/**
- * NOVEDADES (GID 1789987673)
- */
 export const fetchReportsFromSheet = async (): Promise<Report[]> => {
   try {
     const url = `${BASE_URL_BACKEND}&gid=1789987673${getCacheBuster()}`;
@@ -416,4 +386,3 @@ export const submitMileageToSheet = async (mileageData: any): Promise<void> => {
 export const submitFiveSToSheet = async (fiveSData: any): Promise<void> => { await sendToGAS({ method: 'POST_FIVES', data: fiveSData }); };
 export const submitCalibrationToSheet = async (calibrationDate: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION', data: calibrationDate }); };
 export const submitWashToSheet = async (washData: any): Promise<void> => { await sendToGAS({ method: 'POST_WASH', data: washData }); };
-export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: visitData }); };
