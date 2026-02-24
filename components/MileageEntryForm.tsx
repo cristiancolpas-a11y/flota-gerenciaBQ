@@ -270,46 +270,47 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
 
       {activeTab === 'registro' ? (
         <div className="space-y-8">
-          {/* DASHBOARD DE CUMPLIMIENTO (ESTILO REFERENCIA) */}
-          <div className="bg-[#0f172a] rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden border-b-[12px] border-indigo-600/30">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -mr-40 -mt-40"></div>
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-600/5 rounded-full blur-2xl -ml-32 -mb-32"></div>
+          {/* DASHBOARD DE CUMPLIMIENTO (ESTILO PREMIUM) */}
+          <div className="bg-[#0f172a] rounded-[3.5rem] p-12 text-white shadow-2xl relative overflow-hidden border border-white/5">
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] -mr-64 -mt-64"></div>
+            <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-600/5 rounded-full blur-[100px] -ml-48 -mb-48"></div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center relative z-10">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
               
               {/* PORCENTAJE CIRCULAR */}
-              <div className="lg:col-span-4 flex flex-col items-center justify-center border-r border-white/10 pr-10">
-                 <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-8 text-center flex items-center gap-2">
-                   <TrendingUp size={14}/> CUMPLIMIENTO {viewMode === 'semanal' ? `SEMANA ${selectedWeek}` : months[selectedMonth]}
-                 </p>
+              <div className="lg:col-span-4 flex flex-col items-center justify-center lg:border-r lg:border-white/10 lg:pr-12">
+                 <div className="flex items-center gap-3 mb-10">
+                    <TrendingUp size={16} className="text-indigo-400" />
+                    <p className="text-[11px] font-black text-indigo-400 uppercase tracking-[0.4em]">CUMPLIMIENTO {viewMode === 'semanal' ? `SEMANA ${selectedWeek}` : months[selectedMonth]}</p>
+                 </div>
                  
-                 <div className="relative flex items-center justify-center mb-8">
-                    <svg className="w-48 h-48 transform -rotate-90">
-                       <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-white/5" />
-                       <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" 
-                               strokeDasharray={552.92} 
-                               strokeDashoffset={552.92 - (552.92 * stats.percentage) / 100}
-                               className="text-indigo-500 transition-all duration-1000 ease-out" 
-                               strokeLinecap="round" />
+                 <div className="relative flex items-center justify-center mb-10">
+                    <svg className="w-56 h-56 transform -rotate-90">
+                       <circle cx="112" cy="112" r="100" stroke="currentColor" strokeWidth="14" fill="transparent" className="text-white/5" />
+                       <circle cx="112" cy="112" r="100" stroke="currentColor" strokeWidth="14" fill="transparent" 
+                                strokeDasharray={628.3} 
+                                strokeDashoffset={628.3 - (628.3 * stats.percentage) / 100}
+                                className="text-indigo-500 transition-all duration-1000 ease-out" 
+                                strokeLinecap="round" />
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                       <span className="text-7xl font-black tracking-tighter leading-none">{stats.percentage}</span>
+                       <span className="text-8xl font-black tracking-tighter leading-none">{stats.percentage}</span>
                        <span className="text-xl font-black text-indigo-400 mt-1">%</span>
                     </div>
                  </div>
 
-                 <div className="w-full flex justify-between gap-4 mt-2">
-                    <div className="flex-1 bg-white/5 p-3 rounded-2xl border border-white/5">
-                       <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">REPORTADOS</p>
-                       <p className="text-xl font-black">{stats.completed}</p>
-                       <div className="w-full h-1 bg-emerald-500/20 rounded-full mt-2 overflow-hidden">
+                 <div className="w-full grid grid-cols-2 gap-4">
+                    <div className="bg-white/5 p-5 rounded-3xl border border-white/5 backdrop-blur-sm">
+                       <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-2">REPORTADOS</p>
+                       <p className="text-3xl font-black tracking-tighter">{stats.completed}</p>
+                       <div className="w-full h-1.5 bg-emerald-500/20 rounded-full mt-3 overflow-hidden">
                           <div className="h-full bg-emerald-500" style={{width: `${stats.percentage}%`}}></div>
                        </div>
                     </div>
-                    <div className="flex-1 bg-white/5 p-3 rounded-2xl border border-white/5 text-right">
-                       <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest mb-1">FALTANTES</p>
-                       <p className="text-xl font-black">{stats.pending}</p>
-                       <div className="w-full h-1 bg-rose-500/20 rounded-full mt-2 overflow-hidden">
+                    <div className="bg-white/5 p-5 rounded-3xl border border-white/5 backdrop-blur-sm text-right">
+                       <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-2">FALTANTES</p>
+                       <p className="text-3xl font-black tracking-tighter">{stats.pending}</p>
+                       <div className="w-full h-1.5 bg-rose-500/20 rounded-full mt-3 overflow-hidden">
                           <div className="h-full bg-rose-500 ml-auto" style={{width: `${100 - stats.percentage}%`}}></div>
                        </div>
                     </div>
@@ -317,18 +318,20 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
               </div>
 
               {/* FILTROS DE BÚSQUEDA */}
-              <div className="lg:col-span-8 space-y-8">
-                 <div className="flex items-center gap-3">
-                    <Filter size={18} className="text-indigo-400" />
-                    <span className="text-[11px] font-black uppercase tracking-[0.3em] text-white/50">Panel de Filtros Globales</span>
+              <div className="lg:col-span-8 space-y-10">
+                 <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-indigo-500/20 rounded-xl">
+                       <Filter size={20} className="text-indigo-400" />
+                    </div>
+                    <span className="text-[12px] font-black uppercase tracking-[0.4em] text-white/60">Panel de Filtros Globales</span>
                  </div>
 
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-md">
-                       <p className="text-[9px] font-black text-indigo-400 uppercase mb-4 flex items-center gap-2">
-                          <Activity size={14}/> ESTADO DEL REPORTE
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="bg-white/5 p-8 rounded-[3rem] border border-white/5 backdrop-blur-md hover:bg-white/[0.07] transition-all">
+                       <p className="text-[10px] font-black text-indigo-400 uppercase mb-5 flex items-center gap-2.5">
+                          <Activity size={16}/> ESTADO DEL REPORTE
                        </p>
-                       <div className="flex p-1 bg-white/5 rounded-2xl">
+                       <div className="flex p-1.5 bg-white/5 rounded-2xl border border-white/5">
                           {[
                             { id: 'all', label: 'TODO' },
                             { id: 'pending', label: 'FALTAN' },
@@ -337,7 +340,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                             <button 
                               key={f.id} 
                               onClick={() => setStatusFilter(f.id as any)}
-                              className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${statusFilter === f.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:text-white'}`}
+                              className={`flex-1 py-3.5 rounded-xl text-[11px] font-black uppercase transition-all ${statusFilter === f.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30' : 'text-slate-400 hover:text-white'}`}
                             >
                               {f.label}
                             </button>
@@ -345,37 +348,39 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                        </div>
                     </div>
 
-                    <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-md">
-                       <p className="text-[9px] font-black text-indigo-400 uppercase mb-4 flex items-center gap-2">
-                          <Building2 size={14}/> UBICACIÓN CD
+                    <div className="bg-white/5 p-8 rounded-[3rem] border border-white/5 backdrop-blur-md hover:bg-white/[0.07] transition-all">
+                       <p className="text-[10px] font-black text-indigo-400 uppercase mb-5 flex items-center gap-2.5">
+                          <Building2 size={16}/> UBICACIÓN CD
                        </p>
                        <div className="relative">
-                          <select className="bg-[#1e293b] text-white text-[11px] font-black w-full px-5 py-3.5 rounded-2xl outline-none uppercase appearance-none cursor-pointer border border-white/10 focus:border-indigo-500" value={externalCd} onChange={e => setExternalCd(e.target.value)}>
+                          <select className="bg-[#1e293b] text-white text-[12px] font-black w-full px-6 py-4.5 rounded-2xl outline-none uppercase appearance-none cursor-pointer border border-white/10 focus:border-indigo-500 transition-all" value={externalCd} onChange={e => setExternalCd(e.target.value)}>
                             <option value="all">TODOS LOS CD</option>
                             {cds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
                           </select>
-                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" size={16} />
+                          <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" size={18} />
                        </div>
                     </div>
 
-                    <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-md">
-                       <p className="text-[9px] font-black text-indigo-400 uppercase mb-4 flex items-center gap-2">
-                          <UserCircle size={14}/> OPERADOR / CONTRATISTA
+                    <div className="bg-white/5 p-8 rounded-[3rem] border border-white/5 backdrop-blur-md hover:bg-white/[0.07] transition-all">
+                       <p className="text-[10px] font-black text-indigo-400 uppercase mb-5 flex items-center gap-2.5">
+                          <UserCircle size={16}/> OPERADOR / CONTRATISTA
                        </p>
                        <div className="relative">
-                          <select className="bg-[#1e293b] text-white text-[11px] font-black w-full px-5 py-3.5 rounded-2xl outline-none uppercase appearance-none cursor-pointer border border-white/10 focus:border-indigo-500" value={externalContractor} onChange={e => setExternalContractor(e.target.value)}>
+                          <select className="bg-[#1e293b] text-white text-[12px] font-black w-full px-6 py-4.5 rounded-2xl outline-none uppercase appearance-none cursor-pointer border border-white/10 focus:border-indigo-500 transition-all" value={externalContractor} onChange={e => setExternalContractor(e.target.value)}>
                             <option value="all">TODOS LOS OPERADORES</option>
                             {contractors.map(cnt => <option key={cnt} value={cnt}>{cnt}</option>)}
                           </select>
-                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" size={16} />
+                          <ChevronDown className="absolute right-5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" size={18} />
                        </div>
                     </div>
                  </div>
 
                  {stats.total === 0 && (
-                   <div className="bg-indigo-600/20 p-4 rounded-2xl border border-indigo-500/30 flex items-center gap-3 animate-pulse">
-                      <Database size={20} className="text-indigo-400" />
-                      <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest">Sincronizando registros en tiempo real desde Google Sheets...</p>
+                   <div className="bg-indigo-600/20 p-5 rounded-3xl border border-indigo-500/30 flex items-center gap-4 animate-pulse">
+                      <div className="p-2 bg-indigo-500/20 rounded-lg">
+                        <Database size={20} className="text-indigo-400" />
+                      </div>
+                      <p className="text-[11px] font-bold text-indigo-200 uppercase tracking-widest">Sincronizando registros en tiempo real desde Google Sheets...</p>
                    </div>
                  )}
               </div>
@@ -404,56 +409,76 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                         {v.plate}
                       </div>
                       
-                      <div className="text-center w-full space-y-3">
-                        <div className="flex items-center justify-center gap-2 text-indigo-600 font-black">
-                           <Gauge size={16} />
-                           <span className="text-sm">Últ: {lastKm.toLocaleString()} KM</span>
+                      <div className="text-center w-full space-y-4">
+                        <div className="flex items-center justify-center gap-2.5 text-indigo-600 font-black bg-indigo-50/50 py-3 rounded-2xl border border-indigo-100/50">
+                           <Gauge size={18} />
+                           <span className="text-base tracking-tighter">{lastKm.toLocaleString()} <span className="text-[10px] opacity-60">KM</span></span>
                         </div>
                         <div className="pt-4 border-t border-slate-100">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{v.cd || 'SIN ASIGNACIÓN'}</p>
-                          <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest truncate">{v.contractor || 'OPERACIÓN GENERAL'}</p>
+                           <div className="flex items-center justify-center gap-2 mb-1">
+                              <Building2 size={12} className="text-slate-300" />
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{v.cd || 'SIN ASIGNACIÓN'}</p>
+                           </div>
+                           <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest truncate">{v.contractor || 'OPERACIÓN GENERAL'}</p>
                         </div>
                       </div>
                     </button>
                   );
                 }) : (
                   <div className="col-span-full py-48 text-center flex flex-col items-center">
-                     <div className="p-14 bg-slate-50 rounded-full mb-10 border-4 border-dashed border-slate-100 animate-pulse">
-                        <Search size={64} className="text-slate-200" />
+                     <div className="p-16 bg-slate-50 rounded-full mb-10 border-4 border-dashed border-slate-100 animate-pulse">
+                        <Search size={72} className="text-slate-200" />
                      </div>
-                     <p className="text-lg font-black text-slate-300 uppercase tracking-[0.5em]">Sin resultados bajo estos filtros</p>
+                     <p className="text-xl font-black text-slate-300 uppercase tracking-[0.5em]">Sin resultados bajo estos filtros</p>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="p-12 space-y-12 animate-in zoom-in duration-500">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-10">
-                  <button type="button" onClick={() => setActiveVehicle(null)} className="flex items-center gap-3 px-10 py-5 bg-slate-100 text-slate-600 rounded-3xl text-[11px] font-black uppercase hover:bg-rose-500 hover:text-white transition-all shadow-md active:scale-95">
-                    <ArrowLeft size={20} /> VOLVER AL LISTADO
+              <div className="p-12 space-y-16 animate-in zoom-in duration-500">
+                <div className="flex flex-col md:flex-row items-center justify-between border-b border-slate-100 pb-12 gap-8">
+                  <button type="button" onClick={() => setActiveVehicle(null)} className="flex items-center gap-4 px-12 py-6 bg-slate-100 text-slate-600 rounded-[2.5rem] text-[12px] font-black uppercase hover:bg-rose-500 hover:text-white transition-all shadow-lg active:scale-95">
+                    <ArrowLeft size={24} /> VOLVER AL LISTADO
                   </button>
-                  <div className="text-right">
-                     <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Lectura de Referencia</p>
-                     <p className="text-4xl font-black text-indigo-600 tracking-tighter leading-none">{getLastMileage(activeVehicle.plate).toLocaleString()} <span className="text-xl">KM</span></p>
+                  <div className="text-center md:text-right">
+                     <p className="text-[12px] font-black text-slate-400 uppercase tracking-[0.3em] mb-3">Lectura de Referencia Anterior</p>
+                     <div className="flex items-baseline justify-center md:justify-end gap-3">
+                        <p className="text-6xl font-black text-indigo-600 tracking-tighter leading-none">{getLastMileage(activeVehicle.plate).toLocaleString()}</p>
+                        <span className="text-2xl font-black text-indigo-300">KM</span>
+                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-                  <div className="bg-slate-50 rounded-[5rem] p-20 border-4 border-dashed border-slate-200 flex flex-col items-center text-center shadow-inner relative overflow-hidden group">
-                    <div className="bg-[#0f172a] px-20 py-14 rounded-[3.5rem] border-[12px] border-white shadow-2xl mb-12 group-hover:scale-110 transition-transform duration-700">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
+                  <div className="bg-slate-50 rounded-[6rem] p-24 border-4 border-dashed border-slate-200 flex flex-col items-center text-center shadow-inner relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+                    <div className="bg-[#0f172a] px-24 py-16 rounded-[4rem] border-[14px] border-white shadow-2xl mb-14 group-hover:scale-110 transition-transform duration-700 relative z-10">
                        <span className="text-8xl md:text-9xl font-mono font-black text-white tracking-tighter block">{activeVehicle.plate}</span>
                     </div>
-                    <div className="space-y-3 relative z-10">
-                       <p className="text-lg font-black text-indigo-600 uppercase tracking-[0.5em]">AUDITORÍA {viewMode === 'semanal' ? `W${selectedWeek}` : months[selectedMonth]}</p>
-                       <div className="flex items-center gap-4 justify-center text-slate-500">
-                         <Building2 size={20}/> <span className="text-xs font-black uppercase tracking-widest">{activeVehicle.cd}</span>
+                    <div className="space-y-4 relative z-10">
+                       <div className="inline-flex items-center gap-3 px-6 py-2 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
+                          <Activity size={14} /> AUDITORÍA {viewMode === 'semanal' ? `W${selectedWeek}` : months[selectedMonth]}
+                       </div>
+                       <div className="flex items-center gap-5 justify-center text-slate-500">
+                         <div className="flex items-center gap-2">
+                            <Building2 size={22} className="text-indigo-400" />
+                            <span className="text-sm font-black uppercase tracking-widest">{activeVehicle.cd}</span>
+                         </div>
+                         <span className="text-slate-200">|</span>
+                         <div className="flex items-center gap-2">
+                            <Briefcase size={22} className="text-indigo-400" />
+                            <span className="text-sm font-black uppercase tracking-widest">{activeVehicle.contractor}</span>
+                         </div>
                        </div>
                     </div>
                   </div>
 
-                  <form onSubmit={handleFormSubmit} className="space-y-12">
-                    <div className="space-y-8">
-                      <label className="text-xl font-black text-indigo-600 uppercase tracking-[0.4em] block text-center lg:text-left">Kilometraje Actual</label>
-                      <div className="relative">
+                  <form onSubmit={handleFormSubmit} className="space-y-14">
+                    <div className="space-y-10">
+                      <div className="flex items-center gap-4 justify-center lg:justify-start">
+                         <Gauge size={24} className="text-indigo-600" />
+                         <label className="text-2xl font-black text-slate-800 uppercase tracking-[0.4em] block">Kilometraje Actual</label>
+                      </div>
+                      <div className="relative group">
                          <input 
                            autoFocus 
                            required 
@@ -461,23 +486,25 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                            placeholder="000,000" 
                            value={newMileage} 
                            onChange={(e) => setNewMileage(e.target.value)} 
-                           className="w-full p-12 bg-white border-4 border-indigo-50 rounded-[3.5rem] text-center lg:text-left text-7xl font-black text-[#0f172a] outline-none focus:border-indigo-600 focus:shadow-2xl transition-all shadow-inner" 
+                           className="w-full p-14 bg-white border-4 border-indigo-50 rounded-[4rem] text-center lg:text-left text-8xl font-black text-[#0f172a] outline-none focus:border-indigo-600 focus:shadow-2xl transition-all shadow-inner placeholder:text-slate-100" 
                          />
-                         <div className="absolute right-12 top-1/2 -translate-y-1/2 hidden md:block">
-                            <span className="text-3xl font-black text-indigo-200">KM</span>
+                         <div className="absolute right-14 top-1/2 -translate-y-1/2 hidden md:block">
+                            <span className="text-4xl font-black text-indigo-100 group-focus-within:text-indigo-200 transition-colors">KM</span>
                          </div>
                       </div>
                     </div>
                     
-                    <button type="submit" disabled={isSubmitting || !newMileage} className="w-full py-12 bg-indigo-600 text-white rounded-[3.5rem] font-black text-2xl uppercase shadow-2xl hover:bg-[#0f172a] transition-all flex items-center justify-center gap-6 group active:scale-95">
-                      {isSubmitting ? <Loader2 className="animate-spin" size={36} /> : <Save size={36} className="group-hover:rotate-12 transition-transform" />}
+                    <button type="submit" disabled={isSubmitting || !newMileage} className="w-full py-14 bg-indigo-600 text-white rounded-[4rem] font-black text-3xl uppercase shadow-2xl hover:bg-[#0f172a] transition-all flex items-center justify-center gap-8 group active:scale-95">
+                      {isSubmitting ? <Loader2 className="animate-spin" size={40} /> : <Save size={40} className="group-hover:rotate-12 transition-transform" />}
                       {isSubmitting ? 'PROCESANDO...' : `GUARDAR REPORTE`}
                     </button>
                     
-                    <div className="bg-amber-50 p-8 rounded-[2.5rem] border border-amber-100 flex gap-6 items-center">
-                       <AlertCircle className="text-amber-600 shrink-0" size={32} />
-                       <p className="text-xs font-bold text-amber-800 uppercase leading-relaxed">
-                         Al guardar este registro, el vehículo quedará marcado como <span className="text-emerald-700 font-black">LISTO</span> para el periodo actual. Verifique los dígitos antes de confirmar.
+                    <div className="bg-amber-50 p-10 rounded-[3rem] border border-amber-100 flex gap-8 items-center shadow-sm">
+                       <div className="p-4 bg-amber-100 rounded-2xl">
+                          <AlertCircle className="text-amber-600" size={36} />
+                       </div>
+                       <p className="text-sm font-bold text-amber-800 uppercase leading-relaxed">
+                         Al guardar este registro, el vehículo quedará marcado como <span className="text-emerald-700 font-black">LISTO</span> para el periodo actual. <span className="underline decoration-amber-300 decoration-4">Verifique los dígitos</span> antes de confirmar.
                        </p>
                     </div>
                   </form>

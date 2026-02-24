@@ -29,6 +29,11 @@
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-6px); }
         }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
         
         .animate-spin-slow {
             animation: spin 3s linear infinite;
@@ -38,6 +43,9 @@
         }
         .animate-forklift-lift {
             animation: forkliftLift 2s ease-in-out infinite;
+        }
+        .animate-shake {
+            animation: shake 0.2s ease-in-out 0s 2;
         }
 
         /* Custom Scrollbar */
@@ -72,10 +80,12 @@
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div id="root"></div>
     <!-- Punto de entrada de la aplicación -->
     <script type="module" src="./index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>

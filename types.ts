@@ -22,6 +22,30 @@ export interface Calibration {
   daysPending?: number;
 }
 
+export interface Fine {
+  id: string;
+  date: string; // Fecha Infracción (Index 12)
+  month?: string; // Mes (Index 0)
+  registrationDate?: string; // Fecha Registro (Index 1)
+  plate: string; // Placa (Index 14 - Hidden/App Logic)
+  infractionCode: string; // N° Comp (Index 11)
+  description: string; // Concepto (Index 13)
+  amount: number; // Valor (Index 10)
+  status: 'PENDIENTE' | 'PAGADO'; // Tiene SI/NO (Index 8)
+  evidenceUrl?: string; // Comprobante (Index 7)
+  cd?: string; // CD (Index 2)
+  contractor?: string; // Contratista (Index 3)
+  driverName?: string; // Nombres (Index 4)
+  driverId?: string; // Cédula (Index 5)
+  driverPosition?: string; // Cargo (Index 6)
+  paymentAgreement?: string; // Acuerdo de Pago (Index 9)
+  week?: string;
+  // Campos de Seguimiento Documental (Extraídos de la misma hoja)
+  soatExpiry?: string;   // Index 15
+  rtmExpiry?: string;    // Index 16
+  extExpiry?: string;    // Index 17
+}
+
 export interface Driver {
   id: string;
   name: string;
@@ -81,7 +105,9 @@ export interface Report {
   closureComments?: string;
   workshop?: string;
   cd?: string;
+  contractor?: string;
   week?: string;
+  driverName?: string;
 }
 
 export interface FiveSReport {
@@ -110,10 +136,4 @@ export interface WashReport {
   evidenceUrl: string;
   mapUrl: string;
   workshop: string;
-}
-
-export interface MaintenanceInsight {
-  score: number;
-  recommendation: string;
-  priority: 'low' | 'medium' | 'high';
 }

@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Vehicle } from '../types';
-import { createMosaic, processImageWithWatermark, compressImage, normalizeStr, normalizePlate } from '../utils';
-import { X, Droplets, Camera, CheckCircle, Save, Plus, Trash2, Loader2, Sparkles, MapPin, Building2, Image as ImageIcon, Search, AlertCircle } from 'lucide-react';
+import { createMosaic, processImageWithWatermark, compressImage, normalizeStr, normalizePlate, getWeekNumber } from '../utils';
+import { X, Droplets, Camera, CheckCircle, Save, Plus, Trash2, Loader2, Sparkles, MapPin, Building2, Image as ImageIcon, Search, AlertCircle, Calendar } from 'lucide-react';
 
 interface WashFormProps {
   vehicles: Vehicle[];
@@ -69,12 +69,11 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
     };
 
     const coords = await getCoords();
-    const photoType: 'ANTES' | 'DESPUES' = capturedPhotos.length < 1 ? 'ANTES' : 'DESPUES';
 
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, `${formData.plate} - ${photoType}`, coords);
-      setCapturedPhotos(prev => [...prev, { url: watermarked, type: photoType }].slice(0, 4));
+      const watermarked = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords);
+      setCapturedPhotos(prev => [...prev, { url: watermarked, type: 'ANTES' }].slice(0, 4));
       setIsProcessingPhoto(false);
     };
     reader.readAsDataURL(file);
@@ -107,9 +106,16 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
     setIsSubmitting(true);
     try {
       const mosaicEvidence = await createMosaic(capturedPhotos.map(p => p.url));
+      
+      const dateObj = new Date(formData.date + "T12:00:00");
+      const month = dateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+      const week = getWeekNumber(dateObj).toString();
+
       const payload = {
         ...formData,
         id: `WASH-${Date.now()}`,
+        month,
+        week,
         evidenceUrl: mosaicEvidence,
       };
       await onSubmit(payload);
@@ -205,6 +211,19 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
                 onChange={e => setFormData({ ...formData, workshop: e.target.value.toUpperCase() })} 
               />
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2 flex items-center gap-2">
+                <Calendar size={14} className="text-cyan-600" /> FECHA DEL LAVADO
+              </label>
+              <input 
+                required 
+                type="date" 
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none shadow-inner" 
+                value={formData.date} 
+                onChange={e => setFormData({ ...formData, date: e.target.value })} 
+              />
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -225,7 +244,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
           <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
               <span className="text-[11px] font-black text-cyan-600 uppercase tracking-widest flex items-center gap-2">
-                 <Camera size={18} /> EVIDENCIA ANTES/DESPUÉS
+                 <Camera size={18} /> EVIDENCIA FOTOGRÁFICA
               </span>
               <div className="flex items-center gap-4">
                 {isProcessingPhoto && <span className="text-amber-500 text-[9px] font-black animate-pulse flex items-center gap-1"><MapPin size={10}/> ESTAMPANDO GPS...</span>}
@@ -237,9 +256,6 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
               {capturedPhotos.map((photo, index) => (
                 <div key={index} className="relative aspect-video rounded-[2rem] overflow-hidden border-4 border-slate-50 shadow-md">
                   <img src={photo.url} className="w-full h-full object-cover" />
-                  <div className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[7px] font-black text-white ${photo.type === 'ANTES' ? 'bg-amber-50' : 'bg-emerald-50'}`}>
-                    {photo.type}
-                  </div>
                   <button type="button" onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={12} /></button>
                 </div>
               ))}
@@ -252,7 +268,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
                 >
                   <Plus size={32} />
                   <span className="text-[10px] font-black uppercase tracking-widest">
-                    {capturedPhotos.length < 1 ? 'FOTO ANTES' : 'FOTO DESPUÉS'}
+                    CAPTURAR FOTO
                   </span>
                 </button>
               )}

@@ -1,189 +1,191 @@
 
 // SISTEMA GESTIÓN FLOTA BQA - BACKEND UNIFICADO
-// REVISIÓN DEFINITIVA: INSERCIÓN ROBUSTA EN FILAS VACÍAS
 
 var ID_HOJA = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+var ID_MAESTRO = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 var MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
 
 function doPost(e) {
-  var ss;
+  var lock = LockService.getScriptLock();
   try {
-    ss = SpreadsheetApp.openById(ID_HOJA);
-  } catch (err) {
-    return output("error", "Error al abrir la hoja: " + err.toString());
-  }
-  
-  try {
+    lock.waitLock(15000);
     var req = JSON.parse(e.postData.contents);
     var d = req.data;
     var m = req.method;
-    var lock = LockService.getScriptLock();
-    lock.waitLock(15000);
 
-    if (m === 'POST_MILEAGE') {
-      var s = getS(ss, "KILOMETRAJE");
+    // LÓGICA COMPARENDOS MEJORADA CON ACTUALIZACIÓN DE SOPORTE Y PDF
+    if (m === 'POST_FINE') {
+      var ssC = SpreadsheetApp.openById("1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M"); 
+      var s = getS(ssC, "COMPARENDOS");
       var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      s.appendRow([d.cd || "G", d.contractor || "G", d.weekNumber || 0, d.date || today(), placa, d.mileage || 0]);
-    } 
-    
-    else if (m === 'POST_WASH') {
-      var s = getS(ss, "LAVADOS");
-      var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      var imgEvidencia = sImg(d.evidenceUrl, "WASH_EVI_" + placa);
-      var imgMapa = sImg(d.mapUrl, "WASH_MAP_" + placa);
+      var img = sImg(d.evidenceUrl, "DOC_" + placa);
       
-      var dObj = new Date((d.date || today()) + "T12:00:00");
-      var mes = MESES[dObj.getMonth()];
-      var semana = getW(dObj);
-      
-      var rowData = [d.id, mes, semana, d.date, placa, imgEvidencia, imgMapa, (d.workshop || "").toUpperCase()];
-      s.appendRow(rowData);
-    }
-
-    else if (m === 'POST_CALIBRATION') {
-      var s = getS(ss, "CALIBRACIONES");
-      var dt = d.calibrationDate || today();
-      var dObj = new Date(dt + "T12:00:00");
-      if (isNaN(dObj.getTime())) dObj = new Date();
-      
-      var mes = MESES[dObj.getMonth()];
-      var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      var img = sImg(d.certificateUrl, "CAL_" + placa);
-      
-      var rowData = [mes, dt, getW(dObj), placa, (d.taller || "GENERAL").toUpperCase(), img];
-      
-      var colD = s.getRange("D:D").getValues();
-      var targetRow = 1;
-      while (targetRow <= colD.length && colD[targetRow - 1][0] !== "") {
-        targetRow++;
-      }
-      s.getRange(targetRow, 1, 1, rowData.length).setValues([rowData]);
-    }
-
-    else if (m === 'POST_REPORT') {
-      var s = getS(ss, "REPORTE");
-      var rows = s.getDataRange().getValues();
-      var idx = -1;
-      var tid = (d.id || "").toString();
-      var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i][0] && rows[i][0].toString() === tid) { idx = i + 1; break; }
-      }
-      
-      if (idx === -1) {
-        var uI = sImg(d.initialEvidence, "INI_" + placa);
-        var uM = sImg(d.entryMap, "MAP_" + placa);
-        s.appendRow([d.id, d.date, placa, d.source, uI, d.novelty, uM, "ABIERTO", "", "", "", "", "", "", (d.workshop || "").toUpperCase(), d.cd || "G"]);
-      } else {
-        if (d.status) s.getRange(idx, 8).setValue(d.status);
-        if (d.workshopEvidence) s.getRange(idx, 9).setValue(sImg(d.workshopEvidence, "TALLER_" + placa));
-        if (d.closureDate) s.getRange(idx, 10).setValue(d.closureDate);
-        if (d.solutionEvidence) s.getRange(idx, 11).setValue(sImg(d.solutionEvidence, "SOL_" + placa));
-        if (d.exitMap) s.getRange(idx, 12).setValue(sImg(d.exitMap, "EXIT_" + placa));
-        if (d.daysInShop !== undefined) s.getRange(idx, 13).setValue(d.daysInShop);
-        if (d.closureComments) s.getRange(idx, 14).setValue(d.closureComments);
-      }
-    }
-
-    else if (m === 'POST_WORKSHOP_VISIT_UPDATE') {
-      var s = getS(ss, "VISITAS A TALLER");
-      var rows = s.getDataRange().getValues();
-      var tid = (d.id || "").toString(); // Columna H es el Hash
-      var idx = -1;
-
-      // Buscar por ID único en Columna H (Índice 7)
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i][7] && rows[i][7].toString() === tid) { 
-          idx = i + 1; 
-          break; 
+      if (d.updateMode === true) {
+        var rows = s.getDataRange().getValues();
+        var nComp = (d.infractionCode || "").toString();
+        var foundIdx = -1;
+        
+        for (var i = 1; i < rows.length; i++) {
+          if (rows[i][11] && rows[i][11].toString() === nComp) {
+            foundIdx = i + 1;
+            break;
+          }
+        }
+        
+        if (foundIdx !== -1) {
+          s.getRange(foundIdx, 8).setValue(img);
+          lock.releaseLock();
+          return output("success", "Soporte actualizado correctamente.");
         }
       }
 
-      if (idx !== -1) {
-        // Col D (4): Taller
-        s.getRange(idx, 4).setValue(d.workshop.toUpperCase());
-        // Col E (5): Fecha de Vis
-        s.getRange(idx, 5).setValue(d.visitDate);
-        // Col F (6): Evidencia
-        s.getRange(idx, 6).setValue(sImg(d.evidence, "VIS_EVI_" + d.plate));
-        // Col G (7): Estado
-        s.getRange(idx, 7).setValue(d.status || "COMPLETADO");
-      }
+      var dInf = new Date((d.date || today()) + "T12:00:00");
+      var mes = MESES[dInf.getMonth()] || "GENERAL";
+      var tieneSiNo = d.status === 'PENDIENTE' ? 'SI' : 'NO';
+
+      s.appendRow([
+        mes, today(), d.cd || "G", d.contractor || "G", d.driverName || "", d.driverId || "", d.driverPosition || "CONDUCTOR", img, tieneSiNo, d.paymentAgreement || "NO", d.amount, d.infractionCode, d.date, d.description, placa
+      ]);
     }
-
-    else if (m === 'POST_FIVES') {
-      var s = getS(ss, "5S CAMIONES");
+    
+    // ACTUALIZACIÓN DE DOCUMENTOS (SOAT, RTM, EXTINTOR)
+    else if (m === 'POST_DOC_UPDATE') {
+      var ssM = SpreadsheetApp.openById(ID_MAESTRO);
+      var s = ssM.getSheets()[0]; 
       var rows = s.getDataRange().getValues();
-      var idx = -1;
-      var tid = (d.id || "").toString();
-      var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-
-      for (var i = 1; i < rows.length; i++) {
-        if (rows[i][0] && rows[i][0].toString() === tid) { idx = i + 1; break; }
+      var placaBusqueda = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      var foundIdx = -1;
+      
+      for (var i = 0; i < rows.length; i++) {
+        var placaFila = (rows[i][2] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (placaFila === placaBusqueda) {
+          foundIdx = i + 1;
+          break;
+        }
       }
       
-      if (idx === -1) {
-        var u = sImg(d.evidenceUrl, "5S_" + placa);
-        var dObj = new Date((d.date || today()) + "T12:00:00");
-        s.appendRow([d.id, d.date, MESES[dObj.getMonth()], getW(dObj), placa, u, "ABIERTO", "", d.cd || "G"]);
-      } else {
-        var uS = sImg(d.closureEvidenceUrl, "5S_SOL_" + placa);
-        s.getRange(idx, 7).setValue("CERRADO"); 
-        if (uS) s.getRange(idx, 8).setValue(uS);    
+      if (foundIdx !== -1) {
+        var imgUrl = sImg(d.url, d.type + "_" + placaBusqueda);
+        var colIdx = -1;
+        var dateColIdx = -1;
+        
+        if (d.type === 'SOAT') { colIdx = 21; dateColIdx = 4; }
+        else if (d.type === 'RTM') { colIdx = 22; dateColIdx = 6; }
+        else if (d.type === 'EXTINTOR') { colIdx = 24; dateColIdx = 10; }
+        
+        if (colIdx !== -1) {
+          s.getRange(foundIdx, colIdx).setValue(imgUrl);
+          if (d.expiryDate) s.getRange(foundIdx, dateColIdx).setValue(d.expiryDate);
+        }
+      }
+    }
+    // OTROS MÉTODOS (KM, LAVADOS, ETC)
+    else {
+      var ss = SpreadsheetApp.openById(ID_HOJA);
+      
+      if (m === 'POST_REPORT') {
+        var s = getS(ss, "NOVEDADES");
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        for (var i = 1; i < rows.length; i++) {
+          if (rows[i][0] && rows[i][0].toString() === d.id.toString()) {
+            foundIdx = i + 1;
+            break;
+          }
+        }
+
+        var rowData = [
+          d.id, d.date, d.plate, d.source, d.initialEvidence || "", d.novelty, d.entryMap || "", d.status, 
+          d.workshopEvidence || "", d.closureDate || "", d.solutionEvidence || "", d.exitMap || "", 
+          d.daysInShop || 0, d.closureComments || "", d.workshop || "", d.cd || "GENERAL"
+        ];
+
+        if (foundIdx !== -1) {
+          s.getRange(foundIdx, 1, 1, rowData.length).setValues([rowData]);
+        } else {
+          s.appendRow(rowData);
+        }
+      }
+      else if (m === 'POST_WORKSHOP_VISIT_UPDATE') {
+        var s = getS(ss, "VISITAS A TALLER");
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var searchId = (d.id || "").toString();
+        
+        for (var i = 1; i < rows.length; i++) {
+          if (rows[i][7] && rows[i][7].toString() === searchId) {
+            foundIdx = i + 1;
+            break;
+          }
+        }
+        
+        if (foundIdx !== -1) {
+          s.getRange(foundIdx, 4).setValue(d.workshop);
+          s.getRange(foundIdx, 5).setValue(d.visitDate);
+          var imgUrl = sImg(d.evidence, "VISITA_" + d.plate);
+          s.getRange(foundIdx, 6).setValue(imgUrl);
+          s.getRange(foundIdx, 7).setValue(d.status);
+        }
+      }
+      else if (m === 'POST_MILEAGE') {
+        var s = getS(ss, "KILOMETRAJE");
+        s.appendRow([d.cd, d.contractor, d.week, d.date, d.plate, d.mileage]);
+      }
+      else if (m === 'POST_FIVES') {
+        var s = getS(ss, "5S CAMIONES");
+        s.appendRow([d.id, d.date, "", d.week, d.plate, d.evidenceUrl, d.status]);
+      }
+      else if (m === 'POST_WASH') {
+        var s = getS(ss, "LAVADOS");
+        s.appendRow([d.id, d.month, d.week, d.date, d.plate, d.evidenceUrl, d.mapUrl, d.workshop]);
+      }
+      else if (m === 'POST_CALIBRATION') {
+        var s = getS(ss, "CALIBRACIONES");
+        s.appendRow([d.id, d.calibrationDate, "", d.plate, d.equipment, d.certificateUrl]);
       }
     }
 
     lock.releaseLock();
     return output("success", "Datos procesados correctamente.");
   } catch (e) {
+    if (lock.hasLock()) lock.releaseLock();
     return output("error", "Error en procesamiento: " + e.toString());
   }
 }
 
-function getS(ss, n) {
-  if (!ss) return null;
-  var sheets = ss.getSheets();
-  var nameClean = n.trim().toUpperCase();
-  for(var i=0; i<sheets.length; i++){
-    var sn = sheets[i].getName().trim().toUpperCase();
-    if(sn === nameClean) return sheets[i];
-  }
-  return ss.insertSheet(n);
-}
-
-function sImg(b64, n) {
-  if (!b64 || typeof b64 !== 'string' || b64.indexOf('data:image') !== 0) return b64 || "";
+/**
+ * Guarda archivo (Imagen o PDF) en Drive y retorna URL
+ */
+function sImg(base64, name) {
+  if (!base64 || base64.length < 100) return base64;
   try {
-    var p = b64.split(',');
-    var t = p[0].match(/:(.*?);/)[1];
-    var bt = Utilities.base64Decode(p[1]);
-    var bl = Utilities.newBlob(bt, t, n + ".jpg");
-    var fds = DriveApp.getFoldersByName("EVIDENCIAS_FLOTA_BQA");
-    var f = fds.hasNext() ? fds.next() : DriveApp.createFolder("EVIDENCIAS_FLOTA_BQA");
-    var fl = f.createFile(bl);
-    fl.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return fl.getUrl();
-  } catch (err) { 
-    return "DRIVE_ERROR: Revise permisos."; 
-  }
+    var folderName = "BQA_COMPROBANTES_FLOTA";
+    var folders = DriveApp.getFoldersByName(folderName);
+    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+    
+    var mimeType = base64.substring(5, base64.indexOf(';'));
+    var extension = mimeType === 'application/pdf' ? '.pdf' : '.jpg';
+    
+    var bytes = Utilities.base64Decode(base64.split(',')[1]);
+    var blob = Utilities.newBlob(bytes, mimeType, name + "_" + Date.now() + extension);
+    var file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    return file.getUrl();
+  } catch (e) { return "Error Archivo"; }
 }
 
-function getW(d) {
-  try {
-    var t = new Date(d.valueOf());
-    var day = (d.getDay() + 6) % 7;
-    t.setDate(t.getDate() - day + 3);
-    var f = t.valueOf();
-    t.setMonth(0, 1);
-    if (t.getDay() != 4) t.setMonth(0, 1 + ((4 - t.getDay()) + 7) % 7);
-    return 1 + Math.ceil((f - t) / 604800000);
-  } catch(err) { return 0; }
+function getS(ss, name) {
+  var s = ss.getSheetByName(name);
+  if (!s) s = ss.insertSheet(name);
+  return s;
 }
 
-function today() { return new Date().toISOString().split('T')[0]; }
+function today() {
+  return Utilities.formatDate(new Date(), "GMT-5", "yyyy-MM-dd");
+}
 
-function output(s, m) {
-  var res = {status: s, message: m};
-  return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
+function output(status, message) {
+  return ContentService.createTextOutput(JSON.stringify({status: status, message: message}))
+    .setMimeType(ContentService.MimeType.JSON);
 }
