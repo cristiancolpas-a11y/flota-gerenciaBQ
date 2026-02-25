@@ -4,7 +4,7 @@ import { Vehicle, Driver, Report, MileageLog, FiveSReport, Calibration, WashRepo
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxcfgvOknMjDgALRLqQfWDOj4TVkcQ9TbfRwuzvkeqc8xtYnF3GNxbc6CT0OhnOlhXR/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbxM3zQr1AuTiZJk-vpVerQHyOhXrNplY3lzxRANtLMFd6acRpzTQwSw8jVqMhgxthAf/exec';
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbyGM4Di4J90iUoZc4b59uYWbzJN7z_0T_i7Hu8U8jRG5Kd2bZCuX6SN7bTJwNvrP1pw/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -423,7 +423,7 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
         complete: (results) => {
           const rows = results.data as any[][];
           const fines = rows.slice(1).map((row, i): Fine => ({
-            id: `f-${i}`,
+            id: `row-${i + 2}`, // El índice 0 de slice(1) corresponde a la fila 2 de la hoja
             month: cleanSheetValue(row[0]),
             registrationDate: parseFlexibleDate(row[1]),
             cd: cleanSheetValue(row[2]),
@@ -432,6 +432,7 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
             driverId: cleanSheetValue(row[5]),
             amount: parseFloat(cleanSheetValue(row[10])) || 0,
             status: cleanSheetValue(row[8]).toUpperCase().includes('SI') ? 'PENDIENTE' : 'PAGADO',
+            evidenceUrl: cleanSheetValue(row[7]),
             infractionCode: cleanSheetValue(row[11]),
             date: parseFlexibleDate(row[12]),
             description: cleanSheetValue(row[13]),

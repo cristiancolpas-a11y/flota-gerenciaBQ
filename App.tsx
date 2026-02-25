@@ -100,6 +100,9 @@ const App: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toLocaleString('es-ES', { month: 'long' }).toUpperCase());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
+  // Vehicle Filters
+  const [vehicleDocFilter, setVehicleDocFilter] = useState<'all' | 'soat' | 'rtm' | 'plc' | 'ext'>('all');
+
   // Auth State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
@@ -238,6 +241,20 @@ const App: React.FC = () => {
       extWarning: filtered.filter(v => v.extinguisher.status !== 'active').length
     };
   }, [vehicles, filterCd, searchTerm]);
+
+  const filteredVehicles = useMemo(() => {
+    return vehicles.filter(v => {
+      const matchCd = filterCd === 'all' || v.cd === filterCd;
+      const matchSearch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
+      const matchDoc = vehicleDocFilter === 'all' || 
+        (vehicleDocFilter === 'soat' && v.soat.status !== 'active') ||
+        (vehicleDocFilter === 'rtm' && v.rtm.status !== 'active') ||
+        (vehicleDocFilter === 'plc' && v.plc.status !== 'active') ||
+        (vehicleDocFilter === 'ext' && v.extinguisher.status !== 'active');
+      
+      return matchCd && matchSearch && matchDoc;
+    });
+  }, [vehicles, filterCd, searchTerm, vehicleDocFilter]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
@@ -489,10 +506,12 @@ const App: React.FC = () => {
                 rtmWarning={statsVehicles.rtmWarning}
                 plcWarning={statsVehicles.plcWarning}
                 extWarning={statsVehicles.extWarning}
+                onFilter={setVehicleDocFilter}
+                activeFilter={vehicleDocFilter}
               />
 
               <div className="space-y-8">
-                {vehicles.filter(v => (filterCd === 'all' || v.cd === filterCd) && normalizePlate(v.plate).includes(normalizePlate(searchTerm))).map(v => (
+                {filteredVehicles.map(v => (
                   <div key={v.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-500">
                     <div className="flex flex-col lg:flex-row">
                       <div className="lg:w-[280px] bg-[#0f172a] p-8 flex flex-col items-center shrink-0 relative overflow-hidden">

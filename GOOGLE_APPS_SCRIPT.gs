@@ -13,18 +13,19 @@ function doPost(e) {
     var d = req.data;
     var m = req.method;
 
-    // LÓGICA COMPARENDOS MEJORADA CON ACTUALIZACIÓN DE SOPORTE Y PDF
+    // LÓGICA COMPARENDOS - ACTUALIZACIÓN DE SOPORTE EN COLUMNA H (8)
     if (m === 'POST_FINE') {
       var ssC = SpreadsheetApp.openById("1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M"); 
-      var s = getS(ssC, "COMPARENDOS");
+      var s = ssC.getSheets()[0]; // Usar la primera hoja (independiente)
       var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-      var img = sImg(d.evidenceUrl, "DOC_" + placa);
+      var img = sImg(d.evidenceUrl, "SOPORTE_" + placa);
       
       if (d.updateMode === true) {
         var rows = s.getDataRange().getValues();
         var nComp = (d.infractionCode || "").toString();
         var foundIdx = -1;
         
+        // Buscar por código de infracción en columna L (12)
         for (var i = 1; i < rows.length; i++) {
           if (rows[i][11] && rows[i][11].toString() === nComp) {
             foundIdx = i + 1;
@@ -33,9 +34,9 @@ function doPost(e) {
         }
         
         if (foundIdx !== -1) {
-          s.getRange(foundIdx, 8).setValue(img);
+          s.getRange(foundIdx, 8).setValue(img); // Columna H es la 8
           lock.releaseLock();
-          return output("success", "Soporte actualizado correctamente.");
+          return output("success", "Soporte vinculado en columna H correctamente.");
         }
       }
 
@@ -43,6 +44,7 @@ function doPost(e) {
       var mes = MESES[dInf.getMonth()] || "GENERAL";
       var tieneSiNo = d.status === 'PENDIENTE' ? 'SI' : 'NO';
 
+      // Estructura: Mes, Registro, CD, Contratista, Conductor, ID, Cargo, SOPORTE(H), SI/NO, Acuerdo, Valor, Codigo, Fecha, Desc, Placa
       s.appendRow([
         mes, today(), d.cd || "G", d.contractor || "G", d.driverName || "", d.driverId || "", d.driverPosition || "CONDUCTOR", img, tieneSiNo, d.paymentAgreement || "NO", d.amount, d.infractionCode, d.date, d.description, placa
       ]);
