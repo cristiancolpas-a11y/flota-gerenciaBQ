@@ -21,7 +21,28 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
     visitDate: new Date().toISOString().split('T')[0],
   });
 
-  const workshops = ["AUTECO", "AUTOMUNDIAL", "CAMION COLOMBIA", "COUNTRY MOTORS", "DIVERMOTORS", "ROINCOR", "TECNIBENZ", "VEHIPESA", "NAVITRANS", "OTROS"];
+  const workshops = [
+    "AUTECO",
+    "AUTOMUNDIAL",
+    "CAMION COLOMBIA",
+    "COUNTRY MOTORS",
+    "DIVERMOTORS",
+    "GARCILLANTAS",
+    "ROINCOR",
+    "TECNIBENZ",
+    "TODOFIBRAS",
+    "TRAMICON",
+    "VEHIPESA",
+    "COEXITO",
+    "ETM",
+    "NAVISAFT",
+    "NAVITRANS",
+    "OTROS",
+    "GLASS LAMINADO",
+    "COUNTRY TRUCK",
+    "ELECTRONIC",
+    "IVESUR"
+  ];
 
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -25,6 +25,7 @@ import MileageEntryForm from './components/MileageEntryForm';
 import WorkshopVisitItem from './components/WorkshopVisitItem';
 import WorkshopStats from './components/WorkshopStats';
 import WorkshopVisitClosureForm from './components/WorkshopVisitClosureForm';
+import WorkshopModule from './components/WorkshopModule';
 import DocumentUpdateForm from './components/DocumentUpdateForm';
 import WorkshopCalendar from './components/WorkshopCalendar';
 
@@ -373,21 +374,7 @@ const App: React.FC = () => {
           </div>
         </div>
       ) : appMode === 'talleres' ? (
-        <div className="flex-grow bg-[#0f172a] flex flex-col items-center justify-center p-8">
-           <div className="text-center space-y-8">
-              <div className="w-32 h-32 bg-amber-600/20 rounded-full flex items-center justify-center mx-auto border-4 border-amber-500/30">
-                 <Wrench size={64} className="text-amber-500" />
-              </div>
-              <h2 className="text-4xl font-black text-white uppercase tracking-widest">Módulo Talleres</h2>
-              <p className="text-slate-400 font-bold uppercase tracking-widest">Próximamente disponible</p>
-              <button 
-                onClick={() => setAppMode('root_menu')}
-                className="px-8 py-4 bg-white/5 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-3 mx-auto"
-              >
-                <ChevronLeft size={20} /> VOLVER AL MENÚ
-              </button>
-           </div>
-        </div>
+        <WorkshopModule onBack={() => setAppMode('root_menu')} />
       ) : appMode === 'montacargas' ? (
         <div className="flex-grow bg-[#0f172a] flex flex-col items-center justify-center p-8">
            <div className="text-center space-y-8">

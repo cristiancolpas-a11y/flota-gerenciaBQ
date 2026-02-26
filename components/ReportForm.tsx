@@ -29,6 +29,29 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
     date: new Date().toISOString().split('T')[0]
   });
 
+  const workshops = [
+    "AUTECO",
+    "AUTOMUNDIAL",
+    "CAMION COLOMBIA",
+    "COUNTRY MOTORS",
+    "DIVERMOTORS",
+    "GARCILLANTAS",
+    "ROINCOR",
+    "TECNIBENZ",
+    "TODOFIBRAS",
+    "TRAMICON",
+    "VEHIPESA",
+    "COEXITO",
+    "ETM",
+    "NAVISAFT",
+    "NAVITRANS",
+    "OTROS",
+    "GLASS LAMINADO",
+    "COUNTRY TRUCK",
+    "ELECTRONIC",
+    "IVESUR"
+  ];
+
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !formData.plate) {
@@ -146,25 +169,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1">Taller</label>
               <select required className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-500 appearance-none" value={formData.workshop} onChange={e => setFormData({ ...formData, workshop: e.target.value })}>
                 <option value="">SELECCIONE TALLER</option>
-                <option value="AUTECO">AUTECO</option>
-                <option value="AUTOMUNDIAL">AUTOMUNDIAL</option>
-                <option value="CAMION COLOMBIA">CAMION COLOMBIA</option>
-                <option value="COUNTRY MOTORS">COUNTRY MOTORS</option>
-                <option value="DIVERMOTORS">DIVERMOTORS</option>
-                <option value="GARCILLANTAS">GARCILLANTAS</option>
-                <option value="ROINCOR">ROINCOR</option>
-                <option value="TECNIBENZ">TECNIBENZ</option>
-                <option value="TODOFIBRAS">TODOFIBRAS</option>
-                <option value="TRAMICON">TRAMICON</option>
-                <option value="VEHIPESA">VEHIPESA</option>
-                <option value="COEXITO">COEXITO</option>
-                <option value="ETM">ETM</option>
-                <option value="AUTOCARIBE">AUTOCARIBE</option>
-                <option value="NAVITRANS">NAVITRANS</option>
-                <option value="GLASS LAMINADO">GLASS LAMINADO</option>
-                <option value="COUNTRY TRUCK">COUNTRY TRUCK</option>
-                <option value="ELECTRONIC">ELECTRONIC</option>
-                <option value="OTROS">OTROS</option>
+                {workshops.map(w => <option key={w} value={w}>{w}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
