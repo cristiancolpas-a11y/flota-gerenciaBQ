@@ -6,7 +6,7 @@ import { Gavel, Calendar, Eye, UserCircle, FileSignature, Clock, FileText, Credi
 
 interface FineCardProps {
   fine: Fine;
-  onViewDoc: (url: string, title: string) => void;
+  onViewDoc: (url: string | string[], title: string) => void;
   onAddSupport?: (fine: Fine) => void;
 }
 

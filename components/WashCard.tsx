@@ -6,7 +6,7 @@ import { Droplets, Calendar, Hash, MapPin, Eye } from 'lucide-react';
 
 interface WashCardProps {
   report: WashReport;
-  onViewDoc: (url: string, title: string) => void;
+  onViewDoc: (url: string | string[], title: string) => void;
 }
 
 const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
@@ -28,8 +28,8 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
           </div>
         </div>
         <div className="flex flex-col items-end gap-2 relative z-10">
-          <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">
-            LAVADO EXITOSO
+          <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${report.status === 'CERRADO' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/20 text-rose-400 border-rose-500/20'}`}>
+            {report.status === 'CERRADO' ? 'LIMPIEZA EXITOSA' : 'LIMPIEZA PENDIENTE'}
           </span>
           <span className="text-white/40 text-[9px] font-black uppercase tracking-widest">SEMANA {report.week}</span>
         </div>
@@ -52,41 +52,47 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">SOPORTE VISUAL DE LIMPIEZA</h4>
-            <button 
-              onClick={() => onViewDoc(report.evidenceUrl, `Evidencia Lavado ${report.plate}`)}
-              className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all"
-            >
-              <Eye size={14} />
-            </button>
+            <div className="flex gap-2">
+              {(report.initialEvidenceUrl || report.evidenceUrl) && (
+                <button 
+                  onClick={() => onViewDoc(report.initialEvidenceUrl || report.evidenceUrl, `Evidencia Inicial ${report.plate}`)}
+                  className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all flex items-center gap-2"
+                >
+                  <Eye size={14} /> <span className="text-[8px] font-black">VER FOTO</span>
+                </button>
+              )}
+              {report.mapUrl && (
+                <button 
+                  onClick={() => onViewDoc(report.mapUrl, `Ubicación ${report.plate}`)}
+                  className="p-2 bg-cyan-50 text-cyan-600 rounded-xl hover:bg-cyan-600 hover:text-white transition-all flex items-center gap-2"
+                >
+                  <MapPin size={14} /> <span className="text-[8px] font-black">MAPA</span>
+                </button>
+              )}
+            </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
-            <div className="aspect-video rounded-2xl overflow-hidden bg-slate-100 relative group/img">
-              <img 
-                src={report.evidenceUrl || "https://picsum.photos/seed/wash1/400/300"} 
-                alt="Evidencia 1" 
-                className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity"></div>
-            </div>
-            <div className="aspect-video rounded-2xl overflow-hidden bg-slate-100 relative group/img">
-              <img 
-                src={report.mapUrl || "https://picsum.photos/seed/wash2/400/300"} 
-                alt="Evidencia 2" 
-                className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity"></div>
+          <div className="aspect-video rounded-3xl overflow-hidden bg-slate-100 relative group/img border-2 border-slate-100 shadow-inner">
+            <img 
+              src={report.evidenceUrl || report.finalEvidenceUrl || report.initialEvidenceUrl || "https://picsum.photos/seed/wash1/400/300"} 
+              alt="Evidencia de Lavado" 
+              className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110"
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity"></div>
+            <div className="absolute bottom-4 left-4 flex items-center gap-2">
+              <div className="px-3 py-1 bg-white/90 backdrop-blur-sm text-[#0f172a] text-[8px] font-black rounded-full shadow-lg uppercase tracking-widest">REGISTRO FOTOGRÁFICO</div>
             </div>
           </div>
         </div>
 
         {/* Workshop Info */}
-        <div className="flex items-center gap-3 text-slate-400 pt-2 border-t border-slate-100">
-          <MapPin size={14} />
-          <span className="text-[9px] font-bold uppercase tracking-widest truncate">{report.workshop || 'TALLER NO ESPECIFICADO'}</span>
-        </div>
+        {report.workshop && (
+          <div className="flex items-center gap-3 text-slate-400 pt-2 border-t border-slate-100">
+            <MapPin size={14} />
+            <span className="text-[9px] font-bold uppercase tracking-widest truncate">{report.workshop}</span>
+          </div>
+        )}
       </div>
     </div>
   );

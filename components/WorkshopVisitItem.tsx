@@ -6,7 +6,7 @@ import { Eye, User, Calendar, Store } from 'lucide-react';
 
 interface WorkshopVisitItemProps {
   visit: Report;
-  onViewDoc: (url: string, title: string) => void;
+  onViewDoc: (url: string | string[] | {url: string, label?: string}[], title: string) => void;
   onManageClosure?: (visit: Report) => void;
 }
 
@@ -20,7 +20,7 @@ const WorkshopVisitItem: React.FC<WorkshopVisitItemProps> = ({ visit, onViewDoc,
       
       {/* Driver Name Box */}
       <div className="bg-[#0f172a] text-white px-6 py-4 rounded-2xl min-w-[160px] flex items-center justify-center shadow-lg w-full md:w-auto">
-        <span className="font-black text-sm uppercase tracking-widest">{visit.driverName || visit.plate}</span>
+        <span className="font-black text-sm uppercase tracking-widest">{visit.plate}</span>
       </div>
       
       {/* Details */}
@@ -52,7 +52,15 @@ const WorkshopVisitItem: React.FC<WorkshopVisitItemProps> = ({ visit, onViewDoc,
       {/* Actions */}
       <div className="flex items-center gap-2">
         <button 
-          onClick={() => visit.initialEvidence && onViewDoc(visit.initialEvidence, 'Evidencia')}
+          onClick={() => {
+            const photos = [];
+            if (visit.initialEvidence) photos.push({ url: visit.initialEvidence, label: 'Ingreso' });
+            if (visit.workshopEvidence) photos.push({ url: visit.workshopEvidence, label: 'Trabajo' });
+            if (visit.solutionEvidence) photos.push({ url: visit.solutionEvidence, label: 'Salida' });
+            if (photos.length > 0) {
+              onViewDoc(photos, `Evidencia Taller - ${visit.plate}`);
+            }
+          }}
           className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-indigo-50 hover:text-indigo-600 transition-all"
           title="Ver Evidencia"
         >

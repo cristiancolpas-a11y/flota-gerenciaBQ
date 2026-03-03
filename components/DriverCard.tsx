@@ -21,7 +21,7 @@ import {
 
 interface DriverCardProps {
   driver: Driver;
-  onViewDoc: (url: string, title: string) => void;
+  onViewDoc: (url: string | string[], title: string) => void;
 }
 
 const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {

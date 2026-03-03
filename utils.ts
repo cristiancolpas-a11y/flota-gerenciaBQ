@@ -170,12 +170,20 @@ export const createMosaic = async (base64Array: string[]): Promise<string> => {
   }));
 
   const numImages = images.length;
-  const cols = numImages > 3 ? 3 : numImages; 
-  const rows = Math.ceil(numImages / cols);
+  let cols = 2;
+  let rows = 1;
+
+  if (numImages === 2) { cols = 2; rows = 1; }
+  else if (numImages === 3) { cols = 2; rows = 2; }
+  else if (numImages === 4) { cols = 2; rows = 2; }
+  else {
+    cols = Math.ceil(Math.sqrt(numImages));
+    rows = Math.ceil(numImages / cols);
+  }
 
   const canvas = document.createElement('canvas');
-  const cellWidth = 400; 
-  const cellHeight = 300;
+  const cellWidth = 600; 
+  const cellHeight = 450;
 
   canvas.width = cols * cellWidth;
   canvas.height = rows * cellHeight;
@@ -183,16 +191,40 @@ export const createMosaic = async (base64Array: string[]): Promise<string> => {
 
   if (!ctx) return base64Array[0];
 
+  // Fill background with white
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   images.forEach((img, i) => {
     const x = (i % cols) * cellWidth;
     const y = Math.floor(i / cols) * cellHeight;
-    ctx.drawImage(img, x, y, cellWidth, cellHeight);
+    
+    // Calculate aspect ratio to fit image in cell
+    const imgRatio = img.width / img.height;
+    const cellRatio = cellWidth / cellHeight;
+    
+    let drawWidth = cellWidth;
+    let drawHeight = cellHeight;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (imgRatio > cellRatio) {
+      drawHeight = cellWidth / imgRatio;
+      offsetY = (cellHeight - drawHeight) / 2;
+    } else {
+      drawWidth = cellHeight * imgRatio;
+      offsetX = (cellWidth - drawWidth) / 2;
+    }
+
+    ctx.drawImage(img, x + offsetX, y + offsetY, drawWidth, drawHeight);
+    
+    // Draw border
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 8;
     ctx.strokeRect(x, y, cellWidth, cellHeight);
   });
 
-  return canvas.toDataURL('image/jpeg', 0.4); 
+  return canvas.toDataURL('image/jpeg', 0.6); 
 };
 
 export const generateId = (): string => {

@@ -110,23 +110,6 @@ export interface Report {
   driverName?: string;
 }
 
-export interface FiveSReport {
-  id: string;
-  date: string;
-  month?: string;
-  week?: string;
-  plate: string;
-  inspector: string;
-  totalScore: number;
-  observations?: string;
-  evidenceUrl?: string;
-  status: 'ABIERTO' | 'CERRADO';
-  closureDate?: string;
-  closureEvidenceUrl?: string;
-  closureObservations?: string;
-  cd?: string;
-}
-
 export interface WashReport {
   id: string;
   month: string;
@@ -134,6 +117,10 @@ export interface WashReport {
   date: string;
   plate: string;
   evidenceUrl: string;
+  initialEvidenceUrl?: string;
+  finalEvidenceUrl?: string;
   mapUrl: string;
   workshop: string;
+  status?: 'ABIERTO' | 'CERRADO';
+  closureDate?: string;
 }

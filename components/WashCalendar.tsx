@@ -1,22 +1,22 @@
 
 import React, { useMemo } from 'react';
-import { Report } from '../types';
+import { WashReport } from '../types';
 import { normalizePlate } from '../utils';
-import { ChevronLeft, ChevronRight, Store, CheckCircle2, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Droplets, CheckCircle2, Clock } from 'lucide-react';
 
-interface WorkshopCalendarProps {
-  visits: Report[];
+interface WashCalendarProps {
+  reports: WashReport[];
   selectedMonth: string;
   selectedYear: number;
   onMonthChange: (month: string) => void;
   onYearChange: (year: number) => void;
   onViewDoc: (url: string | string[] | {url: string, label?: string}[], title: string) => void;
-  onManageClosure: (visit: Report) => void;
+  onManageClosure: (report: WashReport) => void;
   searchTerm: string;
 }
 
-const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({ 
-  visits, 
+const WashCalendar: React.FC<WashCalendarProps> = ({ 
+  reports, 
   selectedMonth, 
   selectedYear, 
   onMonthChange, 
@@ -50,20 +50,20 @@ const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({
     return days;
   }, [daysInMonth, firstDayOfMonth]);
 
-  const getVisitsForDay = (day: number) => {
+  const getReportsForDay = (day: number) => {
     const dateStr = `${selectedYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const dayVisits = visits.filter(v => v.date === dateStr && normalizePlate(v.plate).includes(normalizePlate(searchTerm)));
+    const dayReports = reports.filter(r => r.date === dateStr && normalizePlate(r.plate).includes(normalizePlate(searchTerm)));
     
-    // Agrupar por placa y priorizar la visita CERRADA o la última ingresada
-    const uniqueVisits: Record<string, Report> = {};
-    dayVisits.forEach(visit => {
-      const plate = normalizePlate(visit.plate);
-      if (!uniqueVisits[plate] || visit.status === 'CERRADO') {
-        uniqueVisits[plate] = visit;
+    // Agrupar por placa y priorizar el reporte CERRADO o el último ingresado
+    const uniqueReports: Record<string, WashReport> = {};
+    dayReports.forEach(report => {
+      const plate = normalizePlate(report.plate);
+      if (!uniqueReports[plate] || report.status === 'CERRADO') {
+        uniqueReports[plate] = report;
       }
     });
     
-    return Object.values(uniqueVisits);
+    return Object.values(uniqueReports);
   };
 
   const handlePrevMonth = () => {
@@ -87,14 +87,14 @@ const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({
   return (
     <div className="bg-white rounded-[3.5rem] shadow-2xl border border-slate-100 overflow-hidden">
       {/* Calendar Header */}
-      <div className="bg-[#1e293b] p-8 flex items-center justify-between text-white">
+      <div className="bg-[#0f172a] p-8 flex items-center justify-between text-white">
         <div className="flex items-center gap-5">
           <div className="p-4 bg-indigo-600 rounded-[1.5rem] shadow-lg shadow-indigo-900/20">
-            <Store size={28} />
+            <Droplets size={28} />
           </div>
           <div>
             <h3 className="text-2xl font-black uppercase tracking-tighter leading-none">{selectedMonth} {selectedYear}</h3>
-            <p className="text-[10px] text-indigo-300 font-black uppercase tracking-[0.2em] mt-1">Calendario de Visitas a Taller</p>
+            <p className="text-[10px] text-indigo-300 font-black uppercase tracking-[0.2em] mt-1">Calendario de Lavados</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -126,27 +126,27 @@ const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({
                 <>
                   <span className="text-sm font-black text-slate-300 mb-3 block ml-1">{day}</span>
                   <div className="space-y-2">
-                    {getVisitsForDay(day).map(visit => (
+                    {getReportsForDay(day).map(report => (
                       <div 
-                        key={visit.id}
+                        key={report.id}
                         onClick={() => {
-                          if (visit.status === 'ABIERTO') {
-                            onManageClosure(visit);
+                          if (report.status === 'ABIERTO') {
+                            onManageClosure(report);
                           } else {
                             const photos = [];
-                            if (visit.initialEvidence) photos.push({ url: visit.initialEvidence, label: 'Ingreso' });
-                            if (visit.workshopEvidence) photos.push({ url: visit.workshopEvidence, label: 'Trabajo' });
-                            if (visit.solutionEvidence) photos.push({ url: visit.solutionEvidence, label: 'Salida' });
+                            if (report.initialEvidenceUrl) photos.push({ url: report.initialEvidenceUrl, label: 'Antes' });
+                            if (report.finalEvidenceUrl) photos.push({ url: report.finalEvidenceUrl, label: 'Después' });
+                            
                             if (photos.length > 0) {
-                              onViewDoc(photos, `Evidencia Taller - ${visit.plate}`);
+                              onViewDoc(photos, `Evidencia Lavado - ${report.plate}`);
                             }
                           }
                         }}
-                        className={`group px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-2 ${visit.status === 'CERRADO' ? 'bg-emerald-500 text-white border border-emerald-600 shadow-sm' : 'bg-rose-500 text-white border border-rose-600 shadow-sm'}`}
+                        className={`group px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-2 ${report.status === 'CERRADO' ? 'bg-emerald-500 text-white border border-emerald-600 shadow-sm' : 'bg-rose-500 text-white border border-rose-600 shadow-sm'}`}
                       >
-                        <span className="truncate">{visit.plate}</span>
+                        <span className="truncate">{report.plate}</span>
                         <div className="shrink-0">
-                          {visit.status === 'CERRADO' ? (
+                          {report.status === 'CERRADO' ? (
                             <CheckCircle2 size={12} className="text-white" />
                           ) : (
                             <Clock size={12} className="text-white animate-pulse" />
@@ -165,4 +165,4 @@ const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({
   );
 };
 
-export default WorkshopCalendar;
+export default WashCalendar;

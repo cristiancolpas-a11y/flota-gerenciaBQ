@@ -51,7 +51,7 @@ const WashStats: React.FC<WashStatsProps> = ({ totalFlota, lavados, pendientes, 
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <p className="text-white/40 text-[8px] font-black uppercase tracking-widest">LAVADOS</p>
+            <p className="text-white/40 text-[8px] font-black uppercase tracking-widest">LIMPIEZAS</p>
             <p className="text-white text-3xl font-black">{lavados}</p>
           </div>
         </div>

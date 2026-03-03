@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, FiveSReport, Calibration, WashReport, Fine } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverCard from './components/DriverCard';
@@ -12,12 +12,11 @@ import ReportForm from './components/ReportForm';
 import ReportStats from './components/ReportStats';
 import VehicleStats from './components/VehicleStats';
 import ClosureForm from './components/ClosureForm';
-import FiveSCard from './components/FiveSCard';
-import FiveSForm from './components/FiveSForm';
-import FiveSClosureForm from './components/FiveSClosureForm';
 import WashCard from './components/WashCard';
 import WashStats from './components/WashStats';
 import WashForm from './components/WashForm';
+import CleaningForm from './components/CleaningForm';
+import CleaningCalendar from './components/CleaningCalendar';
 import CalibrationCard from './components/CalibrationCard';
 import CalibrationForm from './components/CalibrationForm';
 import CalibrationStats from './components/CalibrationStats';
@@ -28,21 +27,22 @@ import WorkshopVisitClosureForm from './components/WorkshopVisitClosureForm';
 import WorkshopModule from './components/WorkshopModule';
 import DocumentUpdateForm from './components/DocumentUpdateForm';
 import WorkshopCalendar from './components/WorkshopCalendar';
+import WashCalendar from './components/WashCalendar';
 
 import { 
   fetchVehiclesFromSheet, 
   fetchDriversFromSheet, 
   fetchFinesFromSheet,
   fetchReportsFromSheet,
-  fetchFiveSReportsFromSheet,
   fetchWashReportsFromSheet,
+  fetchCleaningReportsFromSheet,
   fetchCalibrationsFromSheet,
   fetchMileageLogsFromSheet,
   fetchWorkshopVisitsFromSheet,
   submitReportToSheet,
   submitMileageToSheet,
-  submitFiveSToSheet,
   submitWashToSheet,
+  submitCleaningToSheet,
   submitFineToSheet,
   submitCalibrationToSheet,
   submitDocumentUpdateToSheet,
@@ -58,7 +58,7 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'calibraciones' | 'visitas';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -74,26 +74,28 @@ const App: React.FC = () => {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [fines, setFines] = useState<Fine[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
-  const [fiveSReports, setFiveSReports] = useState<FiveSReport[]>([]);
   const [washReports, setWashReports] = useState<WashReport[]>([]);
+  const [cleaningReports, setCleaningReports] = useState<WashReport[]>([]);
   const [calibrations, setCalibrations] = useState<Calibration[]>([]);
   const [mileageLogs, setMileageLogs] = useState<MileageLog[]>([]);
   const [workshopVisits, setWorkshopVisits] = useState<Report[]>([]);
 
   // UI States
-  const [viewDoc, setViewDoc] = useState<{ url: string, title: string } | null>(null);
+  const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
   const [fineStatusFilter, setFineStatusFilter] = useState<'all' | 'PENDIENTE' | 'PAGADO'>('all');
   const [showFineForm, setShowFineForm] = useState(false);
   const [managingFineSupport, setManagingFineSupport] = useState<Fine | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
-  const [showFiveSForm, setShowFiveSForm] = useState(false);
   const [showWashForm, setShowWashForm] = useState(false);
+  const [showCleaningForm, setShowCleaningForm] = useState(false);
   const [showCalibrationForm, setShowCalibrationForm] = useState(false);
   const [showDocUpdateForm, setShowDocUpdateForm] = useState(false);
   const [closingReport, setClosingReport] = useState<Report | null>(null);
   const [closingWorkshopVisit, setClosingWorkshopVisit] = useState<Report | null>(null);
-  const [closingFiveS, setClosingFiveS] = useState<FiveSReport | null>(null);
+  const [closingCleaning, setClosingCleaning] = useState<WashReport | null>(null);
   const [workshopViewMode, setWorkshopViewMode] = useState<'list' | 'calendar'>('calendar');
+  const [washViewMode, setWashViewMode] = useState<'list' | 'calendar'>('calendar');
+  const [cleaningViewMode, setCleaningViewMode] = useState<'list' | 'calendar'>('calendar');
 
   // Mileage Filters
   const [mileageStatusFilter, setMileageStatusFilter] = useState<'all' | 'completed' | 'pending'>('all');
@@ -132,13 +134,13 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      const [v, d, f, r, fs, w, c, m, wv] = await Promise.all([
+      const [v, d, f, r, w, cl, c, m, wv] = await Promise.all([
         fetchVehiclesFromSheet(),
         fetchDriversFromSheet(),
         fetchFinesFromSheet(),
         fetchReportsFromSheet(),
-        fetchFiveSReportsFromSheet(),
         fetchWashReportsFromSheet(),
+        fetchCleaningReportsFromSheet(),
         fetchCalibrationsFromSheet(),
         fetchMileageLogsFromSheet(),
         fetchWorkshopVisitsFromSheet()
@@ -147,8 +149,8 @@ const App: React.FC = () => {
       setDrivers(d);
       setFines(f);
       setReports(r);
-      setFiveSReports(fs);
       setWashReports(w);
+      setCleaningReports(cl);
       setCalibrations(c);
       setMileageLogs(m);
       setWorkshopVisits(wv);
@@ -173,6 +175,32 @@ const App: React.FC = () => {
       return matchMonth && matchSearch && matchCd && matchContractor;
     });
   }, [washReports, vehicles, selectedMonth, searchTerm, filterCd, filterContractor]);
+
+  const washStats = useMemo(() => {
+    const total = filteredWashReports.length;
+    const completed = filteredWashReports.filter(r => r.status === 'CERRADO').length;
+    const pending = total - completed;
+    return { total, completed, pending };
+  }, [filteredWashReports]);
+
+  const filteredCleaningReports = useMemo(() => {
+    return cleaningReports.filter(r => {
+      const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate));
+      const matchMonth = normalizeStr(r.month).includes(normalizeStr(selectedMonth)) || normalizeStr(selectedMonth).includes(normalizeStr(r.month));
+      const matchSearch = normalizePlate(r.plate).includes(normalizePlate(searchTerm));
+      const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd);
+      const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor);
+      
+      return matchMonth && matchSearch && matchCd && matchContractor;
+    });
+  }, [cleaningReports, vehicles, selectedMonth, searchTerm, filterCd, filterContractor]);
+
+  const cleaningStats = useMemo(() => {
+    const total = filteredCleaningReports.length;
+    const completed = filteredCleaningReports.filter(r => r.status === 'CERRADO').length;
+    const pending = total - completed;
+    return { total, completed, pending };
+  }, [filteredCleaningReports]);
 
   const filteredVehiclesForWash = useMemo(() => {
     return vehicles.filter(v => {
@@ -413,8 +441,8 @@ const App: React.FC = () => {
               { id: 'comparendos', label: 'Comparendos', icon: <Gavel size={18}/> },
               { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
               { id: 'novedades', label: 'Novedades', icon: <ClipboardList size={18}/> },
-              { id: 'fives', label: '5S Camiones', icon: <Sparkles size={18}/> },
               { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
+              { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
               { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
               { id: 'visitas', label: 'Visitas Taller', icon: <Store size={18}/> },
             ].map(item => (
@@ -469,8 +497,8 @@ const App: React.FC = () => {
                 if(activeView === 'comparendos') setShowFineForm(true);
                 else if(activeView === 'vehiculos') setShowDocUpdateForm(true);
                 else if(activeView === 'novedades') setShowReportForm(true);
-                else if(activeView === 'fives') setShowFiveSForm(true);
                 else if(activeView === 'lavados') setShowWashForm(true);
+                else if(activeView === 'limpieza') setShowCleaningForm(true);
                 else if(activeView === 'calibraciones') setShowCalibrationForm(true);
              }} className="p-2 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-700 transition-all">
                <Plus size={18} />
@@ -658,24 +686,6 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {activeView === 'fives' && (
-            <div className="max-w-7xl mx-auto space-y-6 pb-20">
-               <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
-                    <Sparkles size={24} className="text-indigo-600" /> 5S Camiones
-                  </h2>
-                  <button onClick={() => setShowFiveSForm(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg">
-                    <Plus size={16}/> NUEVO 5S
-                  </button>
-               </div>
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {fiveSReports.filter(r => (filterCd === 'all' || r.cd === filterCd) && normalizePlate(r.plate).includes(normalizePlate(searchTerm))).map(r => (
-                    <FiveSCard key={r.id} report={r} onViewDoc={(url, t) => setViewDoc({url, title: t})} onManageClosure={setClosingFiveS} />
-                  ))}
-               </div>
-            </div>
-          )}
-
           {activeView === 'lavados' && (
             <div className="max-w-7xl mx-auto space-y-8 pb-20">
                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -776,6 +786,140 @@ const App: React.FC = () => {
                     </div>
                   )}
                </div>
+            </div>
+          )}
+
+          {activeView === 'limpieza' && (
+            <div className="max-w-7xl mx-auto space-y-8 pb-20">
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="space-y-1">
+                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
+                      <Sparkles size={40} className="text-cyan-600" /> Limpieza 5S
+                    </h2>
+                    <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Cronograma de limpieza profunda y 5S</p>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm">
+                      <button 
+                        onClick={() => setCleaningViewMode('list')}
+                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${cleaningViewMode === 'list' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <LayoutGrid size={12} /> Lista
+                        </div>
+                      </button>
+                      <button 
+                        onClick={() => setCleaningViewMode('calendar')}
+                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${cleaningViewMode === 'calendar' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <CalendarDays size={12} /> Calendario
+                        </div>
+                      </button>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
+                      <div className="flex items-center gap-4 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex flex-col border-r border-slate-200 pr-4">
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">CENTRO (C.D.)</span>
+                          <select 
+                            className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                            value={filterCd}
+                            onChange={e => setFilterCd(e.target.value)}
+                          >
+                            <option value="all">TODOS LOS CD</option>
+                            {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
+                          </select>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">CONTRATISTA</span>
+                          <select 
+                            className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer max-w-[120px]"
+                            value={filterContractor}
+                            onChange={e => setFilterContractor(e.target.value)}
+                          >
+                            <option value="all">TODOS</option>
+                            {uniqueContractors.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                        <CalendarDays size={16} className="text-cyan-600" />
+                        <div className="flex flex-col">
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">PERIODO SELECCIONADO</span>
+                          <div className="flex items-center gap-2">
+                            <select 
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              value="MENSUAL"
+                              disabled
+                            >
+                              <option value="MENSUAL">MENSUAL</option>
+                            </select>
+                            <span className="text-slate-300">|</span>
+                            <select 
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              value={selectedMonth}
+                              onChange={e => setSelectedMonth(e.target.value)}
+                            >
+                              {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
+                                <option key={m} value={m}>{m} - {selectedYear}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => setShowCleaningForm(true)}
+                      className="flex items-center gap-3 px-8 py-4 bg-cyan-600 text-white rounded-3xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-cyan-600/20 hover:bg-cyan-700 transition-all"
+                    >
+                      <Plus size={20}/> Registrar Limpieza
+                    </button>
+                  </div>
+               </div>
+
+               <WashStats 
+                 totalFlota={cleaningStats.total}
+                 lavados={cleaningStats.completed}
+                 pendientes={cleaningStats.pending}
+                 busqueda={filteredCleaningReports.length}
+                 month={selectedMonth}
+               />
+
+               {cleaningViewMode === 'list' ? (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {filteredCleaningReports.map(r => (
+                        <WashCard 
+                          key={r.id} 
+                          report={r} 
+                          onViewDoc={(url, t) => setViewDoc({url, title: t})} 
+                        />
+                      ))
+                    }
+                    {filteredCleaningReports.length === 0 && (
+                      <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
+                        <Droplets size={48} className="mx-auto text-slate-200 mb-4" />
+                        <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado limpiezas con los filtros aplicados para {selectedMonth}</p>
+                      </div>
+                    )}
+                 </div>
+               ) : (
+                 <CleaningCalendar 
+                   reports={cleaningReports.filter(r => filterCd === 'all' || (vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate))?.cd === filterCd))}
+                   selectedMonth={selectedMonth}
+                   selectedYear={selectedYear}
+                   onMonthChange={setSelectedMonth}
+                   onYearChange={setSelectedYear}
+                   onViewDoc={(url, t) => setViewDoc({url, title: t})}
+                   onManageClosure={setClosingCleaning}
+                   searchTerm={searchTerm}
+                 />
+               )}
             </div>
           )}
 
@@ -1041,11 +1185,11 @@ const App: React.FC = () => {
       {managingFineSupport && <FineSupportForm fine={managingFineSupport} onClose={() => setManagingFineSupport(null)} onSubmit={async (d) => { await submitFineToSheet(d); handleSyncData(); }} />}
       {showDocUpdateForm && <DocumentUpdateForm vehicles={vehicles} onClose={() => setShowDocUpdateForm(false)} onSubmit={async (d) => { await submitDocumentUpdateToSheet(d); handleSyncData(); }} />}
       {showReportForm && <ReportForm vehicles={vehicles} onClose={() => setShowReportForm(false)} onSubmit={async (d) => { await submitReportToSheet(d); handleSyncData(); }} />}
-      {showFiveSForm && <FiveSForm vehicles={vehicles} onClose={() => setShowFiveSForm(false)} onSubmit={async (d) => { await submitFiveSToSheet(d); handleSyncData(); }} />}
       {showWashForm && <WashForm vehicles={vehicles} onClose={() => setShowWashForm(false)} onSubmit={async (d) => { await submitWashToSheet(d); handleSyncData(); }} />}
+      {showCleaningForm && <CleaningForm vehicles={vehicles} onClose={() => setShowCleaningForm(false)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
+      {closingCleaning && <CleaningForm vehicles={vehicles} preSelectedPlate={closingCleaning.plate} initialDate={closingCleaning.date} onClose={() => setClosingCleaning(null)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
       {showCalibrationForm && <CalibrationForm vehicles={vehicles} onClose={() => setShowCalibrationForm(false)} onSubmit={async (d) => { await submitCalibrationToSheet(d); handleSyncData(); }} />}
       {closingReport && <ClosureForm report={closingReport} onClose={() => setClosingReport(null)} onSubmit={async (id, d) => { await submitReportToSheet({...closingReport, ...d} as any); handleSyncData(); }} />}
-      {closingFiveS && <FiveSClosureForm report={closingFiveS} onClose={() => setClosingFiveS(null)} onSubmit={async (id, d) => { await submitFiveSToSheet({...closingFiveS, ...d} as any); handleSyncData(); }} />}
       {closingWorkshopVisit && <WorkshopVisitClosureForm visit={closingWorkshopVisit} onClose={() => setClosingWorkshopVisit(null)} onSubmit={async (d) => { await submitWorkshopVisitUpdateToSheet(d); handleSyncData(); }} />}
     </div>
   );

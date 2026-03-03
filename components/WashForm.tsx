@@ -1,41 +1,37 @@
 
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Vehicle } from '../types';
-import { createMosaic, processImageWithWatermark, compressImage, normalizeStr, normalizePlate, getWeekNumber } from '../utils';
-import { X, Droplets, Camera, CheckCircle, Save, Plus, Trash2, Loader2, Sparkles, MapPin, Building2, Image as ImageIcon, Search, AlertCircle, Calendar } from 'lucide-react';
+import { processImageWithWatermark, compressImage, normalizeStr, normalizePlate, getWeekNumber } from '../utils';
+import { X, Droplets, Camera, Save, Plus, Trash2, Loader2, Sparkles, MapPin, Building2, Image as ImageIcon, Calendar } from 'lucide-react';
 
 interface WashFormProps {
   vehicles: Vehicle[];
   onClose: () => void;
   onSubmit: (data: any) => Promise<void>;
-  preSelectedPlate?: string;
 }
 
-const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSelectedPlate }) => {
+const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
   const mapInputRef = useRef<HTMLInputElement>(null);
 
-  // Filtro interno por CD para agilizar la búsqueda de placa
   const [filterCd, setFilterCd] = useState<string>('all');
-
-  const [capturedPhotos, setCapturedPhotos] = useState<{url: string, type: 'ANTES' | 'DESPUES'}[]>([]);
+  const [photo, setPhoto] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
-    plate: preSelectedPlate || '',
+    plate: '',
     date: new Date().toISOString().split('T')[0],
     workshop: '',
     mapUrl: '',
   });
 
-  // 1. Obtener lista única de Centros de Distribución de la flota maestra
   const availableCds = useMemo(() => {
     const unique = Array.from(new Set(vehicles.map(v => (v.cd || "GENERAL").toUpperCase().trim()).filter(Boolean)));
     return (unique as string[]).sort((a, b) => a.localeCompare(b));
   }, [vehicles]);
 
-  // 2. Filtrar vehículos del CD seleccionado para el menú desplegable de placas
   const filteredVehiclesList = useMemo(() => {
     return vehicles.filter(v => {
       const vCd = (v.cd || "GENERAL").toUpperCase().trim();
@@ -51,13 +47,9 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !formData.plate) {
-      if (!formData.plate) alert("Seleccione la placa antes de capturar la evidencia.");
-      return;
-    }
+    if (!file || !formData.plate) return;
 
     setIsProcessingPhoto(true);
-
     const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
       return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
@@ -69,11 +61,10 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
     };
 
     const coords = await getCoords();
-
     const reader = new FileReader();
     reader.onloadend = async () => {
       const watermarked = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords);
-      setCapturedPhotos(prev => [...prev, { url: watermarked, type: 'ANTES' }].slice(0, 4));
+      setPhoto(watermarked);
       setIsProcessingPhoto(false);
     };
     reader.readAsDataURL(file);
@@ -92,37 +83,31 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
     }
   };
 
-  const removePhoto = (index: number) => {
-    setCapturedPhotos(prev => prev.filter((_, i) => i !== index));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.plate || capturedPhotos.length < 1 || !formData.mapUrl || !formData.workshop) {
-      alert("Por favor complete todos los campos: Placa, Taller, Mapa y al menos 1 Foto de evidencia.");
+    if (!formData.plate || !photo || !formData.workshop) {
+      alert("Por favor complete todos los campos: Placa, Taller y Evidencia.");
       return;
     }
     
     setIsSubmitting(true);
     try {
-      const mosaicEvidence = await createMosaic(capturedPhotos.map(p => p.url));
-      
       const dateObj = new Date(formData.date + "T12:00:00");
       const month = dateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
       const week = getWeekNumber(dateObj).toString();
 
       const payload = {
         ...formData,
-        id: `WASH-${Date.now()}`,
+        id: `LAV-${Date.now()}`,
         month,
         week,
-        evidenceUrl: mosaicEvidence,
+        evidenceUrl: photo,
       };
       await onSubmit(payload);
       setIsSuccess(true);
       setTimeout(onClose, 1500);
     } catch (error) {
-      alert("Error al registrar el lavado. Intente de nuevo.");
+      alert("Error al registrar el lavado.");
     } finally {
       setIsSubmitting(false);
     }
@@ -131,10 +116,9 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
   if (isSuccess) {
     return (
       <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[95] p-4">
-        <div className="bg-white rounded-[3rem] p-12 flex flex-col items-center text-center max-w-sm border-4 border-cyan-500 shadow-2xl animate-in zoom-in duration-300">
-          <Sparkles size={64} className="text-cyan-500 mb-4 animate-bounce" />
-          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-tight">¡REGISTRO EXITOSO!</h2>
-          <p className="text-cyan-600 font-bold text-[10px] uppercase tracking-widest mt-4">Evidencia enviada correctamente</p>
+        <div className="bg-white rounded-[3rem] p-12 flex flex-col items-center text-center max-w-sm border-4 border-indigo-500 shadow-2xl animate-in zoom-in duration-300">
+          <Sparkles size={64} className="text-indigo-500 mb-4 animate-bounce" />
+          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-tight">¡LAVADO REGISTRADO!</h2>
         </div>
       </div>
     );
@@ -145,63 +129,48 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
       <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl border-[6px] border-[#0f172a] overflow-hidden animate-in zoom-in duration-300">
         <div className="bg-[#0f172a] p-8 text-white flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-cyan-500 rounded-2xl shadow-lg">
+            <div className="p-3 bg-indigo-500 rounded-2xl shadow-lg">
               <Droplets size={24} />
             </div>
             <div>
               <h2 className="text-xl font-black uppercase tracking-tighter">REGISTRO DE LAVADO</h2>
-              <p className="text-[9px] text-cyan-400 font-bold uppercase tracking-widest">Control Operativo de Flota</p>
+              <p className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest">Control de Higiene</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2.5 bg-white/10 hover:bg-rose-500 rounded-xl transition-all"><X size={28} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white">
-          
-          {!preSelectedPlate && (
-            <div className="bg-cyan-50/40 p-6 rounded-[2.5rem] border-2 border-cyan-100/50 shadow-inner">
-                <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-1.5">
-                    <Building2 size={12} className="text-cyan-600" /> FILTRAR POR CENTRO (C.D.)
-                </label>
-                <select 
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-4 text-[11px] font-black uppercase outline-none focus:border-cyan-500 transition-all shadow-sm" 
-                    value={filterCd} 
-                    onChange={(e) => handleCdChange(e.target.value)}
-                >
-                    <option value="all">-- TODOS LOS CENTROS --</option>
-                    {availableCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-                </select>
-                </div>
-            </div>
-          )}
+          <div className="bg-indigo-50/40 p-6 rounded-[2.5rem] border-2 border-indigo-100/50 shadow-inner">
+            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-1.5 mb-2">
+              <Building2 size={12} className="text-indigo-600" /> FILTRAR POR CENTRO (C.D.)
+            </label>
+            <select 
+              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 transition-all shadow-sm" 
+              value={filterCd} 
+              onChange={(e) => handleCdChange(e.target.value)}
+            >
+              <option value="all">-- TODOS LOS CENTROS --</option>
+              {availableCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
+            </select>
+          </div>
 
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2">UNIDAD VEHICULAR (PLACA)</label>
               <select 
                 required 
-                className={`w-full bg-slate-50 border-2 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none appearance-none shadow-inner transition-all ${filteredVehiclesList.length === 0 ? 'border-rose-200 bg-rose-50/30' : 'border-slate-100'}`}
+                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none appearance-none shadow-inner transition-all"
                 value={formData.plate} 
                 onChange={e => setFormData({ ...formData, plate: e.target.value })}
-                disabled={!!preSelectedPlate}
               >
-                <option value="">{filteredVehiclesList.length === 0 ? '-- SIN VEHÍCULOS --' : '-- SELECCIONE PLACA --'}</option>
-                {preSelectedPlate ? (
-                    <option value={preSelectedPlate}>{preSelectedPlate}</option>
-                ) : (
-                    filteredVehiclesList.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)
-                )}
+                <option value="">-- SELECCIONE PLACA --</option>
+                {filteredVehiclesList.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
               </select>
-              {filteredVehiclesList.length === 0 && !preSelectedPlate && (
-                <p className="text-[9px] font-black text-rose-500 uppercase flex items-center gap-1 mt-1 px-2">
-                  <AlertCircle size={12} /> No hay vehículos registrados en este centro
-                </p>
-              )}
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2">TALLER / LUGAR DE LAVADO</label>
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2">TALLER / LUGAR</label>
               <input 
                 required 
                 type="text" 
@@ -214,7 +183,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
 
             <div className="space-y-1.5">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2 flex items-center gap-2">
-                <Calendar size={14} className="text-cyan-600" /> FECHA DEL LAVADO
+                <Calendar size={14} className="text-indigo-600" /> FECHA
               </label>
               <input 
                 required 
@@ -228,7 +197,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
 
           <div className="space-y-4">
             <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest px-2 flex items-center gap-2">
-              <MapPin size={18} /> EVIDENCIA DE UBICACIÓN (MAPA)
+              <MapPin size={18} /> UBICACIÓN (MAPA)
             </label>
             <button 
               type="button" 
@@ -236,47 +205,39 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, preSel
               className={`w-full py-6 border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all shadow-inner ${formData.mapUrl ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-indigo-400'}`}
             >
               <ImageIcon size={32} />
-              <span className="text-[10px] font-black uppercase tracking-widest">{formData.mapUrl ? 'MAPA CAPTURADO ✓' : 'CAPTURAR MAPA DE TALLER'}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest">{formData.mapUrl ? 'MAPA CAPTURADO ✓' : 'CAPTURAR MAPA'}</span>
             </button>
             <input type="file" accept="image/*" capture="environment" ref={mapInputRef} className="hidden" onChange={handleMapCapture} />
           </div>
 
           <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
-              <span className="text-[11px] font-black text-cyan-600 uppercase tracking-widest flex items-center gap-2">
+              <span className="text-[11px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
                  <Camera size={18} /> EVIDENCIA FOTOGRÁFICA
               </span>
-              <div className="flex items-center gap-4">
-                {isProcessingPhoto && <span className="text-amber-500 text-[9px] font-black animate-pulse flex items-center gap-1"><MapPin size={10}/> ESTAMPANDO GPS...</span>}
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{capturedPhotos.length} / 4</span>
-              </div>
+              {isProcessingPhoto && <span className="text-amber-500 text-[9px] font-black animate-pulse">ESTAMPANDO GPS...</span>}
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              {capturedPhotos.map((photo, index) => (
-                <div key={index} className="relative aspect-video rounded-[2rem] overflow-hidden border-4 border-slate-50 shadow-md">
-                  <img src={photo.url} className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={12} /></button>
-                </div>
-              ))}
-              {capturedPhotos.length < 4 && (
-                <button 
-                  type="button" 
-                  disabled={!formData.plate || isProcessingPhoto} 
-                  onClick={() => evidenceInputRef.current?.click()} 
-                  className="aspect-video rounded-[2rem] border-4 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-300 hover:border-cyan-400 hover:text-cyan-600 transition-all disabled:opacity-40 shadow-inner"
-                >
-                  <Plus size={32} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">
-                    CAPTURAR FOTO
-                  </span>
-                </button>
-              )}
-            </div>
+            {photo ? (
+              <div className="relative aspect-video rounded-[2rem] overflow-hidden border-4 border-slate-50 shadow-md">
+                <img src={photo} className="w-full h-full object-cover" />
+                <button type="button" onClick={() => setPhoto(null)} className="absolute top-4 right-4 p-2 bg-rose-500 text-white rounded-xl shadow-lg hover:scale-110 transition-transform"><Trash2 size={20} /></button>
+              </div>
+            ) : (
+              <button 
+                type="button" 
+                disabled={!formData.plate || isProcessingPhoto} 
+                onClick={() => evidenceInputRef.current?.click()} 
+                className="w-full aspect-video rounded-[2rem] border-4 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-300 hover:border-indigo-400 hover:text-indigo-600 transition-all disabled:opacity-40 shadow-inner"
+              >
+                <Plus size={48} />
+                <span className="text-[12px] font-black uppercase tracking-widest">TOMAR FOTO</span>
+              </button>
+            )}
             <input type="file" accept="image/*" capture="environment" ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
           </div>
 
-          <button type="submit" disabled={isSubmitting || isProcessingPhoto || capturedPhotos.length < 1 || !formData.mapUrl} className="w-full py-6 bg-[#0f172a] text-white font-black rounded-[2.5rem] text-sm uppercase shadow-2xl hover:bg-cyan-600 disabled:opacity-30 transition-all flex items-center justify-center gap-4 group">
+          <button type="submit" disabled={isSubmitting || isProcessingPhoto || !photo} className="w-full py-6 bg-[#0f172a] text-white font-black rounded-[2.5rem] text-sm uppercase shadow-2xl hover:bg-indigo-600 disabled:opacity-30 transition-all flex items-center justify-center gap-4 group">
             {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <Save size={24} />}
             {isSubmitting ? 'REGISTRANDO...' : 'REGISTRAR LAVADO'}
           </button>

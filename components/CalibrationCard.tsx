@@ -6,7 +6,7 @@ import { Settings2, Calendar, Eye, Clock, ShieldCheck, Key, MapPin, Disc } from 
 
 interface CalibrationCardProps {
   calibration: Calibration;
-  onViewDoc: (url: string, title: string) => void;
+  onViewDoc: (url: string | string[], title: string) => void;
 }
 
 const CalibrationCard: React.FC<CalibrationCardProps> = ({ calibration, onViewDoc }) => {

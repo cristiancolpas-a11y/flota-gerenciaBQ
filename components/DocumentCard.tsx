@@ -8,7 +8,7 @@ interface DocumentCardProps {
   title: string;
   doc: VehicleDocument;
   icon: React.ReactNode;
-  onViewDoc?: (url: string, title: string) => void;
+  onViewDoc?: (url: string | string[], title: string) => void;
   onAddSupport?: () => void;
 }
 

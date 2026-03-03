@@ -21,7 +21,7 @@ import {
 
 interface ReportCardProps {
   report: Report;
-  onViewDoc: (url: string, title: string) => void;
+  onViewDoc: (url: string | string[] | {url: string, label?: string}[], title: string) => void;
   onManageClosure?: (report: Report) => void;
 }
 
@@ -100,7 +100,16 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
            
            <div className="flex items-center justify-between gap-1.5 p-3 bg-slate-50/30 rounded-2xl border border-slate-100">
               {/* Foto Ingreso */}
-              <div onClick={() => thumbIn && onViewDoc(report.initialEvidence!, 'Ingreso')} className="group relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 border-white">
+              <div 
+                onClick={() => {
+                  const photos = [];
+                  if (report.initialEvidence) photos.push({ url: report.initialEvidence, label: 'Ingreso' });
+                  if (report.workshopEvidence) photos.push({ url: report.workshopEvidence, label: 'Trabajo' });
+                  if (report.solutionEvidence) photos.push({ url: report.solutionEvidence, label: 'Salida' });
+                  if (photos.length > 0) onViewDoc(photos, `Trazabilidad - ${report.plate}`);
+                }} 
+                className="group relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 border-white"
+              >
                  {thumbIn ? (
                    <img src={thumbIn} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                  ) : <div className="w-full h-full bg-slate-100 flex items-center justify-center"><ImageIcon size={16} className="text-slate-300"/></div>}
@@ -110,7 +119,16 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
               <ArrowRight className={`text-slate-200 ${isClosed ? 'text-emerald-400' : ''}`} size={16} />
 
               {/* Foto Taller */}
-              <div onClick={() => thumbWorkshop && onViewDoc(report.workshopEvidence!, 'Trabajo')} className="group relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 border-white">
+              <div 
+                onClick={() => {
+                  const photos = [];
+                  if (report.initialEvidence) photos.push({ url: report.initialEvidence, label: 'Ingreso' });
+                  if (report.workshopEvidence) photos.push({ url: report.workshopEvidence, label: 'Trabajo' });
+                  if (report.solutionEvidence) photos.push({ url: report.solutionEvidence, label: 'Salida' });
+                  if (photos.length > 0) onViewDoc(photos, `Trazabilidad - ${report.plate}`);
+                }} 
+                className="group relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 border-white"
+              >
                  {thumbWorkshop ? (
                    <img src={thumbWorkshop} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                  ) : <div className="w-full h-full bg-slate-100 flex items-center justify-center"><Wrench size={16} className="text-slate-300"/></div>}
@@ -120,7 +138,16 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
               <ArrowRight className={`text-slate-200 ${isClosed ? 'text-emerald-400' : ''}`} size={16} />
 
               {/* Foto Salida */}
-              <div onClick={() => thumbOut && onViewDoc(report.solutionEvidence!, 'Salida')} className="group relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 border-white">
+              <div 
+                onClick={() => {
+                  const photos = [];
+                  if (report.initialEvidence) photos.push({ url: report.initialEvidence, label: 'Ingreso' });
+                  if (report.workshopEvidence) photos.push({ url: report.workshopEvidence, label: 'Trabajo' });
+                  if (report.solutionEvidence) photos.push({ url: report.solutionEvidence, label: 'Salida' });
+                  if (photos.length > 0) onViewDoc(photos, `Trazabilidad - ${report.plate}`);
+                }} 
+                className="group relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 border-white"
+              >
                  {thumbOut ? (
                    <img src={thumbOut} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                  ) : <div className="w-full h-full bg-slate-100 flex items-center justify-center"><CheckCircle2 size={16} className="text-slate-300"/></div>}

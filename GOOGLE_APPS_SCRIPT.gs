@@ -1,22 +1,56 @@
 
 // SISTEMA GESTIÓN FLOTA BQA - BACKEND UNIFICADO
 
+// ⚠️ ASEGÚRATE DE QUE ESTE ID SEA EL DE TU HOJA DE CÁLCULO ACTUAL
 var ID_HOJA = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 var ID_MAESTRO = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 var MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
 
+function log(msg) {
+  try {
+    var ss = SpreadsheetApp.openById(ID_HOJA);
+    var s = getS(ss, "LOGS");
+    s.appendRow([new Date(), msg]);
+  } catch(e) {}
+}
+
+function doGet(e) {
+  var m = e.parameter.method;
+  var sheetName = e.parameter.sheetName;
+  
+  if (m === 'GET_DATA') {
+    var ss = SpreadsheetApp.openById(ID_HOJA);
+    var s = ss.getSheetByName(sheetName);
+    if (!s) return output("error", "Hoja no encontrada: " + sheetName);
+    var values = s.getDataRange().getValues();
+    return output("success", values);
+  }
+  return output("error", "Metodo no soportado");
+}
+
 function doPost(e) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(15000);
+    lock.waitLock(20000); // Aumentado a 20 segundos
+    if (!e.postData.contents) return output("error", "No hay datos en el postBody");
+    
     var req = JSON.parse(e.postData.contents);
     var d = req.data;
     var m = req.method;
+    
+    log("Method: " + m + " - Data: " + JSON.stringify(d).substring(0, 500));
 
-    // LÓGICA COMPARENDOS - ACTUALIZACIÓN DE SOPORTE EN COLUMNA H (8)
+    if (m === 'GET_DATA') {
+      var ss = SpreadsheetApp.openById(ID_HOJA);
+      var s = ss.getSheetByName(d.sheetName);
+      if (!s) return output("error", "Hoja no encontrada: " + d.sheetName);
+      var values = s.getDataRange().getValues();
+      return output("success", values);
+    }
+
     if (m === 'POST_FINE') {
       var ssC = SpreadsheetApp.openById("1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M"); 
-      var s = ssC.getSheets()[0]; // Usar la primera hoja (independiente)
+      var s = ssC.getSheets()[0];
       var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
       var img = sImg(d.evidenceUrl, "SOPORTE_" + placa);
       
@@ -24,64 +58,46 @@ function doPost(e) {
         var rows = s.getDataRange().getValues();
         var nComp = (d.infractionCode || "").toString();
         var foundIdx = -1;
-        
-        // Buscar por código de infracción en columna L (12)
         for (var i = 1; i < rows.length; i++) {
           if (rows[i][11] && rows[i][11].toString() === nComp) {
             foundIdx = i + 1;
             break;
           }
         }
-        
         if (foundIdx !== -1) {
-          s.getRange(foundIdx, 8).setValue(img); // Columna H es la 8
+          s.getRange(foundIdx, 8).setValue(img);
           lock.releaseLock();
-          return output("success", "Soporte vinculado en columna H correctamente.");
+          return output("success", "Soporte vinculado.");
         }
       }
 
       var dInf = new Date((d.date || today()) + "T12:00:00");
       var mes = MESES[dInf.getMonth()] || "GENERAL";
-      var tieneSiNo = d.status === 'PENDIENTE' ? 'SI' : 'NO';
-
-      // Estructura: Mes, Registro, CD, Contratista, Conductor, ID, Cargo, SOPORTE(H), SI/NO, Acuerdo, Valor, Codigo, Fecha, Desc, Placa
-      s.appendRow([
-        mes, today(), d.cd || "G", d.contractor || "G", d.driverName || "", d.driverId || "", d.driverPosition || "CONDUCTOR", img, tieneSiNo, d.paymentAgreement || "NO", d.amount, d.infractionCode, d.date, d.description, placa
-      ]);
+      s.appendRow([mes, today(), d.cd || "G", d.contractor || "G", d.driverName || "", d.driverId || "", d.driverPosition || "CONDUCTOR", img, d.status === 'PENDIENTE' ? 'SI' : 'NO', d.paymentAgreement || "NO", d.amount, d.infractionCode, d.date, d.description, placa]);
     }
     
-    // ACTUALIZACIÓN DE DOCUMENTOS (SOAT, RTM, EXTINTOR)
     else if (m === 'POST_DOC_UPDATE') {
       var ssM = SpreadsheetApp.openById(ID_MAESTRO);
       var s = ssM.getSheets()[0]; 
       var rows = s.getDataRange().getValues();
       var placaBusqueda = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
       var foundIdx = -1;
-      
       for (var i = 0; i < rows.length; i++) {
-        var placaFila = (rows[i][2] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
-        if (placaFila === placaBusqueda) {
+        if ((rows[i][2] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "") === placaBusqueda) {
           foundIdx = i + 1;
           break;
         }
       }
-      
       if (foundIdx !== -1) {
         var imgUrl = sImg(d.url, d.type + "_" + placaBusqueda);
-        var colIdx = -1;
-        var dateColIdx = -1;
-        
-        if (d.type === 'SOAT') { colIdx = 21; dateColIdx = 4; }
-        else if (d.type === 'RTM') { colIdx = 22; dateColIdx = 6; }
-        else if (d.type === 'EXTINTOR') { colIdx = 24; dateColIdx = 10; }
-        
+        var colIdx = d.type === 'SOAT' ? 21 : d.type === 'RTM' ? 22 : d.type === 'EXTINTOR' ? 24 : -1;
+        var dateColIdx = d.type === 'SOAT' ? 4 : d.type === 'RTM' ? 6 : d.type === 'EXTINTOR' ? 10 : -1;
         if (colIdx !== -1) {
           s.getRange(foundIdx, colIdx).setValue(imgUrl);
           if (d.expiryDate) s.getRange(foundIdx, dateColIdx).setValue(d.expiryDate);
         }
       }
     }
-    // OTROS MÉTODOS (KM, LAVADOS, ETC)
     else {
       var ss = SpreadsheetApp.openById(ID_HOJA);
       
@@ -95,37 +111,27 @@ function doPost(e) {
             break;
           }
         }
-
-        var rowData = [
-          d.id, d.date, d.plate, d.source, d.initialEvidence || "", d.novelty, d.entryMap || "", d.status, 
-          d.workshopEvidence || "", d.closureDate || "", d.solutionEvidence || "", d.exitMap || "", 
-          d.daysInShop || 0, d.closureComments || "", d.workshop || "", d.cd || "GENERAL"
-        ];
-
-        if (foundIdx !== -1) {
-          s.getRange(foundIdx, 1, 1, rowData.length).setValues([rowData]);
-        } else {
-          s.appendRow(rowData);
-        }
+        var imgIni = sImg(d.initialEvidence, "NOV_INI_" + d.plate);
+        var imgWork = sImg(d.workshopEvidence, "NOV_TALLER_" + d.plate);
+        var imgSol = sImg(d.solutionEvidence, "NOV_SOL_" + d.plate);
+        var rowData = [d.id, d.date, d.plate, d.source, imgIni, d.novelty, d.entryMap || "", d.status, imgWork, d.closureDate || "", imgSol, d.exitMap || "", d.daysInShop || 0, d.closureComments || "", d.workshop || "", d.cd || "GENERAL"];
+        if (foundIdx !== -1) s.getRange(foundIdx, 1, 1, rowData.length).setValues([rowData]);
+        else s.appendRow(rowData);
       }
       else if (m === 'POST_WORKSHOP_VISIT_UPDATE') {
         var s = getS(ss, "VISITAS A TALLER");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
-        var searchId = (d.id || "").toString();
-        
         for (var i = 1; i < rows.length; i++) {
-          if (rows[i][7] && rows[i][7].toString() === searchId) {
+          if (rows[i][7] && rows[i][7].toString() === (d.id || "").toString()) {
             foundIdx = i + 1;
             break;
           }
         }
-        
         if (foundIdx !== -1) {
           s.getRange(foundIdx, 4).setValue(d.workshop);
           s.getRange(foundIdx, 5).setValue(d.visitDate);
-          var imgUrl = sImg(d.evidence, "VISITA_" + d.plate);
-          s.getRange(foundIdx, 6).setValue(imgUrl);
+          s.getRange(foundIdx, 6).setValue(sImg(d.evidence, "VISITA_" + d.plate));
           s.getRange(foundIdx, 7).setValue(d.status);
         }
       }
@@ -133,46 +139,91 @@ function doPost(e) {
         var s = getS(ss, "KILOMETRAJE");
         s.appendRow([d.cd, d.contractor, d.week, d.date, d.plate, d.mileage]);
       }
-      else if (m === 'POST_FIVES') {
-        var s = getS(ss, "5S CAMIONES");
-        s.appendRow([d.id, d.date, "", d.week, d.plate, d.evidenceUrl, d.status]);
+      else if (m === 'POST_CLEANING') {
+        var s = getS(ss, "CRONOGRAMA 5S");
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var plateSearch = (d.plate || "").toString().toUpperCase().trim();
+        
+        // d.date viene como YYYY-MM-DD
+        var dateParts = d.date.split("-");
+        var searchYear = parseInt(dateParts[0]);
+        var searchMonth = parseInt(dateParts[1]);
+        var searchDay = parseInt(dateParts[2]);
+        
+        log("Buscando limpieza: " + plateSearch + " para fecha " + d.date);
+        
+        for (var i = 1; i < rows.length; i++) {
+          var rowPlate = (rows[i][3] || "").toString().toUpperCase().trim();
+          if (rowPlate !== plateSearch) continue;
+
+          var rowDateRaw = rows[i][0];
+          var matchDate = false;
+          
+          if (rowDateRaw instanceof Date) {
+            // Comparación por componentes para evitar errores de zona horaria
+            if (rowDateRaw.getFullYear() === searchYear && 
+                (rowDateRaw.getMonth() + 1) === searchMonth && 
+                rowDateRaw.getDate() === searchDay) {
+              matchDate = true;
+            }
+          } else {
+            var rowDateStr = rowDateRaw.toString();
+            if (rowDateStr.indexOf(d.date) !== -1) {
+              matchDate = true;
+            }
+          }
+          
+          if (matchDate) {
+            foundIdx = i + 1;
+            break;
+          }
+        }
+        
+        var imgIni = sImg(d.initialEvidence, "LIMPIEZA_INI_" + d.plate);
+        var imgFin = sImg(d.finalEvidence, "LIMPIEZA_FIN_" + d.plate);
+        var finalStatus = (imgIni && imgFin && imgIni.startsWith("http") && imgFin.startsWith("http")) ? "COMPLETADO" : "PENDIENTE";
+        
+        if (foundIdx !== -1) {
+          s.getRange(foundIdx, 5).setValue(finalStatus); 
+          s.getRange(foundIdx, 6).setValue(imgIni);      
+          s.getRange(foundIdx, 7).setValue(imgFin);      
+          log("Fila encontrada y actualizada: " + foundIdx);
+        } else {
+          var rowData = [d.date, d.month || "", d.week, d.plate, finalStatus, imgIni, imgFin];
+          s.appendRow(rowData);
+          log("No se encontró fila pre-existente. Se creó una nueva al final.");
+        }
       }
       else if (m === 'POST_WASH') {
         var s = getS(ss, "LAVADOS");
-        s.appendRow([d.id, d.month, d.week, d.date, d.plate, d.evidenceUrl, d.mapUrl, d.workshop]);
+        s.appendRow([d.id, d.month, d.week, d.date, d.plate, sImg(d.evidenceUrl, "LAVADO_" + d.plate), d.mapUrl, d.workshop]);
       }
       else if (m === 'POST_CALIBRATION') {
         var s = getS(ss, "CALIBRACIONES");
-        s.appendRow([d.id, d.calibrationDate, "", d.plate, d.equipment, d.certificateUrl]);
+        s.appendRow([d.id, d.calibrationDate, "", d.plate, d.equipment, sImg(d.certificateUrl, "CALIB_" + d.plate)]);
       }
     }
 
     lock.releaseLock();
-    return output("success", "Datos procesados correctamente.");
+    return output("success", "Datos procesados.");
   } catch (e) {
     if (lock.hasLock()) lock.releaseLock();
-    return output("error", "Error en procesamiento: " + e.toString());
+    return output("error", e.toString());
   }
 }
 
-/**
- * Guarda archivo (Imagen o PDF) en Drive y retorna URL
- */
 function sImg(base64, name) {
-  if (!base64 || base64.length < 100) return base64;
+  if (!base64 || base64.length < 100 || base64.startsWith("http")) return base64;
   try {
     var folderName = "BQA_COMPROBANTES_FLOTA";
     var folders = DriveApp.getFoldersByName(folderName);
     var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
-    
     var mimeType = base64.substring(5, base64.indexOf(';'));
-    var extension = mimeType === 'application/pdf' ? '.pdf' : '.jpg';
-    
     var bytes = Utilities.base64Decode(base64.split(',')[1]);
-    var blob = Utilities.newBlob(bytes, mimeType, name + "_" + Date.now() + extension);
+    var blob = Utilities.newBlob(bytes, mimeType, name + "_" + Date.now() + (mimeType === 'application/pdf' ? '.pdf' : '.jpg'));
     var file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    
     return file.getUrl();
   } catch (e) { return "Error Archivo"; }
 }
@@ -183,11 +234,8 @@ function getS(ss, name) {
   return s;
 }
 
-function today() {
-  return Utilities.formatDate(new Date(), "GMT-5", "yyyy-MM-dd");
-}
+function today() { return Utilities.formatDate(new Date(), "GMT-5", "yyyy-MM-dd"); }
 
 function output(status, message) {
-  return ContentService.createTextOutput(JSON.stringify({status: status, message: message}))
-    .setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify({status: status, message: message})).setMimeType(ContentService.MimeType.JSON);
 }
