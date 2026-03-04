@@ -3,8 +3,8 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyqkWYelUBllvAcsu3Z3TaRRdMLHslEhz07x2tF4gHpi4GAkxpIAxmzeWP5IzR7A6-Y/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbyqkWYelUBllvAcsu3Z3TaRRdMLHslEhz07x2tF4gHpi4GAkxpIAxmzeWP5IzR7A6-Y/exec';
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxmE2mZIeJhvE5QYojh6I-2WvqC99RZx70H-O6bfoT-2GNUzb_sQhdI1i1T1dWHK2on/exec'; 
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbxmE2mZIeJhvE5QYojh6I-2WvqC99RZx70H-O6bfoT-2GNUzb_sQhdI1i1T1dWHK2on/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';

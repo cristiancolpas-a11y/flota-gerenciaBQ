@@ -199,9 +199,55 @@ function doPost(e) {
         var s = getS(ss, "LAVADOS");
         s.appendRow([d.id, d.month, d.week, d.date, d.plate, sImg(d.evidenceUrl, "LAVADO_" + d.plate), d.mapUrl, d.workshop]);
       }
+      else if (m === 'POST_CALIBRATION_UPDATE') {
+        var s = getS(ss, "CALIBRACIONES");
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var plateSearch = (d.originalPlate || d.plate || "").toString().toUpperCase().trim();
+        var dateSearch = (d.originalDate || d.calibrationDate || "").toString().trim();
+        
+        for (var i = 1; i < rows.length; i++) {
+          var rowPlate = (rows[i][3] || "").toString().toUpperCase().trim();
+          if (rowPlate !== plateSearch) continue;
+
+          var rowDateRaw = rows[i][1];
+          var matchDate = false;
+          
+          if (rowDateRaw instanceof Date) {
+            var searchParts = dateSearch.split("-");
+            if (rowDateRaw.getFullYear() === parseInt(searchParts[0]) && 
+                (rowDateRaw.getMonth() + 1) === parseInt(searchParts[1]) && 
+                rowDateRaw.getDate() === parseInt(searchParts[2])) {
+              matchDate = true;
+            }
+          } else {
+            if (rowDateRaw.toString().indexOf(dateSearch) !== -1) matchDate = true;
+          }
+          
+          if (matchDate) {
+            foundIdx = i + 1;
+            break;
+          }
+        }
+        
+        var img = sImg(d.certificateUrl, "CALIB_" + d.plate);
+        if (foundIdx !== -1) {
+          s.getRange(foundIdx, 5).setValue(d.taller); // TALLER INDICE 4 (Columna 5)
+          s.getRange(foundIdx, 6).setValue(img);      // FOTO INDICE 5 (Columna 6)
+          s.getRange(foundIdx, 7).setValue("COMPLETADO"); // ESTADO INDICE 6 (Columna 7)
+          
+          // Actualizar metadatos si cambiaron
+          s.getRange(foundIdx, 1).setValue(d.month);
+          s.getRange(foundIdx, 2).setValue(d.calibrationDate);
+          s.getRange(foundIdx, 3).setValue(d.week);
+          s.getRange(foundIdx, 4).setValue(d.plate);
+        } else {
+          s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller, img, "COMPLETADO"]);
+        }
+      }
       else if (m === 'POST_CALIBRATION') {
         var s = getS(ss, "CALIBRACIONES");
-        s.appendRow([d.id, d.calibrationDate, "", d.plate, d.equipment, sImg(d.certificateUrl, "CALIB_" + d.plate)]);
+        s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, sImg(d.certificateUrl, "CALIB_" + d.plate), "COMPLETADO"]);
       }
     }
 

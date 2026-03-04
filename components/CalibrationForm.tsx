@@ -111,6 +111,8 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
         plate: formData.plate,
         taller: formData.taller,
         calibrationDate: formData.calibrationDate,
+        originalPlate: calibrationToUpdate?.plate,
+        originalDate: calibrationToUpdate?.calibrationDate,
         certificateUrl: mergedEvidence,
         cd: selectedVehicle?.cd || 'GENERAL',
         month: calDate.toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
@@ -201,11 +203,11 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Taller / Equipo</label>
-              <input required type="text" disabled={isUpdateMode} placeholder="Ej: AUTECO" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none uppercase disabled:opacity-50" value={formData.taller} onChange={e => setFormData({ ...formData, taller: e.target.value.toUpperCase() })} />
+              <input required type="text" placeholder="Ej: AUTECO" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none uppercase disabled:opacity-50" value={formData.taller} onChange={e => setFormData({ ...formData, taller: e.target.value.toUpperCase() })} />
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Fecha</label>
-              <input required type="date" disabled={isUpdateMode} className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:opacity-50" value={formData.calibrationDate} onChange={e => setFormData({ ...formData, calibrationDate: e.target.value })} />
+              <input required type="date" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:opacity-50" value={formData.calibrationDate} onChange={e => setFormData({ ...formData, calibrationDate: e.target.value })} />
             </div>
           </div>
 
