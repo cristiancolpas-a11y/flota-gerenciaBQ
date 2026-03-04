@@ -75,7 +75,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
 
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, `PLACA: ${formData.plate}`, coords);
+      const watermarked = await processImageWithWatermark(reader.result as string, `PLACA: ${formData.plate}`, coords, formData.date);
       setCapturedPhotos(prev => [...prev, watermarked].slice(0, 6));
       setIsProcessingPhoto(false);
     };

@@ -33,7 +33,7 @@ const DocumentUpdateForm: React.FC<DocumentUpdateFormProps> = ({ vehicles, onClo
     setIsProcessing(true);
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, formData.plate);
+      const watermarked = await processImageWithWatermark(reader.result as string, formData.plate, undefined, new Date().toISOString().split('T')[0]);
       setFormData(prev => ({ ...prev, url: watermarked }));
       setIsProcessing(false);
     };

@@ -139,12 +139,27 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
                      <p className="text-[9px] font-bold text-slate-500 mb-4">{hasDate ? formatDate(item.doc.expiryDate) : 'S/D'}</p>
                      
                      {item.doc.url ? (
-                       <button 
-                         onClick={() => onViewDoc(item.doc.url!, `${driver.name} - ${item.title}`)}
-                         className={`w-full py-2.5 rounded-xl text-[9px] font-black transition-all uppercase tracking-widest border ${s.btn}`}
-                       >
-                         VER SOPORTE
-                       </button>
+                       <div className="space-y-2">
+                         <div 
+                           onClick={() => onViewDoc(item.doc.url!, `${driver.name} - ${item.title}`)}
+                           className="aspect-video rounded-xl overflow-hidden bg-white border border-slate-100 cursor-pointer group/mini relative"
+                         >
+                           <img 
+                             src={getDriveDirectLink(item.doc.url)} 
+                             className="w-full h-full object-cover transition-transform group-hover/mini:scale-110" 
+                             referrerPolicy="no-referrer" 
+                           />
+                           <div className="absolute inset-0 bg-black/10 opacity-0 group-hover/mini:opacity-100 transition-opacity flex items-center justify-center">
+                             <Eye size={16} className="text-white" />
+                           </div>
+                         </div>
+                         <button 
+                           onClick={() => onViewDoc(item.doc.url!, `${driver.name} - ${item.title}`)}
+                           className={`w-full py-2.5 rounded-xl text-[9px] font-black transition-all uppercase tracking-widest border ${s.btn}`}
+                         >
+                           VER SOPORTE
+                         </button>
+                       </div>
                      ) : (
                        <div className="w-full py-2.5 rounded-xl text-[9px] font-black text-center uppercase tracking-widest bg-slate-100 text-slate-300">
                           PENDIENTE

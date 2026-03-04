@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { VehicleDocument } from '../types';
-import { calculateStatus, formatDate } from '../utils';
+import { calculateStatus, formatDate, getDriveDirectLink, isImageLink } from '../utils';
 import { Calendar, Clock, Eye, ShieldCheck, Info, AlertTriangle, UploadCloud } from 'lucide-react';
 
 interface DocumentCardProps {
@@ -15,6 +15,8 @@ interface DocumentCardProps {
 const DocumentCard: React.FC<DocumentCardProps> = ({ title, doc, icon, onViewDoc, onAddSupport }) => {
   const hasDate = !!doc.expiryDate;
   const status = hasDate ? calculateStatus(doc.expiryDate) : 'expired';
+  const isImage = doc.url ? isImageLink(doc.url) : false;
+  const thumbUrl = (doc.url && isImage) ? getDriveDirectLink(doc.url) : null;
   
   const styles = {
     active: {
@@ -94,14 +96,32 @@ const DocumentCard: React.FC<DocumentCardProps> = ({ title, doc, icon, onViewDoc
         </div>
       </div>
 
-      <div className="mt-auto">
+      <div className="mt-auto space-y-3">
         {doc.url && doc.url.length > 10 ? (
-          <button 
-            onClick={() => onViewDoc?.(doc.url!, title)}
-            className={`w-full flex items-center justify-center gap-3 py-3 rounded-2xl text-[9px] font-black transition-all uppercase tracking-[0.2em] ${currentStyle.btn}`}
-          >
-            <Eye size={16} /> VER SOPORTE
-          </button>
+          <>
+            {thumbUrl && (
+              <div 
+                onClick={() => onViewDoc?.(doc.url!, title)}
+                className="aspect-video rounded-2xl overflow-hidden bg-slate-100 relative group/img cursor-pointer border border-slate-100"
+              >
+                <img 
+                  src={thumbUrl} 
+                  alt={title} 
+                  className="w-full h-full object-cover transition-transform group-hover/img:scale-110"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                   <Eye size={24} className="text-white" />
+                </div>
+              </div>
+            )}
+            <button 
+              onClick={() => onViewDoc?.(doc.url!, title)}
+              className={`w-full flex items-center justify-center gap-3 py-3 rounded-2xl text-[9px] font-black transition-all uppercase tracking-[0.2em] ${currentStyle.btn}`}
+            >
+              <Eye size={16} /> VER SOPORTE
+            </button>
+          </>
         ) : (
           <button 
             onClick={onAddSupport}

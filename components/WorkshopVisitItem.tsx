@@ -1,8 +1,8 @@
 
 import React from 'react';
 import { Report } from '../types';
-import { formatDate } from '../utils';
-import { Eye, User, Calendar, Store } from 'lucide-react';
+import { formatDate, getDriveDirectLink } from '../utils';
+import { Eye, User, Calendar, Store, ImageIcon } from 'lucide-react';
 
 interface WorkshopVisitItemProps {
   visit: Report;
@@ -12,6 +12,7 @@ interface WorkshopVisitItemProps {
 
 const WorkshopVisitItem: React.FC<WorkshopVisitItemProps> = ({ visit, onViewDoc, onManageClosure }) => {
   const isPending = visit.status === 'ABIERTO';
+  const thumbUrl = getDriveDirectLink(visit.initialEvidence || visit.workshopEvidence || visit.solutionEvidence || "");
   
   return (
     <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 flex flex-col md:flex-row items-center p-4 gap-6 relative overflow-hidden group hover:shadow-md transition-all">
@@ -21,6 +22,26 @@ const WorkshopVisitItem: React.FC<WorkshopVisitItemProps> = ({ visit, onViewDoc,
       {/* Driver Name Box */}
       <div className="bg-[#0f172a] text-white px-6 py-4 rounded-2xl min-w-[160px] flex items-center justify-center shadow-lg w-full md:w-auto">
         <span className="font-black text-sm uppercase tracking-widest">{visit.plate}</span>
+      </div>
+
+      {/* Thumbnail */}
+      <div 
+        onClick={() => {
+          const photos = [];
+          if (visit.initialEvidence) photos.push({ url: visit.initialEvidence, label: 'Ingreso' });
+          if (visit.workshopEvidence) photos.push({ url: visit.workshopEvidence, label: 'Trabajo' });
+          if (visit.solutionEvidence) photos.push({ url: visit.solutionEvidence, label: 'Salida' });
+          if (photos.length > 0) onViewDoc(photos, `Evidencia Taller - ${visit.plate}`);
+        }}
+        className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 shrink-0 cursor-pointer border-2 border-white shadow-sm group-hover:scale-105 transition-transform"
+      >
+        {thumbUrl ? (
+          <img src={thumbUrl} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-slate-300">
+            <ImageIcon size={20} />
+          </div>
+        )}
       </div>
       
       {/* Details */}

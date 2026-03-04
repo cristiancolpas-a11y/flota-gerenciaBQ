@@ -28,7 +28,7 @@ const FineSupportForm: React.FC<FineSupportFormProps> = ({ fine, onClose, onSubm
       if (file.type === 'application/pdf') {
         setFileData({ url: base64, name: file.name });
       } else if (file.type.startsWith('image/')) {
-        const watermarked = await processImageWithWatermark(base64, `SOPORTE MULTA: ${fine.plate}`);
+        const watermarked = await processImageWithWatermark(base64, `SOPORTE MULTA: ${fine.plate}`, undefined, fine.date);
         setFileData({ url: watermarked, name: file.name });
       }
       setIsProcessing(false);

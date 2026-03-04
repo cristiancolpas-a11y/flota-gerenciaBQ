@@ -20,6 +20,7 @@ import CleaningCalendar from './components/CleaningCalendar';
 import CalibrationCard from './components/CalibrationCard';
 import CalibrationForm from './components/CalibrationForm';
 import CalibrationStats from './components/CalibrationStats';
+import CalibrationCalendar from './components/CalibrationCalendar';
 import MileageEntryForm from './components/MileageEntryForm';
 import WorkshopVisitItem from './components/WorkshopVisitItem';
 import WorkshopStats from './components/WorkshopStats';
@@ -45,6 +46,7 @@ import {
   submitCleaningToSheet,
   submitFineToSheet,
   submitCalibrationToSheet,
+  submitCalibrationUpdateToSheet,
   submitDocumentUpdateToSheet,
   submitWorkshopVisitUpdateToSheet
 } from './services/sheetService';
@@ -89,11 +91,13 @@ const App: React.FC = () => {
   const [showWashForm, setShowWashForm] = useState(false);
   const [showCleaningForm, setShowCleaningForm] = useState(false);
   const [showCalibrationForm, setShowCalibrationForm] = useState(false);
+  const [updatingCalibration, setUpdatingCalibration] = useState<Calibration | null>(null);
   const [showDocUpdateForm, setShowDocUpdateForm] = useState(false);
   const [closingReport, setClosingReport] = useState<Report | null>(null);
   const [closingWorkshopVisit, setClosingWorkshopVisit] = useState<Report | null>(null);
   const [closingCleaning, setClosingCleaning] = useState<WashReport | null>(null);
   const [workshopViewMode, setWorkshopViewMode] = useState<'list' | 'calendar'>('calendar');
+  const [calibrationViewMode, setCalibrationViewMode] = useState<'list' | 'calendar'>('calendar');
   const [washViewMode, setWashViewMode] = useState<'list' | 'calendar'>('calendar');
   const [cleaningViewMode, setCleaningViewMode] = useState<'list' | 'calendar'>('calendar');
 
@@ -244,18 +248,20 @@ const App: React.FC = () => {
   const filteredCalibrations = useMemo(() => {
     return calibrations.filter(c => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(c.plate));
+      const matchMonth = c.month?.trim().toUpperCase() === selectedMonth.trim().toUpperCase();
+      const matchYear = c.year === selectedYear;
       const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || c.cd === filterCd;
       const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || c.contractor === filterContractor;
       const matchSearch = normalizePlate(c.plate).includes(normalizePlate(searchTerm));
-      return matchCd && matchContractor && matchSearch;
+      return matchMonth && matchYear && matchCd && matchContractor && matchSearch;
     });
-  }, [calibrations, vehicles, filterCd, filterContractor, searchTerm]);
+  }, [calibrations, vehicles, filterCd, filterContractor, searchTerm, selectedMonth, selectedYear]);
 
   const statsCalibrations = useMemo(() => {
     return {
       total: filteredCalibrations.length,
-      completed: filteredCalibrations.filter(c => c.status === 'active').length,
-      pending: filteredCalibrations.filter(c => c.status !== 'active').length,
+      completed: filteredCalibrations.filter(c => c.estado === 'COMPLETADO').length,
+      pending: filteredCalibrations.filter(c => c.estado !== 'COMPLETADO').length,
       searchCount: filteredCalibrations.length
     };
   }, [filteredCalibrations]);
@@ -934,6 +940,21 @@ const App: React.FC = () => {
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-4">
+                    <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center">
+                      <button 
+                        onClick={() => setCalibrationViewMode('list')}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'list' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        Lista
+                      </button>
+                      <button 
+                        onClick={() => setCalibrationViewMode('calendar')}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'calendar' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        Cronograma
+                      </button>
+                    </div>
+
                     <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
                       <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
                         <CalendarDays size={16} className="text-indigo-600" />
@@ -961,13 +982,6 @@ const App: React.FC = () => {
                         </div>
                       </div>
                     </div>
-
-                    <button 
-                      onClick={() => setShowCalibrationForm(true)}
-                      className="flex items-center gap-3 px-8 py-4 bg-indigo-600 text-white rounded-3xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 transition-all"
-                    >
-                      <Plus size={20}/> Registrar
-                    </button>
                   </div>
                </div>
 
@@ -1009,17 +1023,41 @@ const App: React.FC = () => {
                  month={selectedMonth}
                />
 
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {filteredCalibrations.map(c => (
-                    <CalibrationCard key={c.id} calibration={c} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
-                  ))}
-                  {filteredCalibrations.length === 0 && (
-                    <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
-                      <Disc size={48} className="mx-auto text-slate-200 mb-4" />
-                      <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado calibraciones con los filtros seleccionados</p>
-                    </div>
-                  )}
-               </div>
+               {calibrationViewMode === 'list' ? (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {filteredCalibrations.map(c => (
+                      <CalibrationCard 
+                        key={c.id} 
+                        calibration={c} 
+                        onViewDoc={(url, t) => setViewDoc({url, title: t})} 
+                        onUpdateEvidence={(cal) => {
+                          setUpdatingCalibration(cal);
+                          setShowCalibrationForm(true);
+                        }}
+                      />
+                    ))}
+                    {filteredCalibrations.length === 0 && (
+                      <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
+                        <Disc size={48} className="mx-auto text-slate-200 mb-4" />
+                        <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado calibraciones con los filtros seleccionados</p>
+                      </div>
+                    )}
+                 </div>
+               ) : (
+                 <CalibrationCalendar 
+                   calibrations={filteredCalibrations}
+                   selectedMonth={selectedMonth}
+                   selectedYear={selectedYear}
+                   onMonthChange={setSelectedMonth}
+                   onYearChange={setSelectedYear}
+                   onViewDoc={(url, t) => setViewDoc({url, title: t})}
+                   onUpdateEvidence={(cal) => {
+                     setUpdatingCalibration(cal);
+                     setShowCalibrationForm(true);
+                   }}
+                   searchTerm={searchTerm}
+                 />
+               )}
             </div>
           )}
 
@@ -1188,7 +1226,24 @@ const App: React.FC = () => {
       {showWashForm && <WashForm vehicles={vehicles} onClose={() => setShowWashForm(false)} onSubmit={async (d) => { await submitWashToSheet(d); handleSyncData(); }} />}
       {showCleaningForm && <CleaningForm vehicles={vehicles} onClose={() => setShowCleaningForm(false)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
       {closingCleaning && <CleaningForm vehicles={vehicles} preSelectedPlate={closingCleaning.plate} initialDate={closingCleaning.date} onClose={() => setClosingCleaning(null)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
-      {showCalibrationForm && <CalibrationForm vehicles={vehicles} onClose={() => setShowCalibrationForm(false)} onSubmit={async (d) => { await submitCalibrationToSheet(d); handleSyncData(); }} />}
+      {showCalibrationForm && (
+        <CalibrationForm 
+          vehicles={vehicles} 
+          calibrationToUpdate={updatingCalibration || undefined}
+          onClose={() => {
+            setShowCalibrationForm(false);
+            setUpdatingCalibration(null);
+          }} 
+          onSubmit={async (d: any) => { 
+            if (d.isUpdate) {
+              await submitCalibrationUpdateToSheet(d);
+            } else {
+              await submitCalibrationToSheet(d);
+            }
+            handleSyncData(); 
+          }} 
+        />
+      )}
       {closingReport && <ClosureForm report={closingReport} onClose={() => setClosingReport(null)} onSubmit={async (id, d) => { await submitReportToSheet({...closingReport, ...d} as any); handleSyncData(); }} />}
       {closingWorkshopVisit && <WorkshopVisitClosureForm visit={closingWorkshopVisit} onClose={() => setClosingWorkshopVisit(null)} onSubmit={async (d) => { await submitWorkshopVisitUpdateToSheet(d); handleSyncData(); }} />}
     </div>

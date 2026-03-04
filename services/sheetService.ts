@@ -264,11 +264,16 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
           const rows = results.data as any[][];
           if (!rows || rows.length < 2) { resolve([]); return; }
           const calibrations = rows.slice(1).filter(row => row && row[3]).map((row, index): Calibration => {
+            const calDateStr = parseFlexibleDate(row[1]);
+            const expDate = calDateStr ? new Date(calDateStr + 'T12:00:00') : null;
+            const year = expDate ? expDate.getFullYear() : undefined;
+            const monthVal = cleanSheetValue(row[0]) || (expDate ? expDate.toLocaleString('es-ES', { month: 'long' }).toUpperCase() : 'GENERAL');
+            const week = cleanSheetValue(row[2]);
             const plate = normalizePlate(cleanSheetValue(row[3])); 
-            const calDateStr = parseFlexibleDate(row[1]);         
             const workshop = cleanSheetValue(row[4]);             
-            const evidenceUrl = cleanSheetValue(row[5]);          
-            const expDate = calDateStr ? new Date(calDateStr) : null;
+            const evidenceUrl = cleanSheetValue(row[5]);
+            const estado = cleanSheetValue(row[6]).toUpperCase();
+            
             if (expDate) expDate.setFullYear(expDate.getFullYear() + 1);
             const expDateStr = expDate ? expDate.toISOString().split('T')[0] : '';
             return {
@@ -280,6 +285,10 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
               certificateUrl: evidenceUrl,
               status: calculateStatus(expDateStr),
               daysPending: getDaysDiff(expDateStr),
+              month: monthVal,
+              week,
+              estado,
+              year,
               cd: 'GENERAL'
             };
           });
@@ -296,7 +305,7 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
  */
 export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
   try {
-    const url = `${BASE_URL_BACKEND}&gid=1160408542${getCacheBuster()}`;
+    const url = `${BASE_URL_BACKEND}&gid=1668814480${getCacheBuster()}`;
     const response = await fetch(url);
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -515,6 +524,7 @@ export const submitDocumentUpdateToSheet = async (data: any): Promise<void> => {
 export const submitReportToSheet = async (report: Report): Promise<void> => { await sendToGAS({ method: 'POST_REPORT', data: report }); };
 export const submitMileageToSheet = async (mileageData: any): Promise<void> => { await sendToGAS({ method: 'POST_MILEAGE', data: mileageData }); };
 export const submitCalibrationToSheet = async (calibrationDate: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION', data: calibrationDate }); };
+export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data }); };
 export const submitWashToSheet = async (washData: any): Promise<void> => { await sendToGAS({ method: 'POST_WASH', data: washData }); };
 export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { await sendToGAS({ method: 'POST_CLEANING', data: cleaningData }); };
 export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: visitData }); };

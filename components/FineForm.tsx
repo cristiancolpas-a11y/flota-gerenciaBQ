@@ -52,7 +52,7 @@ const FineForm: React.FC<FineFormProps> = ({ vehicles, drivers, onClose, onSubmi
         setFormData(prev => ({ ...prev, evidenceUrl: base64, fileName: file.name }));
       } else if (file.type.startsWith('image/')) {
         // Si es imagen, aplicamos marca de agua
-        const watermarked = await processImageWithWatermark(base64, `MULTA: ${formData.plate}`);
+        const watermarked = await processImageWithWatermark(base64, `MULTA: ${formData.plate}`, undefined, formData.date);
         setFormData(prev => ({ ...prev, evidenceUrl: watermarked, fileName: file.name }));
       }
       setIsProcessingFile(false);

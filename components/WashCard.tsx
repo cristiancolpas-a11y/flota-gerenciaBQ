@@ -1,15 +1,17 @@
 
 import React from 'react';
 import { WashReport } from '../types';
-import { formatDate } from '../utils';
+import { formatDate, getDriveDirectLink } from '../utils';
 import { Droplets, Calendar, Hash, MapPin, Eye } from 'lucide-react';
 
 interface WashCardProps {
   report: WashReport;
-  onViewDoc: (url: string | string[], title: string) => void;
+  onViewDoc: (url: string | string[] | {url: string, label?: string}[], title: string) => void;
 }
 
 const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
+  const thumbUrl = getDriveDirectLink(report.evidenceUrl || report.finalEvidenceUrl || report.initialEvidenceUrl || "");
+  
   return (
     <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden group hover:shadow-2xl transition-all duration-500">
       {/* Header with Plate */}
@@ -72,17 +74,59 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
             </div>
           </div>
           
-          <div className="aspect-video rounded-3xl overflow-hidden bg-slate-100 relative group/img border-2 border-slate-100 shadow-inner">
-            <img 
-              src={report.evidenceUrl || report.finalEvidenceUrl || report.initialEvidenceUrl || "https://picsum.photos/seed/wash1/400/300"} 
-              alt="Evidencia de Lavado" 
-              className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110"
-              referrerPolicy="no-referrer"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity"></div>
-            <div className="absolute bottom-4 left-4 flex items-center gap-2">
-              <div className="px-3 py-1 bg-white/90 backdrop-blur-sm text-[#0f172a] text-[8px] font-black rounded-full shadow-lg uppercase tracking-widest">REGISTRO FOTOGRÁFICO</div>
+          {/* REGISTRO FOTOGRÁFICO */}
+          <div className="grid grid-cols-1 gap-4">
+            <div 
+              onClick={() => {
+                const photos = [];
+                if (report.initialEvidenceUrl) photos.push({ url: report.initialEvidenceUrl, label: 'Antes' });
+                if (report.finalEvidenceUrl) photos.push({ url: report.finalEvidenceUrl, label: 'Después' });
+                if (photos.length === 0 && report.evidenceUrl) photos.push({ url: report.evidenceUrl, label: 'Evidencia' });
+                
+                if (photos.length > 0) {
+                  onViewDoc(photos, `Evidencia ${report.plate}`);
+                }
+              }}
+              className="aspect-video rounded-3xl overflow-hidden bg-slate-100 relative group/img border-2 border-slate-100 shadow-inner cursor-pointer"
+            >
+              <img 
+                src={thumbUrl || "https://picsum.photos/seed/wash1/400/300"} 
+                alt="Evidencia Principal" 
+                className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                <Eye size={32} className="text-white drop-shadow-lg scale-0 group-hover/img:scale-100 transition-transform duration-300" />
+              </div>
+              <div className="absolute bottom-4 left-4 flex items-center gap-2">
+                <div className="px-3 py-1 bg-white/90 backdrop-blur-sm text-[#0f172a] text-[8px] font-black rounded-full shadow-lg uppercase tracking-widest">
+                  {report.finalEvidenceUrl ? 'REGISTRO ANTES/DESPUÉS' : 'REGISTRO FOTOGRÁFICO'}
+                </div>
+              </div>
             </div>
+
+            {report.initialEvidenceUrl && report.finalEvidenceUrl && (
+              <div className="grid grid-cols-2 gap-2">
+                <div 
+                  onClick={() => onViewDoc(report.initialEvidenceUrl!, `Evidencia Antes - ${report.plate}`)}
+                  className="aspect-video rounded-xl overflow-hidden bg-slate-50 border border-slate-100 cursor-pointer relative group/mini"
+                >
+                  <img src={getDriveDirectLink(report.initialEvidenceUrl)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/mini:opacity-100 transition-opacity flex items-center justify-center">
+                    <span className="text-[8px] font-black text-white uppercase tracking-widest">ANTES</span>
+                  </div>
+                </div>
+                <div 
+                  onClick={() => onViewDoc(report.finalEvidenceUrl!, `Evidencia Después - ${report.plate}`)}
+                  className="aspect-video rounded-xl overflow-hidden bg-slate-50 border border-slate-100 cursor-pointer relative group/mini"
+                >
+                  <img src={getDriveDirectLink(report.finalEvidenceUrl)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/mini:opacity-100 transition-opacity flex items-center justify-center">
+                    <span className="text-[8px] font-black text-white uppercase tracking-widest">DESPUÉS</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

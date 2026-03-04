@@ -63,7 +63,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
     const coords = await getCoords();
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords);
+      const watermarked = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
       setPhoto(watermarked);
       setIsProcessingPhoto(false);
     };

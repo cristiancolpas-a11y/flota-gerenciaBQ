@@ -57,7 +57,7 @@ const ClosureForm: React.FC<ClosureFormProps> = ({ report, onClose, onSubmit }) 
 
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, `${report.plate} - ${label}`, coords);
+      const watermarked = await processImageWithWatermark(reader.result as string, `${report.plate} - ${label}`, coords, formData.closureDate);
       if (target === 'workshop') {
         setWorkshopPhotos(prev => [...prev, watermarked].slice(0, 6));
       } else {

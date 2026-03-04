@@ -88,7 +88,8 @@ export const isImageLink = (url: string): boolean => {
 export const processImageWithWatermark = (
   base64Str: string, 
   text: string, 
-  coords?: { lat: number, lng: number }
+  coords?: { lat: number, lng: number },
+  customDate?: string
 ): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -117,8 +118,14 @@ export const processImageWithWatermark = (
       ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
       ctx.fillRect(x, y, boxWidth, boxHeight);
       
-      const now = new Date();
-      const timestamp = now.toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      // Use custom date if provided, otherwise use current date
+      // We use T12:00:00 to avoid timezone shifts when parsing YYYY-MM-DD
+      const dateToUse = customDate ? new Date(customDate + "T12:00:00") : new Date();
+      const timestamp = dateToUse.toLocaleDateString('es-CO', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+      });
       
       ctx.fillStyle = '#ffffff';
       ctx.font = `bold ${Math.round(width * 0.035)}px Inter, sans-serif`;

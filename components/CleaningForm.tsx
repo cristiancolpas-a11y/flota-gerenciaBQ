@@ -69,7 +69,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
 
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords);
+      const watermarked = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
       if (activeCaptureType === 'ANTES') {
         setInitialPhotos(prev => [...prev, watermarked].slice(0, 4));
       } else {

@@ -20,6 +20,10 @@ export interface Calibration {
   certificateUrl?: string;
   status: DocumentStatus;
   daysPending?: number;
+  month?: string;
+  week?: string;
+  estado?: string;
+  year?: number;
 }
 
 export interface Fine {

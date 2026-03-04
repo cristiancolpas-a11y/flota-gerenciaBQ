@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Fine } from '../types';
-import { formatDate } from '../utils';
+import { formatDate, getDriveDirectLink } from '../utils';
 import { Gavel, Calendar, Eye, UserCircle, FileSignature, Clock, FileText, CreditCard, AlertCircle, CheckCircle2, ImageOff, Camera } from 'lucide-react';
 
 interface FineCardProps {
@@ -14,6 +14,7 @@ const FineCard: React.FC<FineCardProps> = ({ fine, onViewDoc, onAddSupport }) =>
   const isPending = fine.status === 'PENDIENTE'; 
   const hasAgreement = fine.paymentAgreement === 'SI';
   const hasEvidence = fine.evidenceUrl && fine.evidenceUrl.length > 5;
+  const thumbUrl = hasEvidence ? getDriveDirectLink(fine.evidenceUrl!) : null;
 
   return (
     <div className={`bg-white rounded-[2.5rem] border-2 overflow-hidden shadow-lg transition-all hover:shadow-xl flex flex-col h-full group ${isPending ? 'border-rose-100' : 'border-emerald-100'}`}>
@@ -88,14 +89,30 @@ const FineCard: React.FC<FineCardProps> = ({ fine, onViewDoc, onAddSupport }) =>
         </div>
 
         {/* FOOTER: ACCIÓN DE SOPORTE */}
-        <div className="mt-auto pt-2">
+        <div className="mt-auto pt-2 space-y-3">
            {hasEvidence ? (
-             <button 
-               onClick={() => onViewDoc(fine.evidenceUrl!, `Comparendo - ${fine.driverName}`)}
-               className="w-full flex items-center justify-center gap-2 py-3 bg-[#0f172a] text-white rounded-2xl text-[9px] font-black transition-all uppercase tracking-[0.2em] hover:bg-indigo-600 shadow-lg active:scale-95 group"
-             >
-               <Eye size={16} className="group-hover:scale-110 transition-transform" /> VER SOPORTE
-             </button>
+             <>
+               <div 
+                 onClick={() => onViewDoc(fine.evidenceUrl!, `Comparendo - ${fine.driverName}`)}
+                 className="aspect-video rounded-2xl overflow-hidden bg-slate-100 relative group/img cursor-pointer border border-slate-100"
+               >
+                 <img 
+                   src={thumbUrl!} 
+                   alt="Soporte Comparendo" 
+                   className="w-full h-full object-cover transition-transform group-hover/img:scale-110"
+                   referrerPolicy="no-referrer"
+                 />
+                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye size={24} className="text-white" />
+                 </div>
+               </div>
+               <button 
+                 onClick={() => onViewDoc(fine.evidenceUrl!, `Comparendo - ${fine.driverName}`)}
+                 className="w-full flex items-center justify-center gap-2 py-3 bg-[#0f172a] text-white rounded-2xl text-[9px] font-black transition-all uppercase tracking-[0.2em] hover:bg-indigo-600 shadow-lg active:scale-95 group"
+               >
+                 <Eye size={16} className="group-hover:scale-110 transition-transform" /> VER SOPORTE
+               </button>
+             </>
            ) : (
              <button 
                onClick={() => onAddSupport?.(fine)}

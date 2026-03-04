@@ -1,17 +1,18 @@
 
 import React, { useState, useRef, useMemo } from 'react';
-import { Vehicle } from '../types';
-import { compressImage, createMosaic, processImageWithWatermark, normalizeStr } from '../utils';
-import { X, Key, Camera, CheckCircle, MapPin, Plus, Trash2, Loader2, Calendar, Settings2, Clock, ImageIcon, Building2, UserCircle, Disc } from 'lucide-react';
+import { Calibration, Vehicle } from '../types';
+import { compressImage, createMosaic, processImageWithWatermark, normalizeStr, getWeekNumber } from '../utils';
+import { X, Key, Camera, CheckCircle, MapPin, Plus, Trash2, Loader2, Calendar, Settings2, Clock, ImageIcon, Building2, UserCircle, Disc, Save } from 'lucide-react';
 
 interface CalibrationFormProps {
   onClose: () => void;
   onSubmit: (calibration: any) => Promise<void>;
   vehicles: Vehicle[];
   preSelectedPlate?: string;
+  calibrationToUpdate?: Calibration;
 }
 
-const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, vehicles, preSelectedPlate }) => {
+const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, vehicles, preSelectedPlate, calibrationToUpdate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhotoLocal, setIsProcessingPhotoLocal] = useState(false);
@@ -22,11 +23,13 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
 
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [formData, setFormData] = useState({
-    plate: preSelectedPlate || '',
-    taller: '',
-    calibrationDate: new Date().toISOString().split('T')[0],
+    plate: calibrationToUpdate?.plate || preSelectedPlate || '',
+    taller: calibrationToUpdate?.equipment || '',
+    calibrationDate: calibrationToUpdate?.calibrationDate || new Date().toISOString().split('T')[0],
     certificateUrl: '',
   });
+
+  const isUpdateMode = !!calibrationToUpdate;
 
   const cds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
   const contractors = useMemo(() => {
@@ -72,7 +75,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
       const watermarked = await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = async () => {
-          const res = await processImageWithWatermark(reader.result as string, formData.plate, coords);
+          const res = await processImageWithWatermark(reader.result as string, formData.plate, coords, formData.calibrationDate);
           resolve(res);
         };
         reader.readAsDataURL(file);
@@ -102,12 +105,18 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
       
       const selectedVehicle = vehicles.find(v => v.plate === formData.plate);
 
+      const calDate = new Date(formData.calibrationDate + 'T12:00:00');
       const payload = { 
+        id: calibrationToUpdate?.id,
         plate: formData.plate,
         taller: formData.taller,
         calibrationDate: formData.calibrationDate,
         certificateUrl: mergedEvidence,
-        cd: selectedVehicle?.cd || 'GENERAL'
+        cd: selectedVehicle?.cd || 'GENERAL',
+        month: calDate.toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
+        week: `SEMANA ${getWeekNumber(calDate)}`,
+        estado: 'COMPLETADO',
+        isUpdate: isUpdateMode
       };
       await onSubmit(payload);
       setIsSuccess(true);
@@ -140,15 +149,19 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
               <Disc size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter">🛞 CALIBRACIÓN NEUMÁTICOS</h2>
-              <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">{preSelectedPlate ? `REPORTE DIRECTO: ${preSelectedPlate}` : 'Compresión de datos activa'}</p>
+              <h2 className="text-xl font-black uppercase tracking-tighter">
+                {isUpdateMode ? 'VINCULAR EVIDENCIA' : '🛞 CALIBRACIÓN NEUMÁTICOS'}
+              </h2>
+              <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">
+                {isUpdateMode ? `ID: ${calibrationToUpdate.id}` : (preSelectedPlate ? `REPORTE DIRECTO: ${preSelectedPlate}` : 'Compresión de datos activa')}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="p-2.5 bg-white/10 hover:bg-red-500 rounded-xl transition-all"><X size={24} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white">
-          {!preSelectedPlate && (
+          {!preSelectedPlate && !isUpdateMode && (
             <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200 grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-1">C.D.</label>
@@ -174,11 +187,11 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
               className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:bg-slate-100 disabled:text-slate-400" 
               value={formData.plate} 
               onChange={e => setFormData({ ...formData, plate: e.target.value })}
-              disabled={!!preSelectedPlate}
+              disabled={!!preSelectedPlate || isUpdateMode}
             >
               <option value="">-- SELECCIONE --</option>
-              {preSelectedPlate ? (
-                <option value={preSelectedPlate}>{preSelectedPlate}</option>
+              {preSelectedPlate || isUpdateMode ? (
+                <option value={formData.plate}>{formData.plate}</option>
               ) : (
                 filteredVehicles.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)
               )}
@@ -188,11 +201,11 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Taller / Equipo</label>
-              <input required type="text" placeholder="Ej: AUTECO" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none uppercase" value={formData.taller} onChange={e => setFormData({ ...formData, taller: e.target.value.toUpperCase() })} />
+              <input required type="text" disabled={isUpdateMode} placeholder="Ej: AUTECO" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none uppercase disabled:opacity-50" value={formData.taller} onChange={e => setFormData({ ...formData, taller: e.target.value.toUpperCase() })} />
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Fecha</label>
-              <input required type="date" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none" value={formData.calibrationDate} onChange={e => setFormData({ ...formData, calibrationDate: e.target.value })} />
+              <input required type="date" disabled={isUpdateMode} className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:opacity-50" value={formData.calibrationDate} onChange={e => setFormData({ ...formData, calibrationDate: e.target.value })} />
             </div>
           </div>
 
@@ -219,9 +232,9 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
             <input type="file" accept="image/*" multiple capture="environment" ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
           </div>
 
-          <button type="submit" disabled={isSubmitting || isProcessingPhotoLocal || capturedPhotos.length === 0} className="w-full py-6 bg-[#0f172a] text-white font-black rounded-[2rem] text-sm uppercase shadow-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-4">
-            {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <CheckCircle size={24} />}
-            {isSubmitting ? 'ENVIANDO...' : 'CONFIRMAR REGISTRO'}
+          <button type="submit" disabled={isSubmitting || isProcessingPhotoLocal || capturedPhotos.length === 0} className={`w-full py-6 text-white font-black rounded-[2rem] text-sm uppercase shadow-2xl transition-all flex items-center justify-center gap-4 ${isUpdateMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#0f172a] hover:bg-indigo-600'}`}>
+            {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : (isUpdateMode ? <Save size={24} /> : <CheckCircle size={24} />)}
+            {isSubmitting ? 'ENVIANDO...' : (isUpdateMode ? 'ACTUALIZAR EVIDENCIA' : 'CONFIRMAR REGISTRO')}
           </button>
         </form>
       </div>

@@ -62,7 +62,7 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
     const reader = new FileReader();
     reader.onloadend = async () => {
       // Cambio solicitado: Prefijo "SUP.:" en lugar de "PLACA:"
-      const watermarked = await processImageWithWatermark(reader.result as string, `SUP.: ${visit.plate} - VISITA`, coords);
+      const watermarked = await processImageWithWatermark(reader.result as string, `SUP.: ${visit.plate} - VISITA`, coords, formData.visitDate);
       setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
       setIsProcessingPhoto(false);
     };
