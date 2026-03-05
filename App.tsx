@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
+import DriverStats from './components/DriverStats';
 import DriverCard from './components/DriverCard';
 import FineCard from './components/FineCard';
 import FineForm from './components/FineForm';
@@ -109,6 +110,9 @@ const App: React.FC = () => {
 
   // Vehicle Filters
   const [vehicleDocFilter, setVehicleDocFilter] = useState<'all' | 'soat' | 'rtm' | 'plc' | 'ext'>('all');
+
+  // Driver Filters
+  const [driverDocFilter, setDriverDocFilter] = useState<'all' | 'license' | 'defensive' | 'medical'>('all');
 
   // Auth State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -295,6 +299,34 @@ const App: React.FC = () => {
       return matchCd && matchContractor && matchSearch && matchDoc;
     });
   }, [vehicles, filterCd, filterContractor, searchTerm, vehicleDocFilter]);
+
+  const statsDrivers = useMemo(() => {
+    const filtered = drivers.filter(d => 
+      (filterCd === 'all' || d.cd === filterCd) && 
+      (filterContractor === 'all' || d.contractor === filterContractor) &&
+      d.name.toUpperCase().includes(searchTerm.toUpperCase())
+    );
+    return {
+      total: filtered.length,
+      licenseWarning: filtered.filter(d => d.license.status !== 'active').length,
+      defensiveWarning: filtered.filter(d => d.defensiveDriving.status !== 'active').length,
+      medicalWarning: filtered.filter(d => d.medicalExam.status !== 'active').length
+    };
+  }, [drivers, filterCd, filterContractor, searchTerm]);
+
+  const filteredDrivers = useMemo(() => {
+    return drivers.filter(d => {
+      const matchCd = filterCd === 'all' || d.cd === filterCd;
+      const matchContractor = filterContractor === 'all' || d.contractor === filterContractor;
+      const matchSearch = d.name.toUpperCase().includes(searchTerm.toUpperCase());
+      const matchDoc = driverDocFilter === 'all' || 
+        (driverDocFilter === 'license' && d.license.status !== 'active') ||
+        (driverDocFilter === 'defensive' && d.defensiveDriving.status !== 'active') ||
+        (driverDocFilter === 'medical' && d.medicalExam.status !== 'active');
+      
+      return matchCd && matchContractor && matchSearch && matchDoc;
+    });
+  }, [drivers, filterCd, filterContractor, searchTerm, driverDocFilter]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
@@ -573,8 +605,18 @@ const App: React.FC = () => {
                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
                  <Users size={24} className="text-indigo-600" /> Directorio de Conductores
                </h2>
+               
+               <DriverStats 
+                 total={statsDrivers.total}
+                 licenseWarning={statsDrivers.licenseWarning}
+                 defensiveWarning={statsDrivers.defensiveWarning}
+                 medicalWarning={statsDrivers.medicalWarning}
+                 onFilter={setDriverDocFilter}
+                 activeFilter={driverDocFilter}
+               />
+
                <div className="grid grid-cols-1 gap-6">
-                {drivers.filter(d => (filterCd === 'all' || d.cd === filterCd) && d.name.toUpperCase().includes(searchTerm.toUpperCase())).map(d => (
+                {filteredDrivers.map(d => (
                   <DriverCard key={d.id} driver={d} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
                 ))}
                </div>

@@ -56,6 +56,9 @@ export interface Driver {
   identification: string;
   hireDate: string;
   position?: string;
+  status?: string;
+  experienceTime?: string;
+  licenseIssueDate?: string;
   photoUrl?: string;
   cd?: string;
   contractor?: string;

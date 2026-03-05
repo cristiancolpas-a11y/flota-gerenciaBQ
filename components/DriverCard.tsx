@@ -83,22 +83,24 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
                 <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] flex items-center gap-2 mb-1">
                    <History size={14} className="text-indigo-600" /> Expediente Laboral
                 </h3>
-                <p className="text-[10px] font-bold text-slate-500">Estado: Activo en Flota</p>
+                <p className="text-[10px] font-bold text-slate-500">Estado: {driver.status || 'Activo en Flota'}</p>
               </div>
               <div className="flex items-center gap-2">
                  <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[8px] font-black uppercase tracking-widest border border-emerald-200 flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                    CONTRATO VIGENTE
+                    {driver.status || 'CONTRATO VIGENTE'}
                  </span>
               </div>
            </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
               {[
                 { label: 'Centro Distribución', value: driver.cd || 'ARENOSA', icon: <Building2 className="text-indigo-500" /> },
                 { label: 'Cargo', value: driver.position || 'CONDUCTOR', icon: <Briefcase size={16} className="text-indigo-500" /> },
                 { label: 'Fecha Ingreso', value: formatDate(driver.hireDate), icon: <Calendar size={16} className="text-indigo-500" /> },
-                { label: 'Identificación', value: driver.identification, icon: <IdCard size={16} className="text-indigo-500" /> }
+                { label: 'Identificación', value: driver.identification, icon: <IdCard size={16} className="text-indigo-500" /> },
+                { label: 'Experiencia', value: driver.experienceTime || 'N/A', icon: <Clock size={16} className="text-indigo-500" /> },
+                { label: 'Exp. Licencia', value: formatDate(driver.licenseIssueDate), icon: <FileBadge size={16} className="text-indigo-500" /> }
               ].map((item, i) => (
                 <div key={i} className="group">
                    <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] mb-1 flex items-center gap-2">

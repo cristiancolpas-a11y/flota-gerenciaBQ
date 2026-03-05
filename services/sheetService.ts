@@ -407,20 +407,44 @@ export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
         complete: (results) => {
           const rows = results.data as any[][];
           if (!rows || rows.length < 2) { resolve([]); return; }
-          const drivers = rows.slice(1).filter(row => row && row[1]).map((row): Driver => {
-            const licExp = parseFlexibleDate(row[16]);
+          const drivers = rows.slice(1).filter(row => row && row[2]).map((row): Driver => {
+            const licExp = parseFlexibleDate(row[9]);
+            const courseExp = parseFlexibleDate(row[11]);
+            const medicalExp = parseFlexibleDate(row[13]);
+            
             return {
-              id: `d-${cleanSheetValue(row[2])}`,
-              name: cleanSheetValue(row[1]),
-              identification: cleanSheetValue(row[2]),
+              id: `d-${cleanSheetValue(row[3])}`,
+              name: cleanSheetValue(row[2]),
+              identification: cleanSheetValue(row[3]),
               hireDate: parseFlexibleDate(row[6]),
               position: cleanSheetValue(row[4]),
+              status: cleanSheetValue(row[5]),
+              experienceTime: cleanSheetValue(row[8]),
+              licenseIssueDate: parseFlexibleDate(row[7]),
               photoUrl: cleanSheetValue(row[21]),
               cd: cleanSheetValue(row[0]),
-              contractor: cleanSheetValue(row[3]),
-              license: { expiryDate: licExp, lastRenewalDate: '', status: calculateStatus(licExp), url: cleanSheetValue(row[18]), daysPending: getDaysDiff(licExp) },
-              defensiveDriving: { expiryDate: parseFlexibleDate(row[11]), lastRenewalDate: '', status: 'active', url: cleanSheetValue(row[19]) },
-              medicalExam: { expiryDate: parseFlexibleDate(row[13]), lastRenewalDate: '', status: 'active', url: cleanSheetValue(row[20]) }
+              contractor: cleanSheetValue(row[1]),
+              license: { 
+                expiryDate: licExp, 
+                lastRenewalDate: '', 
+                status: calculateStatus(licExp), 
+                url: cleanSheetValue(row[18]), 
+                daysPending: getDaysDiff(licExp) 
+              },
+              defensiveDriving: { 
+                expiryDate: courseExp, 
+                lastRenewalDate: '', 
+                status: calculateStatus(courseExp), 
+                url: cleanSheetValue(row[19]),
+                daysPending: getDaysDiff(courseExp)
+              },
+              medicalExam: { 
+                expiryDate: medicalExp, 
+                lastRenewalDate: '', 
+                status: calculateStatus(medicalExp), 
+                url: cleanSheetValue(row[20]),
+                daysPending: getDaysDiff(medicalExp)
+              }
             };
           });
           resolve(drivers);
