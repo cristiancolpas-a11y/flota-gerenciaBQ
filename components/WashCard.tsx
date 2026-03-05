@@ -10,8 +10,6 @@ interface WashCardProps {
 }
 
 const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
-  const thumbUrl = getDriveDirectLink(report.evidenceUrl || report.finalEvidenceUrl || report.initialEvidenceUrl || "");
-  
   return (
     <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden group hover:shadow-2xl transition-all duration-500">
       {/* Header with Plate */}
@@ -51,82 +49,53 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
         </div>
 
         {/* Visual Support Section */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-2">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">SOPORTE VISUAL DE LIMPIEZA</h4>
             <div className="flex gap-2">
-              {(report.initialEvidenceUrl || report.evidenceUrl) && (
-                <button 
-                  onClick={() => onViewDoc(report.initialEvidenceUrl || report.evidenceUrl, `Evidencia Inicial ${report.plate}`)}
-                  className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all flex items-center gap-2"
-                >
-                  <Eye size={14} /> <span className="text-[8px] font-black">VER FOTO</span>
-                </button>
-              )}
-              {report.mapUrl && (
-                <button 
-                  onClick={() => onViewDoc(report.mapUrl, `Ubicación ${report.plate}`)}
-                  className="p-2 bg-cyan-50 text-cyan-600 rounded-xl hover:bg-cyan-600 hover:text-white transition-all flex items-center gap-2"
-                >
-                  <MapPin size={14} /> <span className="text-[8px] font-black">MAPA</span>
-                </button>
-              )}
+              <button 
+                onClick={() => onViewDoc(report.evidenceUrl, `Evidencia ${report.plate}`)}
+                className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all flex items-center gap-2"
+              >
+                <Eye size={14} /> <span className="text-[8px] font-black">VER FOTO</span>
+              </button>
+              <button 
+                onClick={() => onViewDoc(report.mapUrl, `Ubicación ${report.plate}`)}
+                className="p-2 bg-cyan-50 text-cyan-600 rounded-xl hover:bg-cyan-600 hover:text-white transition-all flex items-center gap-2"
+              >
+                <MapPin size={14} /> <span className="text-[8px] font-black">MAPA</span>
+              </button>
             </div>
           </div>
           
-          {/* REGISTRO FOTOGRÁFICO */}
-          <div className="grid grid-cols-1 gap-4">
-            <div 
-              onClick={() => {
-                const photos = [];
-                if (report.initialEvidenceUrl) photos.push({ url: report.initialEvidenceUrl, label: 'Antes' });
-                if (report.finalEvidenceUrl) photos.push({ url: report.finalEvidenceUrl, label: 'Después' });
-                if (photos.length === 0 && report.evidenceUrl) photos.push({ url: report.evidenceUrl, label: 'Evidencia' });
-                
-                if (photos.length > 0) {
-                  onViewDoc(photos, `Evidencia ${report.plate}`);
-                }
-              }}
-              className="aspect-video rounded-3xl overflow-hidden bg-slate-100 relative group/img border-2 border-slate-100 shadow-inner cursor-pointer"
-            >
-              <img 
-                src={thumbUrl || "https://picsum.photos/seed/wash1/400/300"} 
-                alt="Evidencia Principal" 
-                className="w-full h-full object-cover transition-transform duration-700 group-hover/img:scale-110"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                <Eye size={32} className="text-white drop-shadow-lg scale-0 group-hover/img:scale-100 transition-transform duration-300" />
+          <div className="grid grid-cols-1 gap-3">
+            {/* Sub Grid: Map (Col G) and Evidence Preview */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Map Column G */}
+              <div 
+                onClick={() => onViewDoc(report.mapUrl, `Ubicación GPS - ${report.plate}`)}
+                className="aspect-video rounded-2xl overflow-hidden bg-slate-50 border-2 border-slate-100 cursor-pointer relative group/mini shadow-sm"
+              >
+                <img src={getDriveDirectLink(report.mapUrl)} className="w-full h-full object-cover transition-transform duration-500 group-hover/mini:scale-110" referrerPolicy="no-referrer" />
+                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/mini:opacity-100 transition-opacity flex items-center justify-center">
+                  <MapPin size={20} className="text-white" />
+                </div>
+                <div className="absolute bottom-2 left-2">
+                  <span className="px-2 py-1 bg-cyan-500 text-white text-[7px] font-black rounded-lg uppercase tracking-widest">MAPA GPS</span>
+                </div>
               </div>
-              <div className="absolute bottom-4 left-4 flex items-center gap-2">
-                <div className="px-3 py-1 bg-white/90 backdrop-blur-sm text-[#0f172a] text-[8px] font-black rounded-full shadow-lg uppercase tracking-widest">
-                  {report.finalEvidenceUrl ? 'REGISTRO ANTES/DESPUÉS' : 'REGISTRO FOTOGRÁFICO'}
+              
+              {/* Evidence Column F (mini preview) */}
+              <div 
+                onClick={() => onViewDoc(report.evidenceUrl, `Evidencia - ${report.plate}`)}
+                className="aspect-video rounded-2xl overflow-hidden bg-slate-50 border-2 border-slate-100 cursor-pointer relative group/mini shadow-sm"
+              >
+                <img src={getDriveDirectLink(report.evidenceUrl)} className="w-full h-full object-cover transition-transform duration-500 group-hover/mini:scale-110" referrerPolicy="no-referrer" />
+                <div className="absolute bottom-2 left-2">
+                  <span className="px-2 py-1 bg-indigo-500 text-white text-[7px] font-black rounded-lg uppercase tracking-widest">EVIDENCIA</span>
                 </div>
               </div>
             </div>
-
-            {report.initialEvidenceUrl && report.finalEvidenceUrl && (
-              <div className="grid grid-cols-2 gap-2">
-                <div 
-                  onClick={() => onViewDoc(report.initialEvidenceUrl!, `Evidencia Antes - ${report.plate}`)}
-                  className="aspect-video rounded-xl overflow-hidden bg-slate-50 border border-slate-100 cursor-pointer relative group/mini"
-                >
-                  <img src={getDriveDirectLink(report.initialEvidenceUrl)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/mini:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="text-[8px] font-black text-white uppercase tracking-widest">ANTES</span>
-                  </div>
-                </div>
-                <div 
-                  onClick={() => onViewDoc(report.finalEvidenceUrl!, `Evidencia Después - ${report.plate}`)}
-                  className="aspect-video rounded-xl overflow-hidden bg-slate-50 border border-slate-100 cursor-pointer relative group/mini"
-                >
-                  <img src={getDriveDirectLink(report.finalEvidenceUrl)} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/mini:opacity-100 transition-opacity flex items-center justify-center">
-                    <span className="text-[8px] font-black text-white uppercase tracking-widest">DESPUÉS</span>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 

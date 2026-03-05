@@ -136,8 +136,8 @@ const CleaningCalendar: React.FC<CleaningCalendarProps> = ({
                             onManageClosure(report);
                           } else {
                             const photos = [];
-                            if (report.initialEvidenceUrl) photos.push({ url: report.initialEvidenceUrl, label: 'Antes' });
-                            if (report.finalEvidenceUrl) photos.push({ url: report.finalEvidenceUrl, label: 'Después' });
+                            if (report.initialEvidenceUrl) photos.push({ url: report.initialEvidenceUrl, label: 'Inicial' });
+                            if (report.finalEvidenceUrl) photos.push({ url: report.finalEvidenceUrl, label: 'Final' });
                             
                             if (photos.length > 0) {
                               onViewDoc(photos, `Evidencia Limpieza - ${report.plate}`);

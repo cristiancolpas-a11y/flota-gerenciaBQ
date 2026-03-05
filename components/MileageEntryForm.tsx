@@ -38,7 +38,7 @@ import ExportButton from './ExportButton';
 interface MileageEntryFormProps {
   vehicles: Vehicle[];
   mileageLogs: MileageLog[];
-  onSubmit: (data: { plate: string, mileage: number, cd: string, contractor: string, date: string, weekNumber: number }) => Promise<void>;
+  onSubmit: (data: { plate: string, mileage: number, cd: string, contractor: string, date: string, week: string }) => Promise<void>;
   externalCd: string;
   setExternalCd: (cd: string) => void;
   externalContractor: string;
@@ -126,27 +126,29 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
     return Array.from(new Set(vInCd.map(v => v.contractor || 'GENERAL'))).sort();
   }, [vehicles, externalCd]);
 
-  const baseFiltered = useMemo(() => {
+  const statsFiltered = useMemo(() => {
     return vehicles.filter(v => {
       const matchCd = externalCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(externalCd);
       const matchContractor = externalContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(externalContractor);
-      const matchPlate = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
-      return matchCd && matchContractor && matchPlate;
+      return matchCd && matchContractor;
     });
-  }, [vehicles, externalCd, externalContractor, searchTerm]);
+  }, [vehicles, externalCd, externalContractor]);
 
   const stats = useMemo(() => {
-    const total = baseFiltered.length;
-    const completed = baseFiltered.filter(v => 
+    const total = statsFiltered.length;
+    const completed = statsFiltered.filter(v => 
       viewMode === 'semanal' ? isVehicleDoneInWeek(v, selectedWeek) : isVehicleDoneInMonth(v, selectedMonth)
     ).length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { total, completed, pending: total - completed, percentage };
-  }, [baseFiltered, mileageLogs, selectedWeek, selectedMonth, viewMode]);
+  }, [statsFiltered, mileageLogs, selectedWeek, selectedMonth, viewMode]);
 
   const filteredVehicles = useMemo(() => {
-    return baseFiltered.filter(v => {
+    return statsFiltered.filter(v => {
       const isCompleted = viewMode === 'semanal' ? isVehicleDoneInWeek(v, selectedWeek) : isVehicleDoneInMonth(v, selectedMonth);
+      const matchPlate = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
+      
+      if (!matchPlate) return false;
       if (statusFilter === 'completed') return isCompleted;
       if (statusFilter === 'pending') return !isCompleted;
       return true;
@@ -156,7 +158,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
       if (aDone !== bDone) return aDone ? 1 : -1;
       return a.plate.localeCompare(b.plate);
     });
-  }, [baseFiltered, statusFilter, mileageLogs, selectedWeek, selectedMonth, viewMode]);
+  }, [statsFiltered, statusFilter, mileageLogs, selectedWeek, selectedMonth, viewMode, searchTerm]);
 
   const historyLogs = useMemo(() => {
     return (mileageLogs || []).filter(log => {
@@ -165,10 +167,11 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
         ? extractNumber(log.week) === selectedWeek 
         : logDate.getMonth() === selectedMonth;
       const matchCd = externalCd === 'all' || normalizeStr(log.cd || "") === normalizeStr(externalCd);
+      const matchContractor = externalContractor === 'all' || normalizeStr(log.contractor || "") === normalizeStr(externalContractor);
       const matchSearch = searchTerm === '' || normalizePlate(log.plate).includes(normalizePlate(searchTerm));
-      return matchTime && matchCd && matchSearch;
+      return matchTime && matchCd && matchContractor && matchSearch;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [mileageLogs, selectedWeek, selectedMonth, viewMode, externalCd, searchTerm]);
+  }, [mileageLogs, selectedWeek, selectedMonth, viewMode, externalCd, externalContractor, searchTerm]);
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,7 +189,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
         cd: activeVehicle.cd || 'GENERAL',
         contractor: activeVehicle.contractor || 'GENERAL',
         date: entryDate,
-        weekNumber: selectedWeek
+        week: selectedWeek.toString()
       });
       setActiveVehicle(null);
       setNewMileage('');

@@ -21,7 +21,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
   const [filterCd, setFilterCd] = useState<string>('all');
   const [initialPhotos, setInitialPhotos] = useState<string[]>([]);
   const [finalPhotos, setFinalPhotos] = useState<string[]>([]);
-  const [activeCaptureType, setActiveCaptureType] = useState<'ANTES' | 'DESPUES' | null>(null);
+  const [activeCaptureType, setActiveCaptureType] = useState<'INICIAL' | 'FINAL' | null>(null);
   
   const [formData, setFormData] = useState({
     plate: preSelectedPlate || '',
@@ -47,8 +47,8 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
   };
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !formData.plate) {
+    const files = e.target.files;
+    if (!files || !files.length || !formData.plate) {
       if (!formData.plate) alert("Seleccione la placa antes de capturar la evidencia.");
       return;
     }
@@ -67,28 +67,39 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
 
     const coords = await getCoords();
 
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
-      if (activeCaptureType === 'ANTES') {
+    for (let i = 0; i < files.length; i++) {
+      const currentPhotos = activeCaptureType === 'INICIAL' ? initialPhotos : finalPhotos;
+      if (currentPhotos.length + i >= 4) break;
+      const file = files[i];
+      
+      const watermarked = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const res = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
+          resolve(res);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      if (activeCaptureType === 'INICIAL') {
         setInitialPhotos(prev => [...prev, watermarked].slice(0, 4));
       } else {
         setFinalPhotos(prev => [...prev, watermarked].slice(0, 4));
       }
-      setIsProcessingPhoto(false);
-      setActiveCaptureType(null);
-    };
-    reader.readAsDataURL(file);
+    }
+    
+    setIsProcessingPhoto(false);
+    setActiveCaptureType(null);
     if (evidenceInputRef.current) evidenceInputRef.current.value = "";
   };
 
-  const startCapture = (type: 'ANTES' | 'DESPUES') => {
+  const startCapture = (type: 'INICIAL' | 'FINAL') => {
     setActiveCaptureType(type);
     evidenceInputRef.current?.click();
   };
 
-  const removePhoto = (type: 'ANTES' | 'DESPUES', index: number) => {
-    if (type === 'ANTES') {
+  const removePhoto = (type: 'INICIAL' | 'FINAL', index: number) => {
+    if (type === 'INICIAL') {
       setInitialPhotos(prev => prev.filter((_, i) => i !== index));
     } else {
       setFinalPhotos(prev => prev.filter((_, i) => i !== index));
@@ -98,7 +109,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.plate || initialPhotos.length === 0 || finalPhotos.length === 0) {
-      alert("Por favor complete todos los campos: Placa, al menos una foto ANTES y al menos una foto DESPUÉS.");
+      alert("Por favor complete todos los campos: Placa, al menos una foto INICIAL y al menos una foto FINAL.");
       return;
     }
     
@@ -109,8 +120,8 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
       const week = getWeekNumber(dateObj).toString();
 
       // Create collages
-      const initialCollage = await createMosaic(initialPhotos);
-      const finalCollage = await createMosaic(finalPhotos);
+      const initialCollage = await createMosaic(initialPhotos, `LIMPIEZA: ${formData.plate}`);
+      const finalCollage = await createMosaic(finalPhotos, `LIMPIEZA: ${formData.plate}`);
 
       const payload = {
         ...formData,
@@ -215,20 +226,20 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
           <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
               <span className="text-[11px] font-black text-cyan-600 uppercase tracking-widest flex items-center gap-2">
-                 <Camera size={18} /> EVIDENCIA (ANTES / DESPUÉS)
+                 <Camera size={18} /> EVIDENCIA FOTOGRÁFICA
               </span>
               {isProcessingPhoto && <span className="text-amber-500 text-[9px] font-black animate-pulse flex items-center gap-1"><Loader2 size={10} className="animate-spin"/> PROCESANDO...</span>}
             </div>
             
             <div className="space-y-6">
-              {/* Sección ANTES */}
+              {/* Sección INICIAL */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center px-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">EVIDENCIA ANTES ({initialPhotos.length}/4)</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">EVIDENCIA INICIAL ({initialPhotos.length}/4)</p>
                   {initialPhotos.length < 4 && (
                     <button 
                       type="button" 
-                      onClick={() => startCapture('ANTES')}
+                      onClick={() => startCapture('INICIAL')}
                       className="text-cyan-600 hover:text-cyan-700 transition-colors"
                     >
                       <Plus size={16} />
@@ -241,7 +252,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
                       <img src={photo} className="w-full h-full object-cover" />
                       <button 
                         type="button" 
-                        onClick={() => removePhoto('ANTES', idx)} 
+                        onClick={() => removePhoto('INICIAL', idx)} 
                         className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-md shadow-lg"
                       >
                         <Trash2 size={10} />
@@ -252,7 +263,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
                     <button 
                       type="button" 
                       disabled={!formData.plate || isProcessingPhoto} 
-                      onClick={() => startCapture('ANTES')} 
+                      onClick={() => startCapture('INICIAL')} 
                       className="aspect-square rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-300 hover:border-cyan-400 hover:text-cyan-600 transition-all disabled:opacity-40"
                     >
                       <Plus size={20} />
@@ -261,14 +272,14 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
                 </div>
               </div>
 
-              {/* Sección DESPUÉS */}
+              {/* Sección FINAL */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center px-1">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">EVIDENCIA DESPUÉS ({finalPhotos.length}/4)</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">EVIDENCIA FINAL ({finalPhotos.length}/4)</p>
                   {finalPhotos.length < 4 && (
                     <button 
                       type="button" 
-                      onClick={() => startCapture('DESPUES')}
+                      onClick={() => startCapture('FINAL')}
                       className="text-cyan-600 hover:text-cyan-700 transition-colors"
                     >
                       <Plus size={16} />
@@ -281,7 +292,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
                       <img src={photo} className="w-full h-full object-cover" />
                       <button 
                         type="button" 
-                        onClick={() => removePhoto('DESPUES', idx)} 
+                        onClick={() => removePhoto('FINAL', idx)} 
                         className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-md shadow-lg"
                       >
                         <Trash2 size={10} />
@@ -292,7 +303,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
                     <button 
                       type="button" 
                       disabled={!formData.plate || isProcessingPhoto} 
-                      onClick={() => startCapture('DESPUES')} 
+                      onClick={() => startCapture('FINAL')} 
                       className="aspect-square rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center text-slate-300 hover:border-cyan-400 hover:text-cyan-600 transition-all disabled:opacity-40"
                     >
                       <Plus size={20} />
@@ -301,7 +312,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
                 </div>
               </div>
             </div>
-            <input type="file" accept="image/*" capture="environment" ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
+            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
           </div>
 
           <button 

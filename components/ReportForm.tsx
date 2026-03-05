@@ -53,8 +53,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
   ];
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !formData.plate) {
+    const files = e.target.files;
+    if (!files || !files.length || !formData.plate) {
       if (!formData.plate) alert("Seleccione la placa antes de capturar la evidencia.");
       return;
     }
@@ -73,13 +73,23 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
 
     const coords = await getCoords();
 
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, `PLACA: ${formData.plate}`, coords, formData.date);
-      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 6));
-      setIsProcessingPhoto(false);
-    };
-    reader.readAsDataURL(file);
+    for (let i = 0; i < files.length; i++) {
+      if (capturedPhotos.length + i >= 4) break;
+      const file = files[i];
+      
+      const watermarked = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const res = await processImageWithWatermark(reader.result as string, `PLACA: ${formData.plate}`, coords, formData.date);
+          resolve(res);
+        };
+        reader.readAsDataURL(file);
+      });
+      
+      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+    }
+    
+    setIsProcessingPhoto(false);
     if (evidenceInputRef.current) evidenceInputRef.current.value = "";
   };
 
@@ -108,7 +118,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
     
     setIsSubmitting(true);
     try {
-      const mergedInitialEvidence = await createMosaic(capturedPhotos);
+      const mergedInitialEvidence = await createMosaic(capturedPhotos, `NOVEDAD INGRESO: ${formData.plate} - ${formData.date}`);
       const selectedVehicle = vehicles.find(v => v.plate === formData.plate);
       const payload = { ...formData, initialEvidence: mergedInitialEvidence, status: 'ABIERTO', cd: selectedVehicle?.cd || 'GENERAL' };
       await onSubmit(payload);
@@ -179,24 +189,25 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
           </div>
 
           <div className="space-y-4">
-            <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest px-1 flex items-center gap-2">
-              <Camera size={14}/> Evidencias (Max 6)
+            <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest px-1 flex items-center justify-between">
+              <span className="flex items-center gap-2"><Camera size={14}/> Evidencias (Max 4)</span>
+              <span className="text-[10px] text-slate-400">{capturedPhotos.length} / 4</span>
             </label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {capturedPhotos.map((photo, index) => (
                 <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200">
                   <img src={photo} className="w-full h-full object-cover" />
                   <button type="button" onClick={() => removePhoto(index)} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-lg shadow-lg"><Trash2 size={12} /></button>
                 </div>
               ))}
-              {capturedPhotos.length < 6 && (
+              {capturedPhotos.length < 4 && (
                 <button type="button" disabled={!formData.plate || isProcessingPhoto} onClick={() => evidenceInputRef.current?.click()} className="aspect-square rounded-xl border-2 border-dashed border-slate-400 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-indigo-400 hover:text-indigo-600 transition-all">
                   <Camera size={24} />
-                  <span className="text-[8px] font-black uppercase">Foto</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Añadir Fotos</span>
                 </button>
               )}
             </div>
-            <input type="file" accept="image/*" capture="environment" ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
+            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
           </div>
 
           <div className="space-y-2">
@@ -207,7 +218,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
               <ImageIcon size={24} /> 
               <span className="text-[9px] font-black uppercase tracking-widest">{formData.entryMap ? 'MAPA ADJUNTO ✓' : 'CAPTURAR MAPA'}</span>
             </button>
-            <input type="file" accept="image/*" capture="environment" ref={mapInputRef} className="hidden" onChange={handleMapChange} />
+            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" ref={mapInputRef} className="hidden" onChange={handleMapChange} />
           </div>
 
           <button type="submit" disabled={isSubmitting || isProcessingPhoto} className="w-full py-5 bg-[#0f172a] text-white font-black rounded-2xl text-sm uppercase shadow-2xl hover:bg-indigo-600 disabled:opacity-50 transition-all flex items-center justify-center gap-3">

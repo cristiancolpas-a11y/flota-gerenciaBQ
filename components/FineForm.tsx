@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { Vehicle, Driver } from '../types';
-import { processImageWithWatermark } from '../utils';
-import { X, Gavel, Camera, Save, Loader2, CheckCircle, User, FileSignature, AlertCircle, FileText, UploadCloud } from 'lucide-react';
+import { processImageWithWatermark, createMosaic } from '../utils';
+import { X, Gavel, Camera, Save, Loader2, CheckCircle, User, FileSignature, AlertCircle, FileText, UploadCloud, Trash2 } from 'lucide-react';
 
 interface FineFormProps {
   vehicles: Vehicle[];
@@ -17,6 +17,7 @@ const FineForm: React.FC<FineFormProps> = ({ vehicles, drivers, onClose, onSubmi
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [photos, setPhotos] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     plate: '',
     driverId: '',
@@ -35,29 +36,50 @@ const FineForm: React.FC<FineFormProps> = ({ vehicles, drivers, onClose, onSubmi
   }, [drivers]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !formData.plate) {
+    const files = e.target.files;
+    if (!files || !formData.plate || !files.length) {
       if (!formData.plate) alert("Seleccione la placa primero.");
       return;
     }
 
     setIsProcessingFile(true);
-    const reader = new FileReader();
     
-    reader.onloadend = async () => {
-      const base64 = reader.result as string;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       
       if (file.type === 'application/pdf') {
-        // Si es PDF, lo guardamos tal cual (base64)
-        setFormData(prev => ({ ...prev, evidenceUrl: base64, fileName: file.name }));
+        // Si es PDF, solo aceptamos uno y limpiamos las fotos
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData(prev => ({ ...prev, evidenceUrl: reader.result as string, fileName: file.name }));
+          setPhotos([]);
+          setIsProcessingFile(false);
+        };
+        reader.readAsDataURL(file);
+        return; // Salimos porque PDF es exclusivo
       } else if (file.type.startsWith('image/')) {
-        // Si es imagen, aplicamos marca de agua
-        const watermarked = await processImageWithWatermark(base64, `MULTA: ${formData.plate}`, undefined, formData.date);
-        setFormData(prev => ({ ...prev, evidenceUrl: watermarked, fileName: file.name }));
+        if (photos.length + i >= 4) break;
+        
+        const watermarked = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            const res = await processImageWithWatermark(reader.result as string, `MULTA: ${formData.plate}`, undefined, formData.date);
+            resolve(res);
+          };
+          reader.readAsDataURL(file);
+        });
+        
+        setPhotos(prev => [...prev, watermarked].slice(0, 4));
+        setFormData(prev => ({ ...prev, evidenceUrl: '', fileName: 'FOTOS CAPTURADAS' }));
       }
-      setIsProcessingFile(false);
-    };
-    reader.readAsDataURL(file);
+    }
+    
+    setIsProcessingFile(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,11 +91,17 @@ const FineForm: React.FC<FineFormProps> = ({ vehicles, drivers, onClose, onSubmi
     
     setIsSubmitting(true);
     try {
+      let finalEvidence = formData.evidenceUrl;
+      if (photos.length > 0) {
+        finalEvidence = await createMosaic(photos);
+      }
+
       const selectedVehicle = vehicles.find(v => v.plate === formData.plate);
       const selectedDriver = drivers.find(d => d.identification === formData.driverId);
       
       const payload = { 
         ...formData, 
+        evidenceUrl: finalEvidence,
         id: `FINE-${Date.now()}`, 
         amount: parseFloat(formData.amount) || 0,
         cd: selectedVehicle?.cd || 'GENERAL',
@@ -174,16 +202,38 @@ const FineForm: React.FC<FineFormProps> = ({ vehicles, drivers, onClose, onSubmi
 
           <div className="space-y-2">
             <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest px-1 flex justify-between">
-              <span>Soporte (PDF o Foto)</span>
-              {formData.evidenceUrl ? <span className="text-emerald-500">LISTO ✓</span> : <span className="text-slate-400 font-normal">Opcional</span>}
+              <span>Soporte (PDF o Fotos Max 4)</span>
+              {isProcessingFile && <Loader2 size={12} className="animate-spin" />}
             </label>
-            <button type="button" onClick={() => fileInputRef.current?.click()} className={`w-full py-5 border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all ${formData.evidenceUrl ? 'bg-indigo-50 border-indigo-500 text-indigo-600 shadow-inner' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-indigo-400'}`}>
-              {isPdf ? <FileText size={28} /> : <UploadCloud size={28} />}
-              <span className="text-[10px] font-black uppercase tracking-widest">
-                {formData.evidenceUrl ? (isPdf ? 'PDF ADJUNTO ✓' : 'FOTO CAPTURADA ✓') : 'SUBIR PDF O TOMAR FOTO'}
-              </span>
-            </button>
-            <input type="file" accept="application/pdf,image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+            
+            <div className="grid grid-cols-2 gap-3">
+              {photos.map((p, idx) => (
+                <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border-2 border-slate-100">
+                  <img src={p} className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => removePhoto(idx)} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-lg"><Trash2 size={12} /></button>
+                </div>
+              ))}
+              {photos.length < 4 && !formData.evidenceUrl.startsWith('data:application/pdf') && (
+                <button type="button" onClick={() => fileInputRef.current?.click()} className={`w-full aspect-square border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all ${photos.length > 0 ? 'bg-indigo-50 border-indigo-500 text-indigo-600 shadow-inner' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-indigo-400'}`}>
+                  <UploadCloud size={24} />
+                  <span className="text-[9px] font-black uppercase tracking-widest text-center px-2">
+                    {photos.length > 0 ? 'Añadir Foto' : 'Subir PDF o Fotos'}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {formData.evidenceUrl.startsWith('data:application/pdf') && (
+              <div className="bg-emerald-50 p-4 rounded-2xl border-2 border-emerald-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FileText className="text-emerald-600" />
+                  <span className="text-[10px] font-black uppercase text-emerald-700 truncate max-w-[150px]">{formData.fileName}</span>
+                </div>
+                <button type="button" onClick={() => setFormData(prev => ({ ...prev, evidenceUrl: '', fileName: '' }))} className="p-1.5 bg-rose-500 text-white rounded-lg"><Trash2 size={12} /></button>
+              </div>
+            )}
+
+            <input type="file" accept="application/pdf,image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={fileInputRef} className="hidden" onChange={handleFileChange} />
           </div>
 
           <button type="submit" disabled={isSubmitting || isProcessingFile} className="w-full py-5 bg-[#0f172a] text-white font-black rounded-[2rem] shadow-2xl hover:bg-rose-600 transition-all flex items-center justify-center gap-3 active:scale-95">

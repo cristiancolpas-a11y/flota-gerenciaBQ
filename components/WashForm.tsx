@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { Vehicle } from '../types';
-import { processImageWithWatermark, compressImage, normalizeStr, normalizePlate, getWeekNumber } from '../utils';
+import { processImageWithWatermark, compressImage, normalizeStr, normalizePlate, getWeekNumber, createMosaic } from '../utils';
 import { X, Droplets, Camera, Save, Plus, Trash2, Loader2, Sparkles, MapPin, Building2, Image as ImageIcon, Calendar } from 'lucide-react';
 
 interface WashFormProps {
@@ -18,7 +18,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   const mapInputRef = useRef<HTMLInputElement>(null);
 
   const [filterCd, setFilterCd] = useState<string>('all');
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
   
   const [formData, setFormData] = useState({
     plate: '',
@@ -61,13 +61,28 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
     };
 
     const coords = await getCoords();
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
-      setPhoto(watermarked);
-      setIsProcessingPhoto(false);
-    };
-    reader.readAsDataURL(file);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsProcessingPhoto(true);
+    
+    for (let i = 0; i < files.length; i++) {
+      if (photos.length + i >= 4) break;
+      const file = files[i];
+      
+      const watermarked = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const res = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
+          resolve(res);
+        };
+        reader.readAsDataURL(file);
+      });
+      
+      setPhotos(prev => [...prev, watermarked].slice(0, 4));
+    }
+    
+    setIsProcessingPhoto(false);
     if (evidenceInputRef.current) evidenceInputRef.current.value = "";
   };
 
@@ -83,9 +98,13 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
     }
   };
 
+  const removePhoto = (index: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.plate || !photo || !formData.workshop) {
+    if (!formData.plate || photos.length === 0 || !formData.workshop) {
       alert("Por favor complete todos los campos: Placa, Taller y Evidencia.");
       return;
     }
@@ -96,12 +115,20 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
       const month = dateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
       const week = getWeekNumber(dateObj).toString();
 
+      // Include map in the mosaic if it exists
+      const mosaicPhotos = [...photos];
+      if (formData.mapUrl) {
+        mosaicPhotos.push(formData.mapUrl);
+      }
+
+      const mergedEvidence = await createMosaic(mosaicPhotos, `LAVADO: ${formData.plate} - ${formData.date}`);
+
       const payload = {
         ...formData,
         id: `LAV-${Date.now()}`,
         month,
         week,
-        evidenceUrl: photo,
+        evidenceUrl: mergedEvidence,
       };
       await onSubmit(payload);
       setIsSuccess(true);
@@ -207,37 +234,40 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
               <ImageIcon size={32} />
               <span className="text-[10px] font-black uppercase tracking-widest">{formData.mapUrl ? 'MAPA CAPTURADO ✓' : 'CAPTURAR MAPA'}</span>
             </button>
-            <input type="file" accept="image/*" capture="environment" ref={mapInputRef} className="hidden" onChange={handleMapCapture} />
+            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" ref={mapInputRef} className="hidden" onChange={handleMapCapture} />
           </div>
 
           <div className="space-y-6">
             <div className="flex items-center justify-between px-2">
               <span className="text-[11px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
-                 <Camera size={18} /> EVIDENCIA FOTOGRÁFICA
+                 <Camera size={18} /> EVIDENCIA (MAX 4 FOTOS)
               </span>
-              {isProcessingPhoto && <span className="text-amber-500 text-[9px] font-black animate-pulse">ESTAMPANDO GPS...</span>}
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{photos.length} / 4</span>
             </div>
             
-            {photo ? (
-              <div className="relative aspect-video rounded-[2rem] overflow-hidden border-4 border-slate-50 shadow-md">
-                <img src={photo} className="w-full h-full object-cover" />
-                <button type="button" onClick={() => setPhoto(null)} className="absolute top-4 right-4 p-2 bg-rose-500 text-white rounded-xl shadow-lg hover:scale-110 transition-transform"><Trash2 size={20} /></button>
-              </div>
-            ) : (
-              <button 
-                type="button" 
-                disabled={!formData.plate || isProcessingPhoto} 
-                onClick={() => evidenceInputRef.current?.click()} 
-                className="w-full aspect-video rounded-[2rem] border-4 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-300 hover:border-indigo-400 hover:text-indigo-600 transition-all disabled:opacity-40 shadow-inner"
-              >
-                <Plus size={48} />
-                <span className="text-[12px] font-black uppercase tracking-widest">TOMAR FOTO</span>
-              </button>
-            )}
-            <input type="file" accept="image/*" capture="environment" ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
+            <div className="grid grid-cols-2 gap-3">
+              {photos.map((p, idx) => (
+                <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden border-2 border-slate-100 shadow-sm">
+                  <img src={p} className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => removePhoto(idx)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg shadow-lg hover:scale-110 transition-transform"><Trash2 size={14} /></button>
+                </div>
+              ))}
+              {photos.length < 4 && (
+                <button 
+                  type="button" 
+                  disabled={!formData.plate || isProcessingPhoto} 
+                  onClick={() => evidenceInputRef.current?.click()} 
+                  className="w-full aspect-video rounded-2xl border-4 border-dashed border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-300 hover:border-indigo-400 hover:text-indigo-600 transition-all disabled:opacity-40 shadow-inner"
+                >
+                  <Plus size={32} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">AÑADIR FOTO</span>
+                </button>
+              )}
+            </div>
+            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
           </div>
 
-          <button type="submit" disabled={isSubmitting || isProcessingPhoto || !photo} className="w-full py-6 bg-[#0f172a] text-white font-black rounded-[2.5rem] text-sm uppercase shadow-2xl hover:bg-indigo-600 disabled:opacity-30 transition-all flex items-center justify-center gap-4 group">
+          <button type="submit" disabled={isSubmitting || isProcessingPhoto || photos.length === 0} className="w-full py-6 bg-[#0f172a] text-white font-black rounded-[2.5rem] text-sm uppercase shadow-2xl hover:bg-indigo-600 disabled:opacity-30 transition-all flex items-center justify-center gap-4 group">
             {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : <Save size={24} />}
             {isSubmitting ? 'REGISTRANDO...' : 'REGISTRAR LAVADO'}
           </button>

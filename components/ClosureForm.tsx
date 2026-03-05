@@ -37,8 +37,8 @@ const ClosureForm: React.FC<ClosureFormProps> = ({ report, onClose, onSubmit }) 
   }, [formData.closureDate, report.date]);
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>, target: 'workshop' | 'solution') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || !files.length) return;
 
     setIsProcessingPhoto(true);
     
@@ -55,19 +55,28 @@ const ClosureForm: React.FC<ClosureFormProps> = ({ report, onClose, onSubmit }) 
     const coords = await getCoords();
     const label = target === 'workshop' ? 'TRABAJO TALLER' : 'SOLUCION FINAL';
 
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const watermarked = await processImageWithWatermark(reader.result as string, `${report.plate} - ${label}`, coords, formData.closureDate);
+    for (let i = 0; i < files.length; i++) {
+      const currentPhotos = target === 'workshop' ? workshopPhotos : solutionPhotos;
+      if (currentPhotos.length + i >= 4) break;
+      const file = files[i];
+      
+      const watermarked = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const res = await processImageWithWatermark(reader.result as string, `${report.plate} - ${label}`, coords, formData.closureDate);
+          resolve(res);
+        };
+        reader.readAsDataURL(file);
+      });
+
       if (target === 'workshop') {
-        setWorkshopPhotos(prev => [...prev, watermarked].slice(0, 6));
+        setWorkshopPhotos(prev => [...prev, watermarked].slice(0, 4));
       } else {
-        setSolutionPhotos(prev => [...prev, watermarked].slice(0, 6));
+        setSolutionPhotos(prev => [...prev, watermarked].slice(0, 4));
       }
-      setIsProcessingPhoto(false);
-    };
-    reader.readAsDataURL(file);
+    }
     
-    // Reset input to allow same file selection
+    setIsProcessingPhoto(false);
     if (e.target) e.target.value = "";
   };
 
@@ -101,8 +110,8 @@ const ClosureForm: React.FC<ClosureFormProps> = ({ report, onClose, onSubmit }) 
     setIsSubmitting(true);
     try {
       // Generar mosaicos solo antes de enviar
-      const workshopMosaic = workshopPhotos.length > 0 ? await createMosaic(workshopPhotos) : "";
-      const solutionMosaic = await createMosaic(solutionPhotos);
+      const workshopMosaic = workshopPhotos.length > 0 ? await createMosaic(workshopPhotos, `TRABAJO TALLER: ${report.plate}`) : "";
+      const solutionMosaic = await createMosaic(solutionPhotos, `SOLUCIÓN FINAL: ${report.plate}`);
       
       const closurePayload = {
         ...formData,
@@ -167,13 +176,13 @@ const ClosureForm: React.FC<ClosureFormProps> = ({ report, onClose, onSubmit }) 
             </div>
           </div>
 
-          {/* EVIDENCIA TALLER (HASTA 6 FOTOS) */}
+          {/* EVIDENCIA TALLER (HASTA 4 FOTOS) */}
           <div className="space-y-4">
             <div className="flex justify-between items-center px-1">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <Wrench size={16} className="text-amber-500" /> Evidencia en Taller (Proceso)
               </label>
-              <span className="text-[10px] font-black text-slate-300">{workshopPhotos.length} / 6</span>
+              <span className="text-[10px] font-black text-slate-300">{workshopPhotos.length} / 4</span>
             </div>
             <div className="grid grid-cols-4 gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
               {workshopPhotos.map((photo, idx) => (
@@ -182,22 +191,22 @@ const ClosureForm: React.FC<ClosureFormProps> = ({ report, onClose, onSubmit }) 
                   <button type="button" onClick={() => removePhoto(idx, 'workshop')} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={10} /></button>
                 </div>
               ))}
-              {workshopPhotos.length < 6 && (
+              {workshopPhotos.length < 4 && (
                 <button type="button" disabled={isProcessingPhoto} onClick={() => workshopInputRef.current?.click()} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 bg-white flex items-center justify-center text-slate-300 hover:border-amber-400 hover:text-amber-500 transition-all">
                   <Plus size={20} />
                 </button>
               )}
             </div>
-            <input type="file" accept="image/*" capture="environment" ref={workshopInputRef} className="hidden" onChange={e => handleAddPhoto(e, 'workshop')} />
+            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={workshopInputRef} className="hidden" onChange={e => handleAddPhoto(e, 'workshop')} />
           </div>
 
-          {/* EVIDENCIA SOLUCIÓN (HASTA 6 FOTOS) */}
+          {/* EVIDENCIA SOLUCIÓN (HASTA 4 FOTOS) */}
           <div className="space-y-4">
             <div className="flex justify-between items-center px-1">
               <label className="text-[11px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
                 <Camera size={16} /> Evidencia Solución (Final) *
               </label>
-              <span className="text-[10px] font-black text-slate-300">{solutionPhotos.length} / 6</span>
+              <span className="text-[10px] font-black text-slate-300">{solutionPhotos.length} / 4</span>
             </div>
             <div className="grid grid-cols-4 gap-3 bg-emerald-50/30 p-4 rounded-2xl border-2 border-dashed border-emerald-200">
               {solutionPhotos.map((photo, idx) => (
@@ -206,13 +215,13 @@ const ClosureForm: React.FC<ClosureFormProps> = ({ report, onClose, onSubmit }) 
                   <button type="button" onClick={() => removePhoto(idx, 'solution')} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={10} /></button>
                 </div>
               ))}
-              {solutionPhotos.length < 6 && (
+              {solutionPhotos.length < 4 && (
                 <button type="button" disabled={isProcessingPhoto} onClick={() => solutionInputRef.current?.click()} className="aspect-square rounded-xl border-2 border-dashed border-emerald-300 bg-white flex items-center justify-center text-emerald-300 hover:border-emerald-500 hover:text-emerald-600 transition-all">
                   <Plus size={20} />
                 </button>
               )}
             </div>
-            <input type="file" accept="image/*" capture="environment" ref={solutionInputRef} className="hidden" onChange={e => handleAddPhoto(e, 'solution')} />
+            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={solutionInputRef} className="hidden" onChange={e => handleAddPhoto(e, 'solution')} />
           </div>
 
           {/* MAPA Y COMENTARIOS */}
@@ -225,7 +234,7 @@ const ClosureForm: React.FC<ClosureFormProps> = ({ report, onClose, onSubmit }) 
                 <ImageIconLucide size={24} /> 
                 <span className="text-[10px] font-black uppercase tracking-widest">{formData.exitMap ? 'MAPA CAPTURADO ✓' : 'FOTO MAPA GPS'}</span>
               </button>
-              <input type="file" accept="image/*" capture="environment" ref={mapExitInputRef} className="hidden" onChange={handleMapCapture} />
+              <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" ref={mapExitInputRef} className="hidden" onChange={handleMapCapture} />
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1">Comentarios Finales *</label>

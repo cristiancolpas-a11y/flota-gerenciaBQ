@@ -1,8 +1,8 @@
 
 import React, { useState, useRef } from 'react';
 import { Fine } from '../types';
-import { processImageWithWatermark } from '../utils';
-import { X, Camera, Save, Loader2, CheckCircle, FileText, UploadCloud, AlertCircle } from 'lucide-react';
+import { processImageWithWatermark, createMosaic } from '../utils';
+import { X, Camera, Save, Loader2, CheckCircle, FileText, UploadCloud, AlertCircle, Trash2 } from 'lucide-react';
 
 interface FineSupportFormProps {
   fine: Fine;
@@ -14,40 +14,70 @@ const FineSupportForm: React.FC<FineSupportFormProps> = ({ fine, onClose, onSubm
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [fileData, setFileData] = useState({ url: '', name: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || !files.length) return;
 
     setIsProcessing(true);
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64 = reader.result as string;
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      
       if (file.type === 'application/pdf') {
-        setFileData({ url: base64, name: file.name });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFileData({ url: reader.result as string, name: file.name });
+          setPhotos([]);
+          setIsProcessing(false);
+        };
+        reader.readAsDataURL(file);
+        return;
       } else if (file.type.startsWith('image/')) {
-        const watermarked = await processImageWithWatermark(base64, `SOPORTE MULTA: ${fine.plate}`, undefined, fine.date);
-        setFileData({ url: watermarked, name: file.name });
+        if (photos.length + i >= 4) break;
+        
+        const watermarked = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            const res = await processImageWithWatermark(reader.result as string, `SOPORTE MULTA: ${fine.plate}`, undefined, fine.date);
+            resolve(res);
+          };
+          reader.readAsDataURL(file);
+        });
+        
+        setPhotos(prev => [...prev, watermarked].slice(0, 4));
+        setFileData({ url: '', name: 'FOTOS CAPTURADAS' });
       }
-      setIsProcessing(false);
-    };
-    reader.readAsDataURL(file);
+    }
+    
+    setIsProcessing(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fileData.url) {
+    if (!fileData.url && photos.length === 0) {
       alert("Por favor seleccione un archivo PDF o tome una foto.");
       return;
     }
     
     setIsSubmitting(true);
     try {
+      let finalUrl = fileData.url;
+      if (photos.length > 0) {
+        finalUrl = await createMosaic(photos, `SOPORTE MULTA: ${fine.plate} - ${fine.infractionCode}`);
+      }
+
       await onSubmit({ 
         ...fine,
-        evidenceUrl: fileData.url,
+        evidenceUrl: finalUrl,
         updateMode: true
       });
       setIsSuccess(true);
@@ -96,29 +126,45 @@ const FineSupportForm: React.FC<FineSupportFormProps> = ({ fine, onClose, onSubm
 
           <div className="space-y-4">
             <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest px-1 flex justify-between items-center">
-              <span>EVIDENCIA (PDF O IMAGEN)</span>
+              <span>EVIDENCIA (PDF O FOTOS MAX 4)</span>
               {isProcessing && <Loader2 size={14} className="animate-spin" />}
             </label>
             
-            <button 
-              type="button" 
-              onClick={() => fileInputRef.current?.click()} 
-              className={`w-full py-12 rounded-[2rem] border-4 border-dashed flex flex-col items-center justify-center gap-4 transition-all ${fileData.url ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-indigo-400 hover:text-indigo-600'}`}
-            >
-              {isPdf ? <FileText size={48} /> : (fileData.url ? <CheckCircle size={48} /> : <UploadCloud size={48} />)}
-              <div className="text-center px-4">
-                <p className="text-[10px] font-black uppercase tracking-widest">
-                  {fileData.url ? (isPdf ? 'PDF SELECCIONADO ✓' : 'FOTO CAPTURADA ✓') : 'SUBIR PDF O TOMAR FOTO'}
-                </p>
-                {fileData.name && <p className="text-[8px] font-bold text-slate-400 mt-1 truncate max-w-[200px]">{fileData.name}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              {photos.map((p, idx) => (
+                <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border-2 border-slate-100">
+                  <img src={p} className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => removePhoto(idx)} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-lg"><Trash2 size={12} /></button>
+                </div>
+              ))}
+              {photos.length < 4 && !fileData.url.startsWith('data:application/pdf') && (
+                <button type="button" onClick={() => fileInputRef.current?.click()} className={`w-full aspect-square border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center gap-4 transition-all ${photos.length > 0 ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-indigo-400 hover:text-indigo-600'}`}>
+                  <UploadCloud size={32} />
+                  <div className="text-center px-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest">
+                      {photos.length > 0 ? 'Añadir Foto' : 'Subir PDF o Fotos'}
+                    </p>
+                  </div>
+                </button>
+              )}
+            </div>
+
+            {fileData.url.startsWith('data:application/pdf') && (
+              <div className="bg-emerald-50 p-4 rounded-2xl border-2 border-emerald-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FileText className="text-emerald-600" />
+                  <span className="text-[10px] font-black uppercase text-emerald-700 truncate max-w-[150px]">{fileData.name}</span>
+                </div>
+                <button type="button" onClick={() => setFileData({ url: '', name: '' })} className="p-1.5 bg-rose-500 text-white rounded-lg"><Trash2 size={12} /></button>
               </div>
-            </button>
-            <input type="file" accept="application/pdf,image/*" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+            )}
+
+            <input type="file" accept="application/pdf,image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={fileInputRef} className="hidden" onChange={handleFileChange} />
           </div>
 
           <button 
             onClick={handleSubmit} 
-            disabled={isSubmitting || isProcessing || !fileData.url} 
+            disabled={isSubmitting || isProcessing || (!fileData.url && photos.length === 0)} 
             className="w-full py-5 bg-[#0f172a] text-white font-black rounded-[2rem] shadow-2xl hover:bg-emerald-600 disabled:opacity-40 transition-all flex items-center justify-center gap-3 active:scale-95"
           >
             {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}

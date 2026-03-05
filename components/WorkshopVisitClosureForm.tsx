@@ -45,8 +45,8 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
   ];
 
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || !files.length) return;
 
     setIsProcessingPhoto(true);
     const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
@@ -59,14 +59,24 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
     };
 
     const coords = await getCoords();
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      // Cambio solicitado: Prefijo "SUP.:" en lugar de "PLACA:"
-      const watermarked = await processImageWithWatermark(reader.result as string, `SUP.: ${visit.plate} - VISITA`, coords, formData.visitDate);
+
+    for (let i = 0; i < files.length; i++) {
+      if (capturedPhotos.length + i >= 4) break;
+      const file = files[i];
+      
+      const watermarked = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const res = await processImageWithWatermark(reader.result as string, `SUP.: ${visit.plate} - VISITA`, coords, formData.visitDate);
+          resolve(res);
+        };
+        reader.readAsDataURL(file);
+      });
+      
       setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
-      setIsProcessingPhoto(false);
-    };
-    reader.readAsDataURL(file);
+    }
+    
+    setIsProcessingPhoto(false);
     if (e.target) e.target.value = "";
   };
 
@@ -79,7 +89,7 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
 
     setIsSubmitting(true);
     try {
-      const mosaic = await createMosaic(capturedPhotos);
+      const mosaic = await createMosaic(capturedPhotos, `VISITA TALLER: ${visit.plate} - ${formData.visitDate}`);
       await onSubmit({
         id: visit.id, // Columna H (Hash)
         plate: visit.plate,
@@ -154,7 +164,7 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
                 </button>
               )}
             </div>
-            <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleCapture} />
+            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={fileInputRef} className="hidden" onChange={handleCapture} />
           </div>
 
           <button type="submit" disabled={isSubmitting || isProcessingPhoto} className="w-full py-5 bg-indigo-600 text-white font-black rounded-2xl text-xs uppercase shadow-xl hover:bg-emerald-600 transition-all flex items-center justify-center gap-3">

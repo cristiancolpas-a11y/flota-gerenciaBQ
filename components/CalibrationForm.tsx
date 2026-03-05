@@ -69,7 +69,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
     const coords = await getCoords();
 
     for (let i = 0; i < files.length; i++) {
-      if (capturedPhotos.length >= 6) break; 
+      if (capturedPhotos.length + i >= 4) break; 
       const file = files[i];
       
       const watermarked = await new Promise<string>((resolve) => {
@@ -81,7 +81,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
         reader.readAsDataURL(file);
       });
 
-      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 6));
+      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
     }
     
     setIsProcessingPhotoLocal(false);
@@ -101,7 +101,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
     
     setIsSubmitting(true);
     try {
-      const mergedEvidence = await createMosaic(capturedPhotos);
+      const mergedEvidence = await createMosaic(capturedPhotos, `CALIBRACIÓN: ${formData.plate} - ${formData.calibrationDate}`);
       
       const selectedVehicle = vehicles.find(v => v.plate === formData.plate);
 
@@ -213,25 +213,25 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Evidencia (Max 6 fotos)</label>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{capturedPhotos.length} / 6</span>
+              <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Evidencia (Max 4 fotos)</label>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{capturedPhotos.length} / 4</span>
             </div>
             
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {capturedPhotos.map((photo, index) => (
                 <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 shadow-sm">
                   <img src={photo} className="w-full h-full object-cover" />
                   <button type="button" onClick={() => removePhoto(index)} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-lg"><Trash2 size={12} /></button>
                 </div>
               ))}
-              {capturedPhotos.length < 6 && (
+              {capturedPhotos.length < 4 && (
                 <button type="button" disabled={!formData.plate || isProcessingPhotoLocal} onClick={() => evidenceInputRef.current?.click()} className="aspect-square rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-indigo-400 hover:text-indigo-600 transition-all">
-                  <Camera size={20} />
-                  <span className="text-[8px] font-black uppercase">Foto</span>
+                  <Camera size={24} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Añadir Fotos</span>
                 </button>
               )}
             </div>
-            <input type="file" accept="image/*" multiple capture="environment" ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
+            <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" multiple ref={evidenceInputRef} className="hidden" onChange={handleAddPhoto} />
           </div>
 
           <button type="submit" disabled={isSubmitting || isProcessingPhotoLocal || capturedPhotos.length === 0} className={`w-full py-6 text-white font-black rounded-[2rem] text-sm uppercase shadow-2xl transition-all flex items-center justify-center gap-4 ${isUpdateMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#0f172a] hover:bg-indigo-600'}`}>

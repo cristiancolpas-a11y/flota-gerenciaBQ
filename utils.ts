@@ -164,15 +164,28 @@ export const compressImage = (base64Str: string, maxWidth = 600): Promise<string
   });
 };
 
-export const createMosaic = async (base64Array: string[]): Promise<string> => {
+export const createMosaic = async (base64Array: string[], title?: string): Promise<string> => {
   if (base64Array.length === 0) return "";
-  if (base64Array.length === 1) return base64Array[0];
-
+  
   const images = await Promise.all(base64Array.map(base64 => {
     return new Promise<HTMLImageElement>((resolve) => {
       const img = new Image();
       img.src = base64;
       img.onload = () => resolve(img);
+      img.onerror = () => {
+        // Fallback for broken images
+        const canvas = document.createElement('canvas');
+        canvas.width = 100;
+        canvas.height = 100;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#f1f5f9';
+          ctx.fillRect(0, 0, 100, 100);
+        }
+        const fallbackImg = new Image();
+        fallbackImg.src = canvas.toDataURL();
+        resolve(fallbackImg);
+      };
     });
   }));
 
@@ -180,58 +193,92 @@ export const createMosaic = async (base64Array: string[]): Promise<string> => {
   let cols = 2;
   let rows = 1;
 
-  if (numImages === 2) { cols = 2; rows = 1; }
-  else if (numImages === 3) { cols = 2; rows = 2; }
-  else if (numImages === 4) { cols = 2; rows = 2; }
+  if (numImages === 1) { cols = 1; rows = 1; }
+  else if (numImages === 2) { cols = 2; rows = 1; }
+  else if (numImages <= 4) { cols = 2; rows = 2; }
+  else if (numImages <= 6) { cols = 3; rows = 2; }
   else {
     cols = Math.ceil(Math.sqrt(numImages));
     rows = Math.ceil(numImages / cols);
   }
 
   const canvas = document.createElement('canvas');
-  const cellWidth = 600; 
-  const cellHeight = 450;
+  const cellWidth = 800; 
+  const cellHeight = 600;
+  const headerHeight = title ? 80 : 0;
 
   canvas.width = cols * cellWidth;
-  canvas.height = rows * cellHeight;
+  canvas.height = (rows * cellHeight) + headerHeight;
   const ctx = canvas.getContext('2d');
 
   if (!ctx) return base64Array[0];
 
-  // Fill background with white
+  // Background
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Draw Title Header
+  if (title) {
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, canvas.width, headerHeight);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.round(headerHeight * 0.5)}px Inter, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(title.toUpperCase(), canvas.width / 2, headerHeight / 2);
+  }
+
   images.forEach((img, i) => {
     const x = (i % cols) * cellWidth;
-    const y = Math.floor(i / cols) * cellHeight;
+    const y = Math.floor(i / cols) * cellHeight + headerHeight;
     
-    // Calculate aspect ratio to fit image in cell
-    const imgRatio = img.width / img.height;
-    const cellRatio = cellWidth / cellHeight;
-    
-    let drawWidth = cellWidth;
-    let drawHeight = cellHeight;
-    let offsetX = 0;
-    let offsetY = 0;
+    // Draw cell background
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(x, y, cellWidth, cellHeight);
 
-    if (imgRatio > cellRatio) {
-      drawHeight = cellWidth / imgRatio;
-      offsetY = (cellHeight - drawHeight) / 2;
+    // Calculate aspect ratio to fit image in cell with padding
+    const padding = 20;
+    const innerWidth = cellWidth - (padding * 2);
+    const innerHeight = cellHeight - (padding * 2);
+    
+    const imgRatio = img.width / img.height;
+    const innerRatio = innerWidth / innerHeight;
+    
+    let drawWidth = innerWidth;
+    let drawHeight = innerHeight;
+    let offsetX = padding;
+    let offsetY = padding;
+
+    if (imgRatio > innerRatio) {
+      drawHeight = innerWidth / imgRatio;
+      offsetY = padding + (innerHeight - drawHeight) / 2;
     } else {
-      drawWidth = cellHeight * imgRatio;
-      offsetX = (cellWidth - drawWidth) / 2;
+      drawWidth = innerHeight * imgRatio;
+      offsetX = padding + (innerWidth - drawWidth) / 2;
     }
 
+    // Shadow effect for images
+    ctx.shadowColor = 'rgba(0,0,0,0.1)';
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
+    
     ctx.drawImage(img, x + offsetX, y + offsetY, drawWidth, drawHeight);
     
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
     // Draw border
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 8;
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 2;
     ctx.strokeRect(x, y, cellWidth, cellHeight);
   });
 
-  return canvas.toDataURL('image/jpeg', 0.6); 
+  return canvas.toDataURL('image/jpeg', 0.7); 
 };
 
 export const generateId = (): string => {

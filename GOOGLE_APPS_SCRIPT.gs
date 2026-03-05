@@ -114,7 +114,9 @@ function doPost(e) {
         var imgIni = sImg(d.initialEvidence, "NOV_INI_" + d.plate);
         var imgWork = sImg(d.workshopEvidence, "NOV_TALLER_" + d.plate);
         var imgSol = sImg(d.solutionEvidence, "NOV_SOL_" + d.plate);
-        var rowData = [d.id, d.date, d.plate, d.source, imgIni, d.novelty, d.entryMap || "", d.status, imgWork, d.closureDate || "", imgSol, d.exitMap || "", d.daysInShop || 0, d.closureComments || "", d.workshop || "", d.cd || "GENERAL"];
+        var imgMapEntry = sImg(d.entryMap, "MAPA_ENTRADA_" + d.plate);
+        var imgMapExit = sImg(d.exitMap, "MAPA_SALIDA_" + d.plate);
+        var rowData = [d.id, d.date, d.plate, d.source, imgIni, d.novelty, imgMapEntry || "", d.status, imgWork, d.closureDate || "", imgSol, imgMapExit || "", d.daysInShop || 0, d.closureComments || "", d.workshop || "", d.cd || "GENERAL"];
         if (foundIdx !== -1) s.getRange(foundIdx, 1, 1, rowData.length).setValues([rowData]);
         else s.appendRow(rowData);
       }
@@ -197,7 +199,7 @@ function doPost(e) {
       }
       else if (m === 'POST_WASH') {
         var s = getS(ss, "LAVADOS");
-        s.appendRow([d.id, d.month, d.week, d.date, d.plate, sImg(d.evidenceUrl, "LAVADO_" + d.plate), d.mapUrl, d.workshop]);
+        s.appendRow([d.id, d.month, d.week, d.date, d.plate, sImg(d.evidenceUrl, "LAVADO_" + d.plate), sImg(d.mapUrl, "MAPA_LAVADO_" + d.plate), d.workshop]);
       }
       else if (m === 'POST_CALIBRATION_UPDATE') {
         var s = getS(ss, "CALIBRACIONES");

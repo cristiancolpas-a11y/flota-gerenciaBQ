@@ -267,7 +267,11 @@ const App: React.FC = () => {
   }, [filteredCalibrations]);
 
   const statsVehicles = useMemo(() => {
-    const filtered = vehicles.filter(v => (filterCd === 'all' || v.cd === filterCd) && normalizePlate(v.plate).includes(normalizePlate(searchTerm)));
+    const filtered = vehicles.filter(v => 
+      (filterCd === 'all' || v.cd === filterCd) && 
+      (filterContractor === 'all' || v.contractor === filterContractor) &&
+      normalizePlate(v.plate).includes(normalizePlate(searchTerm))
+    );
     return {
       total: filtered.length,
       soatWarning: filtered.filter(v => v.soat.status !== 'active').length,
@@ -275,11 +279,12 @@ const App: React.FC = () => {
       plcWarning: filtered.filter(v => v.plc.status !== 'active').length,
       extWarning: filtered.filter(v => v.extinguisher.status !== 'active').length
     };
-  }, [vehicles, filterCd, searchTerm]);
+  }, [vehicles, filterCd, filterContractor, searchTerm]);
 
   const filteredVehicles = useMemo(() => {
     return vehicles.filter(v => {
       const matchCd = filterCd === 'all' || v.cd === filterCd;
+      const matchContractor = filterContractor === 'all' || v.contractor === filterContractor;
       const matchSearch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
       const matchDoc = vehicleDocFilter === 'all' || 
         (vehicleDocFilter === 'soat' && v.soat.status !== 'active') ||
@@ -287,9 +292,9 @@ const App: React.FC = () => {
         (vehicleDocFilter === 'plc' && v.plc.status !== 'active') ||
         (vehicleDocFilter === 'ext' && v.extinguisher.status !== 'active');
       
-      return matchCd && matchSearch && matchDoc;
+      return matchCd && matchContractor && matchSearch && matchDoc;
     });
-  }, [vehicles, filterCd, searchTerm, vehicleDocFilter]);
+  }, [vehicles, filterCd, filterContractor, searchTerm, vehicleDocFilter]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
@@ -599,7 +604,21 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'kilometrajes' && (
-            <MileageEntryForm vehicles={vehicles} mileageLogs={mileageLogs} onSubmit={submitMileageToSheet} externalCd={filterCd} setExternalCd={setFilterCd} externalContractor="all" setExternalContractor={() => {}} searchTerm={searchTerm} setSearchTerm={setSearchTerm} statusFilter={mileageStatusFilter} setStatusFilter={setMileageStatusFilter} selectedWeek={selectedWeek} onWeekChange={setSelectedWeek} />
+            <MileageEntryForm 
+              vehicles={vehicles} 
+              mileageLogs={mileageLogs} 
+              onSubmit={submitMileageToSheet} 
+              externalCd={filterCd} 
+              setExternalCd={setFilterCd} 
+              externalContractor={filterContractor} 
+              setExternalContractor={setFilterContractor} 
+              searchTerm={searchTerm} 
+              setSearchTerm={setSearchTerm} 
+              statusFilter={mileageStatusFilter} 
+              setStatusFilter={setMileageStatusFilter} 
+              selectedWeek={selectedWeek} 
+              onWeekChange={setSelectedWeek} 
+            />
           )}
 
           {activeView === 'novedades' && (
