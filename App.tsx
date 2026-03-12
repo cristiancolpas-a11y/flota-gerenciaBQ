@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -30,6 +30,12 @@ import WorkshopModule from './components/WorkshopModule';
 import DocumentUpdateForm from './components/DocumentUpdateForm';
 import WorkshopCalendar from './components/WorkshopCalendar';
 import WashCalendar from './components/WashCalendar';
+import Dashboard from './components/Dashboard';
+import PreventiveModule from './components/PreventiveModule';
+import PreventiveUpdateForm from './components/PreventiveUpdateForm';
+import AvailabilityModule from './components/AvailabilityModule';
+import AvailabilityIndicators from './components/AvailabilityIndicators';
+import OperationalDashboard from './components/OperationalDashboard';
 
 import { 
   fetchVehiclesFromSheet, 
@@ -49,7 +55,11 @@ import {
   submitCalibrationToSheet,
   submitCalibrationUpdateToSheet,
   submitDocumentUpdateToSheet,
-  submitWorkshopVisitUpdateToSheet
+  submitWorkshopVisitUpdateToSheet,
+  fetchPreventivesFromSheet,
+  submitPreventiveUpdateToSheet,
+  fetchAvailabilityFromSheet,
+  fetchOperationalIndicatorsFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -57,11 +67,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, Wrench, Lock, X
+  UserCircle, LayoutGrid, Settings, ChevronLeft, Wrench, Lock, X, TrendingUp, Activity
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'preventivos' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -82,6 +92,9 @@ const App: React.FC = () => {
   const [calibrations, setCalibrations] = useState<Calibration[]>([]);
   const [mileageLogs, setMileageLogs] = useState<MileageLog[]>([]);
   const [workshopVisits, setWorkshopVisits] = useState<Report[]>([]);
+  const [preventives, setPreventives] = useState<Preventive[]>([]);
+  const [availabilityRecords, setAvailabilityRecords] = useState<AvailabilityRecord[]>([]);
+  const [operationalIndicators, setOperationalIndicators] = useState<OperationalIndicator[]>([]);
 
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
@@ -93,6 +106,8 @@ const App: React.FC = () => {
   const [showCleaningForm, setShowCleaningForm] = useState(false);
   const [showCalibrationForm, setShowCalibrationForm] = useState(false);
   const [updatingCalibration, setUpdatingCalibration] = useState<Calibration | null>(null);
+  const [showPreventiveForm, setShowPreventiveForm] = useState(false);
+  const [updatingPreventive, setUpdatingPreventive] = useState<Preventive | null>(null);
   const [showDocUpdateForm, setShowDocUpdateForm] = useState(false);
   const [closingReport, setClosingReport] = useState<Report | null>(null);
   const [closingWorkshopVisit, setClosingWorkshopVisit] = useState<Report | null>(null);
@@ -142,7 +157,7 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      const [v, d, f, r, w, cl, c, m, wv] = await Promise.all([
+      const [v, d, f, r, w, cl, c, m, wv, p, a, oi] = await Promise.all([
         fetchVehiclesFromSheet(),
         fetchDriversFromSheet(),
         fetchFinesFromSheet(),
@@ -151,17 +166,42 @@ const App: React.FC = () => {
         fetchCleaningReportsFromSheet(),
         fetchCalibrationsFromSheet(),
         fetchMileageLogsFromSheet(),
-        fetchWorkshopVisitsFromSheet()
+        fetchWorkshopVisitsFromSheet(),
+        fetchPreventivesFromSheet(),
+        fetchAvailabilityFromSheet(),
+        fetchOperationalIndicatorsFromSheet()
       ]);
+
+      const filterByYear = (dateStr: string | undefined) => {
+        if (!dateStr || dateStr.trim() === '') return true; 
+        try {
+          if (dateStr.includes('-')) {
+            const year = new Date(dateStr + "T12:00:00").getFullYear();
+            return year >= 2024;
+          } else if (dateStr.includes('/')) {
+            const parts = dateStr.split('/');
+            const year = parseInt(parts[parts.length - 1]);
+            const fullYear = year < 100 ? (year + 2000) : year;
+            return fullYear >= 2024;
+          }
+        } catch (e) {
+          return true;
+        }
+        return true; 
+      };
+
       setVehicles(v);
       setDrivers(d);
-      setFines(f);
-      setReports(r);
-      setWashReports(w);
-      setCleaningReports(cl);
-      setCalibrations(c);
-      setMileageLogs(m);
-      setWorkshopVisits(wv);
+      setFines(f.filter(item => filterByYear(item.date)));
+      setReports(r.filter(item => filterByYear(item.date)));
+      setWashReports(w.filter(item => filterByYear(item.date)));
+      setCleaningReports(cl.filter(item => filterByYear(item.date)));
+      setCalibrations(c.filter(item => filterByYear(item.calibrationDate)));
+      setMileageLogs(m.filter(item => filterByYear(item.date)));
+      setWorkshopVisits(wv.filter(item => filterByYear(item.date)));
+      setPreventives(p); // Preventives are current status, usually don't need historical filtering here
+      setAvailabilityRecords(a.filter(item => filterByYear(item.date)));
+      setOperationalIndicators(oi);
     } catch (err) {
       console.error("Critical Sync Error:", err);
     } finally {
@@ -171,18 +211,42 @@ const App: React.FC = () => {
 
   const uniqueCds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
   const uniqueContractors = useMemo(() => Array.from(new Set(vehicles.map(v => v.contractor || 'GENERAL'))).sort(), [vehicles]);
+  
+  const derivedFleetComposition = useMemo((): FleetComposition[] => {
+    const compositionMap: Record<string, number> = {};
+    vehicles.forEach(v => {
+      const key = `${v.cd || 'GENERAL'}|${v.contractor || 'GENERAL'}`;
+      compositionMap[key] = (compositionMap[key] || 0) + 1;
+    });
+    return Object.entries(compositionMap).map(([key, count]) => {
+      const [cd, contractor] = key.split('|');
+      return { cd, contractor, count };
+    });
+  }, [vehicles]);
 
   const filteredWashReports = useMemo(() => {
     return washReports.filter(r => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate));
-      const matchMonth = normalizeStr(r.month) === normalizeStr(selectedMonth);
+      const rMonth = normalizeStr(r.month);
+      const sMonth = normalizeStr(selectedMonth);
+      const matchMonth = rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth));
+      
+      // Year check
+      let matchYear = true;
+      if (r.date) {
+        const d = new Date(r.date + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          matchYear = d.getFullYear() === selectedYear;
+        }
+      }
+
       const matchSearch = normalizePlate(r.plate).includes(normalizePlate(searchTerm));
       const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd);
       const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor);
       
-      return matchMonth && matchSearch && matchCd && matchContractor;
+      return matchMonth && matchYear && matchSearch && matchCd && matchContractor;
     });
-  }, [washReports, vehicles, selectedMonth, searchTerm, filterCd, filterContractor]);
+  }, [washReports, vehicles, selectedMonth, searchTerm, filterCd, filterContractor, selectedYear]);
 
   const washStats = useMemo(() => {
     const total = filteredWashReports.length;
@@ -194,14 +258,26 @@ const App: React.FC = () => {
   const filteredCleaningReports = useMemo(() => {
     return cleaningReports.filter(r => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate));
-      const matchMonth = normalizeStr(r.month).includes(normalizeStr(selectedMonth)) || normalizeStr(selectedMonth).includes(normalizeStr(r.month));
+      const rMonth = normalizeStr(r.month);
+      const sMonth = normalizeStr(selectedMonth);
+      const matchMonth = rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth));
+      
+      // Year check
+      let matchYear = true;
+      if (r.date) {
+        const d = new Date(r.date + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          matchYear = d.getFullYear() === selectedYear;
+        }
+      }
+
       const matchSearch = normalizePlate(r.plate).includes(normalizePlate(searchTerm));
       const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd);
       const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor);
       
-      return matchMonth && matchSearch && matchCd && matchContractor;
+      return matchMonth && matchYear && matchSearch && matchCd && matchContractor;
     });
-  }, [cleaningReports, vehicles, selectedMonth, searchTerm, filterCd, filterContractor]);
+  }, [cleaningReports, vehicles, selectedMonth, searchTerm, filterCd, filterContractor, selectedYear]);
 
   const cleaningStats = useMemo(() => {
     const total = filteredCleaningReports.length;
@@ -214,31 +290,56 @@ const App: React.FC = () => {
     return vehicles.filter(v => {
       const matchCd = filterCd === 'all' || v.cd === filterCd;
       const matchContractor = filterContractor === 'all' || v.contractor === filterContractor;
-      return matchCd && matchContractor;
+      const matchSearch = normalizePlate(v.plate).includes(normalizePlate(searchTerm));
+      return matchCd && matchContractor && matchSearch;
     });
-  }, [vehicles, filterCd, filterContractor]);
+  }, [vehicles, filterCd, filterContractor, searchTerm]);
 
   const filteredReports = useMemo(() => {
     return reports.filter(r => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate));
-      const d = new Date(r.date + "T12:00:00");
-      const matchMonth = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase() === selectedMonth;
+      
+      let matchMonth = false;
+      let matchYear = true;
+      
+      if (r.date) {
+        const d = new Date(r.date + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          const rMonth = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+          const sMonth = selectedMonth;
+          matchMonth = rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth));
+          matchYear = d.getFullYear() === selectedYear;
+        }
+      }
+
       const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || r.cd === filterCd;
       const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || r.contractor === filterContractor;
       const matchSearch = normalizePlate(r.plate).includes(normalizePlate(searchTerm));
       
-      return matchMonth && matchCd && matchContractor && matchSearch;
+      return matchMonth && matchYear && matchCd && matchContractor && matchSearch;
     });
-  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, searchTerm]);
+  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, searchTerm, selectedYear]);
 
   const statsReports = useMemo(() => {
     const baseFiltered = reports.filter(r => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate));
-      const d = new Date(r.date + "T12:00:00");
-      const matchMonth = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase() === selectedMonth;
+      
+      let matchMonth = false;
+      let matchYear = true;
+      
+      if (r.date) {
+        const d = new Date(r.date + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          const rMonth = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+          const sMonth = selectedMonth;
+          matchMonth = rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth));
+          matchYear = d.getFullYear() === selectedYear;
+        }
+      }
+
       const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || r.cd === filterCd;
       const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || r.contractor === filterContractor;
-      return matchMonth && matchCd && matchContractor;
+      return matchMonth && matchYear && matchCd && matchContractor;
     });
     
     return {
@@ -269,6 +370,28 @@ const App: React.FC = () => {
       searchCount: filteredCalibrations.length
     };
   }, [filteredCalibrations]);
+
+  const filteredFines = useMemo(() => {
+    return fines.filter(f => {
+      const fMonth = normalizeStr(f.month || '');
+      const sMonth = normalizeStr(selectedMonth);
+      const matchMonth = fMonth !== "" && (fMonth === sMonth || fMonth.includes(sMonth) || sMonth.includes(fMonth));
+      
+      let matchYear = true;
+      if (f.date) {
+        const d = new Date(f.date + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          matchYear = d.getFullYear() === selectedYear;
+        }
+      }
+
+      const matchCd = filterCd === 'all' || f.cd === filterCd;
+      const matchStatus = fineStatusFilter === 'all' || f.status === fineStatusFilter;
+      const matchSearch = normalizePlate(f.plate).includes(normalizePlate(searchTerm));
+      
+      return matchMonth && matchYear && matchCd && matchStatus && matchSearch;
+    });
+  }, [fines, selectedMonth, selectedYear, filterCd, fineStatusFilter, searchTerm]);
 
   const statsVehicles = useMemo(() => {
     const filtered = vehicles.filter(v => 
@@ -418,7 +541,7 @@ const App: React.FC = () => {
           {/* Menu Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative z-10">
             <button 
-              onClick={() => setAppMode('camiones')}
+              onClick={() => { setAppMode('camiones'); setActiveView('vehiculos'); }}
               className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-10 rounded-[3rem] transition-all duration-500 flex items-center gap-8 shadow-2xl hover:-translate-y-2"
             >
               <div className="w-20 h-20 bg-indigo-600/20 rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30">
@@ -479,6 +602,9 @@ const App: React.FC = () => {
               
               <nav className="flex-grow space-y-1 overflow-y-auto custom-scrollbar pr-2">
             {[
+              { id: 'indicadoresOperativos', label: 'Tablero Indicadores', icon: <Activity size={18}/> },
+              { id: 'indicadoresDisponibilidad', label: 'Disponibilidad', icon: <TrendingUp size={18}/> },
+              { id: 'preventivos', label: 'Preventivos', icon: <Clock size={18}/> },
               { id: 'vehiculos', label: 'Vehículos', icon: <Truck size={18}/> },
               { id: 'conductores', label: 'Conductores', icon: <Users size={18}/> },
               { id: 'comparendos', label: 'Comparendos', icon: <Gavel size={18}/> },
@@ -543,6 +669,7 @@ const App: React.FC = () => {
                 else if(activeView === 'lavados') setShowWashForm(true);
                 else if(activeView === 'limpieza') setShowCleaningForm(true);
                 else if(activeView === 'calibraciones') setShowCalibrationForm(true);
+                else if(activeView === 'preventivos') setShowPreventiveForm(true);
              }} className="p-2 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-700 transition-all">
                <Plus size={18} />
              </button>
@@ -552,6 +679,43 @@ const App: React.FC = () => {
         {/* CONTENT AREA */}
         <div className="flex-grow p-6 md:p-8 overflow-y-auto bg-[#f8fafc] custom-scrollbar">
           
+          {activeView === 'indicadoresOperativos' && (
+            <OperationalDashboard 
+              indicators={operationalIndicators}
+            />
+          )}
+
+          {activeView === 'indicadoresDisponibilidad' && (
+            <AvailabilityIndicators 
+              vehicles={vehicles}
+              availabilityRecords={availabilityRecords}
+              fleetComposition={derivedFleetComposition}
+            />
+          )}
+
+          {activeView === 'preventivos' && (
+            <PreventiveModule 
+              vehicles={vehicles}
+              mileageLogs={mileageLogs}
+              searchTerm={searchTerm}
+              externalPreventives={preventives}
+              selectedMonth={selectedMonth}
+              filterCd={filterCd}
+              filterContractor={filterContractor}
+              onUpdate={(v) => { setUpdatingPreventive(v); setShowPreventiveForm(true); }}
+            />
+          )}
+
+          {activeView === 'disponibilidad' && (
+            <AvailabilityModule 
+              vehicles={vehicles}
+              availabilityRecords={availabilityRecords}
+              searchTerm={searchTerm}
+              filterCd={filterCd}
+              filterContractor={filterContractor}
+            />
+          )}
+
           {activeView === 'vehiculos' && (
             <div className="max-w-7xl mx-auto space-y-6 pb-20">
               <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
@@ -625,23 +789,76 @@ const App: React.FC = () => {
 
           {activeView === 'comparendos' && (
             <div className="max-w-7xl mx-auto space-y-6 pb-20">
-               <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
-                    <Gavel size={24} className="text-rose-600" /> Gestión Comparendos
-                  </h2>
-                  <div className="flex items-center gap-4">
-                    <select className="bg-white border rounded-lg px-3 py-1.5 text-[9px] font-black uppercase shadow-sm" value={fineStatusFilter} onChange={e => setFineStatusFilter(e.target.value as any)}>
-                      <option value="all">TODOS</option>
-                      <option value="PENDIENTE">PENDIENTES</option>
-                      <option value="PAGADO">PAGADOS</option>
-                    </select>
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="space-y-1">
+                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
+                      <Gavel size={40} className="text-rose-600" /> Gestión Comparendos
+                    </h2>
+                    <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Control y seguimiento de infracciones</p>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                        <CalendarDays size={16} className="text-indigo-600" />
+                        <div className="flex flex-col">
+                          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">PERIODO MENSUAL</span>
+                          <div className="flex items-center gap-2">
+                            <select 
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              value="MENSUAL"
+                              disabled
+                            >
+                              <option value="MENSUAL">MENSUAL</option>
+                            </select>
+                            <span className="text-slate-300">|</span>
+                            <select 
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              value={selectedMonth}
+                              onChange={e => setSelectedMonth(e.target.value)}
+                            >
+                              {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+                            <span className="text-slate-300">|</span>
+                            <select 
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              value={selectedYear}
+                              onChange={e => setSelectedYear(parseInt(e.target.value))}
+                            >
+                              {[2024, 2025, 2026, 2027].map(y => (
+                                <option key={y} value={y}>{y}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest ml-1">ESTADO</span>
+                        <select className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer" value={fineStatusFilter} onChange={e => setFineStatusFilter(e.target.value as any)}>
+                          <option value="all">TODOS</option>
+                          <option value="PENDIENTE">PENDIENTES</option>
+                          <option value="PAGADO">PAGADOS</option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {fines.filter(f => (filterCd === 'all' || f.cd === filterCd) && (fineStatusFilter === 'all' || f.status === fineStatusFilter)).map(f => (
+                  {filteredFines.map(f => (
                     <FineCard key={f.id} fine={f} onViewDoc={(url, t) => setViewDoc({url, title: t})} onAddSupport={setManagingFineSupport} />
                   ))}
                </div>
+               {filteredFines.length === 0 && (
+                 <div className="bg-white p-20 rounded-[3rem] border-4 border-dashed border-slate-200 text-center">
+                    <Gavel size={64} className="text-slate-200 mx-auto mb-6" />
+                    <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado comparendos con los filtros aplicados para {selectedMonth} {selectedYear}</p>
+                 </div>
+               )}
             </div>
           )}
 
@@ -714,7 +931,17 @@ const App: React.FC = () => {
                               onChange={e => setSelectedMonth(e.target.value)}
                             >
                               {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
-                                <option key={m} value={m}>{m} - {selectedYear}</option>
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+                            <span className="text-slate-300">|</span>
+                            <select 
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              value={selectedYear}
+                              onChange={e => setSelectedYear(parseInt(e.target.value))}
+                            >
+                              {[2024, 2025, 2026, 2027].map(y => (
+                                <option key={y} value={y}>{y}</option>
                               ))}
                             </select>
                           </div>
@@ -812,7 +1039,17 @@ const App: React.FC = () => {
                               onChange={e => setSelectedMonth(e.target.value)}
                             >
                               {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
-                                <option key={m} value={m}>{m} - {selectedYear}</option>
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+                            <span className="text-slate-300">|</span>
+                            <select 
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              value={selectedYear}
+                              onChange={e => setSelectedYear(parseInt(e.target.value))}
+                            >
+                              {[2024, 2025, 2026, 2027].map(y => (
+                                <option key={y} value={y}>{y}</option>
                               ))}
                             </select>
                           </div>
@@ -933,7 +1170,17 @@ const App: React.FC = () => {
                               onChange={e => setSelectedMonth(e.target.value)}
                             >
                               {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
-                                <option key={m} value={m}>{m} - {selectedYear}</option>
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+                            <span className="text-slate-300">|</span>
+                            <select 
+                              className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer"
+                              value={selectedYear}
+                              onChange={e => setSelectedYear(parseInt(e.target.value))}
+                            >
+                              {[2024, 2025, 2026, 2027].map(y => (
+                                <option key={y} value={y}>{y}</option>
                               ))}
                             </select>
                           </div>
@@ -1303,6 +1550,14 @@ const App: React.FC = () => {
             }
             handleSyncData(); 
           }} 
+        />
+      )}
+      {showPreventiveForm && (
+        <PreventiveUpdateForm 
+          onClose={() => { setShowPreventiveForm(false); setUpdatingPreventive(null); }}
+          onSubmit={async (d: any) => { await submitPreventiveUpdateToSheet(d); handleSyncData(); }}
+          vehicles={vehicles}
+          initialData={updatingPreventive}
         />
       )}
       {closingReport && <ClosureForm report={closingReport} onClose={() => setClosingReport(null)} onSubmit={async (id, d) => { await submitReportToSheet({...closingReport, ...d} as any); handleSyncData(); }} />}

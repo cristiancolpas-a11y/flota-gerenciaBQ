@@ -20,6 +20,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
   
   const [filterCd, setFilterCd] = useState<string>('all');
   const [filterContractor, setFilterContractor] = useState<string>('all');
+  const [plateSearch, setPlateSearch] = useState('');
 
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [formData, setFormData] = useState({
@@ -40,12 +41,26 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
   }, [vehicles, filterCd]);
 
   const filteredVehicles = useMemo(() => {
-    return vehicles.filter(v => {
+    let list = vehicles.filter(v => {
       const matchCd = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
       const matchContractor = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
       return matchCd && matchContractor;
-    }).sort((a, b) => a.plate.localeCompare(b.plate));
-  }, [vehicles, filterCd, filterContractor]);
+    });
+
+    if (plateSearch) {
+      const search = plateSearch.toUpperCase().trim();
+      list = list.filter(v => v.plate.includes(search));
+    }
+
+    const sorted = list.sort((a, b) => a.plate.localeCompare(b.plate));
+
+    // Auto-select if only one result and not already selected
+    if (sorted.length === 1 && formData.plate !== sorted[0].plate && plateSearch.length >= 3) {
+      setFormData(prev => ({ ...prev, plate: sorted[0].plate }));
+    }
+
+    return sorted;
+  }, [vehicles, filterCd, filterContractor, plateSearch, formData.plate]);
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -183,7 +198,18 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
           )}
 
           <div className="space-y-2">
-            <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 px-1">Placa Vehicular</label>
+            <div className="flex justify-between items-end px-1">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">Placa Vehicular</label>
+              {!preSelectedPlate && !isUpdateMode && (
+                <input 
+                  type="text" 
+                  placeholder="BUSCAR..." 
+                  className="bg-slate-100 border-none rounded-lg px-2 py-0.5 text-[9px] font-black uppercase outline-none focus:ring-2 ring-indigo-500/30 w-24 transition-all"
+                  value={plateSearch}
+                  onChange={(e) => setPlateSearch(e.target.value)}
+                />
+              )}
+            </div>
             <select 
               required 
               className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:bg-slate-100 disabled:text-slate-400" 
@@ -191,7 +217,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
               onChange={e => setFormData({ ...formData, plate: e.target.value })}
               disabled={!!preSelectedPlate || isUpdateMode}
             >
-              <option value="">-- SELECCIONE --</option>
+              <option value="">-- {filteredVehicles.length === 0 ? 'SIN RESULTADOS' : 'SELECCIONE'} --</option>
               {preSelectedPlate || isUpdateMode ? (
                 <option value={formData.plate}>{formData.plate}</option>
               ) : (

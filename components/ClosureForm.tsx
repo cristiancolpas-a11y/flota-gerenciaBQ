@@ -85,7 +85,7 @@ const ClosureForm: React.FC<ClosureFormProps> = ({ report, onClose, onSubmit }) 
     if (file) {
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const compressed = await compressImage(reader.result as string, 800);
+        const compressed = await compressImage(reader.result as string, 1920);
         setFormData(prev => ({ ...prev, exitMap: compressed }));
       };
       reader.readAsDataURL(file);

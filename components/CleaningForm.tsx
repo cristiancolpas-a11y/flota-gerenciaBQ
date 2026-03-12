@@ -19,6 +19,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
   const evidenceInputRef = useRef<HTMLInputElement>(null);
 
   const [filterCd, setFilterCd] = useState<string>('all');
+  const [plateSearch, setPlateSearch] = useState('');
   const [initialPhotos, setInitialPhotos] = useState<string[]>([]);
   const [finalPhotos, setFinalPhotos] = useState<string[]>([]);
   const [activeCaptureType, setActiveCaptureType] = useState<'INICIAL' | 'FINAL' | null>(null);
@@ -34,12 +35,26 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
   }, [vehicles]);
 
   const filteredVehiclesList = useMemo(() => {
-    return vehicles.filter(v => {
+    let list = vehicles.filter(v => {
       const vCd = (v.cd || "GENERAL").toUpperCase().trim();
       const matchCd = filterCd === 'all' || normalizeStr(vCd) === normalizeStr(filterCd);
       return matchCd;
-    }).sort((a, b) => a.plate.localeCompare(b.plate));
-  }, [vehicles, filterCd]);
+    });
+
+    if (plateSearch) {
+      const search = plateSearch.toUpperCase().trim();
+      list = list.filter(v => v.plate.includes(search));
+    }
+
+    const sorted = list.sort((a, b) => a.plate.localeCompare(b.plate));
+
+    // Auto-select if only one result and not already selected
+    if (sorted.length === 1 && formData.plate !== sorted[0].plate && plateSearch.length >= 3) {
+      setFormData(prev => ({ ...prev, plate: sorted[0].plate }));
+    }
+
+    return sorted;
+  }, [vehicles, filterCd, plateSearch, formData.plate]);
 
   const handleCdChange = (val: string) => {
     setFilterCd(val);
@@ -192,7 +207,18 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2">UNIDAD VEHICULAR (PLACA)</label>
+              <div className="flex justify-between items-end px-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">UNIDAD VEHICULAR (PLACA)</label>
+                {!preSelectedPlate && (
+                  <input 
+                    type="text" 
+                    placeholder="BUSCAR PLACA..." 
+                    className="bg-slate-100 border-none rounded-lg px-3 py-1 text-[10px] font-black uppercase outline-none focus:ring-2 ring-cyan-500/30 w-32 transition-all"
+                    value={plateSearch}
+                    onChange={(e) => setPlateSearch(e.target.value)}
+                  />
+                )}
+              </div>
               <select 
                 required 
                 className={`w-full bg-slate-50 border-2 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none appearance-none shadow-inner transition-all ${filteredVehiclesList.length === 0 ? 'border-rose-200 bg-rose-50/30' : 'border-slate-100'}`}

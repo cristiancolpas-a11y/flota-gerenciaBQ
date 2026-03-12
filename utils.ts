@@ -96,7 +96,7 @@ export const processImageWithWatermark = (
     img.src = base64Str;
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxWidth = 800; 
+      const maxWidth = 2048; 
       let width = img.width;
       let height = img.height;
       if (width > maxWidth) {
@@ -110,12 +110,12 @@ export const processImageWithWatermark = (
       ctx.drawImage(img, 0, 0, width, height);
       
       const padding = width * 0.03;
-      const boxWidth = width * 0.45;
-      const boxHeight = height * 0.18;
+      const boxWidth = width * 0.55; 
+      const boxHeight = height * 0.22; 
       const x = width - boxWidth - padding;
       const y = height - boxHeight - padding;
       
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
       ctx.fillRect(x, y, boxWidth, boxHeight);
       
       // Use custom date if provided, otherwise use current date
@@ -128,24 +128,24 @@ export const processImageWithWatermark = (
       });
       
       ctx.fillStyle = '#ffffff';
-      ctx.font = `bold ${Math.round(width * 0.035)}px Inter, sans-serif`;
-      ctx.fillText(text.toUpperCase(), x + 15, y + 25);
+      ctx.font = `bold ${Math.round(width * 0.05)}px Inter, sans-serif`; 
+      ctx.fillText(text.toUpperCase(), x + 25, y + 50);
       
-      ctx.font = `${Math.round(width * 0.025)}px Inter, sans-serif`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.fillText(timestamp, x + 15, y + 55);
+      ctx.font = `${Math.round(width * 0.035)}px Inter, sans-serif`; 
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillText(timestamp, x + 25, y + 100);
       
       if (coords) {
         ctx.fillStyle = '#818cf8';
-        ctx.fillText(`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`, x + 15, y + 80);
+        ctx.fillText(`${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`, x + 25, y + 145);
       }
-      resolve(canvas.toDataURL('image/jpeg', 0.4)); 
+      resolve(canvas.toDataURL('image/jpeg', 0.95)); 
     };
     img.onerror = () => resolve(base64Str);
   });
 };
 
-export const compressImage = (base64Str: string, maxWidth = 600): Promise<string> => {
+export const compressImage = (base64Str: string, maxWidth = 1920): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
@@ -158,7 +158,7 @@ export const compressImage = (base64Str: string, maxWidth = 600): Promise<string
       canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.4));
+      resolve(canvas.toDataURL('image/jpeg', 0.95));
     };
     img.onerror = () => resolve(base64Str);
   });
@@ -203,9 +203,9 @@ export const createMosaic = async (base64Array: string[], title?: string): Promi
   }
 
   const canvas = document.createElement('canvas');
-  const cellWidth = 800; 
-  const cellHeight = 600;
-  const headerHeight = title ? 80 : 0;
+  const cellWidth = 1600; 
+  const cellHeight = 1200;
+  const headerHeight = title ? 120 : 0;
 
   canvas.width = cols * cellWidth;
   canvas.height = (rows * cellHeight) + headerHeight;
@@ -223,7 +223,7 @@ export const createMosaic = async (base64Array: string[], title?: string): Promi
     ctx.fillRect(0, 0, canvas.width, headerHeight);
     
     ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.round(headerHeight * 0.5)}px Inter, sans-serif`;
+    ctx.font = `bold ${Math.round(headerHeight * 0.45)}px Inter, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(title.toUpperCase(), canvas.width / 2, headerHeight / 2);
@@ -238,7 +238,7 @@ export const createMosaic = async (base64Array: string[], title?: string): Promi
     ctx.fillRect(x, y, cellWidth, cellHeight);
 
     // Calculate aspect ratio to fit image in cell with padding
-    const padding = 20;
+    const padding = 40;
     const innerWidth = cellWidth - (padding * 2);
     const innerHeight = cellHeight - (padding * 2);
     
@@ -259,10 +259,10 @@ export const createMosaic = async (base64Array: string[], title?: string): Promi
     }
 
     // Shadow effect for images
-    ctx.shadowColor = 'rgba(0,0,0,0.1)';
-    ctx.shadowBlur = 15;
-    ctx.shadowOffsetX = 5;
-    ctx.shadowOffsetY = 5;
+    ctx.shadowColor = 'rgba(0,0,0,0.15)';
+    ctx.shadowBlur = 30;
+    ctx.shadowOffsetX = 10;
+    ctx.shadowOffsetY = 10;
     
     ctx.drawImage(img, x + offsetX, y + offsetY, drawWidth, drawHeight);
     
@@ -274,11 +274,11 @@ export const createMosaic = async (base64Array: string[], title?: string): Promi
 
     // Draw border
     ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 4;
     ctx.strokeRect(x, y, cellWidth, cellHeight);
   });
 
-  return canvas.toDataURL('image/jpeg', 0.7); 
+  return canvas.toDataURL('image/jpeg', 0.95); 
 };
 
 export const generateId = (): string => {

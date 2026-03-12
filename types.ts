@@ -131,3 +131,53 @@ export interface WashReport {
   status?: 'ABIERTO' | 'CERRADO';
   closureDate?: string;
 }
+
+export interface Preventive {
+  id: string;
+  cd: string;
+  contractor: string;
+  plate: string;
+  lastMaintenanceMileage: number;
+  nextMaintenanceMileage: number;
+  currentMileage: number;
+  kmsToNext: number;
+  status: 'ok' | 'warning' | 'critical';
+  lastUpdate?: string;
+  week?: string;
+  month?: string;
+  evidenceUrl?: string;
+  complianceStatus?: string;
+  validationStatus?: string;
+}
+
+export interface FleetComposition {
+  cd: string;
+  contractor: string;
+  count: number;
+}
+
+export interface AvailabilityRecord {
+  id: string;
+  date: string;
+  cd: string;
+  system: string;
+  detail: string;
+  plate: string;
+  workshop: string;
+  entryDate: string;
+  estimatedExitDate: string;
+  contractor: string;
+  daysUnavailable: number;
+  fullPlate: string;
+}
+
+export interface OperationalIndicator {
+  id: string;
+  month: string;
+  week: string;
+  cd: string;
+  indicator: string;
+  actual: number;
+  trigger: number;
+  meta: number;
+}

@@ -18,12 +18,13 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   const mapInputRef = useRef<HTMLInputElement>(null);
 
   const [filterCd, setFilterCd] = useState<string>('all');
+  const [plateSearch, setPlateSearch] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   
   const [formData, setFormData] = useState({
     plate: '',
     date: new Date().toISOString().split('T')[0],
-    workshop: '',
+    workshop: 'VEHIPESA',
     mapUrl: '',
   });
 
@@ -33,12 +34,26 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   }, [vehicles]);
 
   const filteredVehiclesList = useMemo(() => {
-    return vehicles.filter(v => {
+    let list = vehicles.filter(v => {
       const vCd = (v.cd || "GENERAL").toUpperCase().trim();
       const matchCd = filterCd === 'all' || normalizeStr(vCd) === normalizeStr(filterCd);
       return matchCd;
-    }).sort((a, b) => a.plate.localeCompare(b.plate));
-  }, [vehicles, filterCd]);
+    });
+
+    if (plateSearch) {
+      const search = plateSearch.toUpperCase().trim();
+      list = list.filter(v => v.plate.includes(search));
+    }
+
+    const sorted = list.sort((a, b) => a.plate.localeCompare(b.plate));
+    
+    // Auto-select if only one result and not already selected
+    if (sorted.length === 1 && formData.plate !== sorted[0].plate && plateSearch.length >= 3) {
+      setFormData(prev => ({ ...prev, plate: sorted[0].plate }));
+    }
+
+    return sorted;
+  }, [vehicles, filterCd, plateSearch, formData.plate]);
 
   const handleCdChange = (val: string) => {
     setFilterCd(val);
@@ -91,7 +106,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = async () => {
-        const compressed = await compressImage(reader.result as string, 800);
+        const compressed = await compressImage(reader.result as string, 1920);
         setFormData(prev => ({ ...prev, mapUrl: compressed }));
       };
       reader.readAsDataURL(file);
@@ -117,9 +132,9 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
 
       // Include map in the mosaic if it exists
       const mosaicPhotos = [...photos];
-      if (formData.mapUrl) {
-        mosaicPhotos.push(formData.mapUrl);
-      }
+      // if (formData.mapUrl) {
+      //   mosaicPhotos.push(formData.mapUrl);
+      // }
 
       const mergedEvidence = await createMosaic(mosaicPhotos, `LAVADO: ${formData.plate} - ${formData.date}`);
 
@@ -184,14 +199,25 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-2">UNIDAD VEHICULAR (PLACA)</label>
+              <div className="flex justify-between items-end px-2">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">UNIDAD VEHICULAR (PLACA)</label>
+                <div className="relative group">
+                  <input 
+                    type="text" 
+                    placeholder="BUSCAR PLACA..." 
+                    className="bg-slate-100 border-none rounded-lg px-3 py-1 text-[10px] font-black uppercase outline-none focus:ring-2 ring-indigo-500/30 w-32 transition-all"
+                    value={plateSearch}
+                    onChange={(e) => setPlateSearch(e.target.value)}
+                  />
+                </div>
+              </div>
               <select 
                 required 
                 className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none appearance-none shadow-inner transition-all"
                 value={formData.plate} 
                 onChange={e => setFormData({ ...formData, plate: e.target.value })}
               >
-                <option value="">-- SELECCIONE PLACA --</option>
+                <option value="">-- {filteredVehiclesList.length === 0 ? 'SIN RESULTADOS' : 'SELECCIONE PLACA'} --</option>
                 {filteredVehiclesList.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
               </select>
             </div>
@@ -201,7 +227,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
               <input 
                 required 
                 type="text" 
-                placeholder="EJ: ESTACIÓN CENTRAL" 
+                placeholder="VEHIPESA" 
                 className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 text-sm font-black text-slate-800 outline-none uppercase shadow-inner" 
                 value={formData.workshop} 
                 onChange={e => setFormData({ ...formData, workshop: e.target.value.toUpperCase() })} 

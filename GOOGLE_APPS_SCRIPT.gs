@@ -137,6 +137,27 @@ function doPost(e) {
           s.getRange(foundIdx, 7).setValue(d.status);
         }
       }
+      else if (m === 'POST_PREVENTIVE_UPDATE') {
+        var s = getS(ss, "PREVENTIVO");
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var plateSearch = (d.plate || "").toString().toUpperCase().trim();
+        
+        for (var i = 1; i < rows.length; i++) {
+          var rowPlate = (rows[i][3] || "").toString().toUpperCase().trim();
+          if (rowPlate === plateSearch) {
+            foundIdx = i + 1;
+            break;
+          }
+        }
+        
+        if (foundIdx !== -1) {
+          var img = sImg(d.evidence, "PREV_" + plateSearch);
+          s.getRange(foundIdx, 3).setValue(d.date); // FECHA DE EJECUCION (Indice 2 -> Columna 3)
+          s.getRange(foundIdx, 10).setValue(d.compliance); // CUMPLIMIENTO EN RANGOS (Indice 9 -> Columna 10)
+          s.getRange(foundIdx, 12).setValue(img); // EVIDENCIA (Indice 11 -> Columna 12)
+        }
+      }
       else if (m === 'POST_MILEAGE') {
         var s = getS(ss, "KILOMETRAJE");
         s.appendRow([d.cd, d.contractor, d.week, d.date, d.plate, d.mileage]);

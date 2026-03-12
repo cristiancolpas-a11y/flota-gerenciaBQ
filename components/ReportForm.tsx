@@ -18,6 +18,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
   const mapInputRef = useRef<HTMLInputElement>(null);
   
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
+  const [plateSearch, setPlateSearch] = useState('');
   const [formData, setFormData] = useState({
     id: `OT-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`,
     plate: '',
@@ -28,6 +29,22 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
     workshop: '',
     date: new Date().toISOString().split('T')[0]
   });
+
+  const filteredVehicles = React.useMemo(() => {
+    let list = [...vehicles];
+    if (plateSearch) {
+      const search = plateSearch.toUpperCase().trim();
+      list = list.filter(v => v.plate.includes(search));
+    }
+    const sorted = list.sort((a, b) => a.plate.localeCompare(b.plate));
+    
+    // Auto-select if only one result and not already selected
+    if (sorted.length === 1 && formData.plate !== sorted[0].plate && plateSearch.length >= 3) {
+      setFormData(prev => ({ ...prev, plate: sorted[0].plate }));
+    }
+    
+    return sorted;
+  }, [vehicles, plateSearch, formData.plate]);
 
   const workshops = [
     "AUTECO",
@@ -162,10 +179,19 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1">Placa Vehicular</label>
+              <div className="flex justify-between items-end px-1">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Placa Vehicular</label>
+                <input 
+                  type="text" 
+                  placeholder="BUSCAR..." 
+                  className="bg-slate-100 border-none rounded-lg px-2 py-0.5 text-[9px] font-black uppercase outline-none focus:ring-2 ring-indigo-500/30 w-24 transition-all"
+                  value={plateSearch}
+                  onChange={(e) => setPlateSearch(e.target.value)}
+                />
+              </div>
               <select required className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-500 appearance-none" value={formData.plate} onChange={e => setFormData({ ...formData, plate: e.target.value })}>
-                <option value="">-- SELECCIONE --</option>
-                {vehicles.sort((a, b) => a.plate.localeCompare(b.plate)).map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
+                <option value="">-- {filteredVehicles.length === 0 ? 'SIN RESULTADOS' : 'SELECCIONE'} --</option>
+                {filteredVehicles.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
