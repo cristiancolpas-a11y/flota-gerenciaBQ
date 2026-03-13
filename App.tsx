@@ -390,9 +390,9 @@ const App: React.FC = () => {
       let matchStatus = fineStatusFilter === 'all' || f.status === fineStatusFilter;
       
       if (fineStatusFilter === 'WITH_EVIDENCE') {
-        matchStatus = !!(f.evidenceUrl && f.evidenceUrl.length > 5);
+        matchStatus = !!(f.evidenceUrl && f.evidenceUrl.startsWith('http'));
       } else if (fineStatusFilter === 'WITHOUT_EVIDENCE') {
-        matchStatus = !(f.evidenceUrl && f.evidenceUrl.length > 5);
+        matchStatus = !(f.evidenceUrl && f.evidenceUrl.startsWith('http'));
       }
 
       const matchSearch = normalizePlate(f.plate).includes(normalizePlate(searchTerm));
@@ -405,8 +405,8 @@ const App: React.FC = () => {
     const uniqueDrivers = new Set(filteredFines.map(f => f.driverId)).size;
     const withFines = filteredFines.filter(f => f.status === 'PENDIENTE').length;
     const withoutFines = filteredFines.filter(f => f.status === 'PAGADO').length;
-    const withEvidence = filteredFines.filter(f => f.evidenceUrl && f.evidenceUrl.length > 5).length;
-    const withoutEvidence = filteredFines.filter(f => !(f.evidenceUrl && f.evidenceUrl.length > 5)).length;
+    const withEvidence = filteredFines.filter(f => f.evidenceUrl && f.evidenceUrl.startsWith('http')).length;
+    const withoutEvidence = filteredFines.filter(f => !(f.evidenceUrl && f.evidenceUrl.startsWith('http'))).length;
     return { totalDrivers: uniqueDrivers, withFines, withoutFines, withEvidence, withoutEvidence };
   }, [filteredFines]);
 

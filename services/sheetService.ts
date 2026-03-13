@@ -551,7 +551,11 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          const fines = rows.slice(1).map((row, i): Fine => ({
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          
+          const fines = rows.slice(1)
+            .filter(row => row && row[4] && cleanSheetValue(row[4]).length > 0) // Mostrar todos los que tengan nombre
+            .map((row, i): Fine => ({
             id: `row-${i + 2}`, // El índice 0 de slice(1) corresponde a la fila 2 de la hoja
             month: cleanSheetValue(row[0]),
             registrationDate: parseFlexibleDate(row[1]),
@@ -563,7 +567,7 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
             amount: parseFloat(cleanSheetValue(row[10])) || 0,
             status: cleanSheetValue(row[8]).toUpperCase().includes('SI') ? 'PENDIENTE' : 'PAGADO',
             paymentAgreement: cleanSheetValue(row[9]),
-            evidenceUrl: cleanSheetValue(row[7]) || cleanSheetValue(row[16]),
+            evidenceUrl: cleanSheetValue(row[7]).startsWith('http') ? cleanSheetValue(row[7]) : '', // Estrictamente solo links válidos en Columna H
             infractionCode: cleanSheetValue(row[11]),
             date: parseFlexibleDate(row[12]),
             description: cleanSheetValue(row[13]),

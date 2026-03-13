@@ -13,7 +13,7 @@ interface FineCardProps {
 const FineCard: React.FC<FineCardProps> = ({ fine, onViewDoc, onAddSupport }) => {
   const isPending = fine.status === 'PENDIENTE'; 
   const hasAgreement = fine.paymentAgreement === 'SI';
-  const hasEvidence = fine.evidenceUrl && fine.evidenceUrl.length > 5;
+  const hasEvidence = fine.evidenceUrl && fine.evidenceUrl.startsWith('http');
   const thumbUrl = hasEvidence ? getDriveDirectLink(fine.evidenceUrl!) : null;
 
   return (
@@ -118,7 +118,7 @@ const FineCard: React.FC<FineCardProps> = ({ fine, onViewDoc, onAddSupport }) =>
                onClick={() => onAddSupport?.(fine)}
                className="w-full py-3 bg-amber-50 text-amber-600 rounded-2xl text-[9px] font-black text-center uppercase tracking-widest border-2 border-dashed border-amber-200 flex items-center justify-center gap-2 hover:bg-amber-100 hover:border-amber-400 transition-all active:scale-95"
              >
-               <Camera size={14} /> REGISTRAR SOPORTE
+               <Camera size={14} /> CARGAR SOPORTE A LA HOJA
              </button>
            )}
         </div>
