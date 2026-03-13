@@ -6,6 +6,7 @@ import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
 import DriverCard from './components/DriverCard';
 import FineStats from './components/FineStats';
+import MonthlyReport from './components/MonthlyReport';
 import FineCard from './components/FineCard';
 import FineForm from './components/FineForm';
 import FineSupportForm from './components/FineSupportForm';
@@ -193,14 +194,14 @@ const App: React.FC = () => {
 
       setVehicles(v);
       setDrivers(d);
-      setFines(f.filter(item => filterByYear(item.date)));
+      setFines(f);
       setReports(r.filter(item => filterByYear(item.date)));
       setWashReports(w.filter(item => filterByYear(item.date)));
       setCleaningReports(cl.filter(item => filterByYear(item.date)));
       setCalibrations(c.filter(item => filterByYear(item.calibrationDate)));
       setMileageLogs(m.filter(item => filterByYear(item.date)));
       setWorkshopVisits(wv.filter(item => filterByYear(item.date)));
-      setPreventives(p); // Preventives are current status, usually don't need historical filtering here
+      setPreventives(p); 
       setAvailabilityRecords(a.filter(item => filterByYear(item.date)));
       setOperationalIndicators(oi);
     } catch (err) {
@@ -376,13 +377,26 @@ const App: React.FC = () => {
     return fines.filter(f => {
       const fMonth = normalizeStr(f.month || '');
       const sMonth = normalizeStr(selectedMonth);
-      const matchMonth = fMonth !== "" && (fMonth === sMonth || fMonth.includes(sMonth) || sMonth.includes(fMonth));
+      
+      // Doble validación: por texto en columna MES o por la FECHA del registro
+      let matchMonthByDate = false;
+      if (f.date) {
+        const d = new Date(f.date + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          const dMonth = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+          matchMonthByDate = dMonth === sMonth;
+        }
+      }
+
+      const matchMonth = (fMonth !== "" && (fMonth === sMonth || fMonth.includes(sMonth) || sMonth.includes(fMonth))) || 
+                         (fMonth === "" && matchMonthByDate);
       
       let matchYear = true;
       if (f.date) {
         const d = new Date(f.date + "T12:00:00");
         if (!isNaN(d.getTime())) {
-          matchYear = d.getFullYear() === selectedYear;
+          // Si el mes coincide plenamente, permitimos el registro aunque el año varíe ligeramente (evita discrepancias por typos)
+          matchYear = d.getFullYear() === selectedYear || matchMonth;
         }
       }
 
@@ -402,13 +416,69 @@ const App: React.FC = () => {
   }, [fines, selectedMonth, selectedYear, filterCd, fineStatusFilter, searchTerm]);
 
   const statsFines = useMemo(() => {
-    const uniqueDrivers = new Set(filteredFines.map(f => f.driverId)).size;
-    const withFines = filteredFines.filter(f => f.status === 'PENDIENTE').length;
-    const withoutFines = filteredFines.filter(f => f.status === 'PAGADO').length;
-    const withEvidence = filteredFines.filter(f => f.evidenceUrl && f.evidenceUrl.startsWith('http')).length;
-    const withoutEvidence = filteredFines.filter(f => !(f.evidenceUrl && f.evidenceUrl.startsWith('http'))).length;
-    return { totalDrivers: uniqueDrivers, withFines, withoutFines, withEvidence, withoutEvidence };
-  }, [filteredFines]);
+    // Para las estadísticas, contamos todos los registros que coinciden con el mes/año, 
+    // ignorando el término de búsqueda para que el total coincida con el Excel
+    const baseFiltered = fines.filter(f => {
+      const fMonth = normalizeStr(f.month || '');
+      const sMonth = normalizeStr(selectedMonth);
+      
+      let matchMonthByDate = false;
+      if (f.date) {
+        const d = new Date(f.date + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          const dMonth = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+          matchMonthByDate = dMonth === sMonth;
+        }
+      }
+
+      // If the record has a month, it must match. 
+      // If it doesn't have a month, we try to match by date.
+      // If it has neither, it's only shown if we are in a special "SIN MES" view (not implemented yet, so we'll skip for now to avoid duplicates)
+      const matchMonth = (fMonth !== "" && (fMonth === sMonth || fMonth.includes(sMonth) || sMonth.includes(fMonth))) || 
+                         (fMonth === "" && matchMonthByDate);
+      
+      // Para el conteo total, priorizamos el mes para que coincida con el Excel
+      return matchMonth;
+    });
+
+    const totalRecords = baseFiltered.length;
+    const withFines = baseFiltered.filter(f => f.status === 'PENDIENTE').length;
+    const withoutFines = baseFiltered.filter(f => f.status === 'PAGADO').length;
+    const withEvidence = baseFiltered.filter(f => f.evidenceUrl && f.evidenceUrl.startsWith('http')).length;
+    const withoutEvidence = baseFiltered.filter(f => !(f.evidenceUrl && f.evidenceUrl.startsWith('http'))).length;
+    return { totalDrivers: totalRecords, withFines, withoutFines, withEvidence, withoutEvidence, rawTotal: fines.length };
+  }, [fines, selectedMonth]);
+
+  const monthlySummary = useMemo(() => {
+    const summary: Record<string, { total: number, uniqueDrivers: Set<string> }> = {};
+    fines.forEach(f => {
+      let m = (f.month || '').toUpperCase();
+      if (!m && f.date) {
+        const d = new Date(f.date + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          m = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+        }
+      }
+      if (!m) m = 'SIN MES/FECHA';
+
+      if (!summary[m]) summary[m] = { total: 0, uniqueDrivers: new Set() };
+      summary[m].total++;
+      if (f.driverName) summary[m].uniqueDrivers.add(f.driverName.toUpperCase());
+    });
+    return Object.entries(summary).map(([month, data]) => ({
+      month,
+      total: data.total,
+      uniqueDrivers: data.uniqueDrivers.size
+    })).sort((a, b) => {
+      const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+      const idxA = months.indexOf(a.month);
+      const idxB = months.indexOf(b.month);
+      if (idxA === -1 && idxB === -1) return 0;
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+    });
+  }, [fines]);
 
   const statsVehicles = useMemo(() => {
     const filtered = vehicles.filter(v => 
@@ -872,9 +942,16 @@ const App: React.FC = () => {
                  withoutFines={statsFines.withoutFines}
                  withEvidence={statsFines.withEvidence}
                  withoutEvidence={statsFines.withoutEvidence}
+                 rawTotal={statsFines.rawTotal}
                  month={selectedMonth}
                  activeFilter={fineStatusFilter}
                  onFilterChange={(f) => setFineStatusFilter(f as any)}
+               />
+
+               <MonthlyReport 
+                 summary={monthlySummary}
+                 selectedMonth={selectedMonth}
+                 onSelectMonth={setSelectedMonth}
                />
 
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

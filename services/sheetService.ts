@@ -22,7 +22,8 @@ const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
 const cleanSheetValue = (val: any): string => {
   if (val === null || val === undefined) return '';
-  return String(val).trim();
+  // Eliminar espacios en blanco y caracteres invisibles/especiales
+  return String(val).trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
 };
 
 const parseFlexibleDate = (dateStr: any): string => {
@@ -545,21 +546,22 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
   try {
     const url = `${BASE_URL_FINES}&gid=0${getCacheBuster()}`;
     const response = await fetch(url);
-    const csvText = await response.text();
+    const csvText = (await response.text()) + "\n";
     return new Promise((resolve) => {
       Papa.parse(csvText, {
-        header: false, skipEmptyLines: 'greedy',
+        header: false, skipEmptyLines: false,
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
+          if (!rows || rows.length === 0) { resolve([]); return; }
           
-          const fines = rows.slice(1)
-            .map((row, i) => ({ row, originalIndex: i + 2 }))
-            .filter(item => item.row && item.row[4] && cleanSheetValue(item.row[4]).length > 0)
-            .map((item): Fine => {
-              const { row, originalIndex } = item;
+          // Skip the first row if it's the header "MES"
+          const startIdx = (rows[0] && cleanSheetValue(rows[0][0]).toUpperCase() === 'MES') ? 1 : 0;
+          
+          const fines = rows.slice(startIdx)
+            .filter(r => r && r.some(c => cleanSheetValue(c).length > 0))
+            .map((row, i): Fine => {
               return {
-                id: `row-${originalIndex}`,
+                id: `row-${startIdx + i + 1}`,
                 month: cleanSheetValue(row[0]),
                 registrationDate: parseFlexibleDate(row[1]),
                 cd: cleanSheetValue(row[2]),

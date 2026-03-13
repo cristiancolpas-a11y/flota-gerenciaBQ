@@ -8,6 +8,7 @@ interface FineStatsProps {
   withoutFines: number;
   withEvidence: number;
   withoutEvidence: number;
+  rawTotal?: number;
   month: string;
   activeFilter: string;
   onFilterChange: (filter: string) => void;
@@ -19,6 +20,7 @@ const FineStats: React.FC<FineStatsProps> = ({
   withoutFines, 
   withEvidence, 
   withoutEvidence,
+  rawTotal,
   month, 
   activeFilter, 
   onFilterChange 
@@ -33,7 +35,10 @@ const FineStats: React.FC<FineStatsProps> = ({
         <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
           <Users size={60} />
         </div>
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Conductores en {month}</p>
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">
+          Registros en {month} (Total: {totalDrivers}) {rawTotal !== undefined && `[Cargados: ${rawTotal}]`}
+        </p>
+        <p className="text-[7px] text-slate-300 font-bold uppercase mb-2">Se cuentan registros con Mes: "{month}" o Fecha en {month}</p>
         <div className="flex items-end gap-2">
           <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{totalDrivers}</h3>
           <div className="mb-1 px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-md text-[8px] font-black uppercase">Total</div>
