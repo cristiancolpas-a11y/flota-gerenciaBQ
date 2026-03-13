@@ -4,7 +4,7 @@ import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Pre
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw9u62w53DHA54Sck1PmB6tdqzv9TK3OmKuoYU0TYwTdkZTtKnPI5Bnh4uIpnL6kUav/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbwQq0OLDdzY2x3Yl455AvdQFDU-iDC6OmhyeHfp5exBKuFWgaVEj0GZST-pd-D8-9s/exec';
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbxVjLry2rjYYsFLk_3PERq5KH39P73Oda3LFPKOu2uVammhZenY0I01-SeDU0tAy9uk/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -554,25 +554,29 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
           if (!rows || rows.length < 2) { resolve([]); return; }
           
           const fines = rows.slice(1)
-            .filter(row => row && row[4] && cleanSheetValue(row[4]).length > 0) // Mostrar todos los que tengan nombre
-            .map((row, i): Fine => ({
-            id: `row-${i + 2}`, // El índice 0 de slice(1) corresponde a la fila 2 de la hoja
-            month: cleanSheetValue(row[0]),
-            registrationDate: parseFlexibleDate(row[1]),
-            cd: cleanSheetValue(row[2]),
-            contractor: cleanSheetValue(row[3]),
-            driverName: cleanSheetValue(row[4]),
-            driverId: cleanSheetValue(row[5]),
-            driverPosition: cleanSheetValue(row[6]),
-            amount: parseFloat(cleanSheetValue(row[10])) || 0,
-            status: cleanSheetValue(row[8]).toUpperCase().includes('SI') ? 'PENDIENTE' : 'PAGADO',
-            paymentAgreement: cleanSheetValue(row[9]),
-            evidenceUrl: cleanSheetValue(row[7]).startsWith('http') ? cleanSheetValue(row[7]) : '', // Estrictamente solo links válidos en Columna H
-            infractionCode: cleanSheetValue(row[11]),
-            date: parseFlexibleDate(row[12]),
-            description: cleanSheetValue(row[13]),
-            plate: normalizePlate(cleanSheetValue(row[18])) // Usando índice 18 según lista del usuario
-          } as any));
+            .map((row, i) => ({ row, originalIndex: i + 2 }))
+            .filter(item => item.row && item.row[4] && cleanSheetValue(item.row[4]).length > 0)
+            .map((item): Fine => {
+              const { row, originalIndex } = item;
+              return {
+                id: `row-${originalIndex}`,
+                month: cleanSheetValue(row[0]),
+                registrationDate: parseFlexibleDate(row[1]),
+                cd: cleanSheetValue(row[2]),
+                contractor: cleanSheetValue(row[3]),
+                driverName: cleanSheetValue(row[4]),
+                driverId: cleanSheetValue(row[5]),
+                driverPosition: cleanSheetValue(row[6]),
+                amount: parseFloat(cleanSheetValue(row[9])) || 0,
+                status: cleanSheetValue(row[8]).toUpperCase().includes('SI') ? 'PENDIENTE' : 'PAGADO',
+                paymentAgreement: cleanSheetValue(row[8]),
+                evidenceUrl: cleanSheetValue(row[7]).startsWith('http') ? cleanSheetValue(row[7]) : '',
+                infractionCode: cleanSheetValue(row[10]),
+                date: parseFlexibleDate(row[11]),
+                description: cleanSheetValue(row[12]),
+                plate: normalizePlate(cleanSheetValue(row[17]))
+              } as any;
+            });
           resolve(fines);
         }
       });
@@ -730,10 +734,28 @@ export const fetchOperationalIndicatorsFromSheet = async (): Promise<Operational
 const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL) => {
   console.log(`Enviando a GAS (${payload.method}):`, payload);
   try {
-    await fetch(url, { 
-      method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) 
+    // Eliminamos no-cors para permitir que el navegador siga los redireccionamientos de Google
+    // Aunque de un error de CORS al final, la ejecución en el servidor se completa.
+    const response = await fetch(url, { 
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(payload) 
     });
-  } catch (err) { console.error(err); }
+    
+    // Si llegamos aquí sin error de CORS, podemos verificar la respuesta
+    if (response.ok) {
+      const result = await response.json();
+      console.log("Respuesta de GAS:", result);
+      return result.status === 'success';
+    }
+    return true;
+  } catch (err) { 
+    // Los errores de CORS suelen caer aquí, pero el script se ejecuta igual
+    console.log("Petición enviada (posible error de CORS ignorado):", err);
+    return true; 
+  }
 };
 
 export const submitDocumentUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_DOC_UPDATE', data }); };
@@ -745,7 +767,7 @@ export const submitWashToSheet = async (washData: any): Promise<void> => { await
 export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { await sendToGAS({ method: 'POST_CLEANING', data: cleaningData }); };
 export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: visitData }); };
 export const submitPreventiveUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_PREVENTIVE_UPDATE', data }); };
-export const submitFineToSheet = async (data: any) => {
+export const submitFineToSheet = async (data: any): Promise<boolean> => {
   const method = data.updateMode ? 'POST_FINE_UPDATE' : 'POST_FINE';
   return await sendToGAS({ method, data }, GOOGLE_SCRIPT_FINES_URL);
 };

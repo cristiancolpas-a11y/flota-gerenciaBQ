@@ -54,14 +54,14 @@ const AvailabilityModule: React.FC<AvailabilityModuleProps> = ({
       const plate = r.plate || 'SIN PLACA';
       const cd = r.cd || 'null';
       if (!plateCounts[plate]) {
-        plateCounts[plate] = { name: plate, 'La Arenosa': 0, 'Galapa': 0, 'null': 0 };
+        plateCounts[plate] = { name: plate, 'LA ARENOSA': 0, 'GALAPA': 0, 'null': 0 };
       }
-      const key = cd.includes('Arenosa') ? 'La Arenosa' : cd.includes('Galapa') ? 'Galapa' : 'null';
+      const key = cd.includes('ARENOSA') ? 'LA ARENOSA' : cd.includes('GALAPA') ? 'GALAPA' : 'null';
       plateCounts[plate][key] = (plateCounts[plate][key] || 0) + 1;
     });
     const platesChart = Object.values(plateCounts).sort((a, b) => {
-      const totalA = (a['La Arenosa'] || 0) + (a['Galapa'] || 0) + (a['null'] || 0);
-      const totalB = (b['La Arenosa'] || 0) + (b['Galapa'] || 0) + (b['null'] || 0);
+      const totalA = (a['LA ARENOSA'] || 0) + (a['GALAPA'] || 0) + (a['null'] || 0);
+      const totalB = (b['LA ARENOSA'] || 0) + (b['GALAPA'] || 0) + (b['null'] || 0);
       return totalB - totalA;
     }).slice(0, 10);
 
@@ -73,12 +73,12 @@ const AvailabilityModule: React.FC<AvailabilityModuleProps> = ({
       if (!workshopCounts[workshop]) {
         workshopCounts[workshop] = { name: workshop, 'La Arenosa': 0, 'Galapa': 0, 'null': 0 };
       }
-      const key = cd.includes('Arenosa') ? 'La Arenosa' : cd.includes('Galapa') ? 'Galapa' : 'null';
+      const key = cd.includes('ARENOSA') ? 'LA ARENOSA' : cd.includes('GALAPA') ? 'GALAPA' : 'null';
       workshopCounts[workshop][key] = (workshopCounts[workshop][key] || 0) + 1;
     });
     const workshopsChart = Object.values(workshopCounts).sort((a, b) => {
-      const totalA = (a['La Arenosa'] || 0) + (a['Galapa'] || 0) + (a['null'] || 0);
-      const totalB = (b['La Arenosa'] || 0) + (b['Galapa'] || 0) + (b['null'] || 0);
+      const totalA = (a['LA ARENOSA'] || 0) + (a['GALAPA'] || 0) + (a['null'] || 0);
+      const totalB = (b['LA ARENOSA'] || 0) + (b['GALAPA'] || 0) + (b['null'] || 0);
       return totalB - totalA;
     }).slice(0, 10);
 
@@ -88,14 +88,14 @@ const AvailabilityModule: React.FC<AvailabilityModuleProps> = ({
       const system = r.system || 'OTROS';
       const cd = r.cd || 'null';
       if (!systemCounts[system]) {
-        systemCounts[system] = { name: system, 'La Arenosa': 0, 'Galapa': 0, 'null': 0 };
+        systemCounts[system] = { name: system, 'LA ARENOSA': 0, 'GALAPA': 0, 'null': 0 };
       }
-      const key = cd.includes('Arenosa') ? 'La Arenosa' : cd.includes('Galapa') ? 'Galapa' : 'null';
+      const key = cd.includes('ARENOSA') ? 'LA ARENOSA' : cd.includes('GALAPA') ? 'GALAPA' : 'null';
       systemCounts[system][key] = (systemCounts[system][key] || 0) + 1;
     });
     const systemsChart = Object.values(systemCounts).sort((a, b) => {
-      const totalA = (a['La Arenosa'] || 0) + (a['Galapa'] || 0) + (a['null'] || 0);
-      const totalB = (b['La Arenosa'] || 0) + (b['Galapa'] || 0) + (b['null'] || 0);
+      const totalA = (a['LA ARENOSA'] || 0) + (a['GALAPA'] || 0) + (a['null'] || 0);
+      const totalB = (b['LA ARENOSA'] || 0) + (b['GALAPA'] || 0) + (b['null'] || 0);
       return totalB - totalA;
     });
 
@@ -107,7 +107,14 @@ const AvailabilityModule: React.FC<AvailabilityModuleProps> = ({
     const available = availabilityData.filter(v => v.isAvailable).length;
     const unavailable = total - available;
     const availabilityRate = total > 0 ? Math.round((available / total) * 100) : 0;
-    return { total, available, unavailable, availabilityRate };
+    
+    const cdBreakdown: Record<string, number> = {};
+    availabilityData.forEach(v => {
+      const cd = v.cd || 'GENERAL';
+      cdBreakdown[cd] = (cdBreakdown[cd] || 0) + 1;
+    });
+
+    return { total, available, unavailable, availabilityRate, cdBreakdown };
   }, [availabilityData]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -160,11 +167,21 @@ const AvailabilityModule: React.FC<AvailabilityModuleProps> = ({
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-lg">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Flota</p>
-          <div className="flex items-baseline gap-2">
-            <p className="text-3xl font-black text-slate-900">{stats.total}</p>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vehículos</p>
+        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-lg flex flex-col justify-between">
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Flota</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-3xl font-black text-slate-900">{stats.total}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vehículos</p>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-slate-50 flex flex-wrap gap-3">
+            {Object.entries(stats.cdBreakdown).map(([cd, count]) => (
+              <div key={cd} className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400"></div>
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">{cd}: {count}</span>
+              </div>
+            ))}
           </div>
         </div>
         <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100 shadow-lg">
@@ -211,8 +228,8 @@ const AvailabilityModule: React.FC<AvailabilityModuleProps> = ({
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
                     <Legend iconType="circle" wrapperStyle={{ paddingTop: '40px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }} />
-                    <Bar dataKey="La Arenosa" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} />
-                    <Bar dataKey="Galapa" fill="#d97706" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Bar dataKey="LA ARENOSA" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Bar dataKey="GALAPA" fill="#d97706" radius={[4, 4, 0, 0]} barSize={20} />
                     <Bar dataKey="null" fill="#a78bfa" radius={[4, 4, 0, 0]} barSize={20} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -238,8 +255,8 @@ const AvailabilityModule: React.FC<AvailabilityModuleProps> = ({
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
                     <Legend iconType="circle" wrapperStyle={{ paddingTop: '40px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }} />
-                    <Bar dataKey="La Arenosa" fill="#d97706" radius={[4, 4, 0, 0]} barSize={20} />
-                    <Bar dataKey="Galapa" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Bar dataKey="LA ARENOSA" fill="#d97706" radius={[4, 4, 0, 0]} barSize={20} />
+                    <Bar dataKey="GALAPA" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} />
                     <Bar dataKey="null" fill="#a78bfa" radius={[4, 4, 0, 0]} barSize={20} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -264,8 +281,8 @@ const AvailabilityModule: React.FC<AvailabilityModuleProps> = ({
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f8fafc' }} />
                   <Legend iconType="circle" wrapperStyle={{ paddingTop: '40px', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }} />
-                  <Bar dataKey="Galapa" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={30} />
-                  <Bar dataKey="La Arenosa" fill="#d97706" radius={[4, 4, 0, 0]} barSize={30} />
+                  <Bar dataKey="GALAPA" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={30} />
+                  <Bar dataKey="LA ARENOSA" fill="#d97706" radius={[4, 4, 0, 0]} barSize={30} />
                   <Bar dataKey="null" fill="#a78bfa" radius={[4, 4, 0, 0]} barSize={30} />
                 </BarChart>
               </ResponsiveContainer>
