@@ -5,6 +5,7 @@ import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
 import DriverCard from './components/DriverCard';
+import FineStats from './components/FineStats';
 import FineCard from './components/FineCard';
 import FineForm from './components/FineForm';
 import FineSupportForm from './components/FineSupportForm';
@@ -386,12 +387,28 @@ const App: React.FC = () => {
       }
 
       const matchCd = filterCd === 'all' || f.cd === filterCd;
-      const matchStatus = fineStatusFilter === 'all' || f.status === fineStatusFilter;
+      let matchStatus = fineStatusFilter === 'all' || f.status === fineStatusFilter;
+      
+      if (fineStatusFilter === 'WITH_EVIDENCE') {
+        matchStatus = !!(f.evidenceUrl && f.evidenceUrl.length > 5);
+      } else if (fineStatusFilter === 'WITHOUT_EVIDENCE') {
+        matchStatus = !(f.evidenceUrl && f.evidenceUrl.length > 5);
+      }
+
       const matchSearch = normalizePlate(f.plate).includes(normalizePlate(searchTerm));
       
       return matchMonth && matchYear && matchCd && matchStatus && matchSearch;
     });
   }, [fines, selectedMonth, selectedYear, filterCd, fineStatusFilter, searchTerm]);
+
+  const statsFines = useMemo(() => {
+    const uniqueDrivers = new Set(filteredFines.map(f => f.driverId)).size;
+    const withFines = filteredFines.filter(f => f.status === 'PENDIENTE').length;
+    const withoutFines = filteredFines.filter(f => f.status === 'PAGADO').length;
+    const withEvidence = filteredFines.filter(f => f.evidenceUrl && f.evidenceUrl.length > 5).length;
+    const withoutEvidence = filteredFines.filter(f => !(f.evidenceUrl && f.evidenceUrl.length > 5)).length;
+    return { totalDrivers: uniqueDrivers, withFines, withoutFines, withEvidence, withoutEvidence };
+  }, [filteredFines]);
 
   const statsVehicles = useMemo(() => {
     const filtered = vehicles.filter(v => 
@@ -848,6 +865,18 @@ const App: React.FC = () => {
                     </div>
                   </div>
                </div>
+
+               <FineStats 
+                 totalDrivers={statsFines.totalDrivers}
+                 withFines={statsFines.withFines}
+                 withoutFines={statsFines.withoutFines}
+                 withEvidence={statsFines.withEvidence}
+                 withoutEvidence={statsFines.withoutEvidence}
+                 month={selectedMonth}
+                 activeFilter={fineStatusFilter}
+                 onFilterChange={(f) => setFineStatusFilter(f as any)}
+               />
+
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredFines.map(f => (
                     <FineCard key={f.id} fine={f} onViewDoc={(url, t) => setViewDoc({url, title: t})} onAddSupport={setManagingFineSupport} />

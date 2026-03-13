@@ -20,11 +20,11 @@ const FineCard: React.FC<FineCardProps> = ({ fine, onViewDoc, onAddSupport }) =>
     <div className={`bg-white rounded-[2.5rem] border-2 overflow-hidden shadow-lg transition-all hover:shadow-xl flex flex-col h-full group ${isPending ? 'border-rose-100' : 'border-emerald-100'}`}>
       
       {/* ENCABEZADO CENTRAL: NOMBRE DEL CONDUCTOR */}
-      <div className={`p-6 flex flex-col items-center text-center relative overflow-hidden ${isPending ? 'bg-[#0f172a]' : 'bg-emerald-600'} text-white`}>
+      <div className={`p-6 flex flex-col items-center text-center relative overflow-hidden ${isPending ? 'bg-rose-600' : 'bg-emerald-600'} text-white`}>
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
         
         <div className="mb-3 p-3 bg-white/10 rounded-full border border-white/20 shadow-2xl relative z-10">
-           <UserCircle size={40} className={isPending ? 'text-indigo-400' : 'text-emerald-200'} />
+           <UserCircle size={40} className={isPending ? 'text-rose-200' : 'text-emerald-200'} />
         </div>
 
         <h2 className="text-lg font-black uppercase tracking-tight leading-tight mb-2 relative z-10 px-4 drop-shadow-md">
@@ -34,7 +34,7 @@ const FineCard: React.FC<FineCardProps> = ({ fine, onViewDoc, onAddSupport }) =>
         <div className="flex flex-col items-center gap-1.5 relative z-10">
            <div className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em] border border-white/30 shadow-lg flex items-center gap-1.5 ${isPending ? 'bg-rose-600 animate-pulse' : 'bg-emerald-500'}`}>
               {isPending ? <AlertCircle size={12}/> : <CheckCircle2 size={12}/>}
-              {isPending ? 'TIENE COMPARENDO' : 'SIN DEUDA'}
+              {isPending ? 'TIENE COMPARENDO (SI)' : 'SIN DEUDA (NO)'}
            </div>
            <span className="text-[9px] font-bold opacity-60 uppercase tracking-widest mt-1">
               CC {fine.driverId || '---'}
