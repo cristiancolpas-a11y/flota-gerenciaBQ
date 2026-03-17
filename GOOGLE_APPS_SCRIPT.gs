@@ -120,6 +120,24 @@ function doPost(e) {
         if (foundIdx !== -1) s.getRange(foundIdx, 1, 1, rowData.length).setValues([rowData]);
         else s.appendRow(rowData);
       }
+      else if (m === 'POST_WORKSHOP_RECORD') {
+        var s = getS(ss, "TALLERES");
+        var ev1Url = sImg(d.evidence1Url, "EV1_" + d.plate);
+        var ev2Url = sImg(d.evidence2Url, "EV2_" + d.plate);
+        
+        s.appendRow([
+          d.month,
+          d.week,
+          d.date,
+          d.plate,
+          d.status,
+          d.novelty,
+          ev1Url,
+          ev2Url,
+          d.workshopName,
+          new Date()
+        ]);
+      }
       else if (m === 'POST_WORKSHOP_VISIT_UPDATE') {
         var s = getS(ss, "VISITAS A TALLER");
         var rows = s.getDataRange().getValues();

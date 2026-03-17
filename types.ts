@@ -95,6 +95,19 @@ export interface MileageLog {
   week?: string;
 }
 
+export interface WorkshopRecord {
+  id: string;
+  month: string;
+  week: string;
+  date: string;
+  plate: string;
+  status: string;
+  novelty: string;
+  evidence1Url?: string;
+  evidence2Url?: string;
+  workshopName: string;
+}
+
 export interface Report {
   id: string;
   date: string;
@@ -148,6 +161,8 @@ export interface Preventive {
   evidenceUrl?: string;
   complianceStatus?: string;
   validationStatus?: string;
+  frequency?: number;
+  difference?: number;
 }
 
 export interface FleetComposition {

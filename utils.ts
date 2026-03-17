@@ -203,9 +203,10 @@ export const createMosaic = async (base64Array: string[], title?: string): Promi
   }
 
   const canvas = document.createElement('canvas');
-  const cellWidth = 1600; 
-  const cellHeight = 1200;
-  const headerHeight = title ? 120 : 0;
+  // Reducir la resolución del collage para evitar exceder el límite de 10MB de Google Apps Script
+  const cellWidth = 800; 
+  const cellHeight = 600;
+  const headerHeight = title ? 80 : 0;
 
   canvas.width = cols * cellWidth;
   canvas.height = (rows * cellHeight) + headerHeight;
@@ -238,7 +239,7 @@ export const createMosaic = async (base64Array: string[], title?: string): Promi
     ctx.fillRect(x, y, cellWidth, cellHeight);
 
     // Calculate aspect ratio to fit image in cell with padding
-    const padding = 40;
+    const padding = 20;
     const innerWidth = cellWidth - (padding * 2);
     const innerHeight = cellHeight - (padding * 2);
     
@@ -260,9 +261,9 @@ export const createMosaic = async (base64Array: string[], title?: string): Promi
 
     // Shadow effect for images
     ctx.shadowColor = 'rgba(0,0,0,0.15)';
-    ctx.shadowBlur = 30;
-    ctx.shadowOffsetX = 10;
-    ctx.shadowOffsetY = 10;
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetX = 5;
+    ctx.shadowOffsetY = 5;
     
     ctx.drawImage(img, x + offsetX, y + offsetY, drawWidth, drawHeight);
     
@@ -274,11 +275,12 @@ export const createMosaic = async (base64Array: string[], title?: string): Promi
 
     // Draw border
     ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 2;
     ctx.strokeRect(x, y, cellWidth, cellHeight);
   });
 
-  return canvas.toDataURL('image/jpeg', 0.95); 
+  // Reducir la calidad de compresión a 0.8 para ahorrar peso
+  return canvas.toDataURL('image/jpeg', 0.8); 
 };
 
 export const generateId = (): string => {

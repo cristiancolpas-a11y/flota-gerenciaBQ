@@ -1,10 +1,10 @@
-
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw9u62w53DHA54Sck1PmB6tdqzv9TK3OmKuoYU0TYwTdkZTtKnPI5Bnh4uIpnL6kUav/exec'; 
 const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbxVjLry2rjYYsFLk_3PERq5KH39P73Oda3LFPKOu2uVammhZenY0I01-SeDU0tAy9uk/exec';
+const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbxU8y_M1pACZaBf92uc0W01I4UqCqmOwnt7uUZSTezkSMQZgXYSLGv0laaGlR9UGJ8q/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -639,7 +639,9 @@ export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
                 month: cleanSheetValue(row[1]),
                 complianceStatus: complianceStatus,
                 validationStatus: validationStatus,
-                evidenceUrl: evidence
+                evidenceUrl: evidence,
+                frequency: parseInt(cleanSheetValue(row[4])) || 5000,
+                difference: parseInt(cleanSheetValue(row[8])) || 0
               };
             });
           resolve(preventives);
@@ -733,11 +735,50 @@ export const fetchOperationalIndicatorsFromSheet = async (): Promise<Operational
   } catch (e) { return []; }
 };
 
+export const fetchWorkshopRecordsFromSheet = async (): Promise<WorkshopRecord[]> => {
+  try {
+    const url = 'https://docs.google.com/spreadsheets/d/1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo/gviz/tq?tqx=out:csv&sheet=TALLERES';
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          
+          // 0:MES, 1:SEMANA, 2:FECHA, 3:PLACA, 4:ESTADO, 5:NOVEDAD, 6:EVIDENCIA_1, 7:EVIDENCIA_2, 8:MÁS ALTO
+          const records = rows.slice(1)
+            .filter(row => row && row[3]) // Placa en indice 3
+            .map((row, i): WorkshopRecord => {
+              return {
+                id: `workshop-${i}`,
+                month: cleanSheetValue(row[0]),
+                week: cleanSheetValue(row[1]),
+                date: parseFlexibleDate(row[2]),
+                plate: normalizePlate(cleanSheetValue(row[3])),
+                status: cleanSheetValue(row[4]),
+                novelty: cleanSheetValue(row[5]),
+                evidence1Url: cleanSheetValue(row[6]),
+                evidence2Url: cleanSheetValue(row[7]),
+                workshopName: cleanSheetValue(row[8]),
+              };
+            });
+          resolve(records);
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
 const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL) => {
   console.log(`Enviando a GAS (${payload.method}):`, payload);
   try {
-    // Eliminamos no-cors para permitir que el navegador siga los redireccionamientos de Google
-    // Aunque de un error de CORS al final, la ejecución en el servidor se completa.
     const response = await fetch(url, { 
       method: 'POST',
       headers: {
@@ -746,7 +787,6 @@ const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL) 
       body: JSON.stringify(payload) 
     });
     
-    // Si llegamos aquí sin error de CORS, podemos verificar la respuesta
     if (response.ok) {
       const result = await response.json();
       console.log("Respuesta de GAS:", result);
@@ -768,6 +808,7 @@ export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> =
 export const submitWashToSheet = async (washData: any): Promise<void> => { await sendToGAS({ method: 'POST_WASH', data: washData }); };
 export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { await sendToGAS({ method: 'POST_CLEANING', data: cleaningData }); };
 export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: visitData }); };
+export const submitWorkshopRecordToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_RECORD', data }, GOOGLE_SCRIPT_WORKSHOP_URL); };
 export const submitPreventiveUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_PREVENTIVE_UPDATE', data }); };
 export const submitFineToSheet = async (data: any): Promise<boolean> => {
   const method = data.updateMode ? 'POST_FINE_UPDATE' : 'POST_FINE';

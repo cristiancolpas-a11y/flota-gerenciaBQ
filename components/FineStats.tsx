@@ -25,11 +25,19 @@ const FineStats: React.FC<FineStatsProps> = ({
   activeFilter, 
   onFilterChange 
 }) => {
+  const handleFilterClick = (filter: string) => {
+    if (activeFilter === filter) {
+      onFilterChange('all');
+    } else {
+      onFilterChange(filter);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
       {/* TOTAL CONDUCTORES */}
       <div 
-        onClick={() => onFilterChange('all')}
+        onClick={() => handleFilterClick('all')}
         className={`bg-white rounded-[2rem] p-6 shadow-lg border-b-4 relative overflow-hidden group transition-all hover:scale-[1.02] cursor-pointer ${activeFilter === 'all' ? 'border-indigo-600 ring-4 ring-indigo-500/20' : 'border-indigo-500'}`}
       >
         <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -47,7 +55,7 @@ const FineStats: React.FC<FineStatsProps> = ({
 
       {/* CON COMPARENDO (SI) */}
       <div 
-        onClick={() => onFilterChange('PENDIENTE')}
+        onClick={() => handleFilterClick('PENDIENTE')}
         className={`bg-white rounded-[2rem] p-6 shadow-lg border-b-4 relative overflow-hidden group transition-all hover:scale-[1.02] cursor-pointer ${activeFilter === 'PENDIENTE' ? 'border-rose-600 ring-4 ring-rose-500/20' : 'border-rose-500'}`}
       >
         <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -62,7 +70,7 @@ const FineStats: React.FC<FineStatsProps> = ({
 
       {/* SIN COMPARENDO (NO) */}
       <div 
-        onClick={() => onFilterChange('PAGADO')}
+        onClick={() => handleFilterClick('PAGADO')}
         className={`bg-white rounded-[2rem] p-6 shadow-lg border-b-4 relative overflow-hidden group transition-all hover:scale-[1.02] cursor-pointer ${activeFilter === 'PAGADO' ? 'border-emerald-600 ring-4 ring-emerald-500/20' : 'border-emerald-500'}`}
       >
         <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -77,7 +85,7 @@ const FineStats: React.FC<FineStatsProps> = ({
 
       {/* CON COMPROBANTE */}
       <div 
-        onClick={() => onFilterChange('WITH_EVIDENCE')}
+        onClick={() => handleFilterClick('WITH_EVIDENCE')}
         className={`bg-white rounded-[2rem] p-6 shadow-lg border-b-4 relative overflow-hidden group transition-all hover:scale-[1.02] cursor-pointer ${activeFilter === 'WITH_EVIDENCE' ? 'border-blue-600 ring-4 ring-blue-500/20' : 'border-blue-500'}`}
       >
         <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
@@ -92,7 +100,7 @@ const FineStats: React.FC<FineStatsProps> = ({
 
       {/* SIN COMPROBANTE */}
       <div 
-        onClick={() => onFilterChange('WITHOUT_EVIDENCE')}
+        onClick={() => handleFilterClick('WITHOUT_EVIDENCE')}
         className={`bg-white rounded-[2rem] p-6 shadow-lg border-b-4 relative overflow-hidden group transition-all hover:scale-[1.02] cursor-pointer ${activeFilter === 'WITHOUT_EVIDENCE' ? 'border-amber-600 ring-4 ring-amber-500/20' : 'border-amber-500'}`}
       >
         <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">

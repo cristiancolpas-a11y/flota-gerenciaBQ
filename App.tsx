@@ -154,6 +154,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     handleSyncData();
+    
+    // Auto-refresh data every 5 minutes
+    const intervalId = setInterval(() => {
+      handleSyncData();
+    }, 5 * 60 * 1000);
+    
+    return () => clearInterval(intervalId);
   }, []);
 
   const handleSyncData = async () => {
@@ -350,7 +357,7 @@ const App: React.FC = () => {
       pending: baseFiltered.filter(r => r.status === 'ABIERTO').length,
       searchCount: filteredReports.length
     };
-  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, filteredReports]);
+  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, filteredReports, selectedYear]);
 
   const filteredCalibrations = useMemo(() => {
     return calibrations.filter(c => {
@@ -438,7 +445,8 @@ const App: React.FC = () => {
                          (fMonth === "" && matchMonthByDate);
       
       // Para el conteo total, priorizamos el mes para que coincida con el Excel
-      return matchMonth;
+      const matchCd = filterCd === 'all' || f.cd === filterCd;
+      return matchMonth && matchCd;
     });
 
     const totalRecords = baseFiltered.length;
@@ -446,12 +454,13 @@ const App: React.FC = () => {
     const withoutFines = baseFiltered.filter(f => f.status === 'PAGADO').length;
     const withEvidence = baseFiltered.filter(f => f.evidenceUrl && f.evidenceUrl.startsWith('http')).length;
     const withoutEvidence = baseFiltered.filter(f => !(f.evidenceUrl && f.evidenceUrl.startsWith('http'))).length;
-    return { totalDrivers: totalRecords, withFines, withoutFines, withEvidence, withoutEvidence, rawTotal: fines.length };
-  }, [fines, selectedMonth]);
+    const rawTotal = filterCd === 'all' ? fines.length : fines.filter(f => f.cd === filterCd).length;
+    return { totalDrivers: totalRecords, withFines, withoutFines, withEvidence, withoutEvidence, rawTotal };
+  }, [fines, selectedMonth, filterCd]);
 
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { total: number, uniqueDrivers: Set<string> }> = {};
-    fines.forEach(f => {
+    fines.filter(f => filterCd === 'all' || f.cd === filterCd).forEach(f => {
       let m = (f.month || '').toUpperCase();
       if (!m && f.date) {
         const d = new Date(f.date + "T12:00:00");
@@ -478,7 +487,7 @@ const App: React.FC = () => {
       if (idxB === -1) return -1;
       return idxA - idxB;
     });
-  }, [fines]);
+  }, [fines, filterCd]);
 
   const statsVehicles = useMemo(() => {
     const filtered = vehicles.filter(v => 
@@ -655,7 +664,7 @@ const App: React.FC = () => {
           </div>
         </div>
       ) : appMode === 'talleres' ? (
-        <WorkshopModule onBack={() => setAppMode('root_menu')} />
+        <WorkshopModule onBack={() => setAppMode('root_menu')} vehicles={vehicles} />
       ) : appMode === 'montacargas' ? (
         <div className="flex-grow bg-[#0f172a] flex flex-col items-center justify-center p-8">
            <div className="text-center space-y-8">
@@ -704,7 +713,13 @@ const App: React.FC = () => {
             ].map(item => (
               <button 
                 key={item.id}
-                onClick={() => { setActiveView(item.id as ActiveView); setIsSidebarOpen(false); }} 
+                onClick={() => { 
+                  setActiveView(item.id as ActiveView); 
+                  setIsSidebarOpen(false); 
+                  if (item.id === 'preventivos') {
+                    handleSyncData();
+                  }
+                }} 
                 className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
               >
                 {item.icon} {item.label}
@@ -926,11 +941,23 @@ const App: React.FC = () => {
                     <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
                       <div className="flex flex-col">
                         <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest ml-1">ESTADO</span>
-                        <select className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer" value={fineStatusFilter} onChange={e => setFineStatusFilter(e.target.value as any)}>
-                          <option value="all">TODOS</option>
-                          <option value="PENDIENTE">PENDIENTES</option>
-                          <option value="PAGADO">PAGADOS</option>
-                        </select>
+                        <div className="flex items-center gap-2">
+                          <select className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer" value={fineStatusFilter} onChange={e => setFineStatusFilter(e.target.value as any)}>
+                            <option value="all">TODOS</option>
+                            <option value="PENDIENTE">PENDIENTES</option>
+                            <option value="PAGADO">PAGADOS</option>
+                            <option value="WITH_EVIDENCE">CON SOPORTE</option>
+                            <option value="WITHOUT_EVIDENCE">SIN SOPORTE</option>
+                          </select>
+                          {fineStatusFilter !== 'all' && (
+                            <button 
+                              onClick={() => setFineStatusFilter('all')}
+                              className="text-[8px] font-black text-rose-500 hover:text-rose-600 uppercase tracking-tighter"
+                            >
+                              [Limpiar]
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
