@@ -408,6 +408,7 @@ const App: React.FC = () => {
       }
 
       const matchCd = filterCd === 'all' || f.cd === filterCd;
+      const matchContractor = filterContractor === 'all' || f.contractor === filterContractor;
       let matchStatus = fineStatusFilter === 'all' || f.status === fineStatusFilter;
       
       if (fineStatusFilter === 'WITH_EVIDENCE') {
@@ -418,9 +419,9 @@ const App: React.FC = () => {
 
       const matchSearch = normalizePlate(f.plate).includes(normalizePlate(searchTerm));
       
-      return matchMonth && matchYear && matchCd && matchStatus && matchSearch;
+      return matchMonth && matchYear && matchCd && matchContractor && matchStatus && matchSearch;
     });
-  }, [fines, selectedMonth, selectedYear, filterCd, fineStatusFilter, searchTerm]);
+  }, [fines, selectedMonth, selectedYear, filterCd, filterContractor, fineStatusFilter, searchTerm]);
 
   const statsFines = useMemo(() => {
     // Para las estadísticas, contamos todos los registros que coinciden con el mes/año, 
@@ -446,7 +447,8 @@ const App: React.FC = () => {
       
       // Para el conteo total, priorizamos el mes para que coincida con el Excel
       const matchCd = filterCd === 'all' || f.cd === filterCd;
-      return matchMonth && matchCd;
+      const matchContractor = filterContractor === 'all' || f.contractor === filterContractor;
+      return matchMonth && matchCd && matchContractor;
     });
 
     const totalRecords = baseFiltered.length;
@@ -454,9 +456,9 @@ const App: React.FC = () => {
     const withoutFines = baseFiltered.filter(f => f.status === 'PAGADO').length;
     const withEvidence = baseFiltered.filter(f => f.evidenceUrl && f.evidenceUrl.startsWith('http')).length;
     const withoutEvidence = baseFiltered.filter(f => !(f.evidenceUrl && f.evidenceUrl.startsWith('http'))).length;
-    const rawTotal = filterCd === 'all' ? fines.length : fines.filter(f => f.cd === filterCd).length;
+    const rawTotal = filterCd === 'all' && filterContractor === 'all' ? fines.length : fines.filter(f => (filterCd === 'all' || f.cd === filterCd) && (filterContractor === 'all' || f.contractor === filterContractor)).length;
     return { totalDrivers: totalRecords, withFines, withoutFines, withEvidence, withoutEvidence, rawTotal };
-  }, [fines, selectedMonth, filterCd]);
+  }, [fines, selectedMonth, filterCd, filterContractor]);
 
   const monthlySummary = useMemo(() => {
     const summary: Record<string, { total: number, uniqueDrivers: Set<string> }> = {};
@@ -900,6 +902,25 @@ const App: React.FC = () => {
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-4">
+                    <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
+                      <select 
+                        className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
+                        value={filterCd}
+                        onChange={e => setFilterCd(e.target.value)}
+                      >
+                        <option value="all">TODOS LOS CD</option>
+                        {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
+                      </select>
+                      <select 
+                        className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
+                        value={filterContractor}
+                        onChange={e => setFilterContractor(e.target.value)}
+                      >
+                        <option value="all">TODOS LOS CONTRATISTAS</option>
+                        {uniqueContractors.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+
                     <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
                       <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
                         <CalendarDays size={16} className="text-indigo-600" />
