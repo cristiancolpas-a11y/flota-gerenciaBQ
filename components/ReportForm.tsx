@@ -27,7 +27,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
     initialEvidence: '',
     entryMap: '',
     workshop: '',
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    workshopDate: new Date().toISOString().split('T')[0]
   });
 
   const filteredVehicles = React.useMemo(() => {
@@ -137,7 +138,20 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
     try {
       const mergedInitialEvidence = await createMosaic(capturedPhotos, `NOVEDAD INGRESO: ${formData.plate} - ${formData.date}`);
       const selectedVehicle = vehicles.find(v => v.plate === formData.plate);
-      const payload = { ...formData, initialEvidence: mergedInitialEvidence, status: 'ABIERTO', cd: selectedVehicle?.cd || 'GENERAL' };
+      
+      // Calcular días en atender
+      const reportDate = new Date(formData.date);
+      const entryDate = new Date(formData.workshopDate);
+      const daysToAttend = Math.max(0, Math.ceil((entryDate.getTime() - reportDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+      const payload = { 
+        ...formData, 
+        initialEvidence: mergedInitialEvidence, 
+        status: 'PENDIENTES', 
+        cd: selectedVehicle?.cd || 'GENERAL',
+        contractor: selectedVehicle?.contractor || 'GENERAL',
+        daysToAttend
+      };
       await onSubmit(payload);
       setIsSuccess(true);
       setTimeout(onClose, 1500);
@@ -177,26 +191,31 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white">
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-end px-1">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Placa Vehicular</label>
+              <input 
+                type="text" 
+                placeholder="BUSCAR..." 
+                className="bg-slate-100 border-none rounded-lg px-2 py-0.5 text-[9px] font-black uppercase outline-none focus:ring-2 ring-indigo-500/30 w-24 transition-all"
+                value={plateSearch}
+                onChange={(e) => setPlateSearch(e.target.value)}
+              />
+            </div>
+            <select required className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-500 appearance-none" value={formData.plate} onChange={e => setFormData({ ...formData, plate: e.target.value })}>
+              <option value="">-- {filteredVehicles.length === 0 ? 'SIN RESULTADOS' : 'SELECCIONE'} --</option>
+              {filteredVehicles.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
+            </select>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <div className="flex justify-between items-end px-1">
-                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Placa Vehicular</label>
-                <input 
-                  type="text" 
-                  placeholder="BUSCAR..." 
-                  className="bg-slate-100 border-none rounded-lg px-2 py-0.5 text-[9px] font-black uppercase outline-none focus:ring-2 ring-indigo-500/30 w-24 transition-all"
-                  value={plateSearch}
-                  onChange={(e) => setPlateSearch(e.target.value)}
-                />
-              </div>
-              <select required className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-500 appearance-none" value={formData.plate} onChange={e => setFormData({ ...formData, plate: e.target.value })}>
-                <option value="">-- {filteredVehicles.length === 0 ? 'SIN RESULTADOS' : 'SELECCIONE'} --</option>
-                {filteredVehicles.map(v => <option key={v.id} value={v.plate}>{v.plate}</option>)}
-              </select>
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1">Fecha Reporte</label>
+              <input type="date" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-500" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1">Fecha</label>
-              <input type="date" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-500" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} />
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1">Fecha Ingreso Taller</label>
+              <input type="date" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none focus:border-indigo-500" value={formData.workshopDate} onChange={e => setFormData({ ...formData, workshopDate: e.target.value })} />
             </div>
           </div>
 
@@ -216,7 +235,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
 
           <div className="space-y-4">
             <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest px-1 flex items-center justify-between">
-              <span className="flex items-center gap-2"><Camera size={14}/> Evidencias (Max 4)</span>
+              <span className="flex items-center gap-2"><Camera size={14}/> Evidencia inicial (Max 4)</span>
               <span className="text-[10px] text-slate-400">{capturedPhotos.length} / 4</span>
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -238,11 +257,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
 
           <div className="space-y-2">
             <label className="text-[11px] font-black text-indigo-600 uppercase tracking-widest px-1 flex items-center gap-2">
-              <MapPin size={14} /> Mapa de Ubicación
+              <MapPin size={14} /> Mapa de taller
             </label>
             <button type="button" onClick={() => mapInputRef.current?.click()} className={`w-full py-4 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-all ${formData.entryMap ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-slate-50 border-slate-300 text-slate-500'}`}>
               <ImageIcon size={24} /> 
-              <span className="text-[9px] font-black uppercase tracking-widest">{formData.entryMap ? 'MAPA ADJUNTO ✓' : 'CAPTURAR MAPA'}</span>
+              <span className="text-[9px] font-black uppercase tracking-widest">{formData.entryMap ? 'MAPA ADJUNTO ✓' : 'SELECCIONAR EL MAPA'}</span>
             </button>
             <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" ref={mapInputRef} className="hidden" onChange={handleMapChange} />
           </div>

@@ -78,7 +78,7 @@ function doPost(e) {
     
     else if (m === 'POST_DOC_UPDATE') {
       var ssM = SpreadsheetApp.openById(ID_MAESTRO);
-      var s = ssM.getSheets()[0]; 
+      var s = getSheetByGid(ssM, "1506825194") || ssM.getSheets()[0]; 
       var rows = s.getDataRange().getValues();
       var placaBusqueda = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
       var foundIdx = -1;
@@ -102,21 +102,55 @@ function doPost(e) {
       var ss = SpreadsheetApp.openById(ID_HOJA);
       
       if (m === 'POST_REPORT') {
-        var s = getS(ss, "NOVEDADES");
+        var s = getSheetByGid(ss, "1789987673") || getS(ss, "NOVEDADES");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
+        var existingRow = null;
         for (var i = 1; i < rows.length; i++) {
-          if (rows[i][0] && rows[i][0].toString() === d.id.toString()) {
+          if (rows[i][0] && rows[i][0].toString().trim() === d.id.toString().trim()) {
             foundIdx = i + 1;
+            existingRow = rows[i];
             break;
           }
         }
+
         var imgIni = sImg(d.initialEvidence, "NOV_INI_" + d.plate);
         var imgWork = sImg(d.workshopEvidence, "NOV_TALLER_" + d.plate);
         var imgSol = sImg(d.solutionEvidence, "NOV_SOL_" + d.plate);
         var imgMapEntry = sImg(d.entryMap, "MAPA_ENTRADA_" + d.plate);
         var imgMapExit = sImg(d.exitMap, "MAPA_SALIDA_" + d.plate);
-        var rowData = [d.id, d.date, d.plate, d.source, imgIni, d.novelty, imgMapEntry || "", d.status, imgWork, d.closureDate || "", imgSol, imgMapExit || "", d.daysInShop || 0, d.closureComments || "", d.workshop || "", d.cd || "GENERAL"];
+
+        // Si ya existe la fila, preservamos los links si los nuevos vienen vacíos
+        if (existingRow) {
+          if (!imgIni && existingRow[7]) imgIni = existingRow[7];
+          if (!imgMapEntry && existingRow[10]) imgMapEntry = existingRow[10];
+          if (!imgWork && existingRow[12]) imgWork = existingRow[12];
+          if (!imgSol && existingRow[14]) imgSol = existingRow[14];
+          if (!imgMapExit && existingRow[15]) imgMapExit = existingRow[15];
+        }
+
+        var rowData = [
+          d.id, 
+          d.date, 
+          d.cd || "GENERAL",
+          d.contractor || "GENERAL",
+          d.plate, 
+          d.source, 
+          d.workshopDate || "",
+          imgIni || "",
+          d.novelty,
+          d.daysToAttend || 0,
+          imgMapEntry || "",
+          d.status,
+          imgWork || "",
+          d.closureDate || "",
+          imgSol || "",
+          imgMapExit || "",
+          d.daysInShop || 0,
+          d.closureComments || "",
+          d.workshop || ""
+        ];
+
         if (foundIdx !== -1) s.getRange(foundIdx, 1, 1, rowData.length).setValues([rowData]);
         else s.appendRow(rowData);
       }
@@ -139,11 +173,11 @@ function doPost(e) {
         ]);
       }
       else if (m === 'POST_WORKSHOP_VISIT_UPDATE') {
-        var s = getS(ss, "VISITAS A TALLER");
+        var s = getSheetByGid(ss, "239875479") || getS(ss, "VISITAS A TALLER");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         for (var i = 1; i < rows.length; i++) {
-          if (rows[i][7] && rows[i][7].toString() === (d.id || "").toString()) {
+          if (rows[i][7] && rows[i][7].toString().trim() === (d.id || "").toString().trim()) {
             foundIdx = i + 1;
             break;
           }
@@ -156,7 +190,7 @@ function doPost(e) {
         }
       }
       else if (m === 'POST_PREVENTIVE_UPDATE') {
-        var s = getS(ss, "PREVENTIVO");
+        var s = getSheetByGid(ss, "2086109634") || getS(ss, "PREVENTIVO");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var plateSearch = (d.plate || "").toString().toUpperCase().trim();
@@ -170,18 +204,32 @@ function doPost(e) {
         }
         
         if (foundIdx !== -1) {
-          var img = sImg(d.evidence, "PREV_" + plateSearch);
-          s.getRange(foundIdx, 3).setValue(d.date); // FECHA DE EJECUCION (Indice 2 -> Columna 3)
-          s.getRange(foundIdx, 10).setValue(d.compliance); // CUMPLIMIENTO EN RANGOS (Indice 9 -> Columna 10)
-          s.getRange(foundIdx, 12).setValue(img); // EVIDENCIA (Indice 11 -> Columna 12)
+          var imgUrls = [];
+          if (Array.isArray(d.evidence)) {
+            for (var j = 0; j < d.evidence.length; j++) {
+              var url = sImg(d.evidence[j], "PREV_" + plateSearch + "_" + (j+1));
+              if (url) imgUrls.push(url);
+            }
+          } else if (d.evidence) {
+            var singleUrl = sImg(d.evidence, "PREV_" + plateSearch);
+            if (singleUrl) imgUrls.push(singleUrl);
+          }
+          var img = imgUrls.join(", ");
+          
+          s.getRange(foundIdx, 3).setValue(d.date); // FECHA DE EJECUCION (Columna C)
+          s.getRange(foundIdx, 8).setValue(d.currentKm); // KM REGISTRADO (Columna H)
+          s.getRange(foundIdx, 9).setValue(d.difference); // DIFERENCIA (Columna I)
+          s.getRange(foundIdx, 10).setValue(d.compliance); // CUMPLIMIENTO EN RANGOS (Columna J)
+          s.getRange(foundIdx, 11).setValue(d.validation); // VALIDACION CUMPLIMIENTO (Columna K)
+          s.getRange(foundIdx, 12).setValue(img); // EVIDENCIA (Columna L)
         }
       }
       else if (m === 'POST_MILEAGE') {
-        var s = getS(ss, "KILOMETRAJE");
+        var s = getSheetByGid(ss, "1929496440") || getS(ss, "KILOMETRAJE");
         s.appendRow([d.cd, d.contractor, d.week, d.date, d.plate, d.mileage]);
       }
       else if (m === 'POST_CLEANING') {
-        var s = getS(ss, "CRONOGRAMA 5S");
+        var s = getSheetByGid(ss, "1853969081") || getS(ss, "CRONOGRAMA 5S");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var plateSearch = (d.plate || "").toString().toUpperCase().trim();
@@ -241,7 +289,7 @@ function doPost(e) {
         s.appendRow([d.id, d.month, d.week, d.date, d.plate, sImg(d.evidenceUrl, "LAVADO_" + d.plate), sImg(d.mapUrl, "MAPA_LAVADO_" + d.plate), d.workshop]);
       }
       else if (m === 'POST_CALIBRATION_UPDATE') {
-        var s = getS(ss, "CALIBRACIONES");
+        var s = getSheetByGid(ss, "505557891") || getS(ss, "CALIBRACIONES");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var plateSearch = (d.originalPlate || d.plate || "").toString().toUpperCase().trim();
@@ -287,7 +335,7 @@ function doPost(e) {
         }
       }
       else if (m === 'POST_CALIBRATION') {
-        var s = getS(ss, "CALIBRACIONES");
+        var s = getSheetByGid(ss, "505557891") || getS(ss, "CALIBRACIONES");
         s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, sImg(d.certificateUrl, "CALIB_" + d.plate), "COMPLETADO"]);
       }
     }
@@ -298,6 +346,16 @@ function doPost(e) {
     if (lock.hasLock()) lock.releaseLock();
     return output("error", e.toString());
   }
+}
+
+function getSheetByGid(ss, gid) {
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId().toString() === gid.toString()) {
+      return sheets[i];
+    }
+  }
+  return null;
 }
 
 function sImg(base64, name) {

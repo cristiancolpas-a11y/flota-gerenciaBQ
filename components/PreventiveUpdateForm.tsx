@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Camera, Save, Loader2, Calculator, Calendar, Truck, Gauge } from 'lucide-react';
 import { Vehicle, Preventive } from '../types';
+import { compressImage } from '../utils';
 
 interface PreventiveUpdateFormProps {
   onClose: () => void;
@@ -15,27 +16,38 @@ const PreventiveUpdateForm: React.FC<PreventiveUpdateFormProps> = ({ onClose, on
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [week, setWeek] = useState('');
   const [month, setMonth] = useState('');
-  const [frequency, setFrequency] = useState(5000);
-  const [lastKm, setLastKm] = useState(0);
-  const [nextKm, setNextKm] = useState(0);
-  const [currentKm, setCurrentKm] = useState(0);
-  const [difference, setDifference] = useState(0);
-  const [compliance, setCompliance] = useState<'Cumplió' | 'No cumplió'>('Cumplió');
-  const [validation, setValidation] = useState('');
-  const [evidence, setEvidence] = useState<string>('');
+  const [frequency, setFrequency] = useState(initialData?.frequency || 5000);
+  const [lastKm, setLastKm] = useState(initialData?.lastMaintenanceMileage || 0);
+  const [nextKm, setNextKm] = useState(initialData?.nextMaintenanceMileage || 0);
+  const [currentKm, setCurrentKm] = useState(initialData?.currentMileage || 0);
+  const [difference, setDifference] = useState(initialData?.difference || initialData?.kmsToNext || 0);
+  const [compliance, setCompliance] = useState<string>(
+    initialData?.complianceStatus === 'Cumplió' || initialData?.complianceStatus === '1' ? 'Cumplió' : 
+    (initialData?.complianceStatus === 'No cumplió' || initialData?.complianceStatus === '0' ? 'No cumplió' : 'Cumplió')
+  );
+  const [validation, setValidation] = useState(
+    initialData?.validationStatus === '100%' ? '100%' : 
+    (initialData?.validationStatus === '0%' ? '0%' : '100%')
+  );
+  const [evidence, setEvidence] = useState<string[]>(
+    initialData?.evidenceUrl ? initialData.evidenceUrl.split(',').map(s => s.trim()).filter(Boolean) : []
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Auto-calculate difference and compliance
+  // Auto-calculate difference
   useEffect(() => {
     const diff = currentKm - nextKm;
     setDifference(diff);
-    // Rule: If difference is <= 0 (or within a small margin, let's say 0 for now) -> Cumplió
-    if (diff <= 0) {
-      setCompliance('Cumplió');
-    } else {
-      setCompliance('No cumplió');
-    }
   }, [currentKm, nextKm]);
+
+  // Auto-update validation based on compliance
+  useEffect(() => {
+    if (compliance === 'Cumplió') {
+      setValidation('100%');
+    } else if (compliance === 'No cumplió') {
+      setValidation('0%');
+    }
+  }, [compliance]);
 
   // Auto-calculate next maintenance
   useEffect(() => {
@@ -59,20 +71,48 @@ const PreventiveUpdateForm: React.FC<PreventiveUpdateFormProps> = ({ onClose, on
   }, [date]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEvidence(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []) as File[];
+    if (files.length > 0) {
+      if (evidence.length + files.length > 4) {
+        alert('Máximo 4 fotos permitidas.');
+        return;
+      }
+      
+      const newEvidences: string[] = [];
+      let processed = 0;
+
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          try {
+            const compressed = await compressImage(reader.result as string, 1200);
+            newEvidences.push(compressed);
+          } catch (e) {
+            console.error("Error compressing image:", e);
+            newEvidences.push(reader.result as string); // Fallback to uncompressed
+          }
+          
+          processed++;
+          if (processed === files.length) {
+            setEvidence(prev => [...prev, ...newEvidences]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+      
+      // Reset input value so the same file can be selected again if removed
+      e.target.value = '';
     }
+  };
+
+  const removeEvidence = (index: number) => {
+    setEvidence(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!plate || !date || !evidence) {
-      alert('Por favor complete todos los campos y suba una evidencia.');
+    if (!plate || !date || evidence.length === 0) {
+      alert('Por favor complete todos los campos y suba al menos una evidencia.');
       return;
     }
 
@@ -120,178 +160,83 @@ const PreventiveUpdateForm: React.FC<PreventiveUpdateFormProps> = ({ onClose, on
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Basic Info */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vehículo (Placa)</label>
-                <div className="relative">
-                  <Truck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600">
+                <Truck size={24} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehículo Seleccionado</p>
+                {initialData ? (
+                  <p className="text-xl font-black text-slate-900">{plate || 'Sin Placa'}</p>
+                ) : (
                   <select 
                     value={plate} 
                     onChange={(e) => setPlate(e.target.value)}
-                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-6 py-4 font-black text-slate-800 outline-none focus:border-indigo-500 transition-all uppercase"
+                    className="bg-transparent border-b-2 border-indigo-200 font-black text-slate-900 outline-none focus:border-indigo-500 transition-all uppercase text-lg"
                     required
                   >
-                    <option value="">Seleccione Vehículo</option>
+                    <option value="">Seleccione Placa</option>
                     {vehicles.map(v => (
                       <option key={v.id} value={v.plate}>{v.plate}</option>
                     ))}
                   </select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha de Ejecución</label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input 
-                    type="date" 
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl pl-12 pr-6 py-4 font-black text-slate-800 outline-none focus:border-indigo-500 transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Semana</label>
-                  <input 
-                    type="text" 
-                    value={week}
-                    readOnly
-                    className="w-full bg-slate-100 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-500 outline-none"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Mes</label>
-                  <input 
-                    type="text" 
-                    value={month}
-                    readOnly
-                    className="w-full bg-slate-100 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-500 outline-none"
-                  />
-                </div>
+                )}
               </div>
             </div>
-
-            {/* Kilometraje Info */}
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Frecuencia (KM)</label>
-                  <input 
-                    type="number" 
-                    value={frequency}
-                    onChange={(e) => setFrequency(parseInt(e.target.value) || 0)}
-                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-800 outline-none focus:border-indigo-500 transition-all"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Último MTTO (KM)</label>
-                  <input 
-                    type="number" 
-                    value={lastKm}
-                    onChange={(e) => setLastKm(parseInt(e.target.value) || 0)}
-                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-800 outline-none focus:border-indigo-500 transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Próximo MTTO (KM)</label>
-                  <input 
-                    type="number" 
-                    value={nextKm}
-                    readOnly
-                    className="w-full bg-slate-100 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-500 outline-none"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">KM Actual (Registro)</label>
-                  <input 
-                    type="number" 
-                    value={currentKm}
-                    onChange={(e) => setCurrentKm(parseInt(e.target.value) || 0)}
-                    className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-800 outline-none focus:border-indigo-500 transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Diferencia (KM)</label>
-                  <input 
-                    type="number" 
-                    value={difference}
-                    readOnly
-                    className={`w-full border-2 rounded-2xl px-6 py-4 font-black outline-none ${
-                      difference > 0 ? 'bg-rose-50 border-rose-100 text-rose-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'
-                    }`}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cumplimiento</label>
-                  <div className={`w-full border-2 rounded-2xl px-6 py-4 font-black text-center text-[10px] uppercase tracking-widest ${
-                    compliance === 'Cumplió' ? 'bg-emerald-500 border-emerald-600 text-white' : 'bg-rose-500 border-rose-600 text-white'
-                  }`}>
-                    {compliance}
-                  </div>
-                </div>
-              </div>
+            <div className="text-right">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha de Registro</p>
+              <p className="text-sm font-black text-slate-600">{new Date(date).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Validación Cumplimiento</label>
-              <textarea 
-                value={validation}
-                onChange={(e) => setValidation(e.target.value)}
-                placeholder="Notas de validación..."
-                className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-4 font-black text-slate-800 outline-none focus:border-indigo-500 transition-all min-h-[100px]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Evidencia (Imagen)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Evidencia Fotográfica (Hasta 4 imágenes)</label>
               <div className="relative group">
                 <input 
                   type="file" 
                   accept="image/*"
+                  multiple
                   onChange={handleFileChange}
                   className="hidden"
                   id="preventive-evidence"
-                  required={!evidence}
+                  disabled={evidence.length >= 4}
                 />
-                <label 
-                  htmlFor="preventive-evidence"
-                  className={`w-full flex flex-col items-center justify-center gap-3 p-8 rounded-2xl border-2 border-dashed transition-all cursor-pointer ${
-                    evidence ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
-                  }`}
-                >
-                  {evidence ? (
-                    <div className="relative w-full max-h-[200px] rounded-xl overflow-hidden shadow-lg">
-                      <img src={evidence} alt="Preview" className="w-full h-full object-contain bg-black" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-white font-black text-[10px] uppercase tracking-widest">Cambiar Imagen</span>
+                
+                {evidence.length > 0 && (
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    {evidence.map((img, idx) => (
+                      <div key={idx} className="relative w-full h-32 rounded-xl overflow-hidden shadow-lg group/img">
+                        <img src={img} alt={`Preview ${idx + 1}`} className="w-full h-full object-cover bg-black" />
+                        <button 
+                          type="button"
+                          onClick={() => removeEvidence(idx)}
+                          className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-rose-600"
+                        >
+                          <X size={14} />
+                        </button>
                       </div>
+                    ))}
+                  </div>
+                )}
+
+                {evidence.length < 4 && (
+                  <label 
+                    htmlFor="preventive-evidence"
+                    className="w-full flex flex-col items-center justify-center gap-3 p-12 rounded-[2rem] border-2 border-dashed transition-all cursor-pointer bg-slate-50 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 group"
+                  >
+                    <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-slate-400 group-hover:text-indigo-500 group-hover:scale-110 transition-all">
+                      <Camera size={32} />
                     </div>
-                  ) : (
-                    <>
-                      <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-slate-400">
-                        <Camera size={24} />
-                      </div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subir Soporte Fotográfico</span>
-                    </>
-                  )}
-                </label>
+                    <div className="text-center">
+                      <span className="block text-[11px] font-black text-slate-500 uppercase tracking-widest mb-1">
+                        {evidence.length > 0 ? `Subir más fotos (${evidence.length}/4)` : 'Subir Soporte Fotográfico'}
+                      </span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Máximo 4 imágenes permitidas</span>
+                    </div>
+                  </label>
+                )}
               </div>
             </div>
           </div>
@@ -299,7 +244,7 @@ const PreventiveUpdateForm: React.FC<PreventiveUpdateFormProps> = ({ onClose, on
           <button 
             type="submit" 
             disabled={isSubmitting}
-            className="w-full py-5 bg-indigo-600 text-white rounded-[1.5rem] font-black uppercase tracking-widest text-xs shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 hover:-translate-y-1 transition-all disabled:opacity-50 disabled:translate-y-0 flex items-center justify-center gap-3 shrink-0"
+            className="w-full py-6 bg-indigo-600 text-white rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-2xl shadow-indigo-600/30 hover:bg-indigo-700 hover:-translate-y-1 active:translate-y-0 transition-all disabled:opacity-50 disabled:translate-y-0 flex items-center justify-center gap-3 shrink-0"
           >
             {isSubmitting ? (
               <>
@@ -307,7 +252,7 @@ const PreventiveUpdateForm: React.FC<PreventiveUpdateFormProps> = ({ onClose, on
               </>
             ) : (
               <>
-                <Save size={20} /> GUARDAR REGISTRO PREVENTIVO
+                <Save size={20} /> GUARDAR EVIDENCIA
               </>
             )}
           </button>

@@ -1,8 +1,22 @@
 
 import React, { useMemo, useState } from 'react';
-import { Truck, Gauge, AlertTriangle, CheckCircle2, Clock, Search, Camera, Calendar, Hash, Filter } from 'lucide-react';
+import { Truck, Gauge, AlertTriangle, CheckCircle2, Clock, Search, Camera, Calendar, Hash, Filter, ExternalLink, TrendingUp, BarChart3 } from 'lucide-react';
 import { Vehicle, MileageLog, Preventive } from '../types';
 import { normalizePlate } from '../utils';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Cell,
+  LineChart,
+  Line,
+  Legend,
+  ReferenceLine
+} from 'recharts';
 
 interface PreventiveModuleProps {
   vehicles: Vehicle[];
@@ -60,13 +74,57 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
     return {
       totalInSheet: externalPreventives?.length || 0,
       totalFiltered: preventiveData.length,
-      cumplio: preventiveData.filter(v => v.complianceStatus === 'Cumplió').length,
-      noCumplio: preventiveData.filter(v => v.complianceStatus === 'No cumplió').length,
+      cumplio: preventiveData.filter(v => v.complianceStatus === 'Cumplió' || v.complianceStatus === '1').length,
+      noCumplio: preventiveData.filter(v => v.complianceStatus === 'No cumplió' || v.complianceStatus === '0').length,
     };
   }, [preventiveData, externalPreventives]);
 
   const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
   const weeks = Array.from({ length: 53 }, (_, i) => (i + 1).toString());
+
+  const chartData = useMemo(() => {
+    // Filter data for Month and Week charts based on CD and Contractor filters
+    const filteredForCharts = externalPreventives?.filter(p => {
+      const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(p.plate));
+      const matchCd = !filterCd || filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || p.cd === filterCd;
+      const matchContractor = !filterContractor || filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || p.contractor === filterContractor;
+      return matchCd && matchContractor;
+    }) || [];
+
+    // Month data
+    const monthStats = months.map(m => {
+      const monthData = filteredForCharts.filter(p => p.month?.toUpperCase() === m);
+      const total = monthData.length;
+      const complied = monthData.filter(p => p.complianceStatus === 'Cumplió' || p.complianceStatus === '1').length;
+      const percentage = total > 0 ? Math.round((complied / total) * 100) : 0;
+      return { name: m.substring(0, 3), percentage, total, complied };
+    }).filter(m => m.total > 0);
+
+    // Week data (last 12 weeks with data)
+    const weekStats = weeks.map(w => {
+      const weekData = filteredForCharts.filter(p => p.week === w);
+      const total = weekData.length;
+      const complied = weekData.filter(p => p.complianceStatus === 'Cumplió' || p.complianceStatus === '1').length;
+      return { name: `S${w}`, complied, total };
+    }).filter(w => w.total > 0).slice(-12);
+
+    // CD data (always show all CDs for comparison, but respect Contractor filter)
+    const cds = Array.from(new Set(externalPreventives?.map(p => p.cd?.trim()).filter(Boolean) || []));
+    const cdStats = cds.map(cd => {
+      const cdData = externalPreventives?.filter(p => {
+        const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(p.plate));
+        const matchCd = p.cd?.trim() === cd;
+        const matchContractor = !filterContractor || filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || p.contractor === filterContractor;
+        return matchCd && matchContractor;
+      }) || [];
+      const total = cdData.length;
+      const complied = cdData.filter(p => p.complianceStatus === 'Cumplió' || p.complianceStatus === '1').length;
+      const percentage = total > 0 ? Math.round((complied / total) * 100) : 0;
+      return { name: String(cd).toUpperCase(), percentage, total, complied };
+    }).filter(cd => cd.total > 0).sort((a, b) => b.percentage - a.percentage);
+
+    return { monthStats, weekStats, cdStats };
+  }, [externalPreventives, vehicles, filterCd, filterContractor, months, weeks]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in duration-500">
@@ -105,6 +163,174 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
         </div>
       </div>
 
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2">
+                <TrendingUp size={20} className="text-indigo-600" /> Mensual (%)
+              </h3>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                {filterCd && filterCd !== 'all' ? `CD: ${filterCd}` : 'Todos los Centros'}
+              </p>
+            </div>
+          </div>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.monthStats} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 800 }}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 800 }}
+                  unit="%"
+                  domain={[0, 100]}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    fontSize: '10px',
+                    fontWeight: '800',
+                    textTransform: 'uppercase'
+                  }}
+                />
+                <ReferenceLine y={100} stroke="#10b981" strokeDasharray="3 3" />
+                <Bar dataKey="percentage" radius={[6, 6, 6, 6]} barSize={20}>
+                  {chartData.monthStats.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.percentage >= 95 ? '#10b981' : entry.percentage >= 80 ? '#f59e0b' : '#ef4444'} 
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2">
+                <BarChart3 size={20} className="text-indigo-600" /> Semanal
+              </h3>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                {filterCd && filterCd !== 'all' ? `CD: ${filterCd}` : 'Todos los Centros'}
+              </p>
+            </div>
+          </div>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData.weekStats} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 800 }}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 800 }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    fontSize: '10px',
+                    fontWeight: '800',
+                    textTransform: 'uppercase'
+                  }}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', paddingTop: '10px' }} />
+                <Line 
+                  type="monotone" 
+                  dataKey="complied" 
+                  name="Cumplieron"
+                  stroke="#6366f1" 
+                  strokeWidth={3} 
+                  dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="total" 
+                  name="Total"
+                  stroke="#cbd5e1" 
+                  strokeWidth={1} 
+                  strokeDasharray="3 3"
+                  dot={{ r: 3, fill: '#cbd5e1', strokeWidth: 0 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2">
+                <Filter size={20} className="text-indigo-600" /> Por CD (%)
+              </h3>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Cumplimiento por Centro</p>
+            </div>
+          </div>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.cdStats} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis 
+                  type="number"
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 800 }}
+                  unit="%"
+                  domain={[0, 100]}
+                />
+                <YAxis 
+                  dataKey="name" 
+                  type="category"
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 8, fontWeight: 800 }}
+                  width={100}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    fontSize: '10px',
+                    fontWeight: '800',
+                    textTransform: 'uppercase'
+                  }}
+                />
+                <Bar dataKey="percentage" radius={[0, 6, 6, 0]} barSize={15}>
+                  {chartData.cdStats.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.percentage >= 95 ? '#10b981' : entry.percentage >= 80 ? '#f59e0b' : '#ef4444'} 
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
@@ -136,94 +362,120 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
       </div>
 
       {/* List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {preventiveData.map(v => (
-          <div key={v.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-500">
-            <div className={`h-2 w-full ${v.complianceStatus === 'No cumplió' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-            <div className="p-8 space-y-6">
-              <div className="flex justify-between items-start">
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-slate-900 px-4 py-2 rounded-xl text-white font-mono font-black text-xl tracking-tighter shadow-lg shadow-slate-900/20">
+      <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
+        <div className="overflow-y-auto max-h-[600px]">
+          <table className="w-full text-left border-collapse table-fixed">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-50 border-b border-slate-200 text-[8px] uppercase tracking-widest text-slate-500 font-black">
+                <th className="p-2 w-[40px]">SEM</th>
+                <th className="p-2 w-[60px]">MES</th>
+                <th className="p-2 w-[80px]">FECHA</th>
+                <th className="p-2 w-[80px]">PLACA</th>
+                <th className="p-2 w-[70px]">FREC.</th>
+                <th className="p-2 w-[80px]">ÚLT. KM</th>
+                <th className="p-2 w-[80px]">PRÓX. KM</th>
+                <th className="p-2 w-[80px]">REG. KM</th>
+                <th className="p-2 w-[70px]">DIF.</th>
+                <th className="p-2 w-[100px] text-center">CUMPLIMIENTO</th>
+                <th className="p-2 w-[60px] text-center">VAL.</th>
+                <th className="p-2 w-[80px] text-center">EVIDENCIA</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-[10px] font-medium text-slate-700">
+              {preventiveData.map(v => (
+                <tr key={v.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="p-2 font-black text-indigo-500">
+                    {v.week}
+                  </td>
+                  <td className="p-2 font-black text-slate-400 uppercase tracking-widest text-[8px]">
+                    {v.month}
+                  </td>
+                  <td className="p-2 font-black text-slate-600">
+                    {v.lastUpdate ? new Date(v.lastUpdate).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) : 'N/A'}
+                  </td>
+                  <td className="p-2">
+                    <span className="bg-slate-900 px-2 py-1 rounded text-white font-mono font-black tracking-tighter text-[9px]">
                       {v.plate}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{v.month}</span>
-                      <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-widest">SEM {v.week}</span>
-                    </div>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest w-fit ${
-                    v.complianceStatus === 'No cumplió' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
-                  }`}>
-                    {v.complianceStatus || 'SIN REGISTRO'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-black text-slate-400 uppercase tracking-widest">FECHA EJEC.</span>
-                  <span className="font-black text-slate-600">{v.lastUpdate ? new Date(v.lastUpdate).toLocaleDateString('es-ES') : 'N/A'}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-black text-slate-400 uppercase tracking-widest">ÚLTIMO MTTO</span>
-                  <span className="font-black text-slate-600">{v.lastMaintenanceMileage?.toLocaleString()} KM</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-black text-slate-400 uppercase tracking-widest">KM REGISTRADO</span>
-                  <span className="font-black text-slate-800">{v.currentMileage?.toLocaleString()} KM</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-black text-slate-400 uppercase tracking-widest">PRÓXIMO MANT.</span>
-                  <span className="font-black text-indigo-600">{v.nextMaintenanceMileage?.toLocaleString()} KM</span>
-                </div>
-                
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                    <span className="text-slate-400">DIFERENCIA</span>
-                    <span className={`font-black ${v.difference && v.difference > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {v.difference?.toLocaleString()} KM
                     </span>
-                  </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full transition-all duration-1000 ${v.complianceStatus === 'No cumplió' ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                      style={{ width: `${Math.max(0, Math.min(100, 100 - (Math.abs(v.difference || 0) / 1000) * 100))}%` }}
-                    />
-                  </div>
-                </div>
-
-                {v.validationStatus && (
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Validación</p>
-                    <p className="text-[10px] text-slate-600 font-medium leading-relaxed">{v.validationStatus}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">FRECUENCIA</span>
-                  <span className="text-[10px] font-bold text-slate-600 uppercase">{v.frequency?.toLocaleString()} KM</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {v.evidenceUrl && v.evidenceUrl.trim() !== '' && (
-                    <a 
-                      href={v.evidenceUrl.startsWith('http') ? v.evidenceUrl : `https://${v.evidenceUrl}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-all"
-                      title="Ver Evidencia"
-                    >
-                      <Search size={14} />
-                    </a>
-                  )}
-                  <Gauge size={20} className="text-slate-200" />
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
+                  </td>
+                  <td className="p-2 font-black text-slate-600">
+                    {v.frequency?.toLocaleString()}
+                  </td>
+                  <td className="p-2 font-black text-slate-600">
+                    {v.lastMaintenanceMileage?.toLocaleString()}
+                  </td>
+                  <td className="p-2 font-black text-indigo-600">
+                    {v.nextMaintenanceMileage?.toLocaleString()}
+                  </td>
+                  <td className="p-2 font-black text-slate-800">
+                    {v.currentMileage?.toLocaleString()}
+                  </td>
+                  <td className="p-2">
+                    <span className={`font-black ${v.difference && v.difference > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      {v.difference?.toLocaleString()}
+                    </span>
+                  </td>
+                  <td className="p-2 text-center">
+                    <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest inline-block ${
+                      v.complianceStatus === 'Cumplió' || v.complianceStatus === '1' ? 'bg-emerald-100 text-emerald-600' : 
+                      (v.complianceStatus === 'No cumplió' || v.complianceStatus === '0' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-600')
+                    }`}>
+                      {v.complianceStatus === 'Cumplió' || v.complianceStatus === '1' ? 'CUMPLIÓ' : 
+                       (v.complianceStatus === 'No cumplió' || v.complianceStatus === '0' ? 'NO CUMPLIÓ' : 'SIN REG.')}
+                    </span>
+                  </td>
+                  <td className="p-2 text-center">
+                    <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest inline-block ${
+                      v.validationStatus === '100%' ? 'bg-emerald-100 text-emerald-600' : 
+                      (v.validationStatus === '0%' ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-600')
+                    }`}>
+                      {v.validationStatus || '-'}
+                    </span>
+                  </td>
+                  <td className="p-2 text-center">
+                    {v.evidenceUrl && v.evidenceUrl.trim() !== '' ? (
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        {v.evidenceUrl.split(',').map((url, idx) => {
+                          const cleanUrl = url.trim();
+                          if (!cleanUrl) return null;
+                          return (
+                            <a 
+                              key={idx}
+                              href={cleanUrl.startsWith('http') ? cleanUrl : `https://${cleanUrl}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all"
+                              title={`Ver Evidencia ${idx + 1}`}
+                            >
+                              <Search size={10} />
+                            </a>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (onUpdate) onUpdate(v);
+                        }}
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-400 hover:bg-indigo-100 hover:text-indigo-600 transition-all"
+                        title="Registrar Evidencia"
+                      >
+                        <Camera size={10} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {preventiveData.length === 0 && (
+                <tr>
+                  <td colSpan={12} className="p-8 text-center text-slate-400 font-medium">
+                    No hay registros preventivos que coincidan con los filtros.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

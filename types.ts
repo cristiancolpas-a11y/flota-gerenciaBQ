@@ -113,10 +113,14 @@ export interface Report {
   date: string;
   plate: string;
   source: string;
-  novelty: string;
+  cd?: string;
+  contractor?: string;
+  workshopDate?: string;
   initialEvidence?: string;
+  novelty: string;
+  daysToAttend?: number;
   entryMap?: string;
-  status: 'ABIERTO' | 'CERRADO';
+  status: 'PENDIENTES' | 'COMPLETADOS';
   workshopEvidence?: string;
   closureDate?: string;
   solutionEvidence?: string;
@@ -124,8 +128,6 @@ export interface Report {
   daysInShop?: number;
   closureComments?: string;
   workshop?: string;
-  cd?: string;
-  contractor?: string;
   week?: string;
   driverName?: string;
 }

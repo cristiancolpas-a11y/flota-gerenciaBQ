@@ -2,9 +2,9 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw9u62w53DHA54Sck1PmB6tdqzv9TK3OmKuoYU0TYwTdkZTtKnPI5Bnh4uIpnL6kUav/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbxVjLry2rjYYsFLk_3PERq5KH39P73Oda3LFPKOu2uVammhZenY0I01-SeDU0tAy9uk/exec';
-const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbxU8y_M1pACZaBf92uc0W01I4UqCqmOwnt7uUZSTezkSMQZgXYSLGv0laaGlR9UGJ8q/exec';
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec'; 
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec';
+const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -192,8 +192,8 @@ export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
               const hashId = cleanSheetValue(row[7]); 
               const driverName = cleanSheetValue(row[8]);
               
-              // Solo es CERRADO si el estado es CERRADO
-              const isClosed = statusRaw.includes('CERRADO');
+              // Solo es CERRADO si el estado es CERRADO o COMPLETADOS
+              const isClosed = statusRaw.includes('CERRADO') || statusRaw.includes('COMPLETADOS');
               
               return {
                 id: hashId || `vprog-${i}`,
@@ -202,7 +202,7 @@ export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
                 plate: normalizePlate(identifier),
                 workshop: workshop,
                 closureDate: dateVis,
-                status: isClosed ? 'CERRADO' : 'ABIERTO',
+                status: isClosed ? 'COMPLETADOS' : 'PENDIENTES',
                 novelty: 'VISITA TÉCNICA PROGRAMADA',
                 source: 'CALENDARIO',
                 initialEvidence: evidence,
@@ -510,26 +510,29 @@ export const fetchReportsFromSheet = async (): Promise<Report[]> => {
           const rows = results.data as any[][];
           if (!rows) { resolve([]); return; }
           const reports = rows.slice(1).filter(row => row && row[0]).map((row): Report => {
-            const solutionEvidence = cleanSheetValue(row[10]);
-            const isClosed = cleanSheetValue(row[7]).toUpperCase().includes('CERRADO');
+            const statusRaw = cleanSheetValue(row[11]).toUpperCase();
+            const isClosed = statusRaw.includes('CERRADO') || statusRaw.includes('COMPLETADOS');
 
             return {
               id: cleanSheetValue(row[0]), 
               date: parseFlexibleDate(row[1]), 
-              plate: normalizePlate(cleanSheetValue(row[2])), 
-              source: cleanSheetValue(row[3]), 
-              initialEvidence: cleanSheetValue(row[4]), 
-              novelty: cleanSheetValue(row[5]), 
-              entryMap: cleanSheetValue(row[6]), 
-              status: isClosed ? 'CERRADO' : 'ABIERTO', 
-              workshopEvidence: cleanSheetValue(row[8]), 
-              closureDate: parseFlexibleDate(row[9]), 
-              solutionEvidence: solutionEvidence, 
-              exitMap: cleanSheetValue(row[11]), 
-              daysInShop: parseInt(cleanSheetValue(row[12])) || 0, 
-              closureComments: cleanSheetValue(row[13]), 
-              workshop: cleanSheetValue(row[14]), 
-              cd: cleanSheetValue(row[15])
+              cd: cleanSheetValue(row[2]),
+              contractor: cleanSheetValue(row[3]),
+              plate: normalizePlate(cleanSheetValue(row[4])), 
+              source: cleanSheetValue(row[5]), 
+              workshopDate: parseFlexibleDate(row[6]),
+              initialEvidence: cleanSheetValue(row[7]), 
+              novelty: cleanSheetValue(row[8]), 
+              daysToAttend: parseInt(cleanSheetValue(row[9])) || 0,
+              entryMap: cleanSheetValue(row[10]), 
+              status: isClosed ? 'COMPLETADOS' : 'PENDIENTES', 
+              workshopEvidence: cleanSheetValue(row[12]), 
+              closureDate: parseFlexibleDate(row[13]), 
+              solutionEvidence: cleanSheetValue(row[14]), 
+              exitMap: cleanSheetValue(row[15]), 
+              daysInShop: parseInt(cleanSheetValue(row[16])) || 0, 
+              closureComments: cleanSheetValue(row[17]), 
+              workshop: cleanSheetValue(row[18])
             };
           });
           resolve(reports);
@@ -591,7 +594,7 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
  */
 export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
   try {
-    const url = `${BASE_URL_BACKEND}&gid=1668814480${getCacheBuster()}`;
+    const url = `${BASE_URL_BACKEND}&gid=2086109634${getCacheBuster()}`;
     const response = await fetch(url);
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -612,9 +615,9 @@ export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
               const nextKm = parseInt(cleanSheetValue(row[6])) || 0;
               const currentKm = parseInt(cleanSheetValue(row[7])) || 0;
               const kmsToNext = parseInt(cleanSheetValue(row[8])) || (nextKm - currentKm);
-              const complianceStatus = cleanSheetValue(row[9]); // CUMPLIMIENTO EN RANGOS
-              const validationStatus = cleanSheetValue(row[10]); // VALIDACIÓN CUMPLIMIENTO
-              const evidence = cleanSheetValue(row[11]);
+              const complianceStatus = cleanSheetValue(row[9]); // CUMPLIMIENTO EN RANGOS (Col J)
+              const validationStatus = cleanSheetValue(row[10]); // VALIDACIÓN CUMPLIMIENTO (Col K)
+              const evidence = cleanSheetValue(row[11]); // EVIDENCIA (Col L)
               
               const combinedStatus = (complianceStatus + " " + validationStatus).toLowerCase();
               

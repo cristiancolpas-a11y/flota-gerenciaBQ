@@ -11,7 +11,7 @@ interface WorkshopVisitItemProps {
 }
 
 const WorkshopVisitItem: React.FC<WorkshopVisitItemProps> = ({ visit, onViewDoc, onManageClosure }) => {
-  const isPending = visit.status === 'ABIERTO';
+  const isPending = visit.status === 'PENDIENTES';
   const thumbUrl = getDriveDirectLink(visit.initialEvidence || visit.workshopEvidence || visit.solutionEvidence || "");
   
   return (
@@ -49,7 +49,7 @@ const WorkshopVisitItem: React.FC<WorkshopVisitItemProps> = ({ visit, onViewDoc,
         <div className="flex items-center justify-center md:justify-start gap-2 text-indigo-600">
           <Store size={14} />
           <span className="font-black text-[10px] uppercase tracking-widest">
-            {isPending ? 'PENDIENTE TALLER' : 'COMPLETADO'}
+            {isPending ? 'PENDIENTES TALLER' : 'COMPLETADOS'}
           </span>
         </div>
         <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-2 md:gap-4 text-slate-400 text-[9px] font-bold uppercase tracking-wider">
@@ -66,7 +66,7 @@ const WorkshopVisitItem: React.FC<WorkshopVisitItemProps> = ({ visit, onViewDoc,
       <div className="flex flex-col items-center gap-1 px-4">
         <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest">ESTADO REVISIÓN</span>
         <span className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${isPending ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>
-          {isPending ? 'PENDIENTE' : 'COMPLETADO'}
+          {isPending ? 'PENDIENTES' : 'COMPLETADOS'}
         </span>
       </div>
       

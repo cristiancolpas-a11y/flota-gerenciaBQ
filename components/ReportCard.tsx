@@ -16,16 +16,18 @@ import {
   Calendar,
   MessageSquare,
   History,
-  Hash
+  Hash,
+  Camera
 } from 'lucide-react';
 
 interface ReportCardProps {
   report: Report;
   onViewDoc: (url: string | string[] | {url: string, label?: string}[], title: string) => void;
   onManageClosure?: (report: Report) => void;
+  onManageEntry?: (report: Report) => void;
 }
 
-const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClosure }) => {
+const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClosure, onManageEntry }) => {
   const getThumb = (url?: string) => {
     if (!url) return null;
     if (url.startsWith('data')) return url;
@@ -36,7 +38,8 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
   const thumbIn = getThumb(report.initialEvidence);
   const thumbOut = getThumb(report.solutionEvidence);
   const thumbWorkshop = getThumb(report.workshopEvidence);
-  const isClosed = report.status === 'CERRADO';
+  const isClosed = report.status === 'COMPLETADOS';
+  const hasEntry = !!report.entryMap;
 
   return (
     <div className={`bg-white rounded-[2rem] border-2 overflow-hidden shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full ${isClosed ? 'border-emerald-100 bg-emerald-50/5' : 'border-rose-50 bg-white'}`}>
@@ -51,15 +54,22 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
           </div>
           <div>
             <h3 className="font-mono font-black text-white text-xl tracking-tighter leading-none">{report.plate}</h3>
-            <p className="text-[8px] text-indigo-300 font-black uppercase tracking-widest mt-1.5 flex items-center gap-1.5">
-               <Calendar size={10} /> {formatDate(report.date)}
-            </p>
+            <div className="flex flex-col gap-1 mt-1.5">
+              <p className="text-[8px] text-indigo-300 font-black uppercase tracking-widest flex items-center gap-1.5">
+                 <Calendar size={10} /> REP: {formatDate(report.date)}
+              </p>
+              {report.workshopDate && (
+                <p className="text-[8px] text-amber-300 font-black uppercase tracking-widest flex items-center gap-1.5">
+                   <Clock size={10} /> TALLER: {formatDate(report.workshopDate)} ({report.daysToAttend}d)
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="flex flex-col items-end relative z-10">
           <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest shadow-md border ${isClosed ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-rose-600 text-white border-rose-500 animate-pulse'}`}>
-            {isClosed ? 'FINALIZADO' : 'EN TALLER'}
+            {isClosed ? 'COMPLETADOS' : 'PENDIENTES'}
           </span>
           <span className="text-[7px] text-white/30 font-bold uppercase tracking-widest mt-2">{report.id}</span>
         </div>
@@ -99,60 +109,117 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
            <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest block px-1">Trazabilidad Visual</span>
            
            <div className="flex items-center justify-between gap-1.5 p-3 bg-slate-50/30 rounded-2xl border border-slate-100">
-              {/* Foto Ingreso */}
-              <div 
-                onClick={() => {
-                  const photos = [];
-                  if (report.initialEvidence) photos.push({ url: report.initialEvidence, label: 'Ingreso' });
-                  if (report.workshopEvidence) photos.push({ url: report.workshopEvidence, label: 'Trabajo' });
-                  if (report.solutionEvidence) photos.push({ url: report.solutionEvidence, label: 'Salida' });
-                  if (photos.length > 0) onViewDoc(photos, `Trazabilidad - ${report.plate}`);
-                }} 
-                className="group relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 border-white"
-              >
-                 {thumbIn ? (
-                   <img src={thumbIn} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
-                 ) : <div className="w-full h-full bg-slate-100 flex items-center justify-center"><ImageIcon size={16} className="text-slate-300"/></div>}
-                 <div className="absolute top-0 left-0 bg-indigo-600 text-white text-[6px] font-black px-1.5 py-0.5 rounded-br-md">INI</div>
-              </div>
+               {/* Foto Ingreso */}
+               <div className="relative group w-16 h-16">
+                 <div 
+                   onClick={() => {
+                     if (thumbIn) {
+                       const photos = [];
+                       if (report.initialEvidence) photos.push({ url: report.initialEvidence, label: 'Ingreso' });
+                       if (report.workshopEvidence) photos.push({ url: report.workshopEvidence, label: 'Trabajo' });
+                       if (report.solutionEvidence) photos.push({ url: report.solutionEvidence, label: 'Salida' });
+                       onViewDoc(photos, `Trazabilidad - ${report.plate}`);
+                     } else if (!isClosed) {
+                       onManageEntry?.(report);
+                     }
+                   }} 
+                   className={`w-full h-full rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 ${thumbIn ? 'border-white' : 'border-dashed border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100 transition-colors'}`}
+                 >
+                    {thumbIn ? (
+                      <img src={thumbIn} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                        <Camera size={14} className="text-indigo-400" />
+                        <span className="text-[5px] font-black text-indigo-400 uppercase">AÑADIR</span>
+                      </div>
+                    )}
+                    <div className="absolute top-0 left-0 bg-indigo-600 text-white text-[6px] font-black px-1.5 py-0.5 rounded-br-md">INI</div>
+                 </div>
+                 {!isClosed && !thumbIn && (
+                   <button 
+                     onClick={(e) => { e.stopPropagation(); onManageEntry?.(report); }}
+                     className="absolute -bottom-1 -right-1 p-1 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-700 transition-all z-20"
+                   >
+                     <Camera size={10} />
+                   </button>
+                 )}
+               </div>
 
-              <ArrowRight className={`text-slate-200 ${isClosed ? 'text-emerald-400' : ''}`} size={16} />
+               <ArrowRight className={`text-slate-200 ${isClosed ? 'text-emerald-400' : ''}`} size={16} />
 
-              {/* Foto Taller */}
-              <div 
-                onClick={() => {
-                  const photos = [];
-                  if (report.initialEvidence) photos.push({ url: report.initialEvidence, label: 'Ingreso' });
-                  if (report.workshopEvidence) photos.push({ url: report.workshopEvidence, label: 'Trabajo' });
-                  if (report.solutionEvidence) photos.push({ url: report.solutionEvidence, label: 'Salida' });
-                  if (photos.length > 0) onViewDoc(photos, `Trazabilidad - ${report.plate}`);
-                }} 
-                className="group relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 border-white"
-              >
-                 {thumbWorkshop ? (
-                   <img src={thumbWorkshop} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
-                 ) : <div className="w-full h-full bg-slate-100 flex items-center justify-center"><Wrench size={16} className="text-slate-300"/></div>}
-                 <div className="absolute top-0 left-0 bg-amber-500 text-white text-[6px] font-black px-1.5 py-0.5 rounded-br-md">TRB</div>
-              </div>
+               {/* Foto Taller */}
+               <div className="relative group w-16 h-16">
+                 <div 
+                   onClick={() => {
+                     if (thumbWorkshop) {
+                       const photos = [];
+                       if (report.initialEvidence) photos.push({ url: report.initialEvidence, label: 'Ingreso' });
+                       if (report.workshopEvidence) photos.push({ url: report.workshopEvidence, label: 'Trabajo' });
+                       if (report.solutionEvidence) photos.push({ url: report.solutionEvidence, label: 'Salida' });
+                       onViewDoc(photos, `Trazabilidad - ${report.plate}`);
+                     } else if (!isClosed) {
+                       onManageEntry?.(report);
+                     }
+                   }} 
+                   className={`w-full h-full rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 ${thumbWorkshop ? 'border-white' : 'border-dashed border-amber-200 bg-amber-50/50 hover:bg-amber-100 transition-colors'}`}
+                 >
+                    {thumbWorkshop ? (
+                      <img src={thumbWorkshop} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                        <Camera size={14} className="text-amber-400" />
+                        <span className="text-[5px] font-black text-amber-400 uppercase">AÑADIR</span>
+                      </div>
+                    )}
+                    <div className="absolute top-0 left-0 bg-amber-500 text-white text-[6px] font-black px-1.5 py-0.5 rounded-br-md">TRB</div>
+                 </div>
+                 {!isClosed && !thumbWorkshop && (
+                   <button 
+                     onClick={(e) => { e.stopPropagation(); onManageEntry?.(report); }}
+                     className="absolute -bottom-1 -right-1 p-1 bg-amber-500 text-white rounded-lg shadow-lg hover:bg-amber-600 transition-all z-20"
+                   >
+                     <Camera size={10} />
+                   </button>
+                 )}
+               </div>
 
-              <ArrowRight className={`text-slate-200 ${isClosed ? 'text-emerald-400' : ''}`} size={16} />
+               <ArrowRight className={`text-slate-200 ${isClosed ? 'text-emerald-400' : ''}`} size={16} />
 
-              {/* Foto Salida */}
-              <div 
-                onClick={() => {
-                  const photos = [];
-                  if (report.initialEvidence) photos.push({ url: report.initialEvidence, label: 'Ingreso' });
-                  if (report.workshopEvidence) photos.push({ url: report.workshopEvidence, label: 'Trabajo' });
-                  if (report.solutionEvidence) photos.push({ url: report.solutionEvidence, label: 'Salida' });
-                  if (photos.length > 0) onViewDoc(photos, `Trazabilidad - ${report.plate}`);
-                }} 
-                className="group relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 border-white"
-              >
-                 {thumbOut ? (
-                   <img src={thumbOut} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
-                 ) : <div className="w-full h-full bg-slate-100 flex items-center justify-center"><CheckCircle2 size={16} className="text-slate-300"/></div>}
-                 <div className="absolute top-0 left-0 bg-emerald-500 text-white text-[6px] font-black px-1.5 py-0.5 rounded-br-md">FIN</div>
-              </div>
+               {/* Foto Salida */}
+               <div className="relative group w-16 h-16">
+                 <div 
+                   onClick={() => {
+                     if (thumbOut) {
+                       const photos = [];
+                       if (report.initialEvidence) photos.push({ url: report.initialEvidence, label: 'Ingreso' });
+                       if (report.workshopEvidence) photos.push({ url: report.workshopEvidence, label: 'Trabajo' });
+                       if (report.solutionEvidence) photos.push({ url: report.solutionEvidence, label: 'Salida' });
+                       onViewDoc(photos, `Trazabilidad - ${report.plate}`);
+                     } else if (!isClosed) {
+                       onManageClosure?.(report);
+                     }
+                   }} 
+                   className={`w-full h-full rounded-xl overflow-hidden cursor-pointer shadow-sm border-2 ${thumbOut ? 'border-white' : 'border-dashed border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100 transition-colors'}`}
+                 >
+                    {thumbOut ? (
+                      <img src={thumbOut} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                        <Camera size={14} className="text-emerald-400" />
+                        <span className="text-[5px] font-black text-emerald-400 uppercase">AÑADIR</span>
+                      </div>
+                    )}
+                    <div className="absolute top-0 left-0 bg-emerald-500 text-white text-[6px] font-black px-1.5 py-0.5 rounded-br-md">FIN</div>
+                 </div>
+                 {!isClosed && !thumbOut && (
+                   <button 
+                     onClick={(e) => { e.stopPropagation(); onManageClosure?.(report); }}
+                     className="absolute -bottom-1 -right-1 p-1 bg-emerald-500 text-white rounded-lg shadow-lg hover:bg-emerald-600 transition-all z-20"
+                   >
+                     <Camera size={10} />
+                   </button>
+                 )}
+               </div>
            </div>
         </div>
 
@@ -175,11 +242,16 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
         {/* ACCIONES COMPACTAS */}
         <div className="mt-auto grid grid-cols-2 gap-2.5 pt-2">
           <button 
-            onClick={() => report.entryMap && onViewDoc(report.entryMap, 'Mapa Ingreso')}
-            disabled={!report.entryMap}
-            className="flex items-center justify-center gap-2 py-3 bg-white text-indigo-600 border border-slate-200 text-[8px] font-black rounded-xl hover:bg-indigo-600 hover:text-white transition-all uppercase tracking-widest shadow-sm disabled:opacity-30"
+            onClick={() => {
+              if (report.entryMap) {
+                onViewDoc(report.entryMap, 'Mapa Ingreso');
+              } else if (!isClosed) {
+                onManageEntry?.(report);
+              }
+            }}
+            className={`flex items-center justify-center gap-2 py-3 border text-[8px] font-black rounded-xl transition-all uppercase tracking-widest shadow-sm ${report.entryMap ? 'bg-white text-indigo-600 border-slate-200 hover:bg-indigo-600 hover:text-white' : 'bg-indigo-50 text-indigo-400 border-indigo-200 hover:bg-indigo-600 hover:text-white'}`}
           >
-            <MapPin size={12} /> MAPA IN
+            <MapPin size={12} /> {report.entryMap ? 'MAPA IN' : 'MAPA IN'}
           </button>
           
           {isClosed ? (

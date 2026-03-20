@@ -51,7 +51,7 @@ const ReportStats: React.FC<ReportStatsProps> = ({ total, completed, pending, se
             <CheckCircle2 size={20} />
           </div>
           <div>
-            <p className="text-white/40 text-[8px] font-black uppercase tracking-widest">GESTIONADOS</p>
+            <p className="text-white/40 text-[8px] font-black uppercase tracking-widest">COMPLETADOS</p>
             <p className="text-white text-2xl font-black tracking-tighter">{completed}</p>
           </div>
         </div>
@@ -61,7 +61,7 @@ const ReportStats: React.FC<ReportStatsProps> = ({ total, completed, pending, se
             <Wrench size={20} />
           </div>
           <div>
-            <p className="text-white/40 text-[8px] font-black uppercase tracking-widest">EN TALLER</p>
+            <p className="text-white/40 text-[8px] font-black uppercase tracking-widest">PENDIENTES</p>
             <p className="text-white text-2xl font-black tracking-tighter">{pending}</p>
           </div>
         </div>

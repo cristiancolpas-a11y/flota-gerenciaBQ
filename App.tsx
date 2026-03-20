@@ -15,6 +15,7 @@ import ReportForm from './components/ReportForm';
 import ReportStats from './components/ReportStats';
 import VehicleStats from './components/VehicleStats';
 import ClosureForm from './components/ClosureForm';
+import WorkshopEntryForm from './components/WorkshopEntryForm';
 import WashCard from './components/WashCard';
 import WashStats from './components/WashStats';
 import WashForm from './components/WashForm';
@@ -38,6 +39,10 @@ import PreventiveUpdateForm from './components/PreventiveUpdateForm';
 import AvailabilityModule from './components/AvailabilityModule';
 import AvailabilityIndicators from './components/AvailabilityIndicators';
 import OperationalDashboard from './components/OperationalDashboard';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  LineChart, Line, Legend, ReferenceLine, LabelList
+} from 'recharts';
 
 import { 
   fetchVehiclesFromSheet, 
@@ -83,6 +88,12 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCd, setFilterCd] = useState('all');
   const [filterContractor, setFilterContractor] = useState('all');
+  const [filterSource, setFilterSource] = useState('all');
+  const [filterWorkshop, setFilterWorkshop] = useState('all');
+  
+  const [reportViewMode, setReportViewMode] = useState<'grid' | 'table'>('grid');
+  const [vehicleViewMode, setVehicleViewMode] = useState<'grid' | 'table'>('grid');
+  const [driverViewMode, setDriverViewMode] = useState<'grid' | 'table'>('grid');
   
   // Data States
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -112,6 +123,7 @@ const App: React.FC = () => {
   const [updatingPreventive, setUpdatingPreventive] = useState<Preventive | null>(null);
   const [showDocUpdateForm, setShowDocUpdateForm] = useState(false);
   const [closingReport, setClosingReport] = useState<Report | null>(null);
+  const [registeringEntry, setRegisteringEntry] = useState<Report | null>(null);
   const [closingWorkshopVisit, setClosingWorkshopVisit] = useState<Report | null>(null);
   const [closingCleaning, setClosingCleaning] = useState<WashReport | null>(null);
   const [workshopViewMode, setWorkshopViewMode] = useState<'list' | 'calendar'>('calendar');
@@ -220,6 +232,8 @@ const App: React.FC = () => {
 
   const uniqueCds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
   const uniqueContractors = useMemo(() => Array.from(new Set(vehicles.map(v => v.contractor || 'GENERAL'))).sort(), [vehicles]);
+  const uniqueSources = useMemo(() => Array.from(new Set(reports.map(r => r.source).filter(Boolean))).sort(), [reports]);
+  const uniqueWorkshops = useMemo(() => Array.from(new Set(workshopVisits.map(v => v.workshop).filter(Boolean))).sort(), [workshopVisits]);
   
   const derivedFleetComposition = useMemo((): FleetComposition[] => {
     const compositionMap: Record<string, number> = {};
@@ -323,11 +337,13 @@ const App: React.FC = () => {
 
       const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || r.cd === filterCd;
       const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || r.contractor === filterContractor;
-      const matchSearch = normalizePlate(r.plate).includes(normalizePlate(searchTerm));
+      const matchSource = filterSource === 'all' || r.source === filterSource;
+      const matchSearch = normalizePlate(r.plate).includes(normalizePlate(searchTerm)) || 
+                          (r.source && r.source.toUpperCase().includes(searchTerm.toUpperCase()));
       
-      return matchMonth && matchYear && matchCd && matchContractor && matchSearch;
+      return matchMonth && matchYear && matchCd && matchContractor && matchSearch && matchSource;
     });
-  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, searchTerm, selectedYear]);
+  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, filterSource, searchTerm, selectedYear]);
 
   const statsReports = useMemo(() => {
     const baseFiltered = reports.filter(r => {
@@ -348,16 +364,52 @@ const App: React.FC = () => {
 
       const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || r.cd === filterCd;
       const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || r.contractor === filterContractor;
-      return matchMonth && matchYear && matchCd && matchContractor;
+      const matchSource = filterSource === 'all' || r.source === filterSource;
+      return matchMonth && matchYear && matchCd && matchContractor && matchSource;
     });
     
     return {
       total: baseFiltered.length,
-      completed: baseFiltered.filter(r => r.status === 'CERRADO').length,
-      pending: baseFiltered.filter(r => r.status === 'ABIERTO').length,
+      completed: baseFiltered.filter(r => r.status === 'COMPLETADOS').length,
+      pending: baseFiltered.filter(r => r.status === 'PENDIENTES').length,
       searchCount: filteredReports.length
     };
-  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, filteredReports, selectedYear]);
+  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, filterSource, filteredReports, selectedYear]);
+
+  const reportComplianceData = useMemo(() => {
+    const yearReports = reports.filter(r => {
+      if (!r.date) return false;
+      const d = new Date(r.date + "T12:00:00");
+      return !isNaN(d.getTime()) && d.getFullYear() === selectedYear;
+    });
+
+    const weeks: { [key: string]: { total: number, completed: number } } = {};
+    
+    yearReports.forEach(r => {
+      const d = new Date(r.date + "T12:00:00");
+      const week = getWeekNumber(d);
+      const weekKey = `S${week}`;
+      
+      if (!weeks[weekKey]) {
+        weeks[weekKey] = { total: 0, completed: 0 };
+      }
+      
+      weeks[weekKey].total += 1;
+      if (r.status === 'COMPLETADOS') {
+        weeks[weekKey].completed += 1;
+      }
+    });
+
+    return Object.keys(weeks)
+      .sort((a, b) => parseInt(a.substring(1)) - parseInt(b.substring(1)))
+      .map(key => ({
+        name: key,
+        percentage: weeks[key].total > 0 ? Math.round((weeks[key].completed / weeks[key].total) * 100) : 0,
+        total: weeks[key].total,
+        completed: weeks[key].completed
+      }))
+      .slice(-12);
+  }, [reports, selectedYear]);
 
   const filteredCalibrations = useMemo(() => {
     return calibrations.filter(c => {
@@ -822,9 +874,29 @@ const App: React.FC = () => {
 
           {activeView === 'vehiculos' && (
             <div className="max-w-7xl mx-auto space-y-6 pb-20">
-              <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
-                 <Shield size={24} className="text-indigo-600" /> Seguimiento Documental
-              </h2>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+                   <Shield size={24} className="text-indigo-600" /> Seguimiento Documental
+                </h2>
+                <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm">
+                  <button 
+                    onClick={() => setVehicleViewMode('grid')}
+                    className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${vehicleViewMode === 'grid' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <LayoutGrid size={12} /> Cuadrícula
+                    </div>
+                  </button>
+                  <button 
+                    onClick={() => setVehicleViewMode('table')}
+                    className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${vehicleViewMode === 'table' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <ListFilter size={12} /> Tabla
+                    </div>
+                  </button>
+                </div>
+              </div>
 
               <VehicleStats 
                 total={statsVehicles.total}
@@ -836,43 +908,116 @@ const App: React.FC = () => {
                 activeFilter={vehicleDocFilter}
               />
 
-              <div className="space-y-8">
-                {filteredVehicles.map(v => (
-                  <div key={v.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-500">
-                    <div className="flex flex-col lg:flex-row">
-                      <div className="lg:w-[280px] bg-[#0f172a] p-8 flex flex-col items-center shrink-0 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
-                        <div className="bg-white/5 px-6 py-4 rounded-2xl border border-white/10 text-center mb-6 shadow-2xl">
-                            <h2 className="text-3xl font-mono font-black text-white tracking-tighter">{v.plate}</h2>
+              {vehicleViewMode === 'table' ? (
+                <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-[8px] uppercase tracking-widest text-slate-500 font-black">
+                          <th className="p-4">Placa</th>
+                          <th className="p-4">CD</th>
+                          <th className="p-4">Contratista</th>
+                          <th className="p-4">SOAT</th>
+                          <th className="p-4">RTM</th>
+                          <th className="p-4">EXT</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-[10px] font-medium text-slate-700">
+                        {filteredVehicles.map(v => (
+                          <tr key={v.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-4">
+                              <span className="bg-slate-900 px-2 py-1 rounded text-white font-mono font-black tracking-tighter">
+                                {v.plate}
+                              </span>
+                            </td>
+                            <td className="p-4 font-black uppercase text-slate-400">{v.cd}</td>
+                            <td className="p-4 font-black uppercase text-slate-600">{v.contractor}</td>
+                            <td className="p-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
+                                v.soat.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                              }`}>
+                                {v.soat.expiryDate}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
+                                v.rtm.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                              }`}>
+                                {v.rtm.expiryDate}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
+                                v.extinguisher.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                              }`}>
+                                {v.extinguisher.expiryDate}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {filteredVehicles.map(v => (
+                    <div key={v.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-500">
+                      <div className="flex flex-col lg:flex-row">
+                        <div className="lg:w-[280px] bg-[#0f172a] p-8 flex flex-col items-center shrink-0 relative overflow-hidden">
+                          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
+                          <div className="bg-white/5 px-6 py-4 rounded-2xl border border-white/10 text-center mb-6 shadow-2xl">
+                              <h2 className="text-3xl font-mono font-black text-white tracking-tighter">{v.plate}</h2>
+                          </div>
+                          <div className="space-y-2 w-full">
+                             <div className="flex items-center gap-2 text-indigo-400">
+                               <Building2 size={14}/>
+                               <span className="text-[9px] font-black uppercase tracking-widest">{v.cd}</span>
+                             </div>
+                             <div className="flex items-center gap-2 text-slate-400">
+                               <Users size={14}/>
+                               <span className="text-[9px] font-black uppercase tracking-widest truncate">{v.contractor}</span>
+                             </div>
+                          </div>
                         </div>
-                        <div className="space-y-2 w-full">
-                           <div className="flex items-center gap-2 text-indigo-400">
-                             <Building2 size={14}/>
-                             <span className="text-[9px] font-black uppercase tracking-widest">{v.cd}</span>
-                           </div>
-                           <div className="flex items-center gap-2 text-slate-400">
-                             <Users size={14}/>
-                             <span className="text-[9px] font-black uppercase tracking-widest truncate">{v.contractor}</span>
-                           </div>
+                        <div className="flex-grow p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                           <DocumentCard title="SOAT" doc={v.soat} icon={<Shield/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} onAddSupport={() => setShowDocUpdateForm(true)} />
+                           <DocumentCard title="RTM" doc={v.rtm} icon={<RefreshCw/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} onAddSupport={() => setShowDocUpdateForm(true)} />
+                           <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Shield/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} onAddSupport={() => setShowDocUpdateForm(true)} />
                         </div>
-                      </div>
-                      <div className="flex-grow p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                         <DocumentCard title="SOAT" doc={v.soat} icon={<Shield/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} onAddSupport={() => setShowDocUpdateForm(true)} />
-                         <DocumentCard title="RTM" doc={v.rtm} icon={<RefreshCw/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} onAddSupport={() => setShowDocUpdateForm(true)} />
-                         <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Shield/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} onAddSupport={() => setShowDocUpdateForm(true)} />
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {activeView === 'conductores' && (
             <div className="max-w-7xl mx-auto space-y-6">
-               <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
-                 <Users size={24} className="text-indigo-600" /> Directorio de Conductores
-               </h2>
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                 <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
+                   <Users size={24} className="text-indigo-600" /> Directorio de Conductores
+                 </h2>
+                 <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm">
+                   <button 
+                     onClick={() => setDriverViewMode('grid')}
+                     className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${driverViewMode === 'grid' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                   >
+                     <div className="flex items-center gap-2">
+                       <LayoutGrid size={12} /> Cuadrícula
+                     </div>
+                   </button>
+                   <button 
+                     onClick={() => setDriverViewMode('table')}
+                     className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${driverViewMode === 'table' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                   >
+                     <div className="flex items-center gap-2">
+                       <ListFilter size={12} /> Tabla
+                     </div>
+                   </button>
+                 </div>
+               </div>
                
                <DriverStats 
                  total={statsDrivers.total}
@@ -883,11 +1028,60 @@ const App: React.FC = () => {
                  activeFilter={driverDocFilter}
                />
 
-               <div className="grid grid-cols-1 gap-6">
-                {filteredDrivers.map(d => (
-                  <DriverCard key={d.id} driver={d} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
-                ))}
-               </div>
+               {driverViewMode === 'table' ? (
+                 <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
+                   <div className="overflow-x-auto">
+                     <table className="w-full text-left border-collapse">
+                       <thead>
+                         <tr className="bg-slate-50 border-b border-slate-200 text-[8px] uppercase tracking-widest text-slate-500 font-black">
+                           <th className="p-4">Nombre</th>
+                           <th className="p-4">CD</th>
+                           <th className="p-4">Contratista</th>
+                           <th className="p-4">Licencia</th>
+                           <th className="p-4">Manejo Def.</th>
+                           <th className="p-4">Ex. Médico</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-slate-100 text-[10px] font-medium text-slate-700">
+                         {filteredDrivers.map(d => (
+                           <tr key={d.id} className="hover:bg-slate-50 transition-colors">
+                             <td className="p-4 font-black uppercase">{d.name}</td>
+                             <td className="p-4 font-black uppercase text-slate-400">{d.cd}</td>
+                             <td className="p-4 font-black uppercase text-slate-600">{d.contractor}</td>
+                             <td className="p-4">
+                               <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
+                                 d.license.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                               }`}>
+                                 {d.license.expiryDate}
+                               </span>
+                             </td>
+                             <td className="p-4">
+                               <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
+                                 d.defensiveDriving.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                               }`}>
+                                 {d.defensiveDriving.expiryDate}
+                               </span>
+                             </td>
+                             <td className="p-4">
+                               <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
+                                 d.medicalExam.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+                               }`}>
+                                 {d.medicalExam.expiryDate}
+                               </span>
+                             </td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                 </div>
+               ) : (
+                 <div className="grid grid-cols-1 gap-6">
+                  {filteredDrivers.map(d => (
+                    <DriverCard key={d.id} driver={d} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
+                  ))}
+                 </div>
+               )}
             </div>
           )}
 
@@ -1045,7 +1239,26 @@ const App: React.FC = () => {
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-4">
-                    {/* Filtros CD y Contratista */}
+                    <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm">
+                      <button 
+                        onClick={() => setReportViewMode('grid')}
+                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'grid' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <LayoutGrid size={12} /> Cuadrícula
+                        </div>
+                      </button>
+                      <button 
+                        onClick={() => setReportViewMode('table')}
+                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${reportViewMode === 'table' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <ListFilter size={12} /> Tabla
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Filtros CD, Contratista y Origen */}
                     <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
                       <select 
                         className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
@@ -1062,6 +1275,14 @@ const App: React.FC = () => {
                       >
                         <option value="all">TODOS LOS CONTRATISTAS</option>
                         {uniqueContractors.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <select 
+                        className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
+                        value={filterSource}
+                        onChange={e => setFilterSource(e.target.value)}
+                      >
+                        <option value="all">TODOS LOS ORIGENES</option>
+                        {uniqueSources.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
 
@@ -1112,6 +1333,59 @@ const App: React.FC = () => {
                   </div>
                </div>
 
+               {/* Chart Section */}
+               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2">
+                        <TrendingUp size={20} className="text-indigo-600" /> Cumplimiento Semanal (%)
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Cierre de novedades por semana</p>
+                    </div>
+                  </div>
+                  <div className="h-[250px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={reportComplianceData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis 
+                          dataKey="name" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 800 }}
+                        />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 800 }}
+                          unit="%"
+                          domain={[0, 100]}
+                        />
+                        <Tooltip 
+                          cursor={{ fill: '#f8fafc' }}
+                          contentStyle={{ 
+                            borderRadius: '16px', 
+                            border: 'none', 
+                            boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                            fontSize: '10px',
+                            fontWeight: '800',
+                            textTransform: 'uppercase'
+                          }}
+                        />
+                        <ReferenceLine y={100} stroke="#10b981" strokeDasharray="3 3" />
+                        <Bar dataKey="percentage" radius={[6, 6, 6, 6]} barSize={30}>
+                          {reportComplianceData.map((entry, index) => (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={entry.percentage >= 90 ? '#10b981' : entry.percentage >= 70 ? '#f59e0b' : '#ef4444'} 
+                            />
+                          ))}
+                          <LabelList dataKey="percentage" position="top" style={{ fill: '#64748b', fontSize: 10, fontWeight: 800 }} formatter={(v: any) => `${v}%`} />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+               </div>
+
                <ReportStats 
                  total={statsReports.total}
                  completed={statsReports.completed}
@@ -1120,17 +1394,73 @@ const App: React.FC = () => {
                  month={selectedMonth}
                />
 
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {filteredReports.map(r => (
-                    <ReportCard key={r.id} report={r} onViewDoc={(url, t) => setViewDoc({url, title: t})} onManageClosure={setClosingReport} />
-                  ))}
-                  {filteredReports.length === 0 && (
-                    <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
-                      <ClipboardList size={48} className="mx-auto text-slate-200 mb-4" />
-                      <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado novedades con los filtros seleccionados</p>
+               {reportViewMode === 'table' ? (
+                  <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-[8px] uppercase tracking-widest text-slate-500 font-black">
+                            <th className="p-4">Fecha</th>
+                            <th className="p-4">Placa</th>
+                            <th className="p-4">Tipo</th>
+                            <th className="p-4">Taller</th>
+                            <th className="p-4">Estado</th>
+                            <th className="p-4">Días</th>
+                            <th className="p-4 text-right">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-[10px] font-medium text-slate-700">
+                          {filteredReports.map(r => (
+                            <tr key={r.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="p-4 font-black">{r.date}</td>
+                              <td className="p-4">
+                                <span className="bg-slate-900 px-2 py-1 rounded text-white font-mono font-black tracking-tighter">
+                                  {r.plate}
+                                </span>
+                              </td>
+                              <td className="p-4 uppercase font-black text-slate-400 truncate max-w-[200px]">{r.novelty}</td>
+                              <td className="p-4 uppercase font-black text-slate-600">{r.workshop}</td>
+                              <td className="p-4">
+                                <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
+                                  r.status === 'COMPLETADOS' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+                                }`}>
+                                  {r.status}
+                                </span>
+                              </td>
+                              <td className="p-4 font-black">{r.daysInShop || '0'}d</td>
+                              <td className="p-4 text-right">
+                                <button 
+                                  onClick={() => setClosingReport(r)}
+                                  className="text-indigo-600 font-black uppercase tracking-widest text-[8px] hover:underline"
+                                >
+                                  Gestionar
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  )}
-               </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {filteredReports.map(r => (
+                      <ReportCard 
+                        key={r.id} 
+                        report={r} 
+                        onViewDoc={(url, t) => setViewDoc({url, title: t})} 
+                        onManageClosure={setClosingReport} 
+                        onManageEntry={setRegisteringEntry}
+                      />
+                    ))}
+                    {filteredReports.length === 0 && (
+                      <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
+                        <ClipboardList size={48} className="mx-auto text-slate-200 mb-4" />
+                        <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado novedades con los filtros seleccionados</p>
+                      </div>
+                    )}
+                  </div>
+                )}
             </div>
           )}
 
@@ -1534,6 +1864,17 @@ const App: React.FC = () => {
                   </div>
                   
                   <div className="flex items-center gap-4">
+                    <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
+                      <select 
+                        className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
+                        value={filterWorkshop}
+                        onChange={e => setFilterWorkshop(e.target.value)}
+                      >
+                        <option value="all">TODOS LOS TALLERES</option>
+                        {uniqueWorkshops.map(w => <option key={w} value={w}>{w}</option>)}
+                      </select>
+                    </div>
+
                     <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center">
                       <button 
                         onClick={() => setWorkshopViewMode('list')}
@@ -1574,15 +1915,15 @@ const App: React.FC = () => {
                {workshopViewMode === 'list' ? (
                  <>
                    <WorkshopStats 
-                     total={workshopVisits.filter(v => v.week === String(selectedWeek)).length}
-                     completed={workshopVisits.filter(v => v.week === String(selectedWeek) && v.status === 'CERRADO').length}
-                     pending={workshopVisits.filter(v => v.week === String(selectedWeek) && v.status === 'ABIERTO').length}
+                     total={workshopVisits.filter(v => v.week === String(selectedWeek) && (filterWorkshop === 'all' || v.workshop === filterWorkshop)).length}
+                     completed={workshopVisits.filter(v => v.week === String(selectedWeek) && v.status === 'COMPLETADOS' && (filterWorkshop === 'all' || v.workshop === filterWorkshop)).length}
+                     pending={workshopVisits.filter(v => v.week === String(selectedWeek) && v.status === 'PENDIENTES' && (filterWorkshop === 'all' || v.workshop === filterWorkshop)).length}
                      label={`SEMANA ${selectedWeek}`}
                    />
 
                    <div className="space-y-4">
                       {workshopVisits
-                        .filter(v => v.week === String(selectedWeek) && normalizePlate(v.plate).includes(normalizePlate(searchTerm)))
+                        .filter(v => v.week === String(selectedWeek) && (normalizePlate(v.plate).includes(normalizePlate(searchTerm)) || (v.workshop && v.workshop.toUpperCase().includes(searchTerm.toUpperCase()))) && (filterWorkshop === 'all' || v.workshop === filterWorkshop))
                         .map(v => (
                           <WorkshopVisitItem 
                             key={v.id} 
@@ -1605,15 +1946,21 @@ const App: React.FC = () => {
                    <WorkshopStats 
                      total={workshopVisits.filter(v => {
                        const d = new Date(v.date + "T12:00:00");
-                       return d.getFullYear() === selectedYear && d.toLocaleString('es-ES', { month: 'long' }).toUpperCase() === selectedMonth;
+                       const matchPeriod = d.getFullYear() === selectedYear && d.toLocaleString('es-ES', { month: 'long' }).toUpperCase() === selectedMonth;
+                       const matchWorkshop = filterWorkshop === 'all' || v.workshop === filterWorkshop;
+                       return matchPeriod && matchWorkshop;
                      }).length}
                      completed={workshopVisits.filter(v => {
                        const d = new Date(v.date + "T12:00:00");
-                       return d.getFullYear() === selectedYear && d.toLocaleString('es-ES', { month: 'long' }).toUpperCase() === selectedMonth && v.status === 'CERRADO';
+                       const matchPeriod = d.getFullYear() === selectedYear && d.toLocaleString('es-ES', { month: 'long' }).toUpperCase() === selectedMonth;
+                       const matchWorkshop = filterWorkshop === 'all' || v.workshop === filterWorkshop;
+                       return matchPeriod && matchWorkshop && v.status === 'COMPLETADOS';
                      }).length}
                      pending={workshopVisits.filter(v => {
                        const d = new Date(v.date + "T12:00:00");
-                       return d.getFullYear() === selectedYear && d.toLocaleString('es-ES', { month: 'long' }).toUpperCase() === selectedMonth && v.status === 'ABIERTO';
+                       const matchPeriod = d.getFullYear() === selectedYear && d.toLocaleString('es-ES', { month: 'long' }).toUpperCase() === selectedMonth;
+                       const matchWorkshop = filterWorkshop === 'all' || v.workshop === filterWorkshop;
+                       return matchPeriod && matchWorkshop && v.status === 'PENDIENTES';
                      }).length}
                      label={`${selectedMonth} ${selectedYear}`}
                    />
@@ -1627,6 +1974,7 @@ const App: React.FC = () => {
                      onViewDoc={(url, t) => setViewDoc({url, title: t})}
                      onManageClosure={setClosingWorkshopVisit}
                      searchTerm={searchTerm}
+                     filterWorkshop={filterWorkshop}
                    />
                  </>
                )}
@@ -1715,6 +2063,16 @@ const App: React.FC = () => {
         />
       )}
       {closingReport && <ClosureForm report={closingReport} onClose={() => setClosingReport(null)} onSubmit={async (id, d) => { await submitReportToSheet({...closingReport, ...d} as any); handleSyncData(); }} />}
+      {registeringEntry && (
+        <WorkshopEntryForm 
+          report={registeringEntry} 
+          onClose={() => setRegisteringEntry(null)} 
+          onSubmit={async (d) => { 
+            await submitReportToSheet({...registeringEntry, ...d} as any); 
+            handleSyncData(); 
+          }} 
+        />
+      )}
       {closingWorkshopVisit && <WorkshopVisitClosureForm visit={closingWorkshopVisit} onClose={() => setClosingWorkshopVisit(null)} onSubmit={async (d) => { await submitWorkshopVisitUpdateToSheet(d); handleSyncData(); }} />}
     </div>
   );

@@ -13,6 +13,7 @@ interface WorkshopCalendarProps {
   onViewDoc: (url: string | string[] | {url: string, label?: string}[], title: string) => void;
   onManageClosure: (visit: Report) => void;
   searchTerm: string;
+  filterWorkshop?: string;
 }
 
 const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({ 
@@ -23,7 +24,8 @@ const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({
   onYearChange,
   onViewDoc,
   onManageClosure,
-  searchTerm
+  searchTerm,
+  filterWorkshop = 'all'
 }) => {
   const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
   
@@ -52,13 +54,18 @@ const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({
 
   const getVisitsForDay = (day: number) => {
     const dateStr = `${selectedYear}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const dayVisits = visits.filter(v => v.date === dateStr && normalizePlate(v.plate).includes(normalizePlate(searchTerm)));
+    const dayVisits = visits.filter(v => {
+      const matchSearch = normalizePlate(v.plate).includes(normalizePlate(searchTerm)) || 
+                          (v.workshop && v.workshop.toUpperCase().includes(searchTerm.toUpperCase()));
+      const matchWorkshop = filterWorkshop === 'all' || v.workshop === filterWorkshop;
+      return v.date === dateStr && matchSearch && matchWorkshop;
+    });
     
     // Agrupar por placa y priorizar la visita CERRADA o la última ingresada
     const uniqueVisits: Record<string, Report> = {};
     dayVisits.forEach(visit => {
       const plate = normalizePlate(visit.plate);
-      if (!uniqueVisits[plate] || visit.status === 'CERRADO') {
+      if (!uniqueVisits[plate] || visit.status === 'COMPLETADOS') {
         uniqueVisits[plate] = visit;
       }
     });
@@ -130,7 +137,7 @@ const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({
                       <div 
                         key={visit.id}
                         onClick={() => {
-                          if (visit.status === 'ABIERTO') {
+                          if (visit.status === 'PENDIENTES') {
                             onManageClosure(visit);
                           } else {
                             const photos = [];
@@ -142,11 +149,11 @@ const WorkshopCalendar: React.FC<WorkshopCalendarProps> = ({
                             }
                           }
                         }}
-                        className={`group px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-2 ${visit.status === 'CERRADO' ? 'bg-emerald-500 text-white border border-emerald-600 shadow-sm' : 'bg-rose-500 text-white border border-rose-600 shadow-sm'}`}
+                        className={`group px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-2 ${visit.status === 'COMPLETADOS' ? 'bg-emerald-500 text-white border border-emerald-600 shadow-sm' : 'bg-rose-500 text-white border border-rose-600 shadow-sm'}`}
                       >
                         <span className="truncate">{visit.plate}</span>
                         <div className="shrink-0">
-                          {visit.status === 'CERRADO' ? (
+                          {visit.status === 'COMPLETADOS' ? (
                             <CheckCircle2 size={12} className="text-white" />
                           ) : (
                             <Clock size={12} className="text-white animate-pulse" />

@@ -18,6 +18,7 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
   const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     workshop: visit.workshop || '',
+    otherWorkshop: '',
     visitDate: new Date().toISOString().split('T')[0],
   });
 
@@ -93,10 +94,10 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
       await onSubmit({
         id: visit.id, // Columna H (Hash)
         plate: visit.plate,
-        workshop: formData.workshop,
+        workshop: formData.workshop === 'OTROS' ? formData.otherWorkshop : formData.workshop,
         visitDate: formData.visitDate,
         evidence: mosaic,
-        status: 'COMPLETADO'
+        status: 'COMPLETADOS'
       });
       onClose();
     } catch (error) {
@@ -123,15 +124,30 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           <div className="space-y-4">
             {/* TALLER */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
-                <Store size={12} className="text-indigo-600"/> ASIGNAR TALLER (COL D)
-              </label>
-              <select required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-sm font-black uppercase outline-none focus:border-indigo-500"
-                value={formData.workshop} onChange={e => setFormData({...formData, workshop: e.target.value})}>
-                <option value="">-- SELECCIONE TALLER --</option>
-                {workshops.map(w => <option key={w} value={w}>{w}</option>)}
-              </select>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                  <Store size={12} className="text-indigo-600"/> ASIGNAR TALLER (COL D)
+                </label>
+                <select required className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-5 py-4 text-sm font-black uppercase outline-none focus:border-indigo-500"
+                  value={formData.workshop} onChange={e => setFormData({...formData, workshop: e.target.value})}>
+                  <option value="">-- SELECCIONE TALLER --</option>
+                  {workshops.map(w => <option key={w} value={w}>{w}</option>)}
+                </select>
+              </div>
+              {formData.workshop === 'OTROS' && (
+                <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
+                  <label className="text-[10px] font-black text-amber-600 uppercase tracking-widest px-1">Especifique Taller *</label>
+                  <input 
+                    required 
+                    type="text" 
+                    placeholder="NOMBRE DEL TALLER..." 
+                    className="w-full bg-amber-50 border-2 border-amber-200 rounded-2xl px-5 py-4 text-sm font-black uppercase outline-none focus:border-amber-500 shadow-inner" 
+                    value={formData.otherWorkshop} 
+                    onChange={e => setFormData({ ...formData, otherWorkshop: e.target.value.toUpperCase() })} 
+                  />
+                </div>
+              )}
             </div>
 
             {/* FECHA DE VISITA */}
