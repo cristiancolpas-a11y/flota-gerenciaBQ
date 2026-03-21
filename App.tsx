@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -39,6 +39,7 @@ import PreventiveUpdateForm from './components/PreventiveUpdateForm';
 import AvailabilityModule from './components/AvailabilityModule';
 import AvailabilityIndicators from './components/AvailabilityIndicators';
 import OperationalDashboard from './components/OperationalDashboard';
+import CheckListModule from './components/CheckListModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -66,7 +67,8 @@ import {
   fetchPreventivesFromSheet,
   submitPreventiveUpdateToSheet,
   fetchAvailabilityFromSheet,
-  fetchOperationalIndicatorsFromSheet
+  fetchOperationalIndicatorsFromSheet,
+  fetchCheckListFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -78,7 +80,7 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'preventivos' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'preventivos' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -108,6 +110,7 @@ const App: React.FC = () => {
   const [preventives, setPreventives] = useState<Preventive[]>([]);
   const [availabilityRecords, setAvailabilityRecords] = useState<AvailabilityRecord[]>([]);
   const [operationalIndicators, setOperationalIndicators] = useState<OperationalIndicator[]>([]);
+  const [checkLists, setCheckLists] = useState<CheckList[]>([]);
 
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
@@ -178,7 +181,7 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      const [v, d, f, r, w, cl, c, m, wv, p, a, oi] = await Promise.all([
+      const [v, d, f, r, w, cl, c, m, wv, p, a, oi, ch] = await Promise.all([
         fetchVehiclesFromSheet(),
         fetchDriversFromSheet(),
         fetchFinesFromSheet(),
@@ -190,7 +193,8 @@ const App: React.FC = () => {
         fetchWorkshopVisitsFromSheet(),
         fetchPreventivesFromSheet(),
         fetchAvailabilityFromSheet(),
-        fetchOperationalIndicatorsFromSheet()
+        fetchOperationalIndicatorsFromSheet(),
+        fetchCheckListFromSheet()
       ]);
 
       const filterByYear = (dateStr: string | undefined) => {
@@ -223,6 +227,7 @@ const App: React.FC = () => {
       setPreventives(p); 
       setAvailabilityRecords(a.filter(item => filterByYear(item.date)));
       setOperationalIndicators(oi);
+      setCheckLists(ch);
     } catch (err) {
       console.error("Critical Sync Error:", err);
     } finally {
@@ -764,6 +769,7 @@ const App: React.FC = () => {
               { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
               { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
               { id: 'visitas', label: 'Visitas Taller', icon: <Store size={18}/> },
+              { id: 'checklist', label: 'Check List', icon: <ClipboardList size={18}/> },
             ].map(item => (
               <button 
                 key={item.id}
@@ -839,6 +845,10 @@ const App: React.FC = () => {
             <OperationalDashboard 
               indicators={operationalIndicators}
             />
+          )}
+
+          {activeView === 'checklist' && (
+            <CheckListModule checkLists={checkLists} />
           )}
 
           {activeView === 'indicadoresDisponibilidad' && (

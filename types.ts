@@ -198,3 +198,17 @@ export interface OperationalIndicator {
   trigger: number;
   meta: number;
 }
+
+export interface CheckList {
+  id: string;
+  fecha: string;
+  vehiculo: string;
+  salida: string;
+  retorno: string;
+  estado: string;
+  contratista: string;
+  empresa: string;
+  conductor: string;
+  semana: string;
+  novedades: string;
+}

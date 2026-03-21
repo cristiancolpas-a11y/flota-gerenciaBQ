@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec'; 
@@ -17,6 +17,9 @@ const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_I
 // ID de la hoja de Comparendos
 const FINES_SHEET_ID = '1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M';
 const BASE_URL_FINES = `https://docs.google.com/spreadsheets/d/${FINES_SHEET_ID}/export?format=csv`;
+
+// ID de la hoja de Check List
+const CHECKLIST_DOC_ID = '1i6qGjwhQW3AeR1ja5UxZkOXjJU3oh0f_8Grt131NQzk';
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
@@ -769,6 +772,54 @@ export const fetchWorkshopRecordsFromSheet = async (): Promise<WorkshopRecord[]>
                 evidence1Url: cleanSheetValue(row[6]),
                 evidence2Url: cleanSheetValue(row[7]),
                 workshopName: cleanSheetValue(row[8]),
+              };
+            });
+          resolve(records);
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${CHECKLIST_DOC_ID}/gviz/tq?tqx=out:csv&sheet=DATA${getCacheBuster()}`;
+    const response = await fetch(url);
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          
+          const records = rows.slice(1)
+            .filter(row => {
+              if (!row || !row[2]) return false;
+              const empresa = cleanSheetValue(row[8]).toUpperCase();
+              // Solo mostrar BAVARIA
+              return empresa === 'BAVARIA';
+            })
+            .map((row, i): CheckList => {
+              const rawConductor = cleanSheetValue(row[9]);
+              const rawSalida = cleanSheetValue(row[3]);
+              const rawRetorno = cleanSheetValue(row[4]);
+
+              return {
+                id: `check-${i}`,
+                fecha: parseFlexibleDate(row[1]),
+                vehiculo: normalizePlate(cleanSheetValue(row[2])),
+                salida: rawSalida === '1' ? '100%' : '0%',
+                retorno: rawRetorno === '1' ? '100%' : '0%',
+                estado: cleanSheetValue(row[6]),
+                contratista: cleanSheetValue(row[7]),
+                empresa: cleanSheetValue(row[8]),
+                conductor: rawConductor.trim() === '' ? 'sin datos' : rawConductor,
+                semana: cleanSheetValue(row[10]),
+                novedades: cleanSheetValue(row[12]),
               };
             });
           resolve(records);
