@@ -138,12 +138,16 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
 
       const mergedEvidence = await createMosaic(mosaicPhotos, `LAVADO: ${formData.plate} - ${formData.date}`);
 
+      const selectedVehicle = vehicles.find(v => v.plate === formData.plate);
+
       const payload = {
         ...formData,
         id: `LAV-${Date.now()}`,
         month,
         week,
         evidenceUrl: mergedEvidence,
+        cd: selectedVehicle?.cd || 'GENERAL',
+        contractor: selectedVehicle?.contractor || 'GENERAL',
       };
       await onSubmit(payload);
       setIsSuccess(true);

@@ -1,6 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
-import { Truck, Gauge, AlertTriangle, CheckCircle2, Clock, Search, Camera, Calendar, Hash, Filter, ExternalLink, TrendingUp, BarChart3 } from 'lucide-react';
+import { Truck, Gauge, AlertTriangle, CheckCircle2, Clock, Search, Camera, Calendar, Hash, Filter, ExternalLink, TrendingUp, BarChart3, Plus } from 'lucide-react';
 import { Vehicle, MileageLog, Preventive } from '../types';
 import { normalizePlate } from '../utils';
 import { 
@@ -139,7 +139,7 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
           onClick={() => onUpdate?.({} as any)}
           className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 hover:-translate-y-1 transition-all flex items-center gap-3"
         >
-          <Camera size={20} /> Registrar Preventivo
+          <Plus size={20} /> Registrar Preventivo
         </button>
       </div>
 

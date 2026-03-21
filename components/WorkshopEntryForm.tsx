@@ -115,12 +115,18 @@ const WorkshopEntryForm: React.FC<WorkshopEntryFormProps> = ({ report, onClose, 
     try {
       const finalWorkshop = formData.workshop === 'OTROS' ? formData.otherWorkshop : formData.workshop;
       
+      // Calcular días en atender: Fecha ingreso taller - Fecha reporte
+      const reportDate = new Date(report.date);
+      const entryDate = new Date(formData.workshopDate);
+      const daysToAttend = Math.max(0, Math.ceil((entryDate.getTime() - reportDate.getTime()) / (1000 * 60 * 60 * 24)));
+
       await onSubmit({
         workshopDate: formData.workshopDate,
-        initialEvidence: initialPhotos[0], // Guardamos la primera como principal o podríamos hacer mosaico
+        initialEvidence: initialPhotos[0],
         entryMap: formData.entryMap,
         workshop: finalWorkshop,
-        status: 'PENDIENTES' // Sigue pendiente hasta que se cierre
+        daysToAttend,
+        status: 'PENDIENTES'
       });
       onClose();
     } catch (error) {

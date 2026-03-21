@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Camera, Save, Loader2, Calculator, Calendar, Truck, Gauge } from 'lucide-react';
 import { Vehicle, Preventive } from '../types';
-import { compressImage } from '../utils';
+import { compressImage, createMosaic } from '../utils';
 
 interface PreventiveUpdateFormProps {
   onClose: () => void;
@@ -16,45 +16,8 @@ const PreventiveUpdateForm: React.FC<PreventiveUpdateFormProps> = ({ onClose, on
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [week, setWeek] = useState('');
   const [month, setMonth] = useState('');
-  const [frequency, setFrequency] = useState(initialData?.frequency || 5000);
-  const [lastKm, setLastKm] = useState(initialData?.lastMaintenanceMileage || 0);
-  const [nextKm, setNextKm] = useState(initialData?.nextMaintenanceMileage || 0);
-  const [currentKm, setCurrentKm] = useState(initialData?.currentMileage || 0);
-  const [difference, setDifference] = useState(initialData?.difference || initialData?.kmsToNext || 0);
-  const [compliance, setCompliance] = useState<string>(
-    initialData?.complianceStatus === 'Cumplió' || initialData?.complianceStatus === '1' ? 'Cumplió' : 
-    (initialData?.complianceStatus === 'No cumplió' || initialData?.complianceStatus === '0' ? 'No cumplió' : 'Cumplió')
-  );
-  const [validation, setValidation] = useState(
-    initialData?.validationStatus === '100%' ? '100%' : 
-    (initialData?.validationStatus === '0%' ? '0%' : '100%')
-  );
-  const [evidence, setEvidence] = useState<string[]>(
-    initialData?.evidenceUrl ? initialData.evidenceUrl.split(',').map(s => s.trim()).filter(Boolean) : []
-  );
+  const [evidence, setEvidence] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Auto-calculate difference
-  useEffect(() => {
-    const diff = currentKm - nextKm;
-    setDifference(diff);
-  }, [currentKm, nextKm]);
-
-  // Auto-update validation based on compliance
-  useEffect(() => {
-    if (compliance === 'Cumplió') {
-      setValidation('100%');
-    } else if (compliance === 'No cumplió') {
-      setValidation('0%');
-    }
-  }, [compliance]);
-
-  // Auto-calculate next maintenance
-  useEffect(() => {
-    if (lastKm > 0 && frequency > 0) {
-      setNextKm(lastKm + frequency);
-    }
-  }, [lastKm, frequency]);
 
   // Auto-set week and month based on date
   useEffect(() => {
@@ -111,26 +74,19 @@ const PreventiveUpdateForm: React.FC<PreventiveUpdateFormProps> = ({ onClose, on
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!plate || !date || evidence.length === 0) {
-      alert('Por favor complete todos los campos y suba al menos una evidencia.');
+    if (!plate || evidence.length === 0) {
+      alert('Por favor seleccione la placa y suba al menos una foto de evidencia.');
       return;
     }
 
     setIsSubmitting(true);
     try {
+      // Create mosaic to ensure only ONE link is generated in the sheet
+      const mosaic = await createMosaic(evidence, `PREVENTIVO - ${plate}`);
+      
       await onSubmit({
-        week,
-        month,
-        date,
         plate,
-        frequency,
-        lastKm,
-        nextKm,
-        currentKm,
-        difference,
-        compliance,
-        validation,
-        evidence
+        evidence: mosaic // Send ONLY identification (Plate) and evidence
       });
       onClose();
     } catch (error) {

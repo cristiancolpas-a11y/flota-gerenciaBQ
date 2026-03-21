@@ -2062,13 +2062,36 @@ const App: React.FC = () => {
           initialData={updatingPreventive}
         />
       )}
-      {closingReport && <ClosureForm report={closingReport} onClose={() => setClosingReport(null)} onSubmit={async (id, d) => { await submitReportToSheet({...closingReport, ...d} as any); handleSyncData(); }} />}
+      {closingReport && (
+        <ClosureForm 
+          report={closingReport} 
+          onClose={() => setClosingReport(null)} 
+          onSubmit={async (id, d) => { 
+            const selectedVehicle = vehicles.find(v => v.plate === closingReport.plate);
+            const finalReport = {
+              ...closingReport, 
+              ...d,
+              cd: selectedVehicle?.cd || closingReport.cd || 'GENERAL',
+              contractor: selectedVehicle?.contractor || closingReport.contractor || 'GENERAL'
+            } as any;
+            await submitReportToSheet(finalReport); 
+            handleSyncData(); 
+          }} 
+        />
+      )}
       {registeringEntry && (
         <WorkshopEntryForm 
           report={registeringEntry} 
           onClose={() => setRegisteringEntry(null)} 
           onSubmit={async (d) => { 
-            await submitReportToSheet({...registeringEntry, ...d} as any); 
+            const selectedVehicle = vehicles.find(v => v.plate === registeringEntry.plate);
+            const finalReport = {
+              ...registeringEntry, 
+              ...d,
+              cd: selectedVehicle?.cd || registeringEntry.cd || 'GENERAL',
+              contractor: selectedVehicle?.contractor || registeringEntry.contractor || 'GENERAL'
+            } as any;
+            await submitReportToSheet(finalReport); 
             handleSyncData(); 
           }} 
         />

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Report } from '../types';
 import { formatDate, getDriveDirectLink } from '../utils';
 import { 
@@ -38,6 +38,8 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
   const thumbIn = getThumb(report.initialEvidence);
   const thumbOut = getThumb(report.solutionEvidence);
   const thumbWorkshop = getThumb(report.workshopEvidence);
+  const [isNoveltyExpanded, setIsNoveltyExpanded] = useState(false);
+
   const isClosed = report.status === 'COMPLETADOS';
   const hasEntry = !!report.entryMap;
 
@@ -79,12 +81,25 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
         
         {/* BLOQUE 1: DESCRIPCIÓN REDUCIDA */}
         <div className="space-y-3">
-           <div className="flex items-center gap-2">
-              <FileText size={14} className="text-indigo-400" />
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Trabajo / Novedad</span>
+           <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                 <FileText size={14} className="text-indigo-400" />
+                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Trabajo / Novedad</span>
+              </div>
+              <button 
+                onClick={() => setIsNoveltyExpanded(!isNoveltyExpanded)}
+                className="text-[8px] font-black text-indigo-500 uppercase tracking-widest hover:underline"
+              >
+                {isNoveltyExpanded ? 'Ver menos' : 'Ver más'}
+              </button>
            </div>
-           <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100/50">
-              <p className="text-xs font-bold text-slate-600 leading-tight italic truncate">"{report.novelty}"</p>
+           <div 
+             className={`bg-slate-50/50 p-4 rounded-2xl border border-slate-100/50 cursor-pointer transition-all duration-300 ${isNoveltyExpanded ? 'shadow-inner bg-slate-100' : 'hover:bg-slate-100/50'}`}
+             onClick={() => setIsNoveltyExpanded(!isNoveltyExpanded)}
+           >
+              <p className={`text-xs font-bold text-slate-600 leading-tight italic ${isNoveltyExpanded ? '' : 'truncate'}`}>
+                "{report.novelty}"
+              </p>
            </div>
         </div>
 

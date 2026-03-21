@@ -138,6 +138,8 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
       const initialCollage = await createMosaic(initialPhotos, `LIMPIEZA: ${formData.plate}`);
       const finalCollage = await createMosaic(finalPhotos, `LIMPIEZA: ${formData.plate}`);
 
+      const selectedVehicle = vehicles.find(v => v.plate === formData.plate);
+
       const payload = {
         ...formData,
         id: `CLEAN-${Date.now()}`,
@@ -145,6 +147,8 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
         week,
         initialEvidence: initialCollage,
         finalEvidence: finalCollage,
+        cd: selectedVehicle?.cd || 'GENERAL',
+        contractor: selectedVehicle?.contractor || 'GENERAL',
         status: 'COMPLETADO'
       };
       await onSubmit(payload);
