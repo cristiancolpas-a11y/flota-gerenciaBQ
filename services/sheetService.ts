@@ -817,7 +817,7 @@ export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
                 estado: cleanSheetValue(row[6]),
                 contratista: cleanSheetValue(row[7]),
                 empresa: cleanSheetValue(row[8]),
-                conductor: rawConductor.trim() === '' ? 'sin datos' : rawConductor,
+                conductor: rawConductor.trim() === '' ? '#N/A' : rawConductor,
                 semana: cleanSheetValue(row[10]),
                 novedades: cleanSheetValue(row[12]),
               };
