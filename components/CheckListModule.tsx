@@ -13,20 +13,47 @@ interface CheckListModuleProps {
 
 const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
   const filteredData = useMemo(() => {
-    return checkLists.filter(item => 
-      normalizePlate(item.vehiculo).includes(normalizePlate(searchTerm)) ||
-      item.conductor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.empresa.toLowerCase().includes(searchTerm.toLowerCase())
-    ).sort((a, b) => {
+    return checkLists.filter(item => {
+      const matchesSearch = normalizePlate(item.vehiculo).includes(normalizePlate(searchTerm)) ||
+        item.conductor.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.contratista.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.empresa.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      if (!matchesSearch) return false;
+
+      if (startDate || endDate) {
+        const itemDate = item.fecha ? new Date(item.fecha) : null;
+        if (!itemDate) return false;
+        
+        // Reset hours for comparison
+        itemDate.setHours(0, 0, 0, 0);
+
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (itemDate < start) return false;
+        }
+
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(0, 0, 0, 0);
+          if (itemDate > end) return false;
+        }
+      }
+
+      return true;
+    }).sort((a, b) => {
       const dateA = a.fecha ? new Date(a.fecha).getTime() : 0;
       const dateB = b.fecha ? new Date(b.fecha).getTime() : 0;
       return dateB - dateA;
     });
-  }, [checkLists, searchTerm]);
+  }, [checkLists, searchTerm, startDate, endDate]);
 
   const stats = useMemo(() => {
     const total = filteredData.length;
@@ -145,8 +172,49 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
             </p>
           </div>
           
-          <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
-            <div className="relative w-full md:w-96">
+          <div className="flex flex-col lg:flex-row items-center gap-4 w-full lg:w-auto">
+            <div className="flex items-center gap-2 w-full lg:w-auto">
+              <div className="relative flex-grow lg:w-40">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="date"
+                  className="w-full pl-10 pr-3 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 rounded-xl text-xs font-medium transition-all outline-none shadow-inner"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
+              <span className="text-slate-400 font-bold text-xs uppercase">A</span>
+              <div className="relative flex-grow lg:w-40">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  type="date"
+                  className="w-full pl-10 pr-3 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 rounded-xl text-xs font-medium transition-all outline-none shadow-inner"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
+              {(startDate || endDate) && (
+                <button 
+                  onClick={() => {
+                    setStartDate('');
+                    setEndDate('');
+                    setCurrentPage(1);
+                  }}
+                  className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Limpiar fechas"
+                >
+                  <Filter size={18} />
+                </button>
+              )}
+            </div>
+
+            <div className="relative w-full lg:w-80">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input
                 type="text"
@@ -181,7 +249,7 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
               <Truck size={24} />
             </div>
             <div>
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Salidas 100%</p>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Salidas</p>
               <p className="text-2xl font-black text-slate-800">{stats.salidas100}</p>
             </div>
           </div>
@@ -191,7 +259,7 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
               <User size={24} />
             </div>
             <div>
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Retornos 100%</p>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Retornos</p>
               <p className="text-2xl font-black text-slate-800">{stats.retornos100}</p>
             </div>
           </div>
@@ -228,8 +296,12 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
                     cursor={{fill: '#f8fafc'}}
                   />
                   <Legend iconType="circle" wrapperStyle={{fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '20px'}} />
-                  <Bar dataKey="Salida" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
-                  <Bar dataKey="Retorno" fill="#059669" radius={[4, 4, 0, 0]} barSize={20} />
+                  <Bar dataKey="Salida" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20}>
+                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }} formatter={(v: number) => `${v}%`} />
+                  </Bar>
+                  <Bar dataKey="Retorno" fill="#059669" radius={[4, 4, 0, 0]} barSize={20}>
+                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }} formatter={(v: number) => `${v}%`} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -304,8 +376,12 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
                     cursor={{fill: '#f8fafc'}}
                   />
                   <Legend iconType="circle" wrapperStyle={{fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '20px'}} />
-                  <Bar dataKey="Salida" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30} />
-                  <Bar dataKey="Retorno" fill="#059669" radius={[4, 4, 0, 0]} barSize={30} />
+                  <Bar dataKey="Salida" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30}>
+                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }} formatter={(v: number) => `${v}%`} />
+                  </Bar>
+                  <Bar dataKey="Retorno" fill="#059669" radius={[4, 4, 0, 0]} barSize={30}>
+                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }} formatter={(v: number) => `${v}%`} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
