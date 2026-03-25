@@ -15,8 +15,14 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [selectedContractor, setSelectedContractor] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
+
+  const contractors = useMemo(() => {
+    const unique = new Set(checkLists.map(c => c.contratista).filter(Boolean));
+    return Array.from(unique).sort();
+  }, [checkLists]);
 
   const filteredData = useMemo(() => {
     return checkLists.filter(item => {
@@ -26,6 +32,8 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
         item.empresa.toLowerCase().includes(searchTerm.toLowerCase());
       
       if (!matchesSearch) return false;
+
+      if (selectedContractor && item.contratista !== selectedContractor) return false;
 
       if (startDate || endDate) {
         const itemDate = item.fecha ? new Date(item.fecha) : null;
@@ -53,7 +61,7 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
       const dateB = b.fecha ? new Date(b.fecha).getTime() : 0;
       return dateB - dateA;
     });
-  }, [checkLists, searchTerm, startDate, endDate]);
+  }, [checkLists, searchTerm, startDate, endDate, selectedContractor]);
 
   const stats = useMemo(() => {
     const total = filteredData.length;
@@ -119,7 +127,7 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
     return { total, salidas100, retornos100, topDrivers, weeklyGeneralChartData, monthlyGeneralChartData, aroData };
   }, [filteredData]);
 
-  const DonutChart = ({ value, label }: { value: number, label: string }) => {
+  const DonutChart = ({ value, label, color = "#10b981" }: { value: number, label: string, color?: string }) => {
     const data = [
       { name: 'Cumplió', value: value },
       { name: 'Le faltó', value: 100 - value }
@@ -141,13 +149,13 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
                 dataKey="value"
                 stroke="none"
               >
-                <Cell fill="#10b981" />
-                <Cell fill="#ef4444" />
+                <Cell fill={color} />
+                <Cell fill="#f1f5f9" />
               </Pie>
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-4xl font-black text-slate-900">{value}%</span>
+            <span className="text-4xl font-black text-slate-900" style={{ color: color }}>{value}%</span>
           </div>
         </div>
       </div>
@@ -173,7 +181,25 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
           </div>
           
           <div className="flex flex-col lg:flex-row items-center gap-4 w-full lg:w-auto">
-            <div className="flex items-center gap-2 w-full lg:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+              {/* Contractor Filter */}
+              <div className="relative flex-grow lg:w-48">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <select
+                  className="w-full pl-10 pr-3 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 rounded-xl text-xs font-bold uppercase tracking-tight transition-all outline-none shadow-inner appearance-none cursor-pointer"
+                  value={selectedContractor}
+                  onChange={(e) => {
+                    setSelectedContractor(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  <option value="">TODOS LOS CONTRATISTAS</option>
+                  {contractors.map(c => (
+                    <option key={c} value={c}>{c.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="relative flex-grow lg:w-40">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                 <input
@@ -199,15 +225,16 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
                   }}
                 />
               </div>
-              {(startDate || endDate) && (
+              {(startDate || endDate || selectedContractor) && (
                 <button 
                   onClick={() => {
                     setStartDate('');
                     setEndDate('');
+                    setSelectedContractor('');
                     setCurrentPage(1);
                   }}
                   className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-                  title="Limpiar fechas"
+                  title="Limpiar filtros"
                 >
                   <Filter size={18} />
                 </button>
@@ -296,11 +323,11 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
                     cursor={{fill: '#f8fafc'}}
                   />
                   <Legend iconType="circle" wrapperStyle={{fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '20px'}} />
-                  <Bar dataKey="Salida" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20}>
-                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }} formatter={(v: number) => `${v}%`} />
+                  <Bar dataKey="Salida" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={20}>
+                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#6366f1' }} formatter={(v: number) => `${v}%`} />
                   </Bar>
-                  <Bar dataKey="Retorno" fill="#059669" radius={[4, 4, 0, 0]} barSize={20}>
-                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }} formatter={(v: number) => `${v}%`} />
+                  <Bar dataKey="Retorno" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20}>
+                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#10b981' }} formatter={(v: number) => `${v}%`} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -314,8 +341,8 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
               ADH - Cumplimiento General (ARO)
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <DonutChart value={stats.aroData.salida} label="ADH SALIDA %" />
-              <DonutChart value={stats.aroData.retorno} label="ADH RETORNO %" />
+              <DonutChart value={stats.aroData.salida} label="ADH SALIDA %" color="#6366f1" />
+              <DonutChart value={stats.aroData.retorno} label="ADH RETORNO %" color="#10b981" />
             </div>
           </div>
 
@@ -376,11 +403,11 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
                     cursor={{fill: '#f8fafc'}}
                   />
                   <Legend iconType="circle" wrapperStyle={{fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '20px'}} />
-                  <Bar dataKey="Salida" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30}>
-                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }} formatter={(v: number) => `${v}%`} />
+                  <Bar dataKey="Salida" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={30}>
+                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#6366f1' }} formatter={(v: number) => `${v}%`} />
                   </Bar>
-                  <Bar dataKey="Retorno" fill="#059669" radius={[4, 4, 0, 0]} barSize={30}>
-                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }} formatter={(v: number) => `${v}%`} />
+                  <Bar dataKey="Retorno" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30}>
+                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#10b981' }} formatter={(v: number) => `${v}%`} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
