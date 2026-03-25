@@ -76,7 +76,7 @@ import {
   RefreshCw, Users, Truck, Search, Shield, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, Wrench, Lock, X, TrendingUp, Activity
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
@@ -85,6 +85,7 @@ type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' |
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
   const [activeView, setActiveView] = useState<ActiveView>('vehiculos');
+  const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | null>('doc');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -755,37 +756,81 @@ const App: React.FC = () => {
                  </button>
               </div>
               
-              <nav className="flex-grow space-y-1 overflow-y-auto custom-scrollbar pr-2">
-            {[
-              { id: 'indicadoresOperativos', label: 'Tablero Indicadores', icon: <Activity size={18}/> },
-              { id: 'indicadoresDisponibilidad', label: 'Disponibilidad', icon: <TrendingUp size={18}/> },
-              { id: 'preventivos', label: 'Preventivos', icon: <Clock size={18}/> },
-              { id: 'vehiculos', label: 'Vehículos', icon: <Truck size={18}/> },
-              { id: 'conductores', label: 'Conductores', icon: <Users size={18}/> },
-              { id: 'comparendos', label: 'Comparendos', icon: <Gavel size={18}/> },
-              { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
-              { id: 'novedades', label: 'Novedades', icon: <ClipboardList size={18}/> },
-              { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
-              { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
-              { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
-              { id: 'visitas', label: 'Visitas Taller', icon: <Store size={18}/> },
-              { id: 'checklist', label: 'Check List', icon: <ClipboardList size={18}/> },
-            ].map(item => (
-              <button 
-                key={item.id}
-                onClick={() => { 
-                  setActiveView(item.id as ActiveView); 
-                  setIsSidebarOpen(false); 
-                  if (item.id === 'preventivos') {
-                    handleSyncData();
-                  }
-                }} 
-                className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-              >
-                {item.icon} {item.label}
-              </button>
-            ))}
-          </nav>
+              <nav className="flex-grow space-y-4 overflow-y-auto custom-scrollbar pr-2">
+                {/* DOCUMENTACIÓN SECTION */}
+                <div className="space-y-2">
+                  <button 
+                    onClick={() => setExpandedSection(expandedSection === 'doc' ? null : 'doc')}
+                    className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
+                  >
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">DOCUMENTACIÓN</p>
+                    {expandedSection === 'doc' ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
+                  </button>
+                  
+                  {expandedSection === 'doc' && (
+                    <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                      {[
+                        { id: 'indicadoresOperativos', label: 'Tablero de Indicadores', icon: <Activity size={18}/> },
+                        { id: 'indicadoresDisponibilidad', label: 'Disponibilidad', icon: <TrendingUp size={18}/> },
+                        { id: 'conductores', label: 'Conductores', icon: <Users size={18}/> },
+                        { id: 'vehiculos', label: 'Vehículos', icon: <Truck size={18}/> },
+                        { id: 'comparendos', label: 'Comparendos', icon: <Gavel size={18}/> },
+                        { id: 'checklist', label: 'Check List', icon: <ClipboardList size={18}/> },
+                      ].map(item => (
+                        <button 
+                          key={item.id}
+                          onClick={() => { 
+                            setActiveView(item.id as ActiveView); 
+                            setIsSidebarOpen(false); 
+                          }} 
+                          className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                        >
+                          {item.icon} {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* GESTIÓN SECTION */}
+                <div className="space-y-2">
+                  <button 
+                    onClick={() => setExpandedSection(expandedSection === 'gestion' ? null : 'gestion')}
+                    className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
+                  >
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">GESTIÓN</p>
+                    {expandedSection === 'gestion' ? <ChevronUp size={14} className="text-emerald-400" /> : <ChevronDown size={14} className="text-emerald-400" />}
+                  </button>
+
+                  {expandedSection === 'gestion' && (
+                    <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                      {[
+                        { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
+                        { id: 'novedades', label: 'Novedades', icon: <ClipboardList size={18}/> },
+                        { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
+                        { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
+                        { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
+                        { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
+                        { id: 'preventivos', label: 'Preventivos', icon: <Clock size={18}/> },
+                      ].map(item => (
+                        <button 
+                          key={item.id}
+                          onClick={() => { 
+                            setActiveView(item.id as ActiveView); 
+                            setIsSidebarOpen(false); 
+                            if (item.id === 'preventivos') {
+                              handleSyncData();
+                            }
+                          }} 
+                          className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                        >
+                          {item.icon} {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </nav>
 
           <button onClick={handleSyncData} className="mt-auto w-full flex items-center justify-center gap-3 py-4 bg-white/5 text-indigo-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">
             <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} /> Sincronizar
