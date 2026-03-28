@@ -212,3 +212,31 @@ export interface CheckList {
   semana: string;
   novedades: string;
 }
+
+export interface FuelPerformance {
+  id: string;
+  month: string;
+  week: string;
+  date: string;
+  plate: string;
+  driver: string;
+  contractor: string;
+  cd: string;
+  mileage: number;
+  gallons: number;
+  kmpg: number;
+  speeding: number;
+  idlingCount: number;
+  idlingTime: string;
+  trips: number;
+  targetKmpg: number;
+  compliance: number;
+}
+
+export interface PlateAdherence {
+  id: string;
+  date: string;
+  plate: string;
+  driverName: string;
+  isValid: boolean; // Column J: 1 = true, 0 = false
+}

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -40,6 +40,8 @@ import AvailabilityModule from './components/AvailabilityModule';
 import AvailabilityIndicators from './components/AvailabilityIndicators';
 import OperationalDashboard from './components/OperationalDashboard';
 import CheckListModule from './components/CheckListModule';
+import FuelPerformanceModule from './components/FuelPerformanceModule';
+import PlateAdherenceModule from './components/PlateAdherenceModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -68,7 +70,9 @@ import {
   submitPreventiveUpdateToSheet,
   fetchAvailabilityFromSheet,
   fetchOperationalIndicatorsFromSheet,
-  fetchCheckListFromSheet
+  fetchCheckListFromSheet,
+  fetchFuelPerformanceFromSheet,
+  fetchPlateAdherenceFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -76,11 +80,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'preventivos' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'preventivos' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -112,6 +116,8 @@ const App: React.FC = () => {
   const [availabilityRecords, setAvailabilityRecords] = useState<AvailabilityRecord[]>([]);
   const [operationalIndicators, setOperationalIndicators] = useState<OperationalIndicator[]>([]);
   const [checkLists, setCheckLists] = useState<CheckList[]>([]);
+  const [fuelPerformanceData, setFuelPerformanceData] = useState<FuelPerformance[]>([]);
+  const [plateAdherenceData, setPlateAdherenceData] = useState<PlateAdherence[]>([]);
 
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
@@ -182,7 +188,7 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      const [v, d, f, r, w, cl, c, m, wv, p, a, oi, ch] = await Promise.all([
+      const [v, d, f, r, w, cl, c, m, wv, p, a, oi, ch, fp, pa] = await Promise.all([
         fetchVehiclesFromSheet(),
         fetchDriversFromSheet(),
         fetchFinesFromSheet(),
@@ -195,7 +201,9 @@ const App: React.FC = () => {
         fetchPreventivesFromSheet(),
         fetchAvailabilityFromSheet(),
         fetchOperationalIndicatorsFromSheet(),
-        fetchCheckListFromSheet()
+        fetchCheckListFromSheet(),
+        fetchFuelPerformanceFromSheet(),
+        fetchPlateAdherenceFromSheet()
       ]);
 
       const filterByYear = (dateStr: string | undefined) => {
@@ -229,6 +237,8 @@ const App: React.FC = () => {
       setAvailabilityRecords(a.filter(item => filterByYear(item.date)));
       setOperationalIndicators(oi);
       setCheckLists(ch);
+      setFuelPerformanceData(fp);
+      setPlateAdherenceData(pa);
     } catch (err) {
       console.error("Critical Sync Error:", err);
     } finally {
@@ -812,13 +822,15 @@ const App: React.FC = () => {
                         { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
                         { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
                         { id: 'preventivos', label: 'Preventivos', icon: <Clock size={18}/> },
+                        { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
+                        { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
                       ].map(item => (
                         <button 
                           key={item.id}
                           onClick={() => { 
                             setActiveView(item.id as ActiveView); 
                             setIsSidebarOpen(false); 
-                            if (item.id === 'preventivos') {
+                            if (item.id === 'preventivos' || item.id === 'rendimiento' || item.id === 'adherencia') {
                               handleSyncData();
                             }
                           }} 
@@ -894,6 +906,14 @@ const App: React.FC = () => {
 
           {activeView === 'checklist' && (
             <CheckListModule checkLists={checkLists} />
+          )}
+
+          {activeView === 'rendimiento' && (
+            <FuelPerformanceModule fuelData={fuelPerformanceData} />
+          )}
+
+          {activeView === 'adherencia' && (
+            <PlateAdherenceModule data={plateAdherenceData} />
           )}
 
           {activeView === 'indicadoresDisponibilidad' && (

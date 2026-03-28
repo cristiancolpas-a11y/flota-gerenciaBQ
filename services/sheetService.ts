@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec'; 
@@ -820,6 +820,100 @@ export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
                 conductor: rawConductor.trim() === '' ? '#N/A' : rawConductor,
                 semana: cleanSheetValue(row[10]),
                 novedades: cleanSheetValue(row[12]),
+              };
+            });
+          resolve(records);
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+export const fetchFuelPerformanceFromSheet = async (): Promise<FuelPerformance[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vTaur0xTXFcug2tg_CW5gBBHnh9QtH8psRy0nLHcYSPqoPfs3Tt2d-X3nNWuvUnxRKjxvmJIFryPnTK/pub?gid=1098828384&single=true&output=csv${getCacheBuster()}`;
+    const response = await fetch(url);
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          
+          // Indices provided by user:
+          // 0: Mes1, 1: Semana, 2: CD, 3: ID CD, 4: PLACA, 5: Distancia (Km), 6: Exceso de Velocidad, 
+          // 7: En ralentí > 5 min., 8: Tiempo en ralentí, 9: Viajes, 10: Cantidad (Gal), 
+          // 11: CD1, 12: Gerencia, 13: CANTIDAD GALONES, 14: KM RECORRIDOS, 15: CONTRATISTA
+          const records = rows.slice(1)
+            .filter(row => row && row[4]) // Placa en indice 4
+            .map((row, i): FuelPerformance => {
+              const parseNum = (val: any) => {
+                const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
+                return parseFloat(clean) || 0;
+              };
+              
+              const mileage = parseNum(row[14]);
+              const gallons = parseNum(row[13]);
+              const kmpg = gallons > 0 ? mileage / gallons : 0;
+              const targetKmpg = 10; // Default target
+              
+              return {
+                id: `fuel-${i}`,
+                month: cleanSheetValue(row[0]),
+                week: cleanSheetValue(row[1]),
+                date: '', // Not explicitly in the new indices
+                plate: normalizePlate(cleanSheetValue(row[4])),
+                driver: '#N/A', // Not explicitly in the new indices
+                contractor: cleanSheetValue(row[15]),
+                cd: cleanSheetValue(row[2]),
+                mileage: mileage,
+                gallons: gallons,
+                kmpg: kmpg,
+                speeding: parseNum(row[6]),
+                idlingCount: parseNum(row[7]),
+                idlingTime: cleanSheetValue(row[8]),
+                trips: parseNum(row[9]),
+                targetKmpg: targetKmpg,
+                compliance: targetKmpg > 0 ? (kmpg / targetKmpg) * 100 : 0
+              };
+            });
+          resolve(records);
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+export const fetchPlateAdherenceFromSheet = async (): Promise<PlateAdherence[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vQZ7_kRXNquJ468yEWrpOxrytSu6BEeXN5K838BPD4seHFrHBfnFYGFWf1z6dh7-tubjf0nAF3kV0gd/pub?gid=2011902930&single=true&output=csv${getCacheBuster()}`;
+    const response = await fetch(url);
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          
+          // B: FECHA (1), C: PLACA (2), H: NOMBRE DEL CONDUCTOR (7), J: VALIDADOR (9)
+          const records = rows.slice(1)
+            .filter(row => row && row[2]) // Placa en indice 2
+            .map((row, i): PlateAdherence => {
+              const validador = cleanSheetValue(row[9]);
+              return {
+                id: `adh-${i}`,
+                date: parseFlexibleDate(row[1]),
+                plate: normalizePlate(cleanSheetValue(row[2])),
+                driverName: cleanSheetValue(row[7]),
+                isValid: validador === '1'
               };
             });
           resolve(records);
