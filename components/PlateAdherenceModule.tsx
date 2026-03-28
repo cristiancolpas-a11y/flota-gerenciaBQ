@@ -10,6 +10,8 @@ interface PlateAdherenceModuleProps {
 
 const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('TODOS');
+  const [selectedDay, setSelectedDay] = useState('TODOS');
 
   const filteredData = useMemo(() => {
     return data.filter(item => {
@@ -17,10 +19,26 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
       const isUnknown = !name || name === 'DESCONOCIDO' || name === '#N/A';
       if (isUnknown) return false;
 
-      return item.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             item.driverName.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = item.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           item.driverName.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      if (!matchesSearch) return false;
+
+      if (selectedMonth === 'TODOS' && selectedDay === 'TODOS') return true;
+
+      if (!item.date) return false;
+      const d = new Date(item.date);
+      if (isNaN(d.getTime())) return false;
+
+      const itemMonth = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
+      const itemDay = d.getDate().toString();
+
+      const matchesMonth = selectedMonth === 'TODOS' || itemMonth === selectedMonth;
+      const matchesDay = selectedDay === 'TODOS' || itemDay === selectedDay;
+
+      return matchesMonth && matchesDay;
     });
-  }, [data, searchTerm]);
+  }, [data, searchTerm, selectedMonth, selectedDay]);
 
   const stats = useMemo(() => {
     const total = filteredData.length;
@@ -37,20 +55,30 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
   ];
 
   const dailyData = useMemo(() => {
-    const days: Record<string, { total: number, adhered: number }> = {};
+    const days: Record<string, { total: number, adhered: number, rawDate: number }> = {};
     filteredData.forEach(item => {
       if (!item.date) return;
       const d = new Date(item.date);
       if (isNaN(d.getTime())) return;
-      const day = d.toISOString().split('T')[0];
-      if (!days[day]) days[day] = { total: 0, adhered: 0 };
-      days[day].total++;
-      if (item.isValid) days[day].adhered++;
+      
+      const dayNum = d.getDate().toString().padStart(2, '0');
+      const monthName = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
+      const label = `${dayNum}-${monthName}`;
+      
+      if (!days[label]) {
+        days[label] = { total: 0, adhered: 0, rawDate: d.getTime() };
+      }
+      days[label].total++;
+      if (item.isValid) days[label].adhered++;
     });
-    return Object.entries(days).map(([name, vals]) => ({
-      name,
-      compliance: parseFloat(((vals.adhered / vals.total) * 100).toFixed(1))
-    })).sort((a, b) => a.name.localeCompare(b.name)).slice(-15); // Last 15 days
+    return Object.entries(days)
+      .map(([name, vals]) => ({
+        name,
+        compliance: parseFloat(((vals.adhered / vals.total) * 100).toFixed(1)),
+        rawDate: vals.rawDate
+      }))
+      .sort((a, b) => a.rawDate - b.rawDate)
+      .slice(-15); // Last 15 days
   }, [filteredData]);
 
   const weeklyData = useMemo(() => {
@@ -76,7 +104,7 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
       if (!item.date) return;
       const d = new Date(item.date);
       if (isNaN(d.getTime())) return;
-      const month = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase();
+      const month = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
       if (!months[month]) months[month] = { total: 0, adhered: 0 };
       months[month].total++;
       if (item.isValid) months[month].adhered++;
@@ -122,17 +150,45 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
             </p>
           </div>
           
-          <div className="relative w-full md:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-            <input
-              type="text"
-              placeholder="Buscar por placa o conductor..."
-              className="w-full pl-12 pr-4 py-3 bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 rounded-2xl text-sm font-medium transition-all outline-none shadow-inner"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-              }}
-            />
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-grow md:flex-grow-0 md:w-64">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                type="text"
+                placeholder="Buscar placa o conductor..."
+                className="w-full pl-11 pr-4 py-2.5 bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 rounded-xl text-sm font-medium transition-all outline-none shadow-inner"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl shadow-inner">
+              <div className="flex items-center gap-1 px-2">
+                <ListFilter size={16} className="text-slate-400" />
+                <span className="text-[10px] font-black text-slate-400 uppercase">Filtros</span>
+              </div>
+              
+              <select
+                className="bg-white border-none text-xs font-bold py-1.5 px-3 rounded-lg outline-none shadow-sm text-slate-700"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+              >
+                {['TODOS', 'ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'].map(m => (
+                  <option key={m} value={m}>{m === 'TODOS' ? 'MES: TODOS' : m}</option>
+                ))}
+              </select>
+
+              <select
+                className="bg-white border-none text-xs font-bold py-1.5 px-3 rounded-lg outline-none shadow-sm text-slate-700"
+                value={selectedDay}
+                onChange={(e) => setSelectedDay(e.target.value)}
+              >
+                <option value="TODOS">DÍA: TODOS</option>
+                {Array.from({ length: 31 }, (_, i) => (i + 1).toString()).map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
