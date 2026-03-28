@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { CheckList } from '../types';
-import { Search, Filter, Calendar, Truck, User, ClipboardList, Clock, Building2, Hash, ChevronLeft, ChevronRight, TrendingUp, Award, AlertCircle } from 'lucide-react';
+import { Search, Filter, Calendar, Truck, User, ClipboardList, Clock, Building2, Hash, ChevronLeft, ChevronRight, TrendingUp, Award, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { normalizePlate } from '../utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -16,6 +16,7 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedContractor, setSelectedContractor] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: 'salida' | 'retorno' | 'fecha' | null, direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
@@ -57,11 +58,41 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
 
       return true;
     }).sort((a, b) => {
+      if (sortConfig.key) {
+        let valA: any = a[sortConfig.key as keyof CheckList];
+        let valB: any = b[sortConfig.key as keyof CheckList];
+
+        if (sortConfig.key === 'salida' || sortConfig.key === 'retorno') {
+          valA = parseInt(valA?.replace('%', '') || '0');
+          valB = parseInt(valB?.replace('%', '') || '0');
+        } else if (sortConfig.key === 'fecha') {
+          valA = a.fecha ? new Date(a.fecha).getTime() : 0;
+          valB = b.fecha ? new Date(b.fecha).getTime() : 0;
+        }
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      }
+      
       const dateA = a.fecha ? new Date(a.fecha).getTime() : 0;
       const dateB = b.fecha ? new Date(b.fecha).getTime() : 0;
       return dateB - dateA;
     });
-  }, [checkLists, searchTerm, startDate, endDate, selectedContractor]);
+  }, [checkLists, searchTerm, startDate, endDate, selectedContractor, sortConfig]);
+
+  const handleSort = (key: 'salida' | 'retorno' | 'fecha') => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+    setCurrentPage(1);
+  };
+
+  const SortIcon = ({ column }: { column: 'salida' | 'retorno' | 'fecha' }) => {
+    if (sortConfig.key !== column) return <ArrowUpDown size={14} className="opacity-50" />;
+    return sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
+  };
 
   const stats = useMemo(() => {
     const total = filteredData.length;
@@ -428,12 +459,33 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#005f73] border-t border-white/10">
-                    <th className="px-6 py-3 text-xs font-black text-white uppercase tracking-widest">FECHA</th>
+                    <th 
+                      className="px-6 py-3 text-xs font-black text-white uppercase tracking-widest cursor-pointer hover:bg-[#0a9396] transition-colors"
+                      onClick={() => handleSort('fecha')}
+                    >
+                      <div className="flex items-center gap-2">
+                        FECHA <SortIcon column="fecha" />
+                      </div>
+                    </th>
                     <th className="px-6 py-3 text-xs font-black text-white uppercase tracking-widest">PLACA</th>
                     <th className="px-6 py-3 text-xs font-black text-white uppercase tracking-widest">CONTRATISTA</th>
                     <th className="px-6 py-3 text-xs font-black text-white uppercase tracking-widest">CONDUCTOR</th>
-                    <th className="px-6 py-3 text-xs font-black text-white uppercase tracking-widest text-center">SALIDA</th>
-                    <th className="px-6 py-3 text-xs font-black text-white uppercase tracking-widest text-center">RETORNO</th>
+                    <th 
+                      className="px-6 py-3 text-xs font-black text-white uppercase tracking-widest text-center cursor-pointer hover:bg-[#0a9396] transition-colors"
+                      onClick={() => handleSort('salida')}
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        SALIDA <SortIcon column="salida" />
+                      </div>
+                    </th>
+                    <th 
+                      className="px-6 py-3 text-xs font-black text-white uppercase tracking-widest text-center cursor-pointer hover:bg-[#0a9396] transition-colors"
+                      onClick={() => handleSort('retorno')}
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        RETORNO <SortIcon column="retorno" />
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
