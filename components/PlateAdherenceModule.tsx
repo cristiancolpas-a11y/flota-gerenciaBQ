@@ -237,68 +237,74 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl">
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl overflow-hidden">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 mb-6">
               <Calendar size={18} className="text-blue-600" />
               Cumplimiento Diario (%)
             </h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 8, fontWeight: 700, fill: '#94a3b8'}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
-                  <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                  <ReferenceLine y={80} stroke="red" strokeDasharray="3 3" label={{ value: 'Meta 80%', position: 'right', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
-                  <Line type="monotone" dataKey="compliance" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6' }}>
-                    <LabelList dataKey="compliance" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#3b82f6' }} />
-                  </Line>
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="h-64 overflow-x-auto">
+              <div style={{ minWidth: dailyData.length > 10 ? `${dailyData.length * 50}px` : '100%', height: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dailyData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 8, fontWeight: 700, fill: '#94a3b8'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
+                    <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                    <ReferenceLine y={80} stroke="red" strokeDasharray="3 3" label={{ value: 'Meta 80%', position: 'right', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
+                    <Line type="monotone" dataKey="compliance" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6' }}>
+                      <LabelList dataKey="compliance" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#3b82f6' }} />
+                    </Line>
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl">
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl overflow-hidden">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 mb-6">
               <CalendarDays size={18} className="text-indigo-600" />
               Cumplimiento Semanal (%)
             </h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
-                  <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                  <ReferenceLine y={80} stroke="red" strokeDasharray="3 3" label={{ value: 'Meta 80%', position: 'right', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
-                  <Bar dataKey="compliance" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={40}>
-                    <LabelList dataKey="compliance" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#6366f1' }} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-64 overflow-x-auto">
+              <div style={{ minWidth: weeklyData.length > 8 ? `${weeklyData.length * 80}px` : '100%', height: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
+                    <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                    <ReferenceLine y={80} stroke="red" strokeDasharray="3 3" label={{ value: 'Meta 80%', position: 'right', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
+                    <Bar dataKey="compliance" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={40}>
+                      <LabelList dataKey="compliance" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#6366f1' }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl">
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl overflow-hidden">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 mb-6">
               <TrendingUp size={18} className="text-emerald-600" />
               Cumplimiento Mensual (%)
             </h3>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
-                  <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                  <ReferenceLine y={80} stroke="red" strokeDasharray="3 3" label={{ value: 'Meta 80%', position: 'right', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
-                  <Bar dataKey="compliance" fill="#10b981" radius={[4, 4, 0, 0]} barSize={40}>
-                    <LabelList dataKey="compliance" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#10b981' }} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-64 overflow-x-auto">
+              <div style={{ minWidth: monthlyData.length > 6 ? `${monthlyData.length * 100}px` : '100%', height: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
+                    <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                    <ReferenceLine y={80} stroke="red" strokeDasharray="3 3" label={{ value: 'Meta 80%', position: 'right', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
+                    <Bar dataKey="compliance" fill="#10b981" radius={[4, 4, 0, 0]} barSize={40}>
+                      <LabelList dataKey="compliance" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#10b981' }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
@@ -335,24 +341,26 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
         </div>
 
         <div className="grid grid-cols-1 gap-6 mb-6">
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl">
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl overflow-hidden">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 mb-6">
               <Users size={18} className="text-amber-600" />
               Top 10 Conductores (%)
             </h3>
-            <div className="h-[400px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={driverData} layout="vertical" margin={{ left: 40, right: 40 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                  <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
-                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} width={120} />
-                  <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                  <ReferenceLine x={80} stroke="red" strokeDasharray="3 3" label={{ value: 'Meta 80%', position: 'top', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
-                  <Bar dataKey="compliance" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={25}>
-                    <LabelList dataKey="compliance" position="right" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#f59e0b' }} formatter={(v: number) => `${v}%`} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-[400px] overflow-x-auto">
+              <div style={{ minWidth: '500px', height: '100%' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={driverData} layout="vertical" margin={{ left: 40, right: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
+                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} width={120} />
+                    <Tooltip contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                    <ReferenceLine x={80} stroke="red" strokeDasharray="3 3" label={{ value: 'Meta 80%', position: 'top', fill: 'red', fontSize: 10, fontWeight: 'bold' }} />
+                    <Bar dataKey="compliance" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={25}>
+                      <LabelList dataKey="compliance" position="right" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#f59e0b' }} formatter={(v: number) => `${v}%`} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>

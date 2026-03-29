@@ -856,7 +856,7 @@ export const fetchFuelPerformanceFromSheet = async (): Promise<FuelPerformance[]
                 return parseFloat(clean) || 0;
               };
               
-              const mileage = parseNum(row[14]);
+              const mileage = parseNum(row[5]);
               const gallons = parseNum(row[13]);
               const kmpg = gallons > 0 ? mileage / gallons : 0;
               const targetKmpg = 10; // Default target

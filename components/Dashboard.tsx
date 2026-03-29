@@ -126,57 +126,61 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* Vehicles by CD */}
-        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-lg">
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-lg overflow-hidden">
           <div className="flex items-center gap-3 mb-8">
             <Building2 className="text-indigo-600" size={20} />
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Vehículos por Centro (C.D.)</h3>
           </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={vehiclesByCd}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
-                <YAxis fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  cursor={{ fill: '#f8fafc' }}
-                />
-                <Bar dataKey="value" fill="#6366f1" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-[300px] overflow-x-auto">
+            <div style={{ minWidth: vehiclesByCd.length > 5 ? `${vehiclesByCd.length * 100}px` : '100%', height: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={vehiclesByCd}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
+                  <YAxis fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    cursor={{ fill: '#f8fafc' }}
+                  />
+                  <Bar dataKey="value" fill="#6366f1" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
         {/* Compliance Trends */}
-        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-lg">
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-lg overflow-hidden">
           <div className="flex items-center gap-3 mb-8">
             <Droplets className="text-cyan-500" size={20} />
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Tendencia de Cumplimiento</h3>
           </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyCompliance}>
-                <defs>
-                  <linearGradient id="colorLavados" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorLimpiezas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
-                <YAxis fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', paddingTop: '20px' }} />
-                <Area type="monotone" dataKey="lavados" stroke="#06b6d4" fillOpacity={1} fill="url(#colorLavados)" strokeWidth={3} />
-                <Area type="monotone" dataKey="limpiezas" stroke="#6366f1" fillOpacity={1} fill="url(#colorLimpiezas)" strokeWidth={3} />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-[300px] overflow-x-auto">
+            <div style={{ minWidth: '600px', height: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthlyCompliance}>
+                  <defs>
+                    <linearGradient id="colorLavados" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorLimpiezas" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
+                  <YAxis fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', paddingTop: '20px' }} />
+                  <Area type="monotone" dataKey="lavados" stroke="#06b6d4" fillOpacity={1} fill="url(#colorLavados)" strokeWidth={3} />
+                  <Area type="monotone" dataKey="limpiezas" stroke="#6366f1" fillOpacity={1} fill="url(#colorLimpiezas)" strokeWidth={3} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
