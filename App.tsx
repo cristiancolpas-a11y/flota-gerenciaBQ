@@ -238,7 +238,7 @@ const App: React.FC = () => {
       setOperationalIndicators(oi);
       setCheckLists(ch);
       setFuelPerformanceData(fp);
-      setPlateAdherenceData(pa);
+      setPlateAdherenceData(pa.filter(item => filterByYear(item.date)));
     } catch (err) {
       console.error("Critical Sync Error:", err);
     } finally {

@@ -13,24 +13,29 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
   const [selectedMonth, setSelectedMonth] = useState('TODOS');
   const [selectedDay, setSelectedDay] = useState('TODOS');
 
-  const filteredData = useMemo(() => {
-    return data.filter(item => {
-      const name = item.driverName?.trim().toUpperCase();
-      const isUnknown = !name || name === 'DESCONOCIDO' || name === '#N/A';
-      if (isUnknown) return false;
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedMonth('TODOS');
+    setSelectedDay('TODOS');
+  };
 
+  const filteredData = useMemo(() => {
+    const monthOrder = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+    
+    return data.filter(item => {
       const matchesSearch = item.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           item.driverName.toLowerCase().includes(searchTerm.toLowerCase());
+                           (item.driverName || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       if (!matchesSearch) return false;
 
       if (selectedMonth === 'TODOS' && selectedDay === 'TODOS') return true;
 
       if (!item.date) return false;
-      const d = new Date(item.date);
+      // Use UTC to avoid timezone shifts
+      const d = new Date(item.date + 'T12:00:00');
       if (isNaN(d.getTime())) return false;
 
-      const itemMonth = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
+      const itemMonth = monthOrder[d.getMonth()];
       const itemDay = d.getDate().toString();
 
       const matchesMonth = selectedMonth === 'TODOS' || itemMonth === selectedMonth;
@@ -58,11 +63,12 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
     const days: Record<string, { total: number, adhered: number, rawDate: number }> = {};
     filteredData.forEach(item => {
       if (!item.date) return;
-      const d = new Date(item.date);
+      const d = new Date(item.date + 'T12:00:00');
       if (isNaN(d.getTime())) return;
       
       const dayNum = d.getDate().toString().padStart(2, '0');
-      const monthName = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
+      const monthOrder = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+      const monthName = monthOrder[d.getMonth()];
       const label = `${dayNum}-${monthName}`;
       
       if (!days[label]) {
@@ -85,7 +91,7 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
     const weeks: Record<string, { total: number, adhered: number }> = {};
     filteredData.forEach(item => {
       if (!item.date) return;
-      const d = new Date(item.date);
+      const d = new Date(item.date + 'T12:00:00');
       if (isNaN(d.getTime())) return;
       const week = `Sem ${getWeekNumber(d)}`;
       if (!weeks[week]) weeks[week] = { total: 0, adhered: 0 };
@@ -102,9 +108,10 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
     const months: Record<string, { total: number, adhered: number }> = {};
     filteredData.forEach(item => {
       if (!item.date) return;
-      const d = new Date(item.date);
+      const d = new Date(item.date + 'T12:00:00');
       if (isNaN(d.getTime())) return;
-      const month = d.toLocaleString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
+      const monthOrder = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+      const month = monthOrder[d.getMonth()];
       if (!months[month]) months[month] = { total: 0, adhered: 0 };
       months[month].total++;
       if (item.isValid) months[month].adhered++;
@@ -188,6 +195,15 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
+
+              {(searchTerm || selectedMonth !== 'TODOS' || selectedDay !== 'TODOS') && (
+                <button
+                  onClick={clearFilters}
+                  className="bg-rose-500 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-lg hover:bg-rose-600 transition-colors shadow-sm"
+                >
+                  Limpiar
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -245,7 +261,15 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
             <div className="h-64 overflow-x-auto">
               <div style={{ minWidth: dailyData.length > 10 ? `${dailyData.length * 50}px` : '100%', height: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailyData}>
+                  <LineChart 
+                    data={dailyData}
+                    onClick={(data) => {
+                      if (data && data.activeLabel) {
+                        const day = data.activeLabel.split('-')[0];
+                        setSelectedDay(parseInt(day).toString());
+                      }
+                    }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 8, fontWeight: 700, fill: '#94a3b8'}} />
                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
@@ -293,7 +317,14 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
             <div className="h-64 overflow-x-auto">
               <div style={{ minWidth: monthlyData.length > 6 ? `${monthlyData.length * 100}px` : '100%', height: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyData}>
+                  <BarChart 
+                    data={monthlyData}
+                    onClick={(data) => {
+                      if (data && data.activePayload && data.activePayload.length > 0) {
+                        setSelectedMonth(data.activePayload[0].payload.name);
+                      }
+                    }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} />
                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
@@ -349,7 +380,16 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
             <div className="h-[400px] overflow-x-auto">
               <div style={{ minWidth: '500px', height: '100%' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={driverData} layout="vertical" margin={{ left: 40, right: 40 }}>
+                  <BarChart 
+                    data={driverData} 
+                    layout="vertical" 
+                    margin={{ left: 40, right: 40 }}
+                    onClick={(data) => {
+                      if (data && data.activePayload && data.activePayload.length > 0) {
+                        setSearchTerm(data.activePayload[0].payload.name);
+                      }
+                    }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                     <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} domain={[0, 100]} />
                     <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}} width={120} />
