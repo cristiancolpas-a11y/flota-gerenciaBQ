@@ -36,6 +36,13 @@ interface CorrectivesModuleProps {
 
 const CorrectivesModule: React.FC<CorrectivesModuleProps> = ({ data, onRefresh }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
   const [selectedCD, setSelectedCD] = useState('TODOS');
   const [selectedContractor, setSelectedContractor] = useState('TODOS');
   const [selectedCorrective, setSelectedCorrective] = useState<Corrective | null>(null);
@@ -55,10 +62,11 @@ const CorrectivesModule: React.FC<CorrectivesModuleProps> = ({ data, onRefresh }
         item.workshop.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCD = selectedCD === 'TODOS' || item.cd === selectedCD;
       const matchesContractor = selectedContractor === 'TODOS' || item.contractor === selectedContractor;
+      const matchesDate = !selectedDate || item.date === selectedDate;
 
-      return matchesSearch && matchesCD && matchesContractor;
+      return matchesSearch && matchesCD && matchesContractor && matchesDate;
     });
-  }, [data, searchTerm, selectedCD, selectedContractor]);
+  }, [data, searchTerm, selectedCD, selectedContractor, selectedDate]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -130,6 +138,16 @@ const CorrectivesModule: React.FC<CorrectivesModuleProps> = ({ data, onRefresh }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full md:w-64 pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all font-medium"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+            <Calendar size={16} className="text-slate-400" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 cursor-pointer uppercase tracking-wider"
             />
           </div>
 
