@@ -2,10 +2,10 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec';
-const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec';
-const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbxj55Zpw5KA4MnmVyPZRHgVe8HrTg5BlJCyBEkvh8NtzGMKmt6YECNLn-L204qwfR1pqg/exec';
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxRwydTWV8PQl3bLQlbGgReO_be2s_6ahdkfFDLUIYWyUDTTuJYhfkAKl9SSO1F0dtw/exec'; 
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbxRwydTWV8PQl3bLQlbGgReO_be2s_6ahdkfFDLUIYWyUDTTuJYhfkAKl9SSO1F0dtw/exec';
+const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbxRwydTWV8PQl3bLQlbGgReO_be2s_6ahdkfFDLUIYWyUDTTuJYhfkAKl9SSO1F0dtw/exec';
+const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbxRwydTWV8PQl3bLQlbGgReO_be2s_6ahdkfFDLUIYWyUDTTuJYhfkAKl9SSO1F0dtw/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -1001,7 +1001,18 @@ export const submitCalibrationToSheet = async (calibrationDate: any): Promise<vo
 export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data }); };
 export const submitWashToSheet = async (washData: any): Promise<void> => { await sendToGAS({ method: 'POST_WASH', data: washData }); };
 export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { await sendToGAS({ method: 'POST_CLEANING', data: cleaningData }); };
-export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: visitData }); };
+export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<{success: boolean, message?: string}> => { 
+  try {
+    const result = await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: visitData }); 
+    return {
+      success: !!result,
+      message: typeof result === 'string' ? result : undefined
+    };
+  } catch (error) {
+    console.error("Error al actualizar visita:", error);
+    return { success: false, message: "Error de conexión" };
+  }
+};
 export const submitWorkshopRecordToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_RECORD', data }, GOOGLE_SCRIPT_WORKSHOP_URL); };
 export const submitPreventiveUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_PREVENTIVE_UPDATE', data }); };
 export const submitCorrectiveUpdateToSheet = async (data: any): Promise<{success: boolean, message?: string}> => { 

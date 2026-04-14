@@ -176,17 +176,47 @@ function doPost(e) {
         var s = getSheetByGid(ss, "239875479") || getS(ss, "VISITAS A TALLER");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
+        
+        var searchId = (d.id || "").toString().trim();
+        var searchPlate = (d.plate || "").toString().toUpperCase().trim();
+        var searchProgDate = (d.progDate || "").toString().trim();
+
         for (var i = 1; i < rows.length; i++) {
-          if (rows[i][7] && rows[i][7].toString().trim() === (d.id || "").toString().trim()) {
+          var rowHash = (rows[i][7] || "").toString().trim();
+          var rowPlate = (rows[i][2] || "").toString().toUpperCase().trim();
+          var rowDateRaw = rows[i][1];
+          var rowDateStr = "";
+          
+          if (rowDateRaw instanceof Date) {
+            rowDateStr = Utilities.formatDate(rowDateRaw, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+          } else if (rowDateRaw) {
+            rowDateStr = rowDateRaw.toString();
+          }
+
+          // Intento 1: Por Hash ID (si no es un ID generado vprog-)
+          if (searchId && !searchId.startsWith("vprog-") && rowHash === searchId) {
+            foundIdx = i + 1;
+            break;
+          }
+          
+          // Intento 2: Por Placa y Fecha Programada (Fallback)
+          if (rowPlate === searchPlate && rowDateStr.indexOf(searchProgDate) !== -1) {
             foundIdx = i + 1;
             break;
           }
         }
+
         if (foundIdx !== -1) {
           s.getRange(foundIdx, 4).setValue(d.workshop);
           s.getRange(foundIdx, 5).setValue(d.visitDate);
           s.getRange(foundIdx, 6).setValue(sImg(d.evidence, "VISITA_" + d.plate));
           s.getRange(foundIdx, 7).setValue(d.status);
+          
+          lock.releaseLock();
+          return output("success", "Visita actualizada en fila " + foundIdx);
+        } else {
+          lock.releaseLock();
+          return output("error", "No se encontró el registro para " + searchPlate + " en " + searchProgDate);
         }
       }
       else if (m === 'POST_PREVENTIVE_UPDATE') {

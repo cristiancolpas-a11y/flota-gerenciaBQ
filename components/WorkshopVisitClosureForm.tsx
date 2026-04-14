@@ -96,6 +96,7 @@ const WorkshopVisitClosureForm: React.FC<WorkshopVisitClosureFormProps> = ({ vis
         plate: visit.plate,
         workshop: formData.workshop === 'OTROS' ? formData.otherWorkshop : formData.workshop,
         visitDate: formData.visitDate,
+        progDate: visit.date, // Fecha original de programación para búsqueda fallback
         evidence: mosaic,
         status: 'COMPLETADOS'
       });

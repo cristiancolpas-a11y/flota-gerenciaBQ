@@ -2233,7 +2233,14 @@ const App: React.FC = () => {
           }} 
         />
       )}
-      {closingWorkshopVisit && <WorkshopVisitClosureForm visit={closingWorkshopVisit} onClose={() => setClosingWorkshopVisit(null)} onSubmit={async (d) => { await submitWorkshopVisitUpdateToSheet(d); handleSyncData(); }} />}
+      {closingWorkshopVisit && <WorkshopVisitClosureForm visit={closingWorkshopVisit} onClose={() => setClosingWorkshopVisit(null)} onSubmit={async (d) => { 
+        const res = await submitWorkshopVisitUpdateToSheet(d); 
+        if (res.success) {
+          handleSyncData(); 
+        } else {
+          alert("Error al guardar evidencias: " + (res.message || "No se encontró el registro en la hoja"));
+        }
+      }} />}
     </div>
   );
 };
