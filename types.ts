@@ -9,6 +9,23 @@ export interface VehicleDocument {
   daysPending?: number;
 }
 
+export interface Corrective {
+  id: string;
+  date: string;
+  contractor: string;
+  cd: string;
+  plate: string;
+  system: string;
+  novelty: string;
+  workshop: string;
+  status: string;
+  exitDate: string;
+  evidence1?: string;
+  evidence2?: string;
+  evidence3?: string;
+  evidence4?: string;
+}
+
 export interface Calibration {
   id: string;
   plate: string;

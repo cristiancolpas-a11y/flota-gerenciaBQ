@@ -224,6 +224,61 @@ function doPost(e) {
           s.getRange(foundIdx, 12).setValue(img); // EVIDENCIA (Columna L)
         }
       }
+      else if (m === 'POST_CORRECTIVE_UPDATE') {
+        var ssProg = SpreadsheetApp.openById("1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0");
+        var s = ssProg.getSheetByName("PROGRAMACIÓN") || ssProg.getSheetByName("PROGRAMCION") || ssProg.getSheets()[0];
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var plateSearch = (d.plate || "").toString().toUpperCase().trim();
+        var dateSearch = (d.date || "").toString().trim(); // YYYY-MM-DD
+
+        for (var i = 1; i < rows.length; i++) {
+          var rowPlate = (rows[i][3] || "").toString().toUpperCase().trim();
+          if (rowPlate !== plateSearch) continue;
+
+          var rowDateRaw = rows[i][0];
+          var rowDateStr = "";
+          
+          if (rowDateRaw instanceof Date) {
+            rowDateStr = Utilities.formatDate(rowDateRaw, ssProg.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+          } else if (rowDateRaw) {
+            rowDateStr = rowDateRaw.toString();
+            // Normalizar formatos comunes DD/MM/YYYY a YYYY-MM-DD
+            if (rowDateStr.indexOf('/') !== -1) {
+              var p = rowDateStr.split('/');
+              if (p.length === 3) {
+                if (p[2].length === 4) rowDateStr = p[2] + "-" + ("0" + p[1]).slice(-2) + "-" + ("0" + p[0]).slice(-2);
+                else if (p[0].length === 4) rowDateStr = p[0] + "-" + ("0" + p[1]).slice(-2) + "-" + ("0" + p[2]).slice(-2);
+              }
+            }
+          }
+          
+          if (rowDateStr.indexOf(dateSearch) !== -1) {
+            foundIdx = i + 1;
+            break;
+          }
+        }
+
+        if (foundIdx !== -1) {
+          var img1 = sImg(d.evidence1, "CORR_EV1_" + plateSearch);
+          var img2 = sImg(d.evidence2, "CORR_EV2_" + plateSearch);
+          var img3 = sImg(d.evidence3, "CORR_EV3_" + plateSearch);
+          
+          if (img1) s.getRange(foundIdx, 10).setValue(img1); // EVIDDENCIA 1 (Indice 9 -> Columna 10)
+          if (img2) s.getRange(foundIdx, 11).setValue(img2); // EVIDENCIA 2 (Indice 10 -> Columna 11)
+          if (img3) s.getRange(foundIdx, 12).setValue(img3); // ENVIDENCIA (Indice 11 -> Columna 12)
+          if (d.evidence4) {
+            var img4 = sImg(d.evidence4, "CORR_EV4_" + plateSearch);
+            if (img4) s.getRange(foundIdx, 13).setValue(img4); // EVIDENCIA 4 (Indice 12 -> Columna 13)
+          }
+          
+          lock.releaseLock();
+          return output("success", "Evidencias registradas en fila " + foundIdx);
+        } else {
+          lock.releaseLock();
+          return output("error", "No se encontró la programación para " + plateSearch + " en " + dateSearch);
+        }
+      }
       else if (m === 'POST_MILEAGE') {
         var s = getSheetByGid(ss, "1929496440") || getS(ss, "KILOMETRAJE");
         s.appendRow([d.cd, d.contractor, d.week, d.date, d.plate, d.mileage]);

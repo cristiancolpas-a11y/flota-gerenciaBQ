@@ -1,10 +1,11 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec'; 
 const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec';
 const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbw4R0SWwVj9eZSj7J9x7YsQ-GQWnpCjX5LAEBDKvC-f2mMCGa1g9AxzJT0J9scseDti/exec';
+const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbxj55Zpw5KA4MnmVyPZRHgVe8HrTg5BlJCyBEkvh8NtzGMKmt6YECNLn-L204qwfR1pqg/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -924,6 +925,51 @@ export const fetchPlateAdherenceFromSheet = async (): Promise<PlateAdherence[]> 
   } catch (e) { return []; }
 };
 
+export const fetchCorrectivesFromSheet = async (): Promise<Corrective[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('PROGRAMACIÓN')}${getCacheBuster()}`;
+    const response = await fetch(url);
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[];
+          if (!rows || rows.length === 0) { resolve([]); return; }
+          
+          const records = rows
+            .filter(row => row && (row['PLACA'] || row[3])) 
+            .map((row, i): Corrective => {
+              const getValue = (key: string, index: number) => row[key] || row[index] || '';
+              
+              return {
+                id: `corr-${i}`,
+                date: parseFlexibleDate(getValue('FECHA DE PROGRAMACION', 0)),
+                contractor: cleanSheetValue(getValue('CONTRATISTA', 1)),
+                cd: cleanSheetValue(getValue('CENTRO DE DISTRIBUCION', 2)),
+                plate: normalizePlate(cleanSheetValue(getValue('PLACA', 3))),
+                system: cleanSheetValue(getValue('SISTEMA', 4)),
+                novelty: cleanSheetValue(getValue('NOVEDADES CORRECTIVAS', 5)),
+                workshop: cleanSheetValue(getValue('TALLER PROPUESTO', 6)),
+                status: cleanSheetValue(getValue('ESTADO', 7)),
+                exitDate: parseFlexibleDate(getValue('FECHA DE SALIDA', 8)),
+                evidence1: cleanSheetValue(getValue('EVIDDENCIA 1', 9)),
+                evidence2: cleanSheetValue(getValue('EVIDENCIA 2', 10)),
+                evidence3: cleanSheetValue(getValue('ENVIDENCIA', 11)),
+                evidence4: cleanSheetValue(getValue('EVIDENCIA 4', 12))
+              };
+            });
+          resolve(records);
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
 const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL) => {
   console.log(`Enviando a GAS (${payload.method}):`, payload);
   try {
@@ -958,6 +1004,19 @@ export const submitCleaningToSheet = async (cleaningData: any): Promise<void> =>
 export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: visitData }); };
 export const submitWorkshopRecordToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_RECORD', data }, GOOGLE_SCRIPT_WORKSHOP_URL); };
 export const submitPreventiveUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_PREVENTIVE_UPDATE', data }); };
+export const submitCorrectiveUpdateToSheet = async (data: any): Promise<{success: boolean, message?: string}> => { 
+  try {
+    const result = await sendToGAS({ method: 'POST_CORRECTIVE_UPDATE', data }, GOOGLE_SCRIPT_DAILY_PROGRAM_URL); 
+    // sendToGAS actualmente devuelve boolean, vamos a ajustarlo
+    return {
+      success: !!result,
+      message: typeof result === 'string' ? result : undefined
+    };
+  } catch (error) {
+    console.error("Error al enviar a GAS:", error);
+    return { success: false, message: "Error de conexión" };
+  }
+};
 export const submitFineToSheet = async (data: any): Promise<boolean> => {
   const method = data.updateMode ? 'POST_FINE_UPDATE' : 'POST_FINE';
   return await sendToGAS({ method, data }, GOOGLE_SCRIPT_FINES_URL);
