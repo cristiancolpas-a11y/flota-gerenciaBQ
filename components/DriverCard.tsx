@@ -41,15 +41,15 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
   }, [directPhotoUrl]);
 
   return (
-    <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden transition-all hover:shadow-indigo-500/10 mb-8 max-w-[1400px] mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
-      <div className="flex flex-col lg:flex-row min-h-[400px]">
+    <div className="bg-white rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden transition-all hover:shadow-indigo-500/10 mb-6 md:mb-8 max-w-[1400px] mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
+      <div className="flex flex-col lg:flex-row min-h-[auto] lg:min-h-[400px]">
         
         {/* COLUMNA 1: PERFIL */}
-        <div className="lg:w-[320px] bg-[#0f172a] p-8 flex flex-col items-center shrink-0 relative overflow-hidden">
+        <div className="lg:w-[320px] bg-[#0f172a] p-6 md:p-8 flex flex-row lg:flex-col items-center lg:justify-center shrink-0 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
           
           <div className="relative z-10">
-            <div className="w-40 h-40 rounded-[2.5rem] border-[8px] border-white/10 shadow-2xl overflow-hidden bg-slate-800 flex items-center justify-center relative group">
+            <div className="w-24 h-24 md:w-40 md:h-40 rounded-2xl md:rounded-[2.5rem] border-4 md:border-[8px] border-white/10 shadow-2xl overflow-hidden bg-slate-800 flex items-center justify-center relative group">
               {directPhotoUrl && imageState !== 'error' ? (
                 <img 
                   src={directPhotoUrl} 
@@ -58,44 +58,44 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
                   onError={() => setImageState('error')}
                 />
               ) : (
-                <UserCircle size={80} className="text-slate-600" />
+                <UserCircle size={48} className="text-slate-600 md:size-20" />
               )}
-              <div className="absolute bottom-3 right-3 bg-emerald-500 p-1.5 rounded-lg shadow-lg border-2 border-white">
-                 <CheckCircle2 size={12} className="text-white" />
+              <div className="absolute bottom-1 right-1 md:bottom-3 md:right-3 bg-emerald-500 p-1 md:p-1.5 rounded-md md:rounded-lg shadow-lg border border-white">
+                 <CheckCircle2 size={10} className="text-white md:size-3" />
               </div>
             </div>
           </div>
           
-          <div className="text-center mt-6 w-full z-10">
-            <h2 className="text-xl font-black text-white uppercase tracking-tighter leading-tight mb-3 drop-shadow-md">
+          <div className="text-left lg:text-center ml-6 lg:ml-0 mt-0 lg:mt-6 flex-grow z-10">
+            <h2 className="text-lg md:text-xl font-black text-white uppercase tracking-tighter leading-tight mb-2 md:mb-3 drop-shadow-md">
               {driver.name}
             </h2>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600/20 text-indigo-400 rounded-xl text-[9px] font-black tracking-widest uppercase border border-indigo-500/30 backdrop-blur-sm">
-              <IdCard size={14} /> CC {driver.identification}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-indigo-600/20 text-indigo-400 rounded-lg md:rounded-xl text-[8px] md:text-[9px] font-black tracking-widest uppercase border border-indigo-500/30 backdrop-blur-sm">
+              <IdCard size={12} className="md:size-3.5" /> CC {driver.identification}
             </div>
           </div>
         </div>
 
         {/* COLUMNA 2: INFORMACIÓN */}
-        <div className="flex-grow p-8 bg-white flex flex-col">
-           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-slate-100 pb-6">
+        <div className="flex-grow p-5 md:p-8 bg-white flex flex-col">
+           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 mb-6 md:mb-8 border-b border-slate-100 pb-4 md:pb-6">
               <div>
-                <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] flex items-center gap-2 mb-1">
-                   <History size={14} className="text-indigo-600" /> Expediente Laboral
+                <h3 className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] md:tracking-[0.4em] flex items-center gap-2 mb-1">
+                   <History size={12} className="text-indigo-600 md:size-3.5" /> Expediente Laboral
                 </h3>
-                <p className="text-[10px] font-bold text-slate-500">Estado: {driver.status || 'Activo en Flota'}</p>
+                <p className="text-[9px] md:text-[10px] font-bold text-slate-500">Estado: {driver.status || 'Activo en Flota'}</p>
               </div>
               <div className="flex items-center gap-2">
-                 <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-xl text-[8px] font-black uppercase tracking-widest border border-emerald-200 flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                 <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[7px] md:text-[8px] font-black uppercase tracking-widest border border-emerald-200 flex items-center gap-1.5">
+                    <div className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                     {driver.status || 'CONTRATO VIGENTE'}
                  </span>
               </div>
            </div>
 
-           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-10">
+           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6 mb-8 md:mb-10">
               {[
-                { label: 'Centro Distribución', value: driver.cd || 'ARENOSA', icon: <Building2 className="text-indigo-500" /> },
+                { label: 'Centro Distribución', value: driver.cd || 'ARENOSA', icon: <Building2 className="text-indigo-500" size={16} /> },
                 { label: 'Cargo', value: driver.position || 'CONDUCTOR', icon: <Briefcase size={16} className="text-indigo-500" /> },
                 { label: 'Fecha Ingreso', value: formatDate(driver.hireDate), icon: <Calendar size={16} className="text-indigo-500" /> },
                 { label: 'Identificación', value: driver.identification, icon: <IdCard size={16} className="text-indigo-500" /> },

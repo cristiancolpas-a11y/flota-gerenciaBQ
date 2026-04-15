@@ -696,58 +696,58 @@ const App: React.FC = () => {
           </div>
 
           {/* Central Logo Area */}
-          <div className="relative z-10 flex flex-col items-center text-center mb-16">
-            <div className="w-48 h-48 bg-white rounded-[3rem] shadow-2xl flex items-center justify-center mb-10 relative group">
-              <div className="absolute inset-0 bg-indigo-500/5 rounded-[3rem] scale-110 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+          <div className="relative z-10 flex flex-col items-center text-center mb-8 md:mb-16">
+            <div className="w-32 h-32 md:w-48 md:h-48 bg-white rounded-[2rem] md:rounded-[3rem] shadow-2xl flex items-center justify-center mb-6 md:mb-10 relative group">
+              <div className="absolute inset-0 bg-indigo-500/5 rounded-[2rem] md:rounded-[3rem] scale-110 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
               <div className="relative">
-                <ClipboardList size={80} className="text-slate-800" />
-                <div className="absolute -bottom-2 -right-2 bg-amber-400 p-3 rounded-2xl shadow-lg border-4 border-white">
-                  <Settings size={28} className="text-slate-900 animate-spin-slow" />
+                <ClipboardList size={48} className="md:size-20 text-slate-800" />
+                <div className="absolute -bottom-1 -right-1 md:-bottom-2 md:-right-2 bg-amber-400 p-2 md:p-3 rounded-xl md:rounded-2xl shadow-lg border-2 md:border-4 border-white">
+                  <Settings size={18} className="md:size-7 text-slate-900 animate-spin-slow" />
                 </div>
               </div>
             </div>
-            <h1 className="text-5xl font-black text-white uppercase tracking-[0.2em] mb-4">FLOTA BARRANQUILLA</h1>
-            <p className="text-indigo-400 font-black text-sm uppercase tracking-[0.5em] opacity-80">GESTIÓN Y CONTROL DE ACTIVOS</p>
+            <h1 className="text-3xl md:text-5xl font-black text-white uppercase tracking-[0.2em] mb-2 md:mb-4">FLOTA BARRANQUILLA</h1>
+            <p className="text-indigo-400 font-black text-[10px] md:text-sm uppercase tracking-[0.3em] md:tracking-[0.5em] opacity-80">GESTIÓN Y CONTROL DE ACTIVOS</p>
           </div>
 
           {/* Menu Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 w-full max-w-6xl relative z-10 px-4 md:px-0">
             <button 
               onClick={() => { setAppMode('camiones'); setActiveView('vehiculos'); }}
-              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-10 rounded-[3rem] transition-all duration-500 flex flex-col items-center text-center gap-6 shadow-2xl hover:-translate-y-2"
+              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-4 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
-              <div className="w-20 h-20 bg-indigo-600/20 rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30">
-                <Truck size={36} />
+              <div className="w-14 h-14 md:w-20 md:h-20 bg-indigo-600/20 rounded-2xl md:rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30 shrink-0">
+                <Truck size={24} className="md:size-9" />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">CAMIONES</h3>
-                <p className="text-indigo-400/60 text-[10px] font-bold uppercase tracking-widest">Control de flota pesada</p>
+                <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">CAMIONES</h3>
+                <p className="text-indigo-400/60 text-[8px] md:text-[10px] font-bold uppercase tracking-widest">Control de flota pesada</p>
               </div>
             </button>
 
             <button 
               onClick={() => setAppMode('montacargas')}
-              className="group bg-white/5 hover:bg-emerald-600/20 border border-white/10 hover:border-emerald-500/50 p-10 rounded-[3rem] transition-all duration-500 flex flex-col items-center text-center gap-6 shadow-2xl hover:-translate-y-2"
+              className="group bg-white/5 hover:bg-emerald-600/20 border border-white/10 hover:border-emerald-500/50 p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-4 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
-              <div className="w-20 h-20 bg-emerald-600/20 rounded-[1.5rem] flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-600/10 group-hover:scale-110 transition-transform border border-emerald-500/30">
-                <Truck size={36} className="rotate-12" />
+              <div className="w-14 h-14 md:w-20 md:h-20 bg-emerald-600/20 rounded-2xl md:rounded-[1.5rem] flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-600/10 group-hover:scale-110 transition-transform border border-emerald-500/30 shrink-0">
+                <Truck size={24} className="md:size-9 rotate-12" />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">MONTACARGAS</h3>
-                <p className="text-emerald-400/60 text-[10px] font-bold uppercase tracking-widest">Gestión de equipos logísticos</p>
+                <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">MONTACARGAS</h3>
+                <p className="text-emerald-400/60 text-[8px] md:text-[10px] font-bold uppercase tracking-widest">Gestión de equipos logísticos</p>
               </div>
             </button>
 
             <button 
               onClick={() => { setAppMode('camiones'); setActiveView('enlaces'); }}
-              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-10 rounded-[3rem] transition-all duration-500 flex flex-col items-center text-center gap-6 shadow-2xl hover:-translate-y-2"
+              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-4 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
-              <div className="w-20 h-20 bg-indigo-600/20 rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30">
-                <LinkIcon size={36} />
+              <div className="w-14 h-14 md:w-20 md:h-20 bg-indigo-600/20 rounded-2xl md:rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30 shrink-0">
+                <LinkIcon size={24} className="md:size-9" />
               </div>
               <div>
-                <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">ENLACES FLOTA</h3>
-                <p className="text-indigo-400/60 text-[10px] font-bold uppercase tracking-widest">Acceso rápido a plataformas externas</p>
+                <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">ENLACES FLOTA</h3>
+                <p className="text-indigo-400/60 text-[8px] md:text-[10px] font-bold uppercase tracking-widest">Acceso rápido a plataformas externas</p>
               </div>
             </button>
           </div>
@@ -774,7 +774,14 @@ const App: React.FC = () => {
         <>
           {/* SIDEBAR PREMIUM */}
           {activeView !== 'enlaces' && (
-            <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#0f172a] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform xl:relative xl:translate-x-0`}>
+            <>
+              {isSidebarOpen && (
+                <div 
+                  className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 xl:hidden animate-in fade-in duration-300" 
+                  onClick={() => setIsSidebarOpen(false)}
+                />
+              )}
+              <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#0f172a] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform xl:relative xl:translate-x-0`}>
             <div className="p-8 flex flex-col h-full space-y-2">
               <div className="mb-10 flex items-center justify-between">
                  <div className="flex items-center gap-3">
@@ -812,6 +819,7 @@ const App: React.FC = () => {
                           onClick={() => { 
                             setActiveView(item.id as ActiveView); 
                             setIsSidebarOpen(false); 
+                            setExpandedSection(null);
                           }} 
                           className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                         >
@@ -851,6 +859,7 @@ const App: React.FC = () => {
                           onClick={() => { 
                             setActiveView(item.id as ActiveView); 
                             setIsSidebarOpen(false); 
+                            setExpandedSection(null);
                             if (item.id === 'preventivos' || item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos') {
                               handleSyncData();
                             }
@@ -884,6 +893,7 @@ const App: React.FC = () => {
                           onClick={() => { 
                             setActiveView(item.id as ActiveView); 
                             setIsSidebarOpen(false); 
+                            setExpandedSection(null);
                           }} 
                           className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                         >
@@ -900,12 +910,13 @@ const App: React.FC = () => {
           </button>
         </div>
       </aside>
+            </>
           )}
 
-      <main className="flex-grow flex flex-col h-screen overflow-hidden">
+      <main className="flex-grow flex flex-col h-screen overflow-hidden pb-16 xl:pb-0">
         {/* HEADER */}
-        <header className="bg-white border-b p-4 flex justify-between items-center shrink-0 shadow-sm z-10">
-          <div className="flex items-center gap-4 flex-grow">
+        <header className="bg-white border-b p-3 md:p-4 flex justify-between items-center shrink-0 shadow-sm z-10">
+          <div className="flex items-center gap-2 md:gap-4 flex-grow">
             <button onClick={() => setIsSidebarOpen(true)} className="xl:hidden p-2 text-slate-600"><Menu/></button>
             <button 
               onClick={() => setAppMode('flota_menu')}
@@ -914,19 +925,19 @@ const App: React.FC = () => {
               <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
               <span className="text-[9px] font-black uppercase tracking-widest">Menú Flota</span>
             </button>
-            <div className="bg-slate-50 border rounded-xl px-4 py-2 flex items-center gap-3 w-full max-w-md shadow-inner">
-              <Search size={16} className="text-slate-400" />
+            <div className="bg-slate-50 border rounded-xl px-3 md:px-4 py-1.5 md:py-2 flex items-center gap-2 md:gap-3 w-full max-w-md shadow-inner">
+              <Search size={14} className="text-slate-400 md:size-4" />
               <input 
                 type="text" 
-                placeholder="BUSCAR PLACA, NOMBRE O CC..." 
-                className="bg-transparent font-black uppercase text-[10px] outline-none flex-grow" 
+                placeholder="BUSCAR..." 
+                className="bg-transparent font-black uppercase text-[9px] md:text-[10px] outline-none flex-grow" 
                 value={searchTerm} 
                 onChange={e => setSearchTerm(e.target.value.toUpperCase())} 
               />
             </div>
           </div>
-          <div className="ml-4 flex items-center gap-3">
-             <div className="hidden md:flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl">
+          <div className="ml-2 md:ml-4 flex items-center gap-2 md:gap-3">
+             <div className="hidden lg:flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl">
                <Building2 size={12} className="text-slate-400" />
                <select className="bg-transparent font-black text-[9px] uppercase outline-none" value={filterCd} onChange={e => setFilterCd(e.target.value)}>
                   <option value="all">TODOS LOS CD</option>
@@ -941,11 +952,31 @@ const App: React.FC = () => {
                 else if(activeView === 'limpieza') setShowCleaningForm(true);
                 else if(activeView === 'calibraciones') setShowCalibrationForm(true);
                 else if(activeView === 'preventivos') setShowPreventiveForm(true);
-             }} className="p-2 bg-indigo-600 text-white rounded-lg shadow-lg hover:bg-indigo-700 transition-all">
-               <Plus size={18} />
+             }} className="p-2 md:p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20">
+                <Plus size={18} className="md:size-5" />
              </button>
           </div>
         </header>
+
+        {/* BOTTOM NAV MOBILE */}
+        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around items-center p-2 z-40 xl:hidden">
+          {[
+            { id: 'vehiculos', icon: <Truck size={20}/>, label: 'Flota' },
+            { id: 'kilometrajes', icon: <Gauge size={20}/>, label: 'KM' },
+            { id: 'novedades', icon: <ClipboardList size={20}/>, label: 'Nov' },
+            { id: 'indicadoresOperativos', icon: <Activity size={20}/>, label: 'Ind' },
+            { id: 'enlaces', icon: <LinkIcon size={20}/>, label: 'Links' },
+          ].map(item => (
+            <button 
+              key={item.id}
+              onClick={() => setActiveView(item.id as ActiveView)}
+              className={`flex flex-col items-center gap-1 p-2 transition-all ${activeView === item.id ? 'text-indigo-600' : 'text-slate-400'}`}
+            >
+              {item.icon}
+              <span className="text-[8px] font-black uppercase tracking-tighter">{item.label}</span>
+            </button>
+          ))}
+        </nav>
 
         {/* CONTENT AREA */}
         <div className="flex-grow p-6 md:p-8 overflow-y-auto bg-[#f8fafc] custom-scrollbar">
@@ -1093,25 +1124,25 @@ const App: React.FC = () => {
               ) : (
                 <div className="space-y-8">
                   {filteredVehicles.map(v => (
-                    <div key={v.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-500">
+                    <div key={v.id} className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-200 shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-500">
                       <div className="flex flex-col lg:flex-row">
-                        <div className="lg:w-[280px] bg-[#0f172a] p-8 flex flex-col items-center shrink-0 relative overflow-hidden">
+                        <div className="lg:w-[280px] bg-[#0f172a] p-6 md:p-8 flex flex-row lg:flex-col items-center justify-between lg:justify-center shrink-0 relative overflow-hidden">
                           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
-                          <div className="bg-white/5 px-6 py-4 rounded-2xl border border-white/10 text-center mb-6 shadow-2xl">
-                              <h2 className="text-3xl font-mono font-black text-white tracking-tighter">{v.plate}</h2>
+                          <div className="bg-white/5 px-4 py-2 md:px-6 md:py-4 rounded-xl md:rounded-2xl border border-white/10 text-center mb-0 lg:mb-6 shadow-2xl relative z-10">
+                              <h2 className="text-xl md:text-3xl font-mono font-black text-white tracking-tighter">{v.plate}</h2>
                           </div>
-                          <div className="space-y-2 w-full">
-                             <div className="flex items-center gap-2 text-indigo-400">
-                               <Building2 size={14}/>
-                               <span className="text-[9px] font-black uppercase tracking-widest">{v.cd}</span>
+                          <div className="space-y-1 md:space-y-2 w-auto lg:w-full relative z-10 text-right lg:text-left">
+                             <div className="flex items-center justify-end lg:justify-start gap-2 text-indigo-400">
+                               <Building2 size={12} className="md:size-14"/>
+                               <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest">{v.cd}</span>
                              </div>
-                             <div className="flex items-center gap-2 text-slate-400">
-                               <Users size={14}/>
-                               <span className="text-[9px] font-black uppercase tracking-widest truncate">{v.contractor}</span>
+                             <div className="flex items-center justify-end lg:justify-start gap-2 text-slate-400">
+                               <Users size={12} className="md:size-14"/>
+                               <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest truncate max-w-[100px] md:max-w-none">{v.contractor}</span>
                              </div>
                           </div>
                         </div>
-                        <div className="flex-grow p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="flex-grow p-4 md:p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                            <DocumentCard title="SOAT" doc={v.soat} icon={<Shield/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} onAddSupport={() => setShowDocUpdateForm(true)} />
                            <DocumentCard title="RTM" doc={v.rtm} icon={<RefreshCw/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} onAddSupport={() => setShowDocUpdateForm(true)} />
                            <DocumentCard title="EXTINTOR" doc={v.extinguisher} icon={<Shield/>} onViewDoc={(url, t) => setViewDoc({url, title: `${v.plate} - ${t}`})} onAddSupport={() => setShowDocUpdateForm(true)} />

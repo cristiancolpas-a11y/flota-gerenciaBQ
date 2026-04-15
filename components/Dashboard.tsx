@@ -90,32 +90,32 @@ const Dashboard: React.FC<DashboardProps> = ({
   ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in duration-500">
+    <div className="max-w-7xl mx-auto space-y-6 md:space-y-8 pb-20 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2 md:px-0">
         <div className="space-y-1">
-          <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
-            <TrendingUp size={40} className="text-indigo-600" /> Tablero de Indicadores
+          <h2 className="text-2xl md:text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3 md:gap-4">
+            <TrendingUp size={32} className="text-indigo-600 md:size-10" /> Tablero de Indicadores
           </h2>
-          <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Resumen ejecutivo y métricas de gestión</p>
+          <p className="text-[9px] md:text-[11px] text-slate-400 font-black uppercase tracking-[0.2em] md:tracking-[0.3em] ml-11 md:ml-14">Resumen ejecutivo y métricas de gestión</p>
         </div>
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
         {stats.map((stat, idx) => (
           <div 
             key={idx} 
             onClick={() => onNavigate && onNavigate(stat.view)}
-            className="bg-white p-6 rounded-[2.5rem] border border-slate-200 shadow-lg hover:shadow-xl transition-all group cursor-pointer"
+            className="bg-white p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-lg hover:shadow-xl transition-all group cursor-pointer active:scale-95"
           >
-            <div className="flex items-center gap-4">
-              <div className={`p-4 ${stat.color} rounded-2xl group-hover:scale-110 transition-transform`}>
-                {React.cloneElement(stat.icon as React.ReactElement, { size: 24 })}
+            <div className="flex flex-col md:flex-row items-center md:items-center gap-2 md:gap-4 text-center md:text-left">
+              <div className={`p-3 md:p-4 ${stat.color} rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform`}>
+                {React.cloneElement(stat.icon as React.ReactElement, { size: 20, className: 'md:size-6' })}
               </div>
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
-                <p className="text-3xl font-black text-slate-900 tracking-tighter">{stat.value}</p>
+                <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
+                <p className="text-xl md:text-3xl font-black text-slate-900 tracking-tighter">{stat.value}</p>
               </div>
             </div>
           </div>
@@ -123,21 +123,21 @@ const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-8">
         
         {/* Vehicles by CD */}
-        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-lg overflow-hidden">
-          <div className="flex items-center gap-3 mb-8">
-            <Building2 className="text-indigo-600" size={20} />
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Vehículos por Centro (C.D.)</h3>
+        <div className="bg-white p-5 md:p-8 rounded-[2rem] md:rounded-[3rem] border border-slate-200 shadow-lg overflow-hidden">
+          <div className="flex items-center gap-3 mb-6 md:mb-8">
+            <Building2 className="text-indigo-600" size={18} />
+            <h3 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-widest">Vehículos por Centro (C.D.)</h3>
           </div>
-          <div className="h-[300px] overflow-x-auto">
-            <div style={{ minWidth: vehiclesByCd.length > 5 ? `${vehiclesByCd.length * 100}px` : '100%', height: '100%' }}>
+          <div className="h-[250px] md:h-[300px] overflow-x-auto">
+            <div style={{ minWidth: vehiclesByCd.length > 5 ? `${vehiclesByCd.length * 80}px` : '100%', height: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={vehiclesByCd}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
-                  <YAxis fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
+                  <XAxis dataKey="name" fontSize={9} fontWeight="bold" axisLine={false} tickLine={false} />
+                  <YAxis fontSize={9} fontWeight="bold" axisLine={false} tickLine={false} />
                   <Tooltip 
                     contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                     cursor={{ fill: '#f8fafc' }}
@@ -150,13 +150,13 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         {/* Compliance Trends */}
-        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-lg overflow-hidden">
-          <div className="flex items-center gap-3 mb-8">
-            <Droplets className="text-cyan-500" size={20} />
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Tendencia de Cumplimiento</h3>
+        <div className="bg-white p-5 md:p-8 rounded-[2rem] md:rounded-[3rem] border border-slate-200 shadow-lg overflow-hidden">
+          <div className="flex items-center gap-3 mb-6 md:mb-8">
+            <Droplets className="text-cyan-500" size={18} />
+            <h3 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-widest">Tendencia de Cumplimiento</h3>
           </div>
-          <div className="h-[300px] overflow-x-auto">
-            <div style={{ minWidth: '600px', height: '100%' }}>
+          <div className="h-[250px] md:h-[300px] overflow-x-auto">
+            <div style={{ minWidth: '500px', height: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={monthlyCompliance}>
                   <defs>
@@ -170,12 +170,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
-                  <YAxis fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
+                  <XAxis dataKey="name" fontSize={9} fontWeight="bold" axisLine={false} tickLine={false} />
+                  <YAxis fontSize={9} fontWeight="bold" axisLine={false} tickLine={false} />
                   <Tooltip 
                     contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', paddingTop: '20px' }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: 'bold', textTransform: 'uppercase', paddingTop: '10px' }} />
                   <Area type="monotone" dataKey="lavados" stroke="#06b6d4" fillOpacity={1} fill="url(#colorLavados)" strokeWidth={3} />
                   <Area type="monotone" dataKey="limpiezas" stroke="#6366f1" fillOpacity={1} fill="url(#colorLimpiezas)" strokeWidth={3} />
                 </AreaChart>
