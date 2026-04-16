@@ -711,43 +711,43 @@ const App: React.FC = () => {
           </div>
 
           {/* Menu Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 w-full max-w-6xl relative z-10 px-4 md:px-0">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-8 w-full max-w-6xl relative z-10 px-4 md:px-0">
             <button 
               onClick={() => { setAppMode('camiones'); setActiveView('vehiculos'); }}
-              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-4 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
+              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-4 md:p-10 rounded-2xl md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-3 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
-              <div className="w-14 h-14 md:w-20 md:h-20 bg-indigo-600/20 rounded-2xl md:rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30 shrink-0">
-                <Truck size={24} className="md:size-9" />
+              <div className="w-12 h-12 md:w-20 md:h-20 bg-indigo-600/20 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30 shrink-0">
+                <Truck size={20} className="md:size-9" />
               </div>
               <div>
-                <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">CAMIONES</h3>
-                <p className="text-indigo-400/60 text-[8px] md:text-[10px] font-bold uppercase tracking-widest">Control de flota pesada</p>
+                <h3 className="text-base md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">CAMIONES</h3>
+                <p className="text-indigo-400/60 text-[7px] md:text-[10px] font-bold uppercase tracking-widest">Control de flota pesada</p>
               </div>
             </button>
 
             <button 
               onClick={() => setAppMode('montacargas')}
-              className="group bg-white/5 hover:bg-emerald-600/20 border border-white/10 hover:border-emerald-500/50 p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-4 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
+              className="group bg-white/5 hover:bg-emerald-600/20 border border-white/10 hover:border-emerald-500/50 p-4 md:p-10 rounded-2xl md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-3 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
-              <div className="w-14 h-14 md:w-20 md:h-20 bg-emerald-600/20 rounded-2xl md:rounded-[1.5rem] flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-600/10 group-hover:scale-110 transition-transform border border-emerald-500/30 shrink-0">
-                <Truck size={24} className="md:size-9 rotate-12" />
+              <div className="w-12 h-12 md:w-20 md:h-20 bg-emerald-600/20 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-600/10 group-hover:scale-110 transition-transform border border-emerald-500/30 shrink-0">
+                <Truck size={20} className="md:size-9 rotate-12" />
               </div>
               <div>
-                <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">MONTACARGAS</h3>
-                <p className="text-emerald-400/60 text-[8px] md:text-[10px] font-bold uppercase tracking-widest">Gestión de equipos logísticos</p>
+                <h3 className="text-base md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">MONTACARGAS</h3>
+                <p className="text-emerald-400/60 text-[7px] md:text-[10px] font-bold uppercase tracking-widest">Gestión de equipos logísticos</p>
               </div>
             </button>
 
             <button 
               onClick={() => { setAppMode('camiones'); setActiveView('enlaces'); }}
-              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-4 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
+              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-4 md:p-10 rounded-2xl md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-3 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
-              <div className="w-14 h-14 md:w-20 md:h-20 bg-indigo-600/20 rounded-2xl md:rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30 shrink-0">
-                <LinkIcon size={24} className="md:size-9" />
+              <div className="w-12 h-12 md:w-20 md:h-20 bg-indigo-600/20 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30 shrink-0">
+                <LinkIcon size={20} className="md:size-9" />
               </div>
               <div>
-                <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">ENLACES FLOTA</h3>
-                <p className="text-indigo-400/60 text-[8px] md:text-[10px] font-bold uppercase tracking-widest">Acceso rápido a plataformas externas</p>
+                <h3 className="text-base md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">ENLACES FLOTA</h3>
+                <p className="text-indigo-400/60 text-[7px] md:text-[10px] font-bold uppercase tracking-widest">Acceso rápido a plataformas externas</p>
               </div>
             </button>
           </div>
@@ -979,7 +979,7 @@ const App: React.FC = () => {
         </nav>
 
         {/* CONTENT AREA */}
-        <div className="flex-grow p-6 md:p-8 overflow-y-auto bg-[#f8fafc] custom-scrollbar">
+        <div className="flex-grow p-3 md:p-8 overflow-y-auto bg-[#f8fafc] custom-scrollbar">
           
           {activeView === 'indicadoresOperativos' && (
             <OperationalDashboard 
@@ -1035,25 +1035,25 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'vehiculos' && (
-            <div className="max-w-7xl mx-auto space-y-6 pb-20">
+            <div className="max-w-7xl mx-auto space-y-4 md:space-y-6 pb-20 px-1 md:px-0">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
                    <Shield size={24} className="text-indigo-600" /> Seguimiento Documental
                 </h2>
-                <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm">
+                <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm w-full md:w-auto">
                   <button 
                     onClick={() => setVehicleViewMode('grid')}
-                    className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${vehicleViewMode === 'grid' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                    className={`flex-grow md:flex-none px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${vehicleViewMode === 'grid' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <LayoutGrid size={12} /> Cuadrícula
                     </div>
                   </button>
                   <button 
                     onClick={() => setVehicleViewMode('table')}
-                    className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${vehicleViewMode === 'table' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
+                    className={`flex-grow md:flex-none px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${vehicleViewMode === 'table' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-center gap-2">
                       <ListFilter size={12} /> Tabla
                     </div>
                   </button>
@@ -1071,44 +1071,44 @@ const App: React.FC = () => {
               />
 
               {vehicleViewMode === 'table' ? (
-                <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
+                <div className="bg-white rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-[8px] uppercase tracking-widest text-slate-500 font-black">
-                          <th className="p-4">Placa</th>
-                          <th className="p-4">CD</th>
-                          <th className="p-4">Contratista</th>
-                          <th className="p-4">SOAT</th>
-                          <th className="p-4">RTM</th>
-                          <th className="p-4">EXT</th>
+                          <th className="p-3 md:p-4">Placa</th>
+                          <th className="p-3 md:p-4">CD</th>
+                          <th className="p-3 md:p-4">Contratista</th>
+                          <th className="p-3 md:p-4">SOAT</th>
+                          <th className="p-3 md:p-4">RTM</th>
+                          <th className="p-3 md:p-4">EXT</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-[10px] font-medium text-slate-700">
                         {filteredVehicles.map(v => (
                           <tr key={v.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="p-4">
+                            <td className="p-3 md:p-4">
                               <span className="bg-slate-900 px-2 py-1 rounded text-white font-mono font-black tracking-tighter">
                                 {v.plate}
                               </span>
                             </td>
-                            <td className="p-4 font-black uppercase text-slate-400">{v.cd}</td>
-                            <td className="p-4 font-black uppercase text-slate-600">{v.contractor}</td>
-                            <td className="p-4">
+                            <td className="p-3 md:p-4 font-black uppercase text-slate-400 text-[9px]">{v.cd}</td>
+                            <td className="p-3 md:p-4 font-black uppercase text-slate-600 text-[9px] truncate max-w-[80px] md:max-w-none">{v.contractor}</td>
+                            <td className="p-3 md:p-4">
                               <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
                                 v.soat.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
                               }`}>
                                 {v.soat.expiryDate}
                               </span>
                             </td>
-                            <td className="p-4">
+                            <td className="p-3 md:p-4">
                               <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
                                 v.rtm.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
                               }`}>
                                 {v.rtm.expiryDate}
                               </span>
                             </td>
-                            <td className="p-4">
+                            <td className="p-3 md:p-4">
                               <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
                                 v.extinguisher.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
                               }`}>
@@ -1122,11 +1122,11 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-8">
+                <div className="space-y-6 md:space-y-8">
                   {filteredVehicles.map(v => (
                     <div key={v.id} className="bg-white rounded-[1.5rem] md:rounded-[2.5rem] border border-slate-200 shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-500">
                       <div className="flex flex-col lg:flex-row">
-                        <div className="lg:w-[280px] bg-[#0f172a] p-6 md:p-8 flex flex-row lg:flex-col items-center justify-between lg:justify-center shrink-0 relative overflow-hidden">
+                        <div className="lg:w-[280px] bg-[#0f172a] p-5 md:p-8 flex flex-row lg:flex-col items-center justify-between lg:justify-center shrink-0 relative overflow-hidden">
                           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
                           <div className="bg-white/5 px-4 py-2 md:px-6 md:py-4 rounded-xl md:rounded-2xl border border-white/10 text-center mb-0 lg:mb-6 shadow-2xl relative z-10">
                               <h2 className="text-xl md:text-3xl font-mono font-black text-white tracking-tighter">{v.plate}</h2>
@@ -1138,7 +1138,7 @@ const App: React.FC = () => {
                              </div>
                              <div className="flex items-center justify-end lg:justify-start gap-2 text-slate-400">
                                <Users size={12} className="md:size-14"/>
-                               <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest truncate max-w-[100px] md:max-w-none">{v.contractor}</span>
+                               <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest truncate max-w-[120px] md:max-w-none">{v.contractor}</span>
                              </div>
                           </div>
                         </div>

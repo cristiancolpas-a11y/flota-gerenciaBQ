@@ -41,15 +41,15 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
   }, [directPhotoUrl]);
 
   return (
-    <div className="bg-white rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden transition-all hover:shadow-indigo-500/10 mb-6 md:mb-8 max-w-[1400px] mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
+    <div className="bg-white rounded-xl md:rounded-[2.5rem] border border-slate-200 shadow-xl overflow-hidden transition-all hover:shadow-indigo-500/10 mb-4 md:mb-8 max-w-[1400px] mx-auto animate-in fade-in slide-in-from-bottom-6 duration-700">
       <div className="flex flex-col lg:flex-row min-h-[auto] lg:min-h-[400px]">
         
         {/* COLUMNA 1: PERFIL */}
-        <div className="lg:w-[320px] bg-[#0f172a] p-6 md:p-8 flex flex-row lg:flex-col items-center lg:justify-center shrink-0 relative overflow-hidden">
+        <div className="lg:w-[320px] bg-[#0f172a] p-4 md:p-8 flex flex-row lg:flex-col items-center lg:justify-center shrink-0 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
           
           <div className="relative z-10">
-            <div className="w-24 h-24 md:w-40 md:h-40 rounded-2xl md:rounded-[2.5rem] border-4 md:border-[8px] border-white/10 shadow-2xl overflow-hidden bg-slate-800 flex items-center justify-center relative group">
+            <div className="w-20 h-20 md:w-40 md:h-40 rounded-xl md:rounded-[2.5rem] border-2 md:border-[8px] border-white/10 shadow-2xl overflow-hidden bg-slate-800 flex items-center justify-center relative group">
               {directPhotoUrl && imageState !== 'error' ? (
                 <img 
                   src={directPhotoUrl} 
@@ -58,7 +58,7 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
                   onError={() => setImageState('error')}
                 />
               ) : (
-                <UserCircle size={48} className="text-slate-600 md:size-20" />
+                <UserCircle size={40} className="text-slate-600 md:size-20" />
               )}
               <div className="absolute bottom-1 right-1 md:bottom-3 md:right-3 bg-emerald-500 p-1 md:p-1.5 rounded-md md:rounded-lg shadow-lg border border-white">
                  <CheckCircle2 size={10} className="text-white md:size-3" />
@@ -66,27 +66,27 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
             </div>
           </div>
           
-          <div className="text-left lg:text-center ml-6 lg:ml-0 mt-0 lg:mt-6 flex-grow z-10">
-            <h2 className="text-lg md:text-xl font-black text-white uppercase tracking-tighter leading-tight mb-2 md:mb-3 drop-shadow-md">
+          <div className="text-left lg:text-center ml-4 lg:ml-0 mt-0 lg:mt-6 flex-grow z-10">
+            <h2 className="text-base md:text-xl font-black text-white uppercase tracking-tighter leading-tight mb-1 md:mb-3 drop-shadow-md">
               {driver.name}
             </h2>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 bg-indigo-600/20 text-indigo-400 rounded-lg md:rounded-xl text-[8px] md:text-[9px] font-black tracking-widest uppercase border border-indigo-500/30 backdrop-blur-sm">
-              <IdCard size={12} className="md:size-3.5" /> CC {driver.identification}
+            <div className="inline-flex items-center gap-1.5 px-2 py-1 md:px-4 md:py-2 bg-indigo-600/20 text-indigo-400 rounded-lg md:rounded-xl text-[7px] md:text-[9px] font-black tracking-widest uppercase border border-indigo-500/30 backdrop-blur-sm">
+              <IdCard size={10} className="md:size-3.5" /> CC {driver.identification}
             </div>
           </div>
         </div>
 
         {/* COLUMNA 2: INFORMACIÓN */}
-        <div className="flex-grow p-5 md:p-8 bg-white flex flex-col">
-           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 mb-6 md:mb-8 border-b border-slate-100 pb-4 md:pb-6">
+        <div className="flex-grow p-4 md:p-8 bg-white flex flex-col">
+           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 mb-4 md:mb-8 border-b border-slate-100 pb-3 md:pb-6">
               <div>
-                <h3 className="text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] md:tracking-[0.4em] flex items-center gap-2 mb-1">
-                   <History size={12} className="text-indigo-600 md:size-3.5" /> Expediente Laboral
+                <h3 className="text-[7px] md:text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] md:tracking-[0.4em] flex items-center gap-2 mb-1">
+                   <History size={10} className="text-indigo-600 md:size-3.5" /> Expediente Laboral
                 </h3>
-                <p className="text-[9px] md:text-[10px] font-bold text-slate-500">Estado: {driver.status || 'Activo en Flota'}</p>
+                <p className="text-[8px] md:text-[10px] font-bold text-slate-500">Estado: {driver.status || 'Activo en Flota'}</p>
               </div>
               <div className="flex items-center gap-2">
-                 <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[7px] md:text-[8px] font-black uppercase tracking-widest border border-emerald-200 flex items-center gap-1.5">
+                 <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-[6px] md:text-[8px] font-black uppercase tracking-widest border border-emerald-200 flex items-center gap-1.5">
                     <div className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                     {driver.status || 'CONTRATO VIGENTE'}
                  </span>
@@ -128,17 +128,17 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
                 const s = styles[status === 'critical' ? 'warning' : status];
 
                 return (
-                  <div key={idx} className={`p-5 rounded-[1.8rem] border-2 transition-all hover:shadow-lg flex flex-col ${s.box}`}>
-                     <div className="flex justify-between items-start mb-4">
-                        <div className={`p-2.5 rounded-xl bg-white shadow-sm ${s.icon}`}>
-                           {item.icon}
+                  <div key={idx} className={`p-4 md:p-5 rounded-2xl md:rounded-[1.8rem] border-2 transition-all hover:shadow-lg flex flex-col ${s.box}`}>
+                     <div className="flex justify-between items-start mb-3 md:mb-4">
+                        <div className={`p-2 rounded-xl md:p-2.5 bg-white shadow-sm ${s.icon}`}>
+                           {React.cloneElement(item.icon as React.ReactElement, { size: 16 })}
                         </div>
-                        <span className={`px-3 py-1 rounded-lg text-[8px] font-black tracking-widest uppercase ${s.badge}`}>
+                        <span className={`px-2 py-0.5 md:px-3 md:py-1 rounded-lg text-[7px] md:text-[8px] font-black tracking-widest uppercase ${s.badge}`}>
                            {s.label}
                         </span>
                      </div>
-                     <h5 className="text-[10px] font-black text-slate-800 uppercase mb-0.5 tracking-tight">{item.title}</h5>
-                     <p className="text-[9px] font-bold text-slate-500 mb-4">{hasDate ? formatDate(item.doc.expiryDate) : 'S/D'}</p>
+                     <h5 className="text-[9px] md:text-[10px] font-black text-slate-800 uppercase mb-0.5 tracking-tight">{item.title}</h5>
+                     <p className="text-[8px] md:text-[9px] font-bold text-slate-500 mb-3 md:mb-4">{hasDate ? formatDate(item.doc.expiryDate) : 'S/D'}</p>
                      
                      {item.doc.url ? (
                        <div className="space-y-2">

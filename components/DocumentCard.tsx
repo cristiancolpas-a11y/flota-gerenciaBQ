@@ -60,36 +60,36 @@ const DocumentCard: React.FC<DocumentCardProps> = ({ title, doc, icon, onViewDoc
   const currentStyle = styles[status];
 
   return (
-    <div className={`relative p-6 rounded-[2.5rem] border-4 transition-all duration-500 hover:shadow-xl flex flex-col h-full ${currentStyle.bg} ${currentStyle.border}`}>
+    <div className={`relative p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border-4 transition-all duration-500 hover:shadow-xl flex flex-col h-full ${currentStyle.bg} ${currentStyle.border}`}>
       
       {hasDate && doc.daysPending !== undefined && (
-        <div className={`absolute -top-3 right-6 px-4 py-1.5 rounded-full text-[9px] font-black flex items-center gap-1.5 shadow-xl border-2 z-20 ${status === 'critical' ? 'bg-orange-600 text-white border-orange-400' : 'bg-white text-slate-700 border-slate-50'}`}>
-           {status === 'critical' ? <AlertTriangle size={12} className="animate-bounce" /> : <Clock size={12} className="text-indigo-600 animate-pulse" />} 
+        <div className={`absolute -top-3 right-4 md:right-6 px-3 py-1 md:px-4 md:py-1.5 rounded-full text-[8px] md:text-[9px] font-black flex items-center gap-1.5 shadow-xl border-2 z-20 ${status === 'critical' ? 'bg-orange-600 text-white border-orange-400' : 'bg-white text-slate-700 border-slate-50'}`}>
+           {status === 'critical' ? <AlertTriangle size={10} className="animate-bounce md:size-3" /> : <Clock size={10} className="text-indigo-600 animate-pulse md:size-3" />} 
            {doc.daysPending} DÍAS
         </div>
       )}
 
-      <div className="flex flex-col gap-4 mb-6">
-        <div className="flex items-center gap-4">
-          <div className={`p-4 rounded-2xl transition-all duration-500 shadow-xl shrink-0 ${currentStyle.iconBg}`}>
-            {React.cloneElement(icon as React.ReactElement<any>, { size: 24 })}
+      <div className="flex flex-col gap-3 md:gap-4 mb-4 md:mb-6">
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className={`p-3 md:p-4 rounded-xl md:rounded-2xl transition-all duration-500 shadow-xl shrink-0 ${currentStyle.iconBg}`}>
+            {React.cloneElement(icon as React.ReactElement<any>, { size: 20 })}
           </div>
 
           <div className="flex flex-col flex-grow">
-            <span className={`w-fit px-3 py-0.5 rounded-lg text-[8px] font-black tracking-[0.2em] uppercase shadow-sm mb-1 ${currentStyle.badge}`}>
+            <span className={`w-fit px-2 py-0.5 rounded-md md:rounded-lg text-[7px] md:text-[8px] font-black tracking-[0.2em] uppercase shadow-sm mb-1 ${currentStyle.badge}`}>
               {currentStyle.label}
             </span>
-            <h3 className="font-black text-slate-900 text-lg uppercase tracking-tighter leading-none">
+            <h3 className="font-black text-slate-900 text-base md:text-lg uppercase tracking-tighter leading-none">
               {title}
             </h3>
           </div>
         </div>
         
-        <div className="flex items-center gap-3 text-slate-400 bg-slate-50 p-3 rounded-xl border border-slate-100">
-          <Calendar size={16} className="text-indigo-500" />
+        <div className="flex items-center gap-2 md:gap-3 text-slate-400 bg-slate-50 p-2 md:p-3 rounded-xl border border-slate-100">
+          <Calendar size={14} className="text-indigo-500 md:size-4" />
           <div className="flex flex-col">
-            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Vencimiento</span>
-            <span className={`text-xs font-black tracking-tight ${currentStyle.dateColor}`}>
+            <span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest text-slate-400">Vencimiento</span>
+            <span className={`text-[10px] md:text-xs font-black tracking-tight ${currentStyle.dateColor}`}>
               {hasDate ? formatDate(doc.expiryDate) : 'PENDIENTE'}
             </span>
           </div>

@@ -101,21 +101,21 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-6">
         {stats.map((stat, idx) => (
           <div 
             key={idx} 
             onClick={() => onNavigate && onNavigate(stat.view)}
-            className="bg-white p-4 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-lg hover:shadow-xl transition-all group cursor-pointer active:scale-95"
+            className="bg-white p-3 md:p-6 rounded-xl md:rounded-[2.5rem] border border-slate-200 shadow-lg hover:shadow-xl transition-all group cursor-pointer active:scale-95"
           >
-            <div className="flex flex-col md:flex-row items-center md:items-center gap-2 md:gap-4 text-center md:text-left">
-              <div className={`p-3 md:p-4 ${stat.color} rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform`}>
-                {React.cloneElement(stat.icon as React.ReactElement, { size: 20, className: 'md:size-6' })}
+            <div className="flex flex-col md:flex-row items-center md:items-center gap-1.5 md:gap-4 text-center md:text-left">
+              <div className={`p-2.5 md:p-4 ${stat.color} rounded-lg md:rounded-2xl group-hover:scale-110 transition-transform`}>
+                {React.cloneElement(stat.icon as React.ReactElement, { size: 18, className: 'md:size-6' })}
               </div>
               <div>
-                <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
-                <p className="text-xl md:text-3xl font-black text-slate-900 tracking-tighter">{stat.value}</p>
+                <p className="text-[7px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
+                <p className="text-lg md:text-3xl font-black text-slate-900 tracking-tighter">{stat.value}</p>
               </div>
             </div>
           </div>

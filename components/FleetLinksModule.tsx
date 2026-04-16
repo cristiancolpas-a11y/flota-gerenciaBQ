@@ -94,25 +94,25 @@ const FleetLinksModule: React.FC = () => {
       </div>
 
       {/* Linktree Style List */}
-      <div className="w-full space-y-4">
+      <div className="w-full space-y-3 md:space-y-4">
         {filteredLinks.map((link) => (
           <a
             key={link.id}
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="group relative w-full bg-[#0f172a] hover:bg-[#1e293b] p-5 rounded-xl shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex items-center justify-center text-center overflow-hidden border border-white/10 hover:border-indigo-500"
+            className="group relative w-full bg-[#0f172a] hover:bg-[#1e293b] p-4 md:p-5 rounded-xl shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex items-center justify-center text-center overflow-hidden border border-white/10 hover:border-indigo-500"
           >
-            <div className="absolute left-6 text-indigo-400 group-hover:text-white group-hover:scale-125 transition-all duration-500">
-              {link.icon}
+            <div className="absolute left-4 md:left-6 text-indigo-400 group-hover:text-white group-hover:scale-125 transition-all duration-500">
+              {React.cloneElement(link.icon as React.ReactElement, { size: 18 })}
             </div>
             
-            <h3 className="text-sm font-black text-white uppercase tracking-widest relative z-10">
+            <h3 className="text-[11px] md:text-sm font-black text-white uppercase tracking-widest relative z-10 px-8">
               {link.title}
             </h3>
 
-            <div className="absolute right-6 opacity-0 group-hover:opacity-100 transition-all duration-300">
-              <ExternalLink size={16} className="text-white" />
+            <div className="absolute right-4 md:right-6 opacity-0 group-hover:opacity-100 transition-all duration-300">
+              <ExternalLink size={14} className="text-white md:size-4" />
             </div>
           </a>
         ))}
