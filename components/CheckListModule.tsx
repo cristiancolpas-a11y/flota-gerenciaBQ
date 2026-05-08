@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { CheckList } from '../types';
-import { Search, Filter, Calendar, Truck, User, ClipboardList, Clock, Building2, Hash, ChevronLeft, ChevronRight, TrendingUp, Award, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, Filter, Calendar, Truck, User, ClipboardList, Clock, Building2, Hash, ChevronLeft, ChevronRight, TrendingUp, Award, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid } from 'lucide-react';
 import { normalizePlate } from '../utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -12,6 +12,7 @@ interface CheckListModuleProps {
 }
 
 const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
+  const [activeTab, setActiveTab] = useState<'ALL' | 'ARENOSA' | 'GALAPA'>('ARENOSA');
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -20,40 +21,46 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
+  // Filter checkLists by tab
+  const tabFilteredCheckLists = useMemo(() => {
+    return checkLists.filter(c => {
+      if (activeTab === 'ALL') return true;
+      if (activeTab === 'ARENOSA') return c.source === 'ARENOSA';
+      if (activeTab === 'GALAPA') return c.source === 'GALAPA';
+      return true;
+    });
+  }, [checkLists, activeTab]);
+
   const contractors = useMemo(() => {
-    const unique = new Set(checkLists.map(c => c.contratista).filter(Boolean));
+    const unique = new Set(tabFilteredCheckLists.map(c => c.contratista).filter(Boolean));
     return Array.from(unique).sort();
-  }, [checkLists]);
+  }, [tabFilteredCheckLists]);
 
   const filteredData = useMemo(() => {
-    return checkLists.filter(item => {
-      const matchesSearch = normalizePlate(item.vehiculo).includes(normalizePlate(searchTerm)) ||
-        item.conductor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.contratista.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.empresa.toLowerCase().includes(searchTerm.toLowerCase());
+    // Cache dates and normalized values for performance
+    const startObj = startDate ? new Date(startDate) : null;
+    if (startObj) startObj.setHours(0, 0, 0, 0);
+    const endObj = endDate ? new Date(endDate) : null;
+    if (endObj) endObj.setHours(0, 0, 0, 0);
+    const searchLower = searchTerm.toLowerCase();
+
+    return tabFilteredCheckLists.filter(item => {
+      const matchesSearch = searchTerm === '' || 
+        normalizePlate(item.vehiculo).includes(normalizePlate(searchTerm)) ||
+        item.conductor.toLowerCase().includes(searchLower) ||
+        item.contratista.toLowerCase().includes(searchLower) ||
+        item.empresa.toLowerCase().includes(searchLower);
       
       if (!matchesSearch) return false;
-
       if (selectedContractor && item.contratista !== selectedContractor) return false;
 
-      if (startDate || endDate) {
-        const itemDate = item.fecha ? new Date(item.fecha) : null;
-        if (!itemDate) return false;
-        
-        // Reset hours for comparison
+      if (startObj || endObj) {
+        if (!item.fecha) return false;
+        const itemDate = new Date(item.fecha);
         itemDate.setHours(0, 0, 0, 0);
 
-        if (startDate) {
-          const start = new Date(startDate);
-          start.setHours(0, 0, 0, 0);
-          if (itemDate < start) return false;
-        }
-
-        if (endDate) {
-          const end = new Date(endDate);
-          end.setHours(0, 0, 0, 0);
-          if (itemDate > end) return false;
-        }
+        if (startObj && itemDate < startObj) return false;
+        if (endObj && itemDate > endObj) return false;
       }
 
       return true;
@@ -66,8 +73,8 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
           valA = parseInt(valA?.replace('%', '') || '0');
           valB = parseInt(valB?.replace('%', '') || '0');
         } else if (sortConfig.key === 'fecha') {
-          valA = a.fecha ? new Date(a.fecha).getTime() : 0;
-          valB = b.fecha ? new Date(b.fecha).getTime() : 0;
+          valA = a.fecha || '';
+          valB = b.fecha || '';
         }
 
         if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -75,11 +82,9 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
         return 0;
       }
       
-      const dateA = a.fecha ? new Date(a.fecha).getTime() : 0;
-      const dateB = b.fecha ? new Date(b.fecha).getTime() : 0;
-      return dateB - dateA;
+      return (b.fecha || '').localeCompare(a.fecha || '');
     });
-  }, [checkLists, searchTerm, startDate, endDate, selectedContractor, sortConfig]);
+  }, [tabFilteredCheckLists, searchTerm, startDate, endDate, selectedContractor, sortConfig]);
 
   const handleSort = (key: 'salida' | 'retorno' | 'fecha') => {
     setSortConfig(prev => ({
@@ -95,52 +100,61 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
   };
 
   const stats = useMemo(() => {
-    const total = filteredData.length;
-    const salidas100 = filteredData.filter(d => d.salida === '100%').length;
-    const retornos100 = filteredData.filter(d => d.retorno === '100%').length;
-    
-    // Top Offender (Most active drivers)
+    let total = 0;
+    let salidas100 = 0;
+    let retornos100 = 0;
     const driverCounts: Record<string, number> = {};
-    filteredData.forEach(d => {
-      if (d.conductor && d.conductor !== 'sin datos') {
+    const weeklyGeneral: Record<string, { total: number, salida100: number, retorno100: number }> = {};
+    const monthlyGeneral: Record<string, { total: number, salida100: number, retorno100: number }> = {};
+
+    // Single pass for all stats
+    for (let i = 0; i < filteredData.length; i++) {
+      const d = filteredData[i];
+      total++;
+      if (d.salida === '100%') salidas100++;
+      if (d.retorno === '100%') retornos100++;
+
+      // Drivers
+      if (d.conductor && d.conductor !== 'sin datos' && d.conductor !== '#N/A') {
         driverCounts[d.conductor] = (driverCounts[d.conductor] || 0) + 1;
       }
-    });
-    const topDrivers = Object.entries(driverCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
 
-    // Weekly General Compliance (Salida vs Retorno)
-    const weeklyGeneral: Record<string, { total: number, salida100: number, retorno100: number }> = {};
-    filteredData.forEach(d => {
-      const week = `S${d.semana}`;
+      // Weekly
+      const week = d.semana ? `S${d.semana}` : 'N/A';
       if (!weeklyGeneral[week]) weeklyGeneral[week] = { total: 0, salida100: 0, retorno100: 0 };
       weeklyGeneral[week].total++;
       if (d.salida === '100%') weeklyGeneral[week].salida100++;
       if (d.retorno === '100%') weeklyGeneral[week].retorno100++;
-    });
 
-    const weeklyGeneralChartData = Object.entries(weeklyGeneral).map(([week, vals]) => ({
-      name: week,
-      Salida: Math.round((vals.salida100 / vals.total) * 100),
-      Retorno: Math.round((vals.retorno100 / vals.total) * 100)
-    })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-    // Monthly General Compliance (Salida vs Retorno)
-    const monthlyGeneral: Record<string, { total: number, salida100: number, retorno100: number }> = {};
-    filteredData.forEach(d => {
+      // Monthly
       let month = 'N/A';
       if (d.fecha) {
-        const date = new Date(d.fecha);
-        if (!isNaN(date.getTime())) {
-          month = date.toLocaleString('es-ES', { month: 'short' }).toUpperCase();
+        // Optimization: Use string splitting for simple YYYY-MM-DD
+        const monthIndex = parseInt(d.fecha.split('-')[1]) - 1;
+        if (!isNaN(monthIndex) && monthIndex >= 0 && monthIndex < 12) {
+          const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+          month = months[monthIndex];
         }
       }
       if (!monthlyGeneral[month]) monthlyGeneral[month] = { total: 0, salida100: 0, retorno100: 0 };
       monthlyGeneral[month].total++;
       if (d.salida === '100%') monthlyGeneral[month].salida100++;
       if (d.retorno === '100%') monthlyGeneral[month].retorno100++;
+    }
+    
+    const topDrivers = Object.entries(driverCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const weeklyGeneralChartData = Object.entries(weeklyGeneral).map(([week, vals]) => ({
+      name: week,
+      Salida: Math.round((vals.salida100 / vals.total) * 100),
+      Retorno: Math.round((vals.retorno100 / vals.total) * 100)
+    })).sort((a, b) => {
+      if (a.name === 'N/A') return 1;
+      if (b.name === 'N/A') return -1;
+      return a.name.localeCompare(b.name, undefined, { numeric: true });
     });
 
     const monthlyGeneralChartData = Object.entries(monthlyGeneral).map(([month, vals]) => ({
@@ -149,7 +163,6 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
       Retorno: Math.round((vals.retorno100 / vals.total) * 100)
     }));
 
-    // ARO Data (Salida vs Retorno)
     const aroData = {
       salida: total > 0 ? Math.round((salidas100 / total) * 100) : 0,
       retorno: total > 0 ? Math.round((retornos100 / total) * 100) : 0
@@ -209,6 +222,52 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
             <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
               Registro histórico de inspecciones y novedades
             </p>
+          </div>
+
+          {/* TAB SELECTOR */}
+          <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 overflow-x-auto no-scrollbar max-w-full">
+            <button
+              onClick={() => {
+                setActiveTab('ARENOSA');
+                setCurrentPage(1);
+              }}
+              className={`whitespace-nowrap px-4 md:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${
+                activeTab === 'ARENOSA' 
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 
+                : 'text-slate-500 hover:bg-white hover:text-indigo-600'
+              }`}
+            >
+              <Building2 size={14} />
+              LA ARENOSA
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('GALAPA');
+                setCurrentPage(1);
+              }}
+              className={`whitespace-nowrap px-4 md:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${
+                activeTab === 'GALAPA' 
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 
+                : 'text-slate-500 hover:bg-white hover:text-indigo-600'
+              }`}
+            >
+              <Building2 size={14} />
+              GALAPA
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('ALL');
+                setCurrentPage(1);
+              }}
+              className={`whitespace-nowrap px-4 md:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 ${
+                activeTab === 'ALL' 
+                ? 'bg-slate-800 text-white shadow-xl' 
+                : 'text-slate-500 hover:bg-white hover:text-slate-800'
+              }`}
+            >
+              <LayoutGrid size={14} />
+              VISTA GENERAL
+            </button>
           </div>
           
           <div className="flex flex-col lg:flex-row items-center gap-4 w-full lg:w-auto">

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -44,6 +44,8 @@ import FuelPerformanceModule from './components/FuelPerformanceModule';
 import PlateAdherenceModule from './components/PlateAdherenceModule';
 import FleetLinksModule from './components/FleetLinksModule';
 import CorrectivesModule from './components/CorrectivesModule';
+import UnavailabilityModule from './components/UnavailabilityModule';
+import OperatorsModule from './components/OperatorsModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -75,7 +77,9 @@ import {
   fetchCheckListFromSheet,
   fetchFuelPerformanceFromSheet,
   fetchPlateAdherenceFromSheet,
-  fetchCorrectivesFromSheet
+  fetchCorrectivesFromSheet,
+  fetchUnavailabilityFromSheet,
+  fetchOperatorsFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -83,11 +87,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'preventivos' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'preventivos' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -122,6 +126,8 @@ const App: React.FC = () => {
   const [fuelPerformanceData, setFuelPerformanceData] = useState<FuelPerformance[]>([]);
   const [plateAdherenceData, setPlateAdherenceData] = useState<PlateAdherence[]>([]);
   const [correctives, setCorrectives] = useState<Corrective[]>([]);
+  const [unavailabilityRecords, setUnavailabilityRecords] = useState<UnavailabilityRecord[]>([]);
+  const [operators, setOperators] = useState<OperatorRecord[]>([]);
 
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
@@ -192,7 +198,7 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      const [v, d, f, r, w, cl, c, m, wv, p, a, oi, ch, fp, pa, corr] = await Promise.all([
+      const [v, d, f, r, w, cl, c, m, wv, p, a, oi, ch, fp, pa, corr, unav, ops] = await Promise.all([
         fetchVehiclesFromSheet(),
         fetchDriversFromSheet(),
         fetchFinesFromSheet(),
@@ -208,7 +214,9 @@ const App: React.FC = () => {
         fetchCheckListFromSheet(),
         fetchFuelPerformanceFromSheet(),
         fetchPlateAdherenceFromSheet(),
-        fetchCorrectivesFromSheet()
+        fetchCorrectivesFromSheet(),
+        fetchUnavailabilityFromSheet(),
+        fetchOperatorsFromSheet()
       ]);
 
       const filterByYear = (dateStr: string | undefined) => {
@@ -245,6 +253,8 @@ const App: React.FC = () => {
       setFuelPerformanceData(fp);
       setPlateAdherenceData(pa.filter(item => filterByYear(item.date)));
       setCorrectives(corr);
+      setUnavailabilityRecords(unav);
+      setOperators(ops);
     } catch (err) {
       console.error("Critical Sync Error:", err);
     } finally {
@@ -726,7 +736,7 @@ const App: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => setAppMode('montacargas')}
+              onClick={() => { setAppMode('montacargas'); setActiveView('operadores'); handleSyncData(); }}
               className="group bg-white/5 hover:bg-emerald-600/20 border border-white/10 hover:border-emerald-500/50 p-4 md:p-10 rounded-2xl md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-3 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
               <div className="w-12 h-12 md:w-20 md:h-20 bg-emerald-600/20 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-600/10 group-hover:scale-110 transition-transform border border-emerald-500/30 shrink-0">
@@ -754,22 +764,6 @@ const App: React.FC = () => {
         </div>
       ) : appMode === 'talleres' ? (
         <WorkshopModule onBack={() => setAppMode('root_menu')} vehicles={vehicles} />
-      ) : appMode === 'montacargas' ? (
-        <div className="flex-grow bg-[#0f172a] flex flex-col items-center justify-center p-8">
-           <div className="text-center space-y-8">
-              <div className="w-32 h-32 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto border-4 border-emerald-500/30">
-                 <Truck size={64} className="text-emerald-500 rotate-12" />
-              </div>
-              <h2 className="text-4xl font-black text-white uppercase tracking-widest">Módulo Montacargas</h2>
-              <p className="text-slate-400 font-bold uppercase tracking-widest">Próximamente disponible</p>
-              <button 
-                onClick={() => setAppMode('flota_menu')}
-                className="px-8 py-4 bg-white/5 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-3 mx-auto"
-              >
-                <ChevronLeft size={20} /> VOLVER AL MENÚ
-              </button>
-           </div>
-        </div>
       ) : (
         <>
           {/* SIDEBAR PREMIUM */}
@@ -794,115 +788,132 @@ const App: React.FC = () => {
               </div>
               
               <nav className="flex-grow space-y-4 overflow-y-auto custom-scrollbar pr-2">
-                {/* DOCUMENTACIÓN SECTION */}
-                <div className="space-y-2">
-                  <button 
-                    onClick={() => setExpandedSection(expandedSection === 'doc' ? null : 'doc')}
-                    className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
-                  >
-                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">DOCUMENTACIÓN</p>
-                    {expandedSection === 'doc' ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
-                  </button>
-                  
-                  {expandedSection === 'doc' && (
-                    <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                      {[
-                        { id: 'indicadoresOperativos', label: 'Tablero de Indicadores', icon: <Activity size={18}/> },
-                        { id: 'indicadoresDisponibilidad', label: 'Disponibilidad', icon: <TrendingUp size={18}/> },
-                        { id: 'conductores', label: 'Conductores', icon: <Users size={18}/> },
-                        { id: 'vehiculos', label: 'Vehículos', icon: <Truck size={18}/> },
-                        { id: 'comparendos', label: 'Comparendos', icon: <Gavel size={18}/> },
-                        { id: 'checklist', label: 'Check List', icon: <ClipboardList size={18}/> },
-                      ].map(item => (
-                        <button 
-                          key={item.id}
-                          onClick={() => { 
-                            setActiveView(item.id as ActiveView); 
-                            setIsSidebarOpen(false); 
-                            setExpandedSection(null);
-                          }} 
-                          className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                        >
-                          {item.icon} {item.label}
-                        </button>
-                      ))}
+                {appMode === 'montacargas' ? (
+                  <div className="space-y-1">
+                    <button 
+                      onClick={() => { 
+                        setActiveView('operadores'); 
+                        setIsSidebarOpen(false); 
+                      }} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'operadores' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Users size={18}/> OPERADORES
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* DOCUMENTACIÓN SECTION */}
+                    <div className="space-y-2">
+                      <button 
+                        onClick={() => setExpandedSection(expandedSection === 'doc' ? null : 'doc')}
+                        className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
+                      >
+                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">DOCUMENTACIÓN</p>
+                        {expandedSection === 'doc' ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
+                      </button>
+                      
+                      {expandedSection === 'doc' && (
+                        <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                          {[
+                            { id: 'indicadoresOperativos', label: 'Tablero de Indicadores', icon: <Activity size={18}/> },
+                            { id: 'indicadoresDisponibilidad', label: 'Disponibilidad', icon: <TrendingUp size={18}/> },
+                            { id: 'conductores', label: 'Conductores', icon: <Users size={18}/> },
+                            { id: 'vehiculos', label: 'Vehículos', icon: <Truck size={18}/> },
+                            { id: 'comparendos', label: 'Comparendos', icon: <Gavel size={18}/> },
+                            { id: 'checklist', label: 'Check List', icon: <ClipboardList size={18}/> },
+                          ].map(item => (
+                            <button 
+                              key={item.id}
+                              onClick={() => { 
+                                setActiveView(item.id as ActiveView); 
+                                setIsSidebarOpen(false); 
+                                setExpandedSection(null);
+                              }} 
+                              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                              {item.icon} {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* GESTIÓN SECTION */}
-                <div className="space-y-2">
-                  <button 
-                    onClick={() => setExpandedSection(expandedSection === 'gestion' ? null : 'gestion')}
-                    className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
-                  >
-                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">GESTIÓN</p>
-                    {expandedSection === 'gestion' ? <ChevronUp size={14} className="text-emerald-400" /> : <ChevronDown size={14} className="text-emerald-400" />}
-                  </button>
+                    {/* GESTIÓN SECTION */}
+                    <div className="space-y-2">
+                      <button 
+                        onClick={() => setExpandedSection(expandedSection === 'gestion' ? null : 'gestion')}
+                        className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
+                      >
+                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">GESTIÓN</p>
+                        {expandedSection === 'gestion' ? <ChevronUp size={14} className="text-emerald-400" /> : <ChevronDown size={14} className="text-emerald-400" />}
+                      </button>
 
-                  {expandedSection === 'gestion' && (
-                    <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                      {[
-                        { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
-                        { id: 'novedades', label: 'Novedades', icon: <ClipboardList size={18}/> },
-                        { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
-                        { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
-                        { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
-                        { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
-                        { id: 'preventivos', label: 'Preventivos', icon: <Clock size={18}/> },
-                        { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
-                        { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
-                        { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
-                      ].map(item => (
-                        <button 
-                          key={item.id}
-                          onClick={() => { 
-                            setActiveView(item.id as ActiveView); 
-                            setIsSidebarOpen(false); 
-                            setExpandedSection(null);
-                            if (item.id === 'preventivos' || item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos') {
-                              handleSyncData();
-                            }
-                          }} 
-                          className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                        >
-                          {item.icon} {item.label}
-                        </button>
-                      ))}
+                      {expandedSection === 'gestion' && (
+                        <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                          {[
+                            { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
+                            { id: 'novedades', label: 'Novedades', icon: <ClipboardList size={18}/> },
+                            { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
+                            { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
+                            { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
+                            { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
+                            { id: 'preventivos', label: 'Preventivos', icon: <Clock size={18}/> },
+                            { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
+                            { id: 'indisponibilidad', label: 'Indisponibilidad', icon: <AlertTriangle size={18}/> },
+                            { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
+                            { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
+                          ].map(item => (
+                            <button 
+                              key={item.id}
+                              onClick={() => { 
+                                setActiveView(item.id as ActiveView); 
+                                setIsSidebarOpen(false); 
+                                setExpandedSection(null);
+                                if (item.id === 'preventivos' || item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos' || item.id === 'indisponibilidad') {
+                                  handleSyncData();
+                                }
+                              }} 
+                              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                              {item.icon} {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* RECURSOS SECTION */}
-                <div className="space-y-2">
-                  <button 
-                    onClick={() => setExpandedSection(expandedSection === 'recursos' ? null : 'recursos')}
-                    className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
-                  >
-                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">RECURSOS</p>
-                    {expandedSection === 'recursos' ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
-                  </button>
+                    {/* RECURSOS SECTION */}
+                    <div className="space-y-2">
+                      <button 
+                        onClick={() => setExpandedSection(expandedSection === 'recursos' ? null : 'recursos')}
+                        className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
+                      >
+                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">RECURSOS</p>
+                        {expandedSection === 'recursos' ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
+                      </button>
 
-                  {expandedSection === 'recursos' && (
-                    <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                      {[
-                        { id: 'enlaces', label: 'Enlaces Flota', icon: <LinkIcon size={18}/> },
-                      ].map(item => (
-                        <button 
-                          key={item.id}
-                          onClick={() => { 
-                            setActiveView(item.id as ActiveView); 
-                            setIsSidebarOpen(false); 
-                            setExpandedSection(null);
-                          }} 
-                          className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                        >
-                          {item.icon} {item.label}
-                        </button>
-                      ))}
+                      {expandedSection === 'recursos' && (
+                        <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                          {[
+                            { id: 'enlaces', label: 'Enlaces Flota', icon: <LinkIcon size={18}/> },
+                          ].map(item => (
+                            <button 
+                              key={item.id}
+                              onClick={() => { 
+                                setActiveView(item.id as ActiveView); 
+                                setIsSidebarOpen(false); 
+                                setExpandedSection(null);
+                              }} 
+                              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                              {item.icon} {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
               </nav>
 
           <button onClick={handleSyncData} className="mt-auto w-full flex items-center justify-center gap-3 py-4 bg-white/5 text-indigo-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all">
@@ -937,24 +948,28 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="ml-2 md:ml-4 flex items-center gap-2 md:gap-3">
-             <div className="hidden lg:flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl">
-               <Building2 size={12} className="text-slate-400" />
-               <select className="bg-transparent font-black text-[9px] uppercase outline-none" value={filterCd} onChange={e => setFilterCd(e.target.value)}>
-                  <option value="all">TODOS LOS CD</option>
-                  {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-               </select>
-             </div>
-             <button onClick={() => {
-                if(activeView === 'comparendos') setShowFineForm(true);
-                else if(activeView === 'vehiculos') setShowDocUpdateForm(true);
-                else if(activeView === 'novedades') setShowReportForm(true);
-                else if(activeView === 'lavados') setShowWashForm(true);
-                else if(activeView === 'limpieza') setShowCleaningForm(true);
-                else if(activeView === 'calibraciones') setShowCalibrationForm(true);
-                else if(activeView === 'preventivos') setShowPreventiveForm(true);
-             }} className="p-2 md:p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20">
-                <Plus size={18} className="md:size-5" />
-             </button>
+             {activeView !== 'operadores' && (
+               <>
+                 <div className="hidden lg:flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl">
+                   <Building2 size={12} className="text-slate-400" />
+                   <select className="bg-transparent font-black text-[9px] uppercase outline-none" value={filterCd} onChange={e => setFilterCd(e.target.value)}>
+                      <option value="all">TODOS LOS CD</option>
+                      {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
+                   </select>
+                 </div>
+                 <button onClick={() => {
+                    if(activeView === 'comparendos') setShowFineForm(true);
+                    else if(activeView === 'vehiculos') setShowDocUpdateForm(true);
+                    else if(activeView === 'novedades') setShowReportForm(true);
+                    else if(activeView === 'lavados') setShowWashForm(true);
+                    else if(activeView === 'limpieza') setShowCleaningForm(true);
+                    else if(activeView === 'calibraciones') setShowCalibrationForm(true);
+                    else if(activeView === 'preventivos') setShowPreventiveForm(true);
+                 }} className="p-2 md:p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20">
+                    <Plus size={18} className="md:size-5" />
+                 </button>
+               </>
+             )}
           </div>
         </header>
 
@@ -2146,6 +2161,18 @@ const App: React.FC = () => {
           {activeView === 'correctivos' && (
             <div className="max-w-7xl mx-auto pb-20">
               <CorrectivesModule data={correctives} onRefresh={handleSyncData} />
+            </div>
+          )}
+
+          {activeView === 'indisponibilidad' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <UnavailabilityModule data={unavailabilityRecords} onRefresh={handleSyncData} />
+            </div>
+          )}
+
+          {activeView === 'operadores' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <OperatorsModule data={operators} onRefresh={handleSyncData} />
             </div>
           )}
         </div>

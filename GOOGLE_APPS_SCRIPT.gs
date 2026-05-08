@@ -423,6 +423,16 @@ function doPost(e) {
         var s = getSheetByGid(ss, "505557891") || getS(ss, "CALIBRACIONES");
         s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, sImg(d.certificateUrl, "CALIB_" + d.plate), "COMPLETADO"]);
       }
+      else if (m === 'POST_UNAVAILABILITY_BATCH') {
+        var ssUnav = SpreadsheetApp.openById("1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0");
+        var s = ssUnav.getSheetByName("INDISPONIBILIDAD");
+        if (!s) return output("error", "Hoja INDISPONIBILIDAD no encontrada");
+        if (d && d.length > 0) {
+          s.getRange(s.getLastRow() + 1, 1, d.length, d[0].length).setValues(d);
+        }
+        lock.releaseLock();
+        return output("success", "Lote de indisponibilidad procesado.");
+      }
     }
 
     lock.releaseLock();

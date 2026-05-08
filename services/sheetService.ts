@@ -1,11 +1,11 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxRwydTWV8PQl3bLQlbGgReO_be2s_6ahdkfFDLUIYWyUDTTuJYhfkAKl9SSO1F0dtw/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbxRwydTWV8PQl3bLQlbGgReO_be2s_6ahdkfFDLUIYWyUDTTuJYhfkAKl9SSO1F0dtw/exec';
-const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbxRwydTWV8PQl3bLQlbGgReO_be2s_6ahdkfFDLUIYWyUDTTuJYhfkAKl9SSO1F0dtw/exec';
-const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbxRwydTWV8PQl3bLQlbGgReO_be2s_6ahdkfFDLUIYWyUDTTuJYhfkAKl9SSO1F0dtw/exec';
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec'; 
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec';
+const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec';
+const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -19,8 +19,11 @@ const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_I
 const FINES_SHEET_ID = '1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M';
 const BASE_URL_FINES = `https://docs.google.com/spreadsheets/d/${FINES_SHEET_ID}/export?format=csv`;
 
+const OPERATORS_DOC_ID = '1qLEXUCt1RAr28lwOX2sCJhjoEoG4vKVOrv2d45iZ6kU';
+
 // ID de la hoja de Check List
 const CHECKLIST_DOC_ID = '1i6qGjwhQW3AeR1ja5UxZkOXjJU3oh0f_8Grt131NQzk';
+const CHECKLIST_GALAPA_DOC_ID = '14kak0CqSnX9oOXk0GKD0G_QIt5aJxuCu9-_Livst70Y';
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
@@ -75,6 +78,14 @@ const parseFlexibleDate = (dateStr: any): string => {
     }
     return '';
   } catch { return ''; }
+};
+
+const getWeekNumber = (d: Date): number => {
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
 };
 
 /**
@@ -784,8 +795,90 @@ export const fetchWorkshopRecordsFromSheet = async (): Promise<WorkshopRecord[]>
 };
 
 export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
+  const fetchFromSource = async (docId: string, sheetName: string, defaultCd: string): Promise<CheckList[]> => {
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${sheetName}${getCacheBuster()}`;
+      const response = await fetch(url);
+      const csvText = await response.text();
+      if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+      
+      return new Promise((resolve) => {
+        Papa.parse(csvText, {
+          header: false, skipEmptyLines: 'greedy',
+          complete: (results) => {
+            const rows = results.data as any[][];
+            if (!rows || rows.length < 2) { resolve([]); return; }
+            
+            const records = rows.slice(1)
+              .filter(row => {
+                // Indice 8 (Columna I) es EMPRESA según el usuario
+                if (!row || !row[8]) return false;
+                const empresa = cleanSheetValue(row[8]).toUpperCase();
+                // Solo mostrar BAVARIA
+                return empresa === 'BAVARIA';
+              })
+              .map((row, i): CheckList => {
+                // Según el usuario (indices B=1, C=2...): 
+                // B: Fecha (row[1]), C: vehiculo (row[2]), D: Salida (row[3]), E: Retorno (row[4]), 
+                // G: Estado (row[6]), H: Contratista (row[7]), I: EMPRESA (row[8]), J: CONDUCTOR (row[9])
+                // K: Semana (row[10]), M: Novedades (row[12])
+                const fecha = parseFlexibleDate(row[1]);
+                const rawConductor = cleanSheetValue(row[9]);
+                const rawSalida = cleanSheetValue(row[3]);
+                const rawRetorno = cleanSheetValue(row[4]);
+                const rawSemana = cleanSheetValue(row[10]);
+
+                // Usar semana de la hoja si existe, de lo contrario calcularla
+                let semanaStr = rawSemana;
+                if (!semanaStr || semanaStr.trim() === '') {
+                  try {
+                    if (fecha) {
+                      const d = new Date(fecha + 'T12:00:00');
+                      if (!isNaN(d.getTime())) {
+                        semanaStr = String(getWeekNumber(d));
+                      }
+                    }
+                  } catch (e) {
+                    semanaStr = '';
+                  }
+                }
+
+                return {
+                  id: `check-${docId}-${i}`,
+                  fecha: fecha,
+                  vehiculo: normalizePlate(cleanSheetValue(row[2])),
+                  salida: rawSalida === '1' ? '100%' : '0%',
+                  retorno: rawRetorno === '1' ? '100%' : '0%',
+                  estado: cleanSheetValue(row[6]),
+                  contratista: cleanSheetValue(row[7]),
+                  empresa: cleanSheetValue(row[8]),
+                  conductor: rawConductor.trim() === '' ? '#N/A' : rawConductor,
+                  semana: semanaStr,
+                  novedades: cleanSheetValue(row[12]) || '', // Indice 12
+                  cd: defaultCd,
+                  source: defaultCd === 'LA ARENOSA' ? 'ARENOSA' : 'GALAPA'
+                };
+              });
+            resolve(records);
+          },
+          error: () => resolve([])
+        });
+      });
+    } catch (e) { return []; }
+  };
+
+  const [arenosa, galapa] = await Promise.all([
+    fetchFromSource(CHECKLIST_DOC_ID, 'DATA', 'LA ARENOSA'),
+    fetchFromSource(CHECKLIST_GALAPA_DOC_ID, 'DATA', 'GALAPA')
+  ]);
+
+  return [...arenosa, ...galapa];
+};
+
+export const fetchUnavailabilityFromSheet = async (): Promise<UnavailabilityRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${CHECKLIST_DOC_ID}/gviz/tq?tqx=out:csv&sheet=DATA${getCacheBuster()}`;
+    const docId = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=INDISPONIBILIDAD${getCacheBuster()}`;
     const response = await fetch(url);
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -798,29 +891,40 @@ export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
           if (!rows || rows.length < 2) { resolve([]); return; }
           
           const records = rows.slice(1)
-            .filter(row => {
-              if (!row || !row[2]) return false;
-              const empresa = cleanSheetValue(row[8]).toUpperCase();
-              // Solo mostrar BAVARIA
-              return empresa === 'BAVARIA';
-            })
-            .map((row, i): CheckList => {
-              const rawConductor = cleanSheetValue(row[9]);
-              const rawSalida = cleanSheetValue(row[3]);
-              const rawRetorno = cleanSheetValue(row[4]);
+            .filter(row => row && row[2]) // Placa en indice 2
+            .map((row, i): UnavailabilityRecord => {
+              const plate = normalizePlate(cleanSheetValue(row[2]));
+              const entryDate = parseFlexibleDate(row[10]);
+              const exitDate = parseFlexibleDate(row[11]);
+              let days = parseInt(cleanSheetValue(row[12]));
+
+              // Cálculo automático de días en taller si está vacío
+              if (isNaN(days) || cleanSheetValue(row[12]) === '') {
+                if (entryDate) {
+                  const start = new Date(entryDate + 'T00:00:00');
+                  const end = exitDate ? new Date(exitDate + 'T00:00:00') : new Date();
+                  const diffTime = end.getTime() - start.getTime();
+                  days = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                } else {
+                  days = 0;
+                }
+              }
 
               return {
-                id: `check-${i}`,
-                fecha: parseFlexibleDate(row[1]),
-                vehiculo: normalizePlate(cleanSheetValue(row[2])),
-                salida: rawSalida === '1' ? '100%' : '0%',
-                retorno: rawRetorno === '1' ? '100%' : '0%',
-                estado: cleanSheetValue(row[6]),
-                contratista: cleanSheetValue(row[7]),
-                empresa: cleanSheetValue(row[8]),
-                conductor: rawConductor.trim() === '' ? '#N/A' : rawConductor,
-                semana: cleanSheetValue(row[10]),
-                novedades: cleanSheetValue(row[12]),
+                id: `unavail-${i}-${plate}`,
+                fecha: parseFlexibleDate(row[0]),
+                semana: cleanSheetValue(row[1]),
+                placa: plate,
+                contratista: cleanSheetValue(row[3]),
+                cd: cleanSheetValue(row[4]),
+                estado: cleanSheetValue(row[5]),
+                sistema: cleanSheetValue(row[6]),
+                novedad: cleanSheetValue(row[7]),
+                criticidad: cleanSheetValue(row[8]),
+                taller: cleanSheetValue(row[9]),
+                fechaIngreso: entryDate,
+                fechaSalida: exitDate,
+                diasTaller: days
               };
             });
           resolve(records);
@@ -829,6 +933,39 @@ export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
       });
     });
   } catch (e) { return []; }
+};
+
+export const saveUnavailabilityRecords = async (records: Partial<UnavailabilityRecord>[]): Promise<boolean> => {
+  const UNAVAILABILITY_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec';
+  
+  // Función para formatear YYYY-MM-DD a DD/MM/YYYY
+  const formatSheetDate = (dateStr: string | undefined) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return dateStr;
+  };
+
+  const payload = {
+    method: 'POST_UNAVAILABILITY_BATCH',
+    data: records.map(r => [
+      formatSheetDate(r.fecha),      // Index 0: Fecha
+      r.semana || '',                // Index 1: Semana
+      r.placa || '',                 // Index 2: Placa
+      r.contratista || '',           // Index 3: Contratista
+      r.cd || '',                    // Index 4: CD
+      r.estado || '',                // Index 5: Estado
+      r.sistema || '',               // Index 6: Sistema
+      r.novedad || '',               // Index 7: Novedad
+      r.criticidad || '',            // Index 8: Criticidad (Enviamos solo el número)
+      r.taller || '',                // Index 9: Taller
+      formatSheetDate(r.fechaIngreso), // Index 10: Fecha de ingreso
+      formatSheetDate(r.fechaSalida),  // Index 11: Fecha salida de taller
+      r.diasTaller || ''             // Index 12: Días en taller
+    ])
+  };
+
+  return sendToGAS(payload, UNAVAILABILITY_SCRIPT_URL);
 };
 
 export const fetchFuelPerformanceFromSheet = async (): Promise<FuelPerformance[]> => {
@@ -1031,4 +1168,71 @@ export const submitCorrectiveUpdateToSheet = async (data: any): Promise<{success
 export const submitFineToSheet = async (data: any): Promise<boolean> => {
   const method = data.updateMode ? 'POST_FINE_UPDATE' : 'POST_FINE';
   return await sendToGAS({ method, data }, GOOGLE_SCRIPT_FINES_URL);
+};
+
+export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
+  try {
+    // Usando export?format=csv y gid=2049753520 que es más fiable
+    const url = `https://docs.google.com/spreadsheets/d/${OPERATORS_DOC_ID}/export?format=csv&gid=2049753520${getCacheBuster()}`;
+    const response = await fetch(url);
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+
+    const parseDays = (val: any): number => {
+      const cleaned = cleanSheetValue(val).replace(/[,.]/g, '');
+      return parseInt(cleaned) || 0;
+    };
+
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+
+          const HEADER_IDENTIFIER = "NOMBRES Y APELLIDOS";
+          const operators = rows.slice(1)
+            .filter(row => row && row[3] && cleanSheetValue(row[3]) !== "" && cleanSheetValue(row[3]).toUpperCase() !== HEADER_IDENTIFIER)
+            .map((row, i): OperatorRecord => {
+            // Mapping based on provided columns: A=0, B=1, C=2, D=3, E=4, F=5, H=7, O=14, P=15, Q=16, R=17, S=18, W=22, X=23, Y=24, Z=25, AA=26, AB=27, AC=28, AD=29, AE=30, AF=31, AG=32, AH=33, AI=34, AJ=35, AK=36
+            return {
+              id: `op-${i}-${cleanSheetValue(row[3])}-${cleanSheetValue(row[4])}`,
+              cd: cleanSheetValue(row[1]),                  // Col B (1)
+              provider: cleanSheetValue(row[2]),            // Col C (2)
+              name: cleanSheetValue(row[3]),                // Col D (3)
+              identification: cleanSheetValue(row[4]),      // Col E (4)
+              position: cleanSheetValue(row[5]),            // Col F (5)
+              hireDate: parseFlexibleDate(row[7]),           // Col H (7)
+              licenseExpiry: parseFlexibleDate(row[14]),    // Col O (14)
+              licenseDaysPending: parseDays(row[15]),       // Col P (15)
+              category: cleanSheetValue(row[16]),           // Col Q (16)
+              restrictions: cleanSheetValue(row[17]),       // Col R (17)
+              fines: cleanSheetValue(row[18]),              // Col S (18)
+              courseExpiry: parseFlexibleDate(row[22]),     // Col W (22)
+              courseDaysPending: parseDays(row[23]),        // Col X (23)
+              entity: cleanSheetValue(row[24]),             // Col Y (24)
+              examStatus: cleanSheetValue(row[25]),         // Col Z (25)
+              examExpiry: parseFlexibleDate(row[26]),       // Col AA (26)
+              examDaysPending: parseDays(row[27]),          // Col AB (27)
+              opmCourseDate: parseFlexibleDate(row[28]),    // Col AC (28)
+              opmExpiry: parseFlexibleDate(row[29]),        // Col AD (29)
+              opmDaysPending: parseDays(row[30]),           // Col AE (30)
+              opmEntity: cleanSheetValue(row[31]),          // Col AF (31)
+              licenseUrl: cleanSheetValue(row[32]),         // Col AG (32)
+              courseUrl: cleanSheetValue(row[33]),          // Col AH (33)
+              examUrl: cleanSheetValue(row[34]),            // Col AI (34)
+              opmUrl: cleanSheetValue(row[35]),             // Col AJ (35)
+              photoUrl: cleanSheetValue(row[36])           // Col AK (36)
+            };
+          });
+          resolve(operators);
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) {
+    console.error("Error fetching operators:", e);
+    return [];
+  }
 };

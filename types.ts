@@ -228,6 +228,8 @@ export interface CheckList {
   conductor: string;
   semana: string;
   novedades: string;
+  cd?: string;
+  source?: 'ARENOSA' | 'GALAPA';
 }
 
 export interface FuelPerformance {
@@ -256,4 +258,51 @@ export interface PlateAdherence {
   plate: string;
   driverName: string;
   isValid: boolean; // Column J: 1 = true, 0 = false
+}
+
+export interface UnavailabilityRecord {
+  id: string;
+  fecha: string;
+  semana: string;
+  placa: string;
+  contratista: string;
+  cd: string;
+  estado: string;
+  sistema: string;
+  novedad: string;
+  criticidad: string;
+  taller: string;
+  fechaIngreso: string;
+  fechaSalida: string;
+  diasTaller: number;
+}
+
+export interface OperatorRecord {
+  id: string;
+  cd: string;                // Indice 1
+  provider: string;          // Indice 2
+  name: string;              // Indice 3
+  identification: string;    // Indice 4
+  position: string;          // Indice 5
+  hireDate: string;          // Indice 7
+  licenseExpiry: string;     // Indice 14
+  licenseDaysPending: number;// Indice 15
+  category: string;          // Indice 16
+  restrictions: string;      // Indice 17
+  fines: string;             // Indice 18
+  courseExpiry: string;      // Indice 22
+  courseDaysPending: number; // Indice 23
+  entity: string;            // Indice 24
+  examStatus: string;        // Indice 25
+  examExpiry: string;        // Indice 26
+  examDaysPending: number;   // Indice 27
+  opmCourseDate: string;     // Indice 28
+  opmExpiry: string;         // Indice 29
+  opmDaysPending: number;    // Indice 30
+  opmEntity: string;         // Indice 31
+  licenseUrl?: string;       // Indice 32 (AG)
+  courseUrl?: string;        // Indice 33 (AH)
+  examUrl?: string;          // Indice 34 (AI)
+  opmUrl?: string;           // Indice 35 (AJ)
+  photoUrl?: string;         // Indice 36 (AK)
 }
