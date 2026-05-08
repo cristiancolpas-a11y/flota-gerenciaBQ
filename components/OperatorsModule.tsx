@@ -113,11 +113,11 @@ const OperatorsModule: React.FC<OperatorsModuleProps> = ({ data, onRefresh }) =>
 
   // KPIs
   const stats = useMemo(() => {
-    const total = data.length;
-    const licenseWarning = data.filter(o => o.licenseDaysPending < 30).length;
-    const courseWarning = data.filter(o => o.courseDaysPending < 30).length;
-    const examWarning = data.filter(o => o.examDaysPending < 30).length;
-    const allValid = data.filter(o => 
+    const total = filteredData.length;
+    const licenseWarning = filteredData.filter(o => o.licenseDaysPending < 30).length;
+    const courseWarning = filteredData.filter(o => o.courseDaysPending < 30).length;
+    const examWarning = filteredData.filter(o => o.examDaysPending < 30).length;
+    const allValid = filteredData.filter(o => 
       o.licenseDaysPending >= 30 && 
       o.courseDaysPending >= 30 && 
       o.examDaysPending >= 30 && 
@@ -125,7 +125,7 @@ const OperatorsModule: React.FC<OperatorsModuleProps> = ({ data, onRefresh }) =>
     ).length;
 
     return { total, licenseWarning, courseWarning, examWarning, allValid };
-  }, [data]);
+  }, [filteredData]);
 
   const toggleAlertFilter = (type: typeof activeAlertFilter) => {
     setActiveAlertFilter(prev => prev === type ? 'NONE' : type);
@@ -356,11 +356,11 @@ const OperatorsModule: React.FC<OperatorsModuleProps> = ({ data, onRefresh }) =>
 
                {/* Info Grid */}
                <div className="grid grid-cols-2 lg:grid-cols-5 gap-y-8 gap-x-12 mb-12">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">
+                  <div className="space-y-1 group/cd cursor-pointer" onClick={() => setFilterCD(op.cd)}>
+                    <div className="flex items-center gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2 group-hover/cd:text-indigo-500 transition-colors">
                       <MapPin size={10} /> Centro Dist.
                     </div>
-                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{op.cd}</p>
+                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight group-hover/cd:text-indigo-600 transition-colors">{op.cd}</p>
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">
