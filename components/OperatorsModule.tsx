@@ -7,9 +7,13 @@ import {
   ChevronRight, Calendar, Clock, 
   ShieldAlert, AlertCircle, FileText,
   BadgeCheck, ExternalLink,
-  ChevronDown
+  ChevronDown, BarChart3, PieChart, LineChart as LineIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  Cell, LabelList, PieChart as RePieChart, Pie, AreaChart, Area, Line
+} from 'recharts';
 
 interface OperatorsModuleProps {
   data: OperatorRecord[];
@@ -62,11 +66,55 @@ const OperatorsModule: React.FC<OperatorsModuleProps> = ({ data, onRefresh }) =>
   }, [data, searchTerm, filterCD, activeFilter]);
 
   const stats = useMemo(() => {
-    const total = data.length;
-    const licenseWarning = data.filter(o => o.licenseDaysPending < 30).length;
-    const courseWarning = data.filter(o => o.courseDaysPending < 30).length;
-    const examWarning = data.filter(o => o.examDaysPending < 30).length;
-    return { total, licenseWarning, courseWarning, examWarning };
+    const total = filteredData.length;
+    const licenseWarning = filteredData.filter(o => o.licenseDaysPending < 30).length;
+    const courseWarning = filteredData.filter(o => o.courseDaysPending < 30).length;
+    const examWarning = filteredData.filter(o => o.examDaysPending < 30).length;
+    const allValid = filteredData.filter(o => 
+      o.licenseDaysPending >= 30 && 
+      o.courseDaysPending >= 30 && 
+      o.examDaysPending >= 30 && 
+      (!o.opmDaysPending || o.opmDaysPending >= 30)
+    ).length;
+
+    return { total, licenseWarning, courseWarning, examWarning, allValid };
+  }, [filteredData]);
+
+  const cdStats = useMemo(() => {
+    const counts: Record<string, number> = {};
+    data.forEach(op => {
+      const cd = op.cd || 'SIN CD';
+      counts[cd] = (counts[cd] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [data]);
+
+  const alertStats = useMemo(() => {
+    return [
+      { name: 'VIGENTE', value: data.filter(o => o.licenseDaysPending >= 30 && o.courseDaysPending >= 30 && o.examDaysPending >= 30).length, color: '#10b981' },
+      { name: 'RIESGO', value: data.filter(o => (o.licenseDaysPending < 30 && o.licenseDaysPending >= 0) || (o.courseDaysPending < 30 && o.courseDaysPending >= 0) || (o.examDaysPending < 30 && o.examDaysPending >= 0)).length, color: '#f59e0b' },
+      { name: 'VENCIDO', value: data.filter(o => o.licenseDaysPending < 0 || o.courseDaysPending < 0 || o.examDaysPending < 0).length, color: '#f43f5e' },
+    ].filter(s => s.value > 0);
+  }, [data]);
+
+  const weeklyProjection = useMemo(() => {
+    const weeks = ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'];
+    const total = data.length || 1;
+    
+    return weeks.map((w, i) => {
+      const daysAhead = i * 7;
+      const validCount = data.filter(o => 
+        o.licenseDaysPending >= daysAhead && 
+        o.courseDaysPending >= daysAhead && 
+        o.examDaysPending >= daysAhead
+      ).length;
+      return { 
+        name: w, 
+        percentage: Math.round((validCount / total) * 100) 
+      };
+    });
   }, [data]);
 
   const getStatusInfo = (days: number) => {
@@ -116,46 +164,217 @@ const OperatorsModule: React.FC<OperatorsModuleProps> = ({ data, onRefresh }) =>
       </div>
 
       {/* KPI SECTION */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {kpis.map((kpi, index) => (
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {kpis.concat([{ id: 'ALL' as any, label: 'TODO VIGENTE', value: stats.allValid, icon: ShieldCheck, color: 'emerald' }]).map((kpi, index) => (
           <motion.div
-            key={kpi.id}
+            key={`${kpi.id}-${index}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            onClick={() => setActiveFilter(kpi.id)}
+            onClick={() => {
+              if (kpi.label === 'TODO VIGENTE') {
+                setActiveFilter('ALL');
+                setSearchTerm('');
+              } else {
+                setActiveFilter(kpi.id as FilterType);
+              }
+            }}
             className={`relative p-6 rounded-[2rem] border transition-all cursor-pointer group overflow-hidden ${
-              activeFilter === kpi.id 
+              activeFilter === kpi.id && kpi.label !== 'TODO VIGENTE'
                 ? 'bg-gradient-to-br from-[#7C3AED] to-[#3B82F6] border-transparent shadow-xl shadow-purple-500/20 ring-4 ring-purple-500/10' 
                 : 'bg-white border-slate-100 shadow-sm hover:shadow-md'
             }`}
           >
-            {/* Glow effect for active card */}
-            {activeFilter === kpi.id && (
+            {activeFilter === kpi.id && kpi.label !== 'TODO VIGENTE' && (
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
             )}
             
             <div className="relative z-10 flex flex-col items-center text-center">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-all duration-500 ${
-                activeFilter === kpi.id 
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center mb-3 transition-all duration-500 ${
+                activeFilter === kpi.id && kpi.label !== 'TODO VIGENTE'
                   ? 'bg-white/20 text-white' 
                   : `bg-${kpi.color}-50 text-${kpi.color}-500 group-hover:scale-110`
               }`}>
-                <kpi.icon size={24} />
+                <kpi.icon size={20} />
               </div>
-              <span className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 ${
-                activeFilter === kpi.id ? 'text-purple-100/70' : 'text-slate-400'
+              <span className={`text-[8px] font-black uppercase tracking-[0.2em] mb-1 leading-tight ${
+                activeFilter === kpi.id && kpi.label !== 'TODO VIGENTE' ? 'text-purple-100/70' : 'text-slate-400'
               }`}>
                 {kpi.label}
               </span>
-              <span className={`text-4xl font-black tracking-tighter ${
-                activeFilter === kpi.id ? 'text-white' : 'text-slate-800'
+              <span className={`text-3xl font-black tracking-tighter ${
+                activeFilter === kpi.id && kpi.label !== 'TODO VIGENTE' ? 'text-white' : 'text-slate-800'
               }`}>
                 {kpi.value}
               </span>
             </div>
           </motion.div>
         ))}
+      </div>
+
+      {/* CHARTS SECTION */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-3">
+                <BarChart3 size={18} className="text-purple-500" />
+                Operadores por CD
+              </h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Distribución demográfica</p>
+            </div>
+          </div>
+          
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={cdStats} layout="vertical" margin={{ left: 40, right: 40 }}>
+                <XAxis type="number" hide />
+                <YAxis 
+                  dataKey="name" 
+                  type="category" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }}
+                  width={80}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                />
+                <Bar dataKey="value" radius={[0, 10, 10, 0]} barSize={24} onClick={(data) => setFilterCD(data.name)}>
+                  {cdStats.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#7C3AED' : '#3B82F6'} fillOpacity={0.8} className="cursor-pointer" />
+                  ))}
+                  <LabelList dataKey="value" position="right" style={{ fill: '#475569', fontSize: 10, fontWeight: 900 }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-3">
+                <PieChart size={18} className="text-blue-500" />
+                Vigencia Global
+              </h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Cumplimiento de flota</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center justify-center">
+            <div className="h-[200px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RePieChart>
+                  <Pie
+                    data={alertStats}
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={8}
+                    dataKey="value"
+                    labelLine={false}
+                    label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                    style={{ fontSize: '10px', fontWeight: '900', fill: '#64748b' }}
+                  >
+                    {alertStats.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </RePieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-3 gap-2 w-full mt-4">
+               {alertStats.map((s, i) => (
+                 <div key={i} className="flex flex-col items-center p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="w-2 h-2 rounded-full mb-2" style={{ backgroundColor: s.color }} />
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">{s.name}</span>
+                    <span className="text-sm font-black text-slate-800 tracking-tighter mt-1">{s.value}</span>
+                 </div>
+               ))}
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100"
+        >
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-[0.2em] flex items-center gap-3">
+                <LineIcon size={18} className="text-emerald-500" />
+                Cumplimiento Semanal (%)
+              </h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Proyección de vigencia 4 semanas</p>
+            </div>
+          </div>
+          
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={weeklyProjection} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorPct" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }}
+                />
+                <YAxis 
+                  domain={[0, 100]} 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 9, fontWeight: 900, fill: '#94a3b8' }}
+                  tickFormatter={(val) => `${val}%`}
+                />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                  formatter={(val: number) => [`${val}%`, 'Cumplimiento']}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="percentage" 
+                  stroke="#10b981" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorPct)" 
+                >
+                  <LabelList 
+                    dataKey="percentage" 
+                    position="top" 
+                    offset={10} 
+                    content={(props: any) => {
+                      const { x, y, value } = props;
+                      return (
+                        <text x={x} y={y - 10} fill="#059669" fontSize={10} fontWeight={900} textAnchor="middle">
+                          {value}%
+                        </text>
+                      );
+                    }}
+                  />
+                </Area>
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </motion.div>
       </div>
 
       {/* FILTERS & SEARCH */}
@@ -206,7 +425,7 @@ const OperatorsModule: React.FC<OperatorsModuleProps> = ({ data, onRefresh }) =>
               <NoResults onRefresh={onRefresh} />
             ) : (
               filteredData.map((op, index) => (
-                <OperatorCard key={op.id} op={op} calculateExperience={calculateExperience} getStatusInfo={getStatusInfo} />
+                <OperatorCard key={op.id} op={op} calculateExperience={calculateExperience} getStatusInfo={getStatusInfo} setFilterCD={setFilterCD} />
               ))
             )}
           </div>
@@ -302,9 +521,10 @@ interface OperatorCardProps {
   op: OperatorRecord;
   calculateExperience: (hireDate: string) => string;
   getStatusInfo: (days: number) => any;
+  setFilterCD: (cd: string) => void;
 }
 
-const OperatorCard: React.FC<OperatorCardProps> = ({ op, calculateExperience, getStatusInfo }) => {
+const OperatorCard: React.FC<OperatorCardProps> = ({ op, calculateExperience, getStatusInfo, setFilterCD }) => {
   return (
     <motion.div 
       initial={{ opacity: 0, x: -20 }}
@@ -358,13 +578,16 @@ const OperatorCard: React.FC<OperatorCardProps> = ({ op, calculateExperience, ge
                 <span className="text-[10px] font-black text-white uppercase tracking-wider">{op.provider}</span>
              </div>
           </div>
-          <div className="flex items-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all text-left">
-             <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
+          <div 
+            onClick={() => setFilterCD(op.cd)}
+            className="flex items-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/10 transition-all text-left cursor-pointer group/cd"
+          >
+             <div className="w-8 h-8 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover/cd:bg-blue-400 group-hover/cd:text-white transition-all">
                 <MapPin size={16} />
              </div>
              <div>
-                <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Ubicación</span>
-                <span className="text-[10px] font-black text-white uppercase tracking-wider">{op.cd}</span>
+                <span className="block text-[8px] font-black text-slate-500 uppercase tracking-widest mb-0.5 group-hover/cd:text-blue-300 transition-all">Ubicación</span>
+                <span className="text-[10px] font-black text-white uppercase tracking-wider group-hover/cd:text-blue-100 transition-all">{op.cd}</span>
              </div>
           </div>
         </div>
@@ -384,12 +607,37 @@ const OperatorCard: React.FC<OperatorCardProps> = ({ op, calculateExperience, ge
              </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-12 gap-y-8">
-             <InfoItem icon={Building2} label="Cargo" value={op.position} />
-             <InfoItem icon={Clock} label="Experiencia" value={calculateExperience(op.hireDate)} />
-             <InfoItem icon={Award} label="Categoría" value={op.category} />
-             <InfoItem icon={ShieldAlert} label="Restricciones" value={op.restrictions || 'Ninguna'} />
-             <InfoItem icon={FileText} label="Comparendos" value={op.fines || 'Sin deudas'} />
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-y-8 gap-x-12 mb-12">
+                  <div className="space-y-1 group/cd cursor-pointer" onClick={() => setFilterCD(op.cd)}>
+                    <div className="flex items-center gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2 group-hover/cd:text-indigo-500 transition-colors">
+                      <MapPin size={10} /> Centro Dist.
+                    </div>
+                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight group-hover/cd:text-indigo-600 transition-colors">{op.cd}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">
+                       <Building2 size={10} /> Cargo
+                    </div>
+                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{op.position}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">
+                       <Clock size={10} /> Experiencia
+                    </div>
+                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{calculateExperience(op.hireDate)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">
+                       <Award size={10} /> Categoría
+                    </div>
+                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{op.category}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">
+                       <FileText size={10} /> Comparendos
+                    </div>
+                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight">{op.fines || 'Sin deudas'}</p>
+                  </div>
           </div>
         </div>
 

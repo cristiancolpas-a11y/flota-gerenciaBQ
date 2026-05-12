@@ -15,7 +15,8 @@ import {
   LineChart,
   Line,
   Legend,
-  ReferenceLine
+  ReferenceLine,
+  LabelList
 } from 'recharts';
 
 interface PreventiveModuleProps {
@@ -27,6 +28,7 @@ interface PreventiveModuleProps {
   filterCd?: string;
   filterContractor?: string;
   onUpdate?: (v: Preventive) => void;
+  onFilterCdChange?: (cd: string) => void;
 }
 
 const PreventiveModule: React.FC<PreventiveModuleProps> = ({ 
@@ -37,7 +39,8 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
   selectedMonth: globalMonth,
   filterCd,
   filterContractor,
-  onUpdate 
+  onUpdate,
+  onFilterCdChange
 }) => {
   const [localMonth, setLocalMonth] = useState('all');
   const [localWeek, setLocalWeek] = useState('all');
@@ -109,18 +112,24 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
     }).filter(w => w.total > 0).slice(-12);
 
     // CD data (always show all CDs for comparison, but respect Contractor filter)
-    const cds = Array.from(new Set(externalPreventives?.map(p => p.cd?.trim()).filter(Boolean) || []));
+    const preventivesWithCd = externalPreventives?.map(p => {
+      const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(p.plate));
+      return { ...p, resolvedCd: (vehicle?.cd || p.cd || 'SIN CD').trim().toUpperCase() };
+    }) || [];
+
+    const cds = Array.from(new Set(preventivesWithCd.map(p => p.resolvedCd).filter(Boolean)));
+    
     const cdStats = cds.map(cd => {
-      const cdData = externalPreventives?.filter(p => {
+      const cdData = preventivesWithCd.filter(p => {
         const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(p.plate));
-        const matchCd = p.cd?.trim() === cd;
-        const matchContractor = !filterContractor || filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || p.contractor === filterContractor;
+        const matchCd = p.resolvedCd === cd;
+        const matchContractor = !filterContractor || filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor);
         return matchCd && matchContractor;
-      }) || [];
+      });
       const total = cdData.length;
       const complied = cdData.filter(p => p.complianceStatus === 'Cumplió' || p.complianceStatus === '1').length;
       const percentage = total > 0 ? Math.round((complied / total) * 100) : 0;
-      return { name: String(cd).toUpperCase(), percentage, total, complied };
+      return { name: cd, percentage, total, complied };
     }).filter(cd => cd.total > 0).sort((a, b) => b.percentage - a.percentage);
 
     return { monthStats, weekStats, cdStats };
@@ -212,6 +221,7 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
                       fill={entry.percentage >= 95 ? '#10b981' : entry.percentage >= 80 ? '#f59e0b' : '#ef4444'} 
                     />
                   ))}
+                  <LabelList dataKey="percentage" position="top" style={{ fill: '#1e293b', fontSize: 10, fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -262,7 +272,9 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
                   stroke="#6366f1" 
                   strokeWidth={3} 
                   dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }}
-                />
+                >
+                  <LabelList dataKey="complied" position="top" offset={10} style={{ fill: '#4338ca', fontSize: 10, fontWeight: 900 }} />
+                </Line>
                 <Line 
                   type="monotone" 
                   dataKey="total" 
@@ -317,13 +329,19 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
                     textTransform: 'uppercase'
                   }}
                 />
-                <Bar dataKey="percentage" radius={[0, 6, 6, 0]} barSize={15}>
+                <Bar 
+                  dataKey="percentage" 
+                  radius={[0, 6, 6, 0]} 
+                  barSize={15}
+                  onClick={(data) => onFilterCdChange?.(data.name)}
+                >
                   {chartData.cdStats.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill={entry.percentage >= 95 ? '#10b981' : entry.percentage >= 80 ? '#f59e0b' : '#ef4444'} 
                     />
                   ))}
+                  <LabelList dataKey="percentage" position="right" style={{ fill: '#1e293b', fontSize: 10, fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
