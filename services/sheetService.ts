@@ -645,7 +645,8 @@ export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
               return {
                 id: `prev-${plate}-${i}`,
                 cd: cleanSheetValue(row[12]) || 'GENERAL',
-                contractor: cleanSheetValue(row[13]) || 'GENERAL',
+                contractor: cleanSheetValue(row[14]) || cleanSheetValue(row[13]) || 'GENERAL',
+                brand: cleanSheetValue(row[13]) || 'GENERAL',
                 plate: plate,
                 currentMileage: currentKm,
                 nextMaintenanceMileage: nextKm,

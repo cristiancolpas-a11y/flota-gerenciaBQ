@@ -108,8 +108,19 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
       const weekData = filteredForCharts.filter(p => p.week === w);
       const total = weekData.length;
       const complied = weekData.filter(p => p.complianceStatus === 'Cumplió' || p.complianceStatus === '1').length;
-      return { name: `S${w}`, complied, total };
+      const percentage = total > 0 ? Math.round((complied / total) * 100) : 0;
+      return { name: `S${w}`, complied, total, percentage };
     }).filter(w => w.total > 0).slice(-12);
+
+    // Brand data
+    const brands = Array.from(new Set(filteredForCharts.map(p => p.brand?.trim().toUpperCase()).filter(Boolean)));
+    const brandStats = brands.map(brand => {
+      const brandData = filteredForCharts.filter(p => p.brand?.trim().toUpperCase() === brand);
+      const total = brandData.length;
+      const complied = brandData.filter(p => p.complianceStatus === 'Cumplió' || p.complianceStatus === '1').length;
+      const percentage = total > 0 ? Math.round((complied / total) * 100) : 0;
+      return { name: brand, percentage, total, complied };
+    }).sort((a, b) => b.percentage - a.percentage);
 
     // CD data (always show all CDs for comparison, but respect Contractor filter)
     const preventivesWithCd = externalPreventives?.map(p => {
@@ -132,7 +143,7 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
       return { name: cd, percentage, total, complied };
     }).filter(cd => cd.total > 0).sort((a, b) => b.percentage - a.percentage);
 
-    return { monthStats, weekStats, cdStats };
+    return { monthStats, weekStats, cdStats, brandStats };
   }, [externalPreventives, vehicles, filterCd, filterContractor, months, weeks]);
 
   return (
@@ -172,8 +183,8 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
         </div>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Charts Row 1 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -232,7 +243,7 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
           <div className="flex items-center justify-between mb-8">
             <div>
               <h3 className="text-lg font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2">
-                <BarChart3 size={20} className="text-indigo-600" /> Semanal
+                <BarChart3 size={20} className="text-indigo-600" /> Semanal (%)
               </h3>
               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
                 {filterCd && filterCd !== 'all' ? `CD: ${filterCd}` : 'Todos los Centros'}
@@ -253,6 +264,8 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
                   axisLine={false} 
                   tickLine={false} 
                   tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 800 }}
+                  unit="%"
+                  domain={[0, 100]}
                 />
                 <Tooltip 
                   contentStyle={{ 
@@ -267,14 +280,23 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '9px', fontWeight: '800', textTransform: 'uppercase', paddingTop: '10px' }} />
                 <Line 
                   type="monotone" 
+                  dataKey="percentage" 
+                  name="Cumplimiento"
+                  stroke="#10b981" 
+                  strokeWidth={3} 
+                  dot={{ r: 5, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }}
+                >
+                  <LabelList dataKey="percentage" position="top" offset={12} style={{ fill: '#065f46', fontSize: 10, fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
+                </Line>
+                <Line 
+                  type="monotone" 
                   dataKey="complied" 
                   name="Cumplieron"
                   stroke="#6366f1" 
-                  strokeWidth={3} 
-                  dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }}
-                >
-                  <LabelList dataKey="complied" position="top" offset={10} style={{ fill: '#4338ca', fontSize: 10, fontWeight: 900 }} />
-                </Line>
+                  strokeWidth={2} 
+                  strokeDasharray="5 5"
+                  dot={{ r: 3, fill: '#6366f1', strokeWidth: 0 }}
+                />
                 <Line 
                   type="monotone" 
                   dataKey="total" 
@@ -288,7 +310,10 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
 
+      {/* Charts Row 2 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl">
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -336,6 +361,64 @@ const PreventiveModule: React.FC<PreventiveModuleProps> = ({
                   onClick={(data) => onFilterCdChange?.(data.name)}
                 >
                   {chartData.cdStats.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.percentage >= 95 ? '#10b981' : entry.percentage >= 80 ? '#f59e0b' : '#ef4444'} 
+                    />
+                  ))}
+                  <LabelList dataKey="percentage" position="right" style={{ fill: '#1e293b', fontSize: 10, fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-xl">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2">
+                <Truck size={20} className="text-indigo-600" /> Por Marca/Línea (%)
+              </h3>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Cumplimiento por Flota</p>
+            </div>
+          </div>
+          <div className="h-[250px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.brandStats} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis 
+                  type="number"
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 800 }}
+                  unit="%"
+                  domain={[0, 100]}
+                />
+                <YAxis 
+                  dataKey="name" 
+                  type="category"
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 8, fontWeight: 800 }}
+                  width={100}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    border: 'none', 
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    fontSize: '10px',
+                    fontWeight: '800',
+                    textTransform: 'uppercase'
+                  }}
+                />
+                <Bar 
+                  dataKey="percentage" 
+                  radius={[0, 6, 6, 0]} 
+                  barSize={15}
+                >
+                  {chartData.brandStats.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
                       fill={entry.percentage >= 95 ? '#10b981' : entry.percentage >= 80 ? '#f59e0b' : '#ef4444'} 

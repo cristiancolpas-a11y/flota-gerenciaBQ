@@ -169,6 +169,8 @@ export interface Preventive {
   cd: string;
   contractor: string;
   plate: string;
+  brand?: string;
+  line?: string;
   lastMaintenanceMileage: number;
   nextMaintenanceMileage: number;
   currentMileage: number;
