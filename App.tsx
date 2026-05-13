@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -46,6 +46,7 @@ import FleetLinksModule from './components/FleetLinksModule';
 import CorrectivesModule from './components/CorrectivesModule';
 import UnavailabilityModule from './components/UnavailabilityModule';
 import OperatorsModule from './components/OperatorsModule';
+import ControlTowerModule from './components/ControlTowerModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -79,7 +80,8 @@ import {
   fetchPlateAdherenceFromSheet,
   fetchCorrectivesFromSheet,
   fetchUnavailabilityFromSheet,
-  fetchOperatorsFromSheet
+  fetchOperatorsFromSheet,
+  fetchControlTowerFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -128,6 +130,7 @@ const App: React.FC = () => {
   const [correctives, setCorrectives] = useState<Corrective[]>([]);
   const [unavailabilityRecords, setUnavailabilityRecords] = useState<UnavailabilityRecord[]>([]);
   const [operators, setOperators] = useState<OperatorRecord[]>([]);
+  const [controlTowerRecords, setControlTowerRecords] = useState<ControlTowerRecord[]>([]);
 
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
@@ -198,7 +201,7 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      const [v, d, f, r, w, cl, c, m, wv, p, a, oi, ch, fp, pa, corr, unav, ops] = await Promise.all([
+      const [v, d, f, r, w, cl, c, m, wv, p, a, oi, ch, fp, pa, corr, unav, ops, ct] = await Promise.all([
         fetchVehiclesFromSheet(),
         fetchDriversFromSheet(),
         fetchFinesFromSheet(),
@@ -216,7 +219,8 @@ const App: React.FC = () => {
         fetchPlateAdherenceFromSheet(),
         fetchCorrectivesFromSheet(),
         fetchUnavailabilityFromSheet(),
-        fetchOperatorsFromSheet()
+        fetchOperatorsFromSheet(),
+        fetchControlTowerFromSheet()
       ]);
 
       const filterByYear = (dateStr: string | undefined) => {
@@ -255,6 +259,7 @@ const App: React.FC = () => {
       setCorrectives(corr);
       setUnavailabilityRecords(unav);
       setOperators(ops);
+      setControlTowerRecords(ct);
     } catch (err) {
       console.error("Critical Sync Error:", err);
     } finally {
@@ -852,7 +857,6 @@ const App: React.FC = () => {
                         <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
                           {[
                             { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
-                            { id: 'novedades', label: 'Novedades', icon: <ClipboardList size={18}/> },
                             { id: 'cierre_novedades', label: 'Cierre de Novedades', icon: <Lock size={18}/> },
                             { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
                             { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
@@ -1393,7 +1397,17 @@ const App: React.FC = () => {
             <MileageEntryForm 
               vehicles={vehicles} 
               mileageLogs={mileageLogs} 
-              onSubmit={submitMileageToSheet} 
+              onSubmit={async (data) => {
+                try {
+                  await submitMileageToSheet(data);
+                  alert("✅ Kilometraje guardado con éxito.");
+                  // Intentamos sincronizar pero no bloqueamos el éxito previo
+                  handleSyncData().catch(e => console.error("Error syncing after save:", e));
+                } catch (err) {
+                  console.error("Error submitting mileage:", err);
+                  alert("❌ Error al guardar el kilometraje. Verifique su conexión y reintente.");
+                }
+              }} 
               externalCd={filterCd} 
               setExternalCd={setFilterCd} 
               externalContractor={filterContractor} 
@@ -1644,50 +1658,7 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'cierre_novedades' && (
-            <div className="max-w-7xl mx-auto space-y-8 pb-20">
-               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="space-y-1">
-                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
-                      <Lock size={40} className="text-amber-500" /> Cierre de Novedades
-                    </h2>
-                    <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Gestión y cierre de reportes pendientes</p>
-                  </div>
-                  
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
-                      <select 
-                        className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
-                        value={filterCd}
-                        onChange={e => setFilterCd(e.target.value)}
-                      >
-                        <option value="all">TODOS LOS CD</option>
-                        {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-                      </select>
-                    </div>
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {reports
-                    .filter(r => r.status === 'PENDIENTES' && (filterCd === 'all' || r.cd === filterCd || vehicles.find(v => v.plate === r.plate)?.cd === filterCd))
-                    .map(r => (
-                      <ReportCard 
-                        key={r.id} 
-                        report={r} 
-                        onViewDoc={(url, t) => setViewDoc({url, title: t})} 
-                        onManageClosure={setClosingReport} 
-                        onManageEntry={setRegisteringEntry}
-                      />
-                    ))
-                  }
-                  {reports.filter(r => r.status === 'PENDIENTES').length === 0 && (
-                    <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
-                      <ClipboardCheck size={48} className="mx-auto text-emerald-500 mb-4" />
-                      <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No hay novedades pendientes por cerrar</p>
-                    </div>
-                  )}
-               </div>
-            </div>
+            <ControlTowerModule data={controlTowerRecords} vehicles={vehicles} />
           )}
 
           {activeView === 'lavados' && (

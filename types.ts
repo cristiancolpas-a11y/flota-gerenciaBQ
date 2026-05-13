@@ -262,6 +262,29 @@ export interface PlateAdherence {
   isValid: boolean; // Column J: 1 = true, 0 = false
 }
 
+export interface ControlTowerRecord {
+  id: string;
+  contractor: string;        // Indice 0: TRANSPORTISTA
+  cd: string;                // Indice 1: CD
+  reportDate: string;        // Indice 2: FECHA REPORTE
+  week: string;              // Indice 3: SEMANA
+  month: string;             // Indice 4: MES
+  plate: string;             // Indice 5: PLACA
+  source: string;            // Indice 6: FUENTE
+  novelty: string;           // Indice 7: REPORTE
+  system: string;            // Indice 8: SISTEMA
+  status: string;            // Indice 9: ESTADO
+  criticality: string;       // Indice 10: CRITICIDAD
+  solutionDate: string;      // Indice 11: FECHA SOLUCIÓN
+  closureDays: number;       // Indice 12: DÍAS DE CIERRE
+  daysToClose: number;       // Indice 13: DÍAS PARA CIERRE
+  maintenanceCompliance: string; // Indice 14: CUMPLIMIENTO MTTO COR
+  maintenanceGoal: number;   // Indice 15: META
+  workshopGoal: number;      // Indice 16: META RT
+  workshopResponsePercentage: number; // Indice 17: PORCENTAJE DE RESPUESTA TALLER
+  observations: string;      // Indice 18: OBSERVACIONES
+}
+
 export interface UnavailabilityRecord {
   id: string;
   fecha: string;

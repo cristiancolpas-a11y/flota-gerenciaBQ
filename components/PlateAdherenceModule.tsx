@@ -263,9 +263,9 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart 
                     data={dailyData}
-                    onClick={(data) => {
+                    onClick={(data: any) => {
                       if (data && data.activeLabel) {
-                        const day = data.activeLabel.split('-')[0];
+                        const day = String(data.activeLabel).split('-')[0];
                         setSelectedDay(parseInt(day).toString());
                       }
                     }}
@@ -319,7 +319,7 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart 
                     data={monthlyData}
-                    onClick={(data) => {
+                    onClick={(data: any) => {
                       if (data && data.activePayload && data.activePayload.length > 0) {
                         setSelectedMonth(data.activePayload[0].payload.name);
                       }
@@ -384,7 +384,7 @@ const PlateAdherenceModule: React.FC<PlateAdherenceModuleProps> = ({ data }) => 
                     data={driverData} 
                     layout="vertical" 
                     margin={{ left: 40, right: 40 }}
-                    onClick={(data) => {
+                    onClick={(data: any) => {
                       if (data && data.activePayload && data.activePayload.length > 0) {
                         setSearchTerm(data.activePayload[0].payload.name);
                       }

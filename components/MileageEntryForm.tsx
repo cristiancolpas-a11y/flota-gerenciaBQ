@@ -181,6 +181,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
     if (currentKm < lastKm) {
       if (!window.confirm(`El kilometraje ingresado (${currentKm}) es menor al anterior (${lastKm}). ¿Desea continuar?`)) return;
     }
+
     setIsSubmitting(true);
     try {
       await onSubmit({
@@ -191,10 +192,12 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
         date: entryDate,
         week: selectedWeek.toString()
       });
-      setActiveVehicle(null);
+      // Importante: No cerramos el activeVehicle aquí para que el usuario 
+      // vea que se completó si así lo desea, o limpiamos.
       setNewMileage('');
+      setActiveVehicle(null);
     } catch (err) {
-      alert("Error al guardar.");
+      console.error("Error submitting mileage form:", err);
     } finally {
       setIsSubmitting(false);
     }

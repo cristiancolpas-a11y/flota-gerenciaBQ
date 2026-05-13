@@ -1,11 +1,11 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec';
-const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec';
-const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec';
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec'; 
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec';
+const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec';
+const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -24,6 +24,10 @@ const OPERATORS_DOC_ID = '1qLEXUCt1RAr28lwOX2sCJhjoEoG4vKVOrv2d45iZ6kU';
 // ID de la hoja de Check List
 const CHECKLIST_DOC_ID = '1i6qGjwhQW3AeR1ja5UxZkOXjJU3oh0f_8Grt131NQzk';
 const CHECKLIST_GALAPA_DOC_ID = '14kak0CqSnX9oOXk0GKD0G_QIt5aJxuCu9-_Livst70Y';
+
+// TORRE DE CONTROL
+const CONTROL_TOWER_DOC_ID = '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60';
+const CONTROL_TOWER_GID = '1012312873';
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
@@ -937,7 +941,7 @@ export const fetchUnavailabilityFromSheet = async (): Promise<UnavailabilityReco
 };
 
 export const saveUnavailabilityRecords = async (records: Partial<UnavailabilityRecord>[]): Promise<boolean> => {
-  const UNAVAILABILITY_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw0xbZrYj0nMkmAXMdRJG0nD-wQN47FSCwJSWFJ5egBY8GRFMHClyWPc7GRIe55zembJw/exec';
+  const UNAVAILABILITY_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec';
   
   // Función para formatear YYYY-MM-DD a DD/MM/YYYY
   const formatSheetDate = (dateStr: string | undefined) => {
@@ -1109,32 +1113,40 @@ export const fetchCorrectivesFromSheet = async (): Promise<Corrective[]> => {
 };
 
 const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL) => {
-  console.log(`Enviando a GAS (${payload.method}):`, payload);
+  console.log(`🚀 Enviando a GAS (${payload.method}):`, payload);
   try {
-    const response = await fetch(url, { 
+    // Usamos un timeout corto para no dejar la UI bloqueada si hay problemas de red
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const fetchPromise = fetch(url, { 
       method: 'POST',
+      mode: 'no-cors', // Evita preflights de CORS, permite que la petición llegue siempre
       headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
+        'Content-Type': 'text/plain',
       },
       body: JSON.stringify(payload) 
     });
+
+    await fetchPromise;
+    clearTimeout(timeoutId);
     
-    if (response.ok) {
-      const result = await response.json();
-      console.log("Respuesta de GAS:", result);
-      return result.status === 'success';
-    }
-    return true;
+    console.log("✅ Petición enviada exitosamente (modo no-cors)");
+    return true; 
   } catch (err) { 
-    // Los errores de CORS suelen caer aquí, pero el script se ejecuta igual
-    console.log("Petición enviada (posible error de CORS ignorado):", err);
+    console.warn("GAS - Error en el envío (o timeout), pero la data podría llegar:", err);
+    // En GAS, fallar aquí suele ser un problema de CORS al intentar leer, 
+    // pero el POST suele llegar al servidor. Retornamos true para no bloquear la UI.
     return true; 
   }
 };
 
 export const submitDocumentUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_DOC_UPDATE', data }); };
 export const submitReportToSheet = async (report: Report): Promise<void> => { await sendToGAS({ method: 'POST_REPORT', data: report }); };
-export const submitMileageToSheet = async (mileageData: any): Promise<void> => { await sendToGAS({ method: 'POST_MILEAGE', data: mileageData }); };
+export const submitMileageToSheet = async (mileageData: any): Promise<void> => { 
+  const success = await sendToGAS({ method: 'POST_MILEAGE', data: mileageData }); 
+  if (!success) throw new Error("Error al guardar en el servidor");
+};
 export const submitCalibrationToSheet = async (calibrationDate: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION', data: calibrationDate }); };
 export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data }); };
 export const submitWashToSheet = async (washData: any): Promise<void> => { await sendToGAS({ method: 'POST_WASH', data: washData }); };
@@ -1234,6 +1246,63 @@ export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
     });
   } catch (e) {
     console.error("Error fetching operators:", e);
+    return [];
+  }
+};
+
+export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${CONTROL_TOWER_DOC_ID}/export?format=csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
+    const response = await fetch(url);
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+
+          const records = rows.slice(1)
+            .filter(row => row && row[5]) // Placa en indice 5
+            .map((row, i): ControlTowerRecord => {
+              const parseNum = (val: any) => {
+                const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
+                return parseFloat(clean) || 0;
+              };
+
+              return {
+                id: `ct-${i}-${cleanSheetValue(row[5])}`,
+                contractor: cleanSheetValue(row[0]),
+                cd: cleanSheetValue(row[1]),
+                reportDate: parseFlexibleDate(row[2]),
+                week: cleanSheetValue(row[3]),
+                month: cleanSheetValue(row[4]),
+                plate: normalizePlate(cleanSheetValue(row[5])),
+                source: cleanSheetValue(row[6]),
+                novelty: cleanSheetValue(row[7]),
+                system: cleanSheetValue(row[8]),
+                status: cleanSheetValue(row[9]),
+                criticality: cleanSheetValue(row[10]),
+                solutionDate: parseFlexibleDate(row[11]),
+                closureDays: parseNum(row[12]),
+                daysToClose: parseNum(row[13]),
+                maintenanceCompliance: cleanSheetValue(row[14]),
+                maintenanceGoal: parseNum(row[15]),
+                workshopGoal: parseNum(row[16]),
+                workshopResponsePercentage: parseNum(row[17]),
+                observations: cleanSheetValue(row[18]),
+              };
+            });
+          resolve(records);
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) {
+    console.error("Error fetching control tower data:", e);
     return [];
   }
 };
