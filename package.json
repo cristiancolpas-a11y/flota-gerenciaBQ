@@ -11,12 +11,14 @@
   },
   "dependencies": {
     "@google/genai": "^1.36.0",
+    "clsx": "^2.1.1",
     "lucide-react": "^0.562.0",
     "motion": "^12.34.3",
     "papaparse": "^5.4.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

@@ -175,15 +175,22 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeVehicle || !newMileage) return;
-    const lastKm = getLastMileage(activeVehicle.plate);
+    console.log("Mileage Submit attempt:", { plate: activeVehicle?.plate, newMileage, isSubmitting });
+    
+    if (!activeVehicle || !newMileage || isSubmitting) {
+      console.warn("Mileage Submit blocked:", { hasVehicle: !!activeVehicle, hasMileage: !!newMileage, isSubmitting });
+      return;
+    }
+
     const currentKm = parseInt(newMileage);
-    if (currentKm < lastKm) {
-      if (!window.confirm(`El kilometraje ingresado (${currentKm}) es menor al anterior (${lastKm}). ¿Desea continuar?`)) return;
+    if (isNaN(currentKm)) {
+      console.error("Invalid mileage value:", newMileage);
+      return;
     }
 
     setIsSubmitting(true);
     try {
+      console.log("Calling onSubmit for mileage...");
       await onSubmit({
         plate: activeVehicle.plate,
         mileage: currentKm,
@@ -192,12 +199,12 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
         date: entryDate,
         week: selectedWeek.toString()
       });
-      // Importante: No cerramos el activeVehicle aquí para que el usuario 
-      // vea que se completó si así lo desea, o limpiamos.
+      
+      console.log("✅ Mileage submit successful");
       setNewMileage('');
       setActiveVehicle(null);
     } catch (err) {
-      console.error("Error submitting mileage form:", err);
+      console.error("❌ Error submitting mileage form:", err);
     } finally {
       setIsSubmitting(false);
     }

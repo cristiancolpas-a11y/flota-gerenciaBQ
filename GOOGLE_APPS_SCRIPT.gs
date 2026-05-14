@@ -17,13 +17,18 @@ function log(msg) {
 function doGet(e) {
   var m = e.parameter.method;
   var sheetName = e.parameter.sheetName;
+  var docId = e.parameter.docId || ID_HOJA;
   
   if (m === 'GET_DATA') {
-    var ss = SpreadsheetApp.openById(ID_HOJA);
-    var s = ss.getSheetByName(sheetName);
-    if (!s) return output("error", "Hoja no encontrada: " + sheetName);
-    var values = s.getDataRange().getValues();
-    return output("success", values);
+    try {
+      var ss = SpreadsheetApp.openById(docId);
+      var s = sheetName ? ss.getSheetByName(sheetName) : ss.getSheets()[0];
+      if (!s) return output("error", "Hoja no encontrada");
+      var values = s.getDataRange().getValues();
+      return output("success", values);
+    } catch(e) {
+      return output("error", e.toString());
+    }
   }
   return output("error", "Metodo no soportado");
 }
@@ -41,10 +46,15 @@ function doPost(e) {
     log("Method: " + m + " - Data: " + JSON.stringify(d).substring(0, 500));
 
     if (m === 'GET_DATA') {
-      var ss = SpreadsheetApp.openById(ID_HOJA);
-      var s = ss.getSheetByName(d.sheetName);
-      if (!s) return output("error", "Hoja no encontrada: " + d.sheetName);
+      var docId = d.docId || ID_HOJA;
+      var ss = SpreadsheetApp.openById(docId);
+      var s = d.sheetName ? ss.getSheetByName(d.sheetName) : ss.getSheets()[0];
+      if (!s) {
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "Hoja no encontrada");
+      }
       var values = s.getDataRange().getValues();
+      if (lock.hasLock()) lock.releaseLock();
       return output("success", values);
     }
 
@@ -426,12 +436,57 @@ function doPost(e) {
       else if (m === 'POST_UNAVAILABILITY_BATCH') {
         var ssUnav = SpreadsheetApp.openById("1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0");
         var s = ssUnav.getSheetByName("INDISPONIBILIDAD");
-        if (!s) return output("error", "Hoja INDISPONIBILIDAD no encontrada");
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "Hoja INDISPONIBILIDAD no encontrada");
+        }
         if (d && d.length > 0) {
           s.getRange(s.getLastRow() + 1, 1, d.length, d[0].length).setValues(d);
         }
-        lock.releaseLock();
+        if (lock.hasLock()) lock.releaseLock();
         return output("success", "Lote de indisponibilidad procesado.");
+      }
+      else if (m === 'POST_CONTROL_TOWER_UPDATE') {
+        var s = getS(ss, "CIERRE DE NOVEDADES");
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var plateSearch = (d.plate || "").toString().toUpperCase().trim();
+        var noveltySearch = (d.novelty || "").toString().trim();
+        var dateSearch = (d.reportDate || "").toString().trim();
+
+        for (var i = 1; i < rows.length; i++) {
+          var rowPlate = (rows[i][5] || "").toString().toUpperCase().trim();
+          var rowNovelty = (rows[i][7] || "").toString().trim();
+          var rowDateRaw = rows[i][2];
+          var rowDateStr = "";
+          
+          if (rowDateRaw instanceof Date) {
+            rowDateStr = Utilities.formatDate(rowDateRaw, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+          } else if (rowDateRaw) {
+            rowDateStr = rowDateRaw.toString();
+          }
+
+          if (rowPlate === plateSearch && rowNovelty === noveltySearch && rowDateStr.indexOf(dateSearch) !== -1) {
+            foundIdx = i + 1;
+            break;
+          }
+        }
+
+        if (foundIdx !== -1) {
+          if (d.evidenceBefore) {
+            var imgBefore = sImg(d.evidenceBefore, "CT_BEFORE_" + plateSearch);
+            s.getRange(foundIdx, 20).setValue(imgBefore); // Col T (20)
+          }
+          if (d.evidenceAfter) {
+            var imgAfter = sImg(d.evidenceAfter, "CT_AFTER_" + plateSearch);
+            s.getRange(foundIdx, 21).setValue(imgAfter); // Col U (21)
+          }
+          if (lock.hasLock()) lock.releaseLock();
+          return output("success", "Evidencias actualizadas en fila " + foundIdx);
+        } else {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró el registro para " + plateSearch + " (" + dateSearch + ")");
+        }
       }
     }
 

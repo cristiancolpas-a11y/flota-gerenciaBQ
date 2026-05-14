@@ -1,13 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer, 
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList 
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList, ComposedChart, ReferenceLine
 } from 'recharts';
 import { 
   AlertTriangle, CheckCircle, Clock, Truck, 
   Search, Filter, Calendar, Activity, 
-  ChevronDown, ArrowUpRight, ArrowDownRight,
-  ShieldAlert, MoreVertical, Download, TrendingUp, LayoutGrid
+  ChevronDown, ArrowUpRight, ArrowDownRight, ChevronRight, ChevronLeft,
+  ShieldAlert, MoreVertical, Download, TrendingUp, LayoutGrid, Link as LinkIcon, AlertCircle, Wrench, Camera, Image as ImageIcon, X, Plus, ArrowLeftCircle, ArrowRightCircle
 } from 'lucide-react';
 import { ControlTowerRecord, Vehicle } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -60,6 +60,160 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     system: 'ALL',
     search: ''
   });
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+
+  const [selectedRecord, setSelectedRecord] = useState<ControlTowerRecord | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [beforeImages, setBeforeImages] = useState<string[]>([]);
+  const [afterImages, setAfterImages] = useState<string[]>([]);
+  const [viewingRecord, setViewingRecord] = useState<ControlTowerRecord | null>(null);
+  const [activeEvidenceTab, setActiveEvidenceTab] = useState<'before' | 'after'>('before');
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
+
+  // Helper to fix Google Drive URLs for direct embedding
+  const fixDriveUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('data:')) return url;
+    if (url.includes('drive.google.com')) {
+      let id = '';
+      const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if (dMatch) id = dMatch[1];
+      else {
+        const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (idMatch) id = idMatch[1];
+      }
+      
+      if (id) {
+        // Use a more reliable endpoint for Google Drive images
+        return `https://lh3.googleusercontent.com/u/0/d/${id}=w1000-h1000-nu-iv1`;
+      }
+    }
+    return url;
+  };
+
+  const generateCollage = async (images: string[]): Promise<string> => {
+    if (images.length === 0) return '';
+    if (images.length === 1) return images[0];
+
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d', { alpha: false });
+      if (!ctx) return resolve(images[0]);
+
+      // Smarter sizing for collage
+      let cols = 1;
+      if (images.length === 2 || images.length === 4) cols = 2;
+      else if (images.length === 3 || images.length >= 5) cols = 3;
+      
+      const rows = Math.ceil(images.length / cols);
+      const imgWidth = 800; 
+      const imgHeight = 600;
+      
+      canvas.width = cols * imgWidth;
+      canvas.height = rows * imgHeight;
+
+      // Background
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      let loadedCount = 0;
+      images.forEach((src, index) => {
+        const img = new window.Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const x = (index % cols) * imgWidth;
+          const y = Math.floor(index / cols) * imgHeight;
+          
+          const padding = 8;
+          const targetW = imgWidth - (padding * 2);
+          const targetH = imgHeight - (padding * 2);
+          
+          const scale = Math.min(targetW / img.width, targetH / img.height);
+          const w = img.width * scale;
+          const h = img.height * scale;
+          const offsetX = x + padding + (targetW - w) / 2;
+          const offsetY = y + padding + (targetH - h) / 2;
+
+          ctx.drawImage(img, offsetX, offsetY, w, h);
+          
+          loadedCount++;
+          if (loadedCount === images.length) {
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          }
+        };
+        img.onerror = () => {
+          loadedCount++;
+          if (loadedCount === images.length) {
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+          }
+        };
+        img.src = src;
+      });
+    });
+  };
+
+  const handleUpdateEvidence = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRecord) return;
+
+    setIsSubmitting(true);
+    try {
+      const finalBefore = beforeImages.length > 0 ? await generateCollage(beforeImages) : selectedRecord.evidenceBefore;
+      const finalAfter = afterImages.length > 0 ? await generateCollage(afterImages) : selectedRecord.evidenceAfter;
+
+      const { submitControlTowerUpdateToSheet } = await import('../services/sheetService');
+      const success = await submitControlTowerUpdateToSheet({
+        plate: selectedRecord.plate,
+        reportDate: selectedRecord.reportDate,
+        novelty: selectedRecord.novelty,
+        evidenceBefore: finalBefore,
+        evidenceAfter: finalAfter
+      });
+
+      if (success) {
+        alert('Evidencias registradas correctamente.');
+        setSelectedRecord(null);
+        setBeforeImages([]);
+        setAfterImages([]);
+      } else {
+        alert('Error al registrar las evidencias.');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error en la conexión o procesamiento de imágenes.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after') => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const limit = 6;
+    const selectedFiles = files.slice(0, limit);
+
+    const promises = selectedFiles.map((file: File) => {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(promises).then(results => {
+      if (type === 'before') setBeforeImages(prev => [...prev, ...results].slice(0, 6));
+      else setAfterImages(prev => [...prev, ...results].slice(0, 6));
+    });
+    
+    // Reset input
+    e.target.value = '';
+  };
 
   // Filtered data
   const filteredData = useMemo(() => {
@@ -159,6 +313,88 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
     return { trend, criticality, systems, topPlates, brands };
   }, [filteredData]);
+
+  // New Metrics from user request 
+  const dashboardChartsData = useMemo(() => {
+    const monthlyMap: Record<string, { month: string, total: number, conformant: number, maintenanceGoal: number, workshopResponse: number, workshopTotal: number, workshopGoal: number, closureDaysTotal: number, closureDaysCount: number }> = {};
+    const statusMap: Record<string, { name: string, value: number }> = {};
+    
+    filteredData.forEach(item => {
+      // Estado
+      const stat = item.status || 'SIN ESTADO';
+      const statUpper = stat.toUpperCase().trim();
+      if (!statusMap[statUpper]) statusMap[statUpper] = { name: statUpper, value: 0 };
+      statusMap[statUpper].value++;
+
+      // Monthly metrics
+      const m = item.month || 'S/M';
+      if (!monthlyMap[m]) {
+        monthlyMap[m] = { month: m, total: 0, conformant: 0, maintenanceGoal: 0, workshopResponse: 0, workshopTotal: 0, workshopGoal: 0, closureDaysTotal: 0, closureDaysCount: 0 };
+      }
+      
+      // Robust compliance check for Column O (maintenanceCompliance)
+      const compValue = item.maintenanceCompliance?.toString().toUpperCase().trim() || '';
+      const isCompliant = compValue.includes('CUMPLE') || 
+                         compValue.includes('CUMPLIO') || 
+                         compValue === 'SI' || 
+                         compValue === 'SÍ' || 
+                         compValue === '1' || 
+                         compValue === '100%' || 
+                         compValue === 'OK';
+      
+      monthlyMap[m].total++;
+      if (isCompliant) {
+        monthlyMap[m].conformant++;
+      }
+      
+      // Maintenance Goal from Column P (maintenanceGoal)
+      if (item.maintenanceGoal > 0) {
+        // If meta is provided as a fraction (e.g., 0.95), we store it as is or normalize
+        // But we handle normalization in the display mapping below
+        monthlyMap[m].maintenanceGoal = item.maintenanceGoal;
+      }
+      
+      // Workshop Response from Column R (workshopResponsePercentage)
+      if (typeof item.workshopResponsePercentage === 'number' && !isNaN(item.workshopResponsePercentage)) {
+        monthlyMap[m].workshopResponse += item.workshopResponsePercentage;
+        monthlyMap[m].workshopTotal++;
+      }
+      
+      // Workshop Goal from Column Q (workshopGoal)
+      if (item.workshopGoal > 0) {
+        monthlyMap[m].workshopGoal = item.workshopGoal;
+      }
+
+      if (typeof item.closureDays === 'number' && !isNaN(item.closureDays)) {
+        monthlyMap[m].closureDaysTotal += item.closureDays;
+        monthlyMap[m].closureDaysCount++;
+      }
+    });
+
+    const statusDistribution = Object.values(statusMap);
+
+    const monthlyMetrics = Object.values(monthlyMap).map(m => {
+      const avgResponse = m.workshopTotal > 0 ? (m.workshopResponse / m.workshopTotal) : 0;
+      return {
+        month: m.month,
+        compliancePercent: Number((m.total > 0 ? (m.conformant / m.total) * 100 : 0).toFixed(1)),
+        // meta scale: if 0.95 -> 95, if 95 -> 95
+        maintenanceGoal: m.maintenanceGoal > 0 ? (m.maintenanceGoal <= 1.05 ? m.maintenanceGoal * 100 : m.maintenanceGoal) : 95, 
+        // response scale: if 0.8 -> 80, if 80 -> 80
+        workshopAvgResponse: Number((avgResponse <= 1.05 && avgResponse > 0 ? avgResponse * 100 : avgResponse).toFixed(1)),
+        workshopGoal: m.workshopGoal > 0 ? (m.workshopGoal <= 1.05 ? m.workshopGoal * 100 : m.workshopGoal) : 80,
+        avgClosureDays: Number((m.closureDaysCount > 0 ? (m.closureDaysTotal / m.closureDaysCount) : 0).toFixed(1))
+      };
+    }).sort((a, b) => a.month.localeCompare(b.month));
+
+    return { monthlyMetrics, statusDistribution };
+  }, [filteredData]);
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredData, currentPage]);
 
   const getStatusColor = (status: string) => {
     const s = status.toUpperCase();
@@ -397,12 +633,133 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
         </div>
       </div>
 
+      {/* Additional Dashboard Metrics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        
+        {/* Cierre de Novedades Mensual vs Meta */}
+        <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-xl">
+          <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-400" />
+            Cierre de Novedades Mensual (Cumplimiento vs Meta)
+          </h3>
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={dashboardChartsData.monthlyMetrics}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} domain={[0, 105]} />
+                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+                <Legend />
+                <Bar dataKey="compliancePercent" name="% Cumplimiento" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                  <LabelList dataKey="compliancePercent" position="top" formatter={(v: number) => `${v}%`} style={{ fill: '#94a3b8', fontSize: '10px' }} />
+                </Bar>
+                <Line type="step" dataKey="maintenanceGoal" name="Meta" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="4 4" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Estado Distribution */}
+        <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-xl">
+          <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-indigo-400" />
+            Distribución por Estado
+          </h3>
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie 
+                  data={dashboardChartsData.statusDistribution} 
+                  cx="50%" 
+                  cy="50%" 
+                  innerRadius={60} 
+                  outerRadius={90} 
+                  paddingAngle={5} 
+                  dataKey="value"
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                  labelLine={{ stroke: '#475569', strokeWidth: 1 }}
+                >
+                  {dashboardChartsData.statusDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.name.toUpperCase() === 'CERRADO' || entry.name.toUpperCase() === 'SOLUCIONADO' ? COLORS.LOW : (entry.name.toUpperCase() === 'ABIERTO' || entry.name.toUpperCase() === 'PROCESO' ? COLORS.HIGH : COLORS.MEDIUM)} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+                <Legend verticalAlign="bottom" height={36}/>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Respuesta de Taller Mensual */}
+        <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-xl">
+          <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
+            <Wrench className="w-5 h-5 text-orange-400" />
+            Respuesta Taller vs Meta (% Mensual)
+          </h3>
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={dashboardChartsData.monthlyMetrics}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} domain={[0, 105]} />
+                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+                <Legend />
+                <Bar dataKey="workshopAvgResponse" name="% Respuesta Taller" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                  <LabelList dataKey="workshopAvgResponse" position="top" formatter={(v: number) => `${v}%`} style={{ fill: '#94a3b8', fontSize: '10px' }} />
+                </Bar>
+                <Line type="step" dataKey="workshopGoal" name="Meta Taller" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="4 4" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Días de Cierre Promedio Mensual */}
+        <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-xl">
+          <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-blue-400" />
+            Promedio de Días de Cierre (Mensual)
+          </h3>
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={dashboardChartsData.monthlyMetrics}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+                <Line type="monotone" dataKey="avgClosureDays" name="Días Promedio" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', r: 4 }}>
+                  <LabelList dataKey="avgClosureDays" position="top" formatter={(v: number) => v.toFixed(1)} style={{ fill: '#94a3b8', fontSize: '10px' }} />
+                </Line>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+      </div>
+
       {/* Data Table */}
       <div className="bg-slate-800/40 rounded-2xl border border-slate-700/50 backdrop-blur-xl overflow-hidden shadow-2xl">
-        <div className="p-6 border-b border-slate-700/50 flex justify-between items-center">
+        <div className="p-6 border-b border-slate-700/50 flex flex-col sm:flex-row justify-between items-center gap-4">
           <h3 className="font-semibold text-lg">Detalle Torre de Control</h3>
-          <div className="text-sm text-slate-400">
-            Mostrando {filteredData.length} de {data.length} registros
+          
+          {/* Pagination Controls */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center bg-slate-900/50 rounded-xl px-3 py-1.5 border border-slate-700/50 space-x-2">
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-1 hover:bg-slate-700/50 rounded-md disabled:opacity-30 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4 text-slate-300" />
+              </button>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Página {currentPage} de {totalPages || 1}</span>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="p-1 hover:bg-slate-700/50 rounded-md disabled:opacity-30 transition-colors"
+              >
+                <ChevronRight className="w-4 h-4 text-slate-300" />
+              </button>
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -412,14 +769,15 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Info Vehículo</th>
                 <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Reporte</th>
                 <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Sistema</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Criticidad</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Estado</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">SLA</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Solución</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Criticidad</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Estado</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">SLA</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-right">Solución</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Evidencias</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/50">
-              {filteredData.slice(0, 100).map((item) => (
+              {paginatedData.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-700/30 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
@@ -476,17 +834,364 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                       <span className="text-xs text-slate-500">{item.closureDays ? `${item.closureDays} d` : ''}</span>
                     </div>
                   </td>
+                  <td className="px-6 py-4 text-center">
+                    <div className="flex items-center justify-center gap-3">
+                      {/* Register Button - Only show if one of them is missing */}
+                      {!(item.evidenceBefore && item.evidenceAfter) && (
+                        <button 
+                          onClick={() => {
+                            setSelectedRecord(item);
+                            setBeforeImages([]);
+                            setAfterImages([]);
+                          }}
+                          className={`p-2 rounded-xl transition-all shadow-lg border ${
+                            item.evidenceBefore || item.evidenceAfter 
+                              ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 border-slate-700' 
+                              : 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/40 border-indigo-500/30'
+                          }`}
+                          title={item.evidenceBefore || item.evidenceAfter ? "Completar Evidencias" : "Registrar Evidencias"}
+                        >
+                          <Camera className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {/* Unified View Button - Gallery Icon */}
+                      {(item.evidenceBefore || item.evidenceAfter) && (
+                        <button 
+                          onClick={() => {
+                            setViewingRecord(item);
+                            setActiveEvidenceTab(item.evidenceBefore ? 'before' : 'after');
+                          }}
+                          className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl hover:bg-emerald-500/40 border border-emerald-500/30 transition-all shadow-lg"
+                          title="Ver Galería de Evidencias"
+                        >
+                          <ImageIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {filteredData.length > 100 && (
-            <div className="p-4 text-center text-slate-500 text-sm italic">
-              Mostrando los primeros 100 resultados. Use los filtros para mayor precisión.
+          {filteredData.length === 0 && (
+            <div className="p-8 text-center text-slate-500">
+              <ShieldAlert className="w-8 h-8 mx-auto mb-3 opacity-50" />
+              <p>No se encontraron registros que coincidan con los filtros.</p>
             </div>
           )}
         </div>
       </div>
+      {/* Evidence Registration Modal */}
+      <AnimatePresence>
+        {selectedRecord && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-indigo-400" />
+                  Registrar Evidencias
+                </h3>
+                <button 
+                  onClick={() => setSelectedRecord(null)}
+                  className="p-2 hover:bg-slate-800 rounded-xl transition-colors text-slate-400"
+                >
+                  <ChevronDown className="w-6 h-6 rotate-180" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateEvidence} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">Vehículo</span>
+                    <span className="text-sm font-black text-indigo-400">{selectedRecord.plate}</span>
+                  </div>
+                  <div className="text-sm text-slate-300">
+                    {selectedRecord.novelty}
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Evidencia Antes */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">
+                        Evidencia Antes (Max 6 fotos)
+                      </label>
+                      <button 
+                        type="button"
+                        onClick={() => document.getElementById('before-input')?.click()}
+                        className="p-1 bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                      <input 
+                        id="before-input"
+                        type="file" 
+                        multiple 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => handleImagePick(e, 'before')}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {beforeImages.map((src, idx) => (
+                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
+                          <img src={src} className="w-full h-full object-cover" />
+                          <button 
+                            type="button"
+                            onClick={() => setBeforeImages(prev => prev.filter((_, i) => i !== idx))}
+                            className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {beforeImages.length === 0 && !selectedRecord.evidenceBefore && (
+                        <div className="col-span-3 py-4 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-600 bg-slate-950/20">
+                          <Camera className="w-6 h-6 mb-1 opacity-20" />
+                          <span className="text-xs">Sin fotos seleccionadas</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {selectedRecord.evidenceBefore && beforeImages.length === 0 && (
+                      <div className="mt-2 p-2 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500 truncate max-w-[150px]">Link actual guardado</span>
+                        <a href={selectedRecord.evidenceBefore} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:underline">Ver actual</a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Evidencia Después */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">
+                        Evidencia Después (Max 6 fotos)
+                      </label>
+                      <button 
+                        type="button"
+                        onClick={() => document.getElementById('after-input')?.click()}
+                        className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                      <input 
+                        id="after-input"
+                        type="file" 
+                        multiple 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => handleImagePick(e, 'after')}
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {afterImages.map((src, idx) => (
+                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
+                          <img src={src} className="w-full h-full object-cover" />
+                          <button 
+                            type="button"
+                            onClick={() => setAfterImages(prev => prev.filter((_, i) => i !== idx))}
+                            className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      {afterImages.length === 0 && !selectedRecord.evidenceAfter && (
+                        <div className="col-span-3 py-4 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-600 bg-slate-950/20">
+                          <Camera className="w-6 h-6 mb-1 opacity-20" />
+                          <span className="text-xs">Sin fotos seleccionadas</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedRecord.evidenceAfter && afterImages.length === 0 && (
+                      <div className="mt-2 p-2 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500 truncate max-w-[150px]">Link actual guardado</span>
+                        <a href={selectedRecord.evidenceAfter} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:underline">Ver actual</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => setSelectedRecord(null)}
+                    className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isSubmitting ? (
+                      <Clock className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
+                    Guardar
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Internal Evidence Viewer */}
+      <AnimatePresence>
+        {viewingRecord && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[80vh]"
+            >
+              <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                <div className="flex flex-col">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5 text-blue-400" />
+                    Visualización de Evidencias
+                  </h3>
+                  <span className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
+                    Placa: {viewingRecord.plate} | {viewingRecord.novelty.substring(0, 50)}...
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setViewingRecord(null)}
+                  className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-hidden p-6 flex flex-col gap-6">
+                {/* Tabs */}
+                <div className="flex p-1 bg-slate-800/50 rounded-2xl border border-slate-700 max-w-sm mx-auto w-full">
+                  <button 
+                    onClick={() => setActiveEvidenceTab('before')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                      activeEvidenceTab === 'before' 
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <ArrowLeftCircle className="w-4 h-4" />
+                    Antes
+                  </button>
+                  <button 
+                    onClick={() => setActiveEvidenceTab('after')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                      activeEvidenceTab === 'after' 
+                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' 
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Después
+                    <ArrowRightCircle className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Image Display */}
+                <div className="flex-1 bg-slate-950/40 rounded-2xl border border-slate-800/50 overflow-hidden flex items-center justify-center p-4 relative group">
+                  <AnimatePresence mode="wait">
+                    {activeEvidenceTab === 'before' ? (
+                      <motion.div
+                        key="before"
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        className="w-full h-full flex items-center justify-center"
+                      >
+                        {viewingRecord.evidenceBefore ? (
+                          <div className="relative w-full h-full flex items-center justify-center">
+                            <div className="absolute inset-0 flex items-center justify-center -z-10">
+                              <Clock className="w-8 h-8 text-slate-700 animate-spin" />
+                            </div>
+                            <img 
+                              src={fixDriveUrl(viewingRecord.evidenceBefore)} 
+                              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl relative z-10" 
+                              alt="Evidencia Antes"
+                              referrerPolicy="no-referrer"
+                              onLoad={(e) => (e.currentTarget.style.opacity = '1')}
+                              style={{ opacity: 0, transition: 'opacity 0.3s' }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-slate-600">
+                            <Camera className="w-16 h-16 mb-4 opacity-10" />
+                            <p className="font-bold">No hay evidencia registrada antes</p>
+                          </div>
+                        )}
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="after"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className="w-full h-full flex items-center justify-center"
+                      >
+                        {viewingRecord.evidenceAfter ? (
+                          <div className="relative w-full h-full flex items-center justify-center">
+                            <div className="absolute inset-0 flex items-center justify-center -z-10">
+                              <Clock className="w-8 h-8 text-slate-700 animate-spin" />
+                            </div>
+                            <img 
+                              src={fixDriveUrl(viewingRecord.evidenceAfter)} 
+                              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl relative z-10" 
+                              alt="Evidencia Después"
+                              referrerPolicy="no-referrer"
+                              onLoad={(e) => (e.currentTarget.style.opacity = '1')}
+                              style={{ opacity: 0, transition: 'opacity 0.3s' }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-slate-600">
+                            <Camera className="w-16 h-16 mb-4 opacity-10" />
+                            <p className="font-bold">No hay evidencia registrada después</p>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              <div className="p-6 bg-slate-900/80 border-t border-slate-800 flex justify-end gap-3">
+                <button 
+                  onClick={() => setViewingRecord(null)}
+                  className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all"
+                >
+                  Cerrar
+                </button>
+                <a 
+                  href={activeEvidenceTab === 'before' ? viewingRecord.evidenceBefore : viewingRecord.evidenceAfter}
+                  download={`evidencia_${viewingRecord.plate}_${activeEvidenceTab}.jpg`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-500/20"
+                >
+                  <Download className="w-4 h-4" />
+                  Descargar
+                </a>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

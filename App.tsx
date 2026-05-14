@@ -36,6 +36,7 @@ import WashCalendar from './components/WashCalendar';
 import Dashboard from './components/Dashboard';
 import PreventiveModule from './components/PreventiveModule';
 import PreventiveUpdateForm from './components/PreventiveUpdateForm';
+import PreventiveControlTower from './components/PreventiveControlTower';
 import AvailabilityModule from './components/AvailabilityModule';
 import AvailabilityIndicators from './components/AvailabilityIndicators';
 import OperationalDashboard from './components/OperationalDashboard';
@@ -89,11 +90,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'preventivos' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -201,19 +202,47 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      const [v, d, f, r, w, cl, c, m, wv, p, a, oi, ch, fp, pa, corr, unav, ops, ct] = await Promise.all([
+      // Grupo 1: Datos críticos para la navegación inicial
+      const [v, d, m, wv] = await Promise.all([
         fetchVehiclesFromSheet(),
         fetchDriversFromSheet(),
+        fetchMileageLogsFromSheet(),
+        fetchWorkshopVisitsFromSheet()
+      ]);
+
+      setVehicles(v);
+      setDrivers(d);
+      setMileageLogs(m);
+      setWorkshopVisits(wv);
+
+      // Grupo 2: Reportes y datos secundarios
+      const [f, r, w, cl] = await Promise.all([
         fetchFinesFromSheet(),
         fetchReportsFromSheet(),
         fetchWashReportsFromSheet(),
-        fetchCleaningReportsFromSheet(),
+        fetchCleaningReportsFromSheet()
+      ]);
+
+      setFines(f);
+      setReports(r);
+      setWashReports(w);
+      setCleaningReports(cl);
+
+      // Grupo 3: Datos técnicos y de mantenimiento
+      const [c, p, a, oi] = await Promise.all([
         fetchCalibrationsFromSheet(),
-        fetchMileageLogsFromSheet(),
-        fetchWorkshopVisitsFromSheet(),
         fetchPreventivesFromSheet(),
         fetchAvailabilityFromSheet(),
-        fetchOperationalIndicatorsFromSheet(),
+        fetchOperationalIndicatorsFromSheet()
+      ]);
+
+      setCalibrations(c);
+      setPreventives(p);
+      setAvailabilityRecords(a);
+      setOperationalIndicators(oi);
+
+      // Grupo 4: Listas de control e indicadores de rendimiento
+      const [ch, fp, pa, corr, unav, ops, ct] = await Promise.all([
         fetchCheckListFromSheet(),
         fetchFuelPerformanceFromSheet(),
         fetchPlateAdherenceFromSheet(),
@@ -223,43 +252,14 @@ const App: React.FC = () => {
         fetchControlTowerFromSheet()
       ]);
 
-      const filterByYear = (dateStr: string | undefined) => {
-        if (!dateStr || dateStr.trim() === '') return true; 
-        try {
-          if (dateStr.includes('-')) {
-            const year = new Date(dateStr + "T12:00:00").getFullYear();
-            return year >= 2024;
-          } else if (dateStr.includes('/')) {
-            const parts = dateStr.split('/');
-            const year = parseInt(parts[parts.length - 1]);
-            const fullYear = year < 100 ? (year + 2000) : year;
-            return fullYear >= 2024;
-          }
-        } catch (e) {
-          return true;
-        }
-        return true; 
-      };
-
-      setVehicles(v);
-      setDrivers(d);
-      setFines(f);
-      setReports(r.filter(item => filterByYear(item.date)));
-      setWashReports(w.filter(item => filterByYear(item.date)));
-      setCleaningReports(cl.filter(item => filterByYear(item.date)));
-      setCalibrations(c.filter(item => filterByYear(item.calibrationDate)));
-      setMileageLogs(m.filter(item => filterByYear(item.date)));
-      setWorkshopVisits(wv.filter(item => filterByYear(item.date)));
-      setPreventives(p); 
-      setAvailabilityRecords(a.filter(item => filterByYear(item.date)));
-      setOperationalIndicators(oi);
       setCheckLists(ch);
       setFuelPerformanceData(fp);
-      setPlateAdherenceData(pa.filter(item => filterByYear(item.date)));
+      setPlateAdherenceData(pa);
       setCorrectives(corr);
       setUnavailabilityRecords(unav);
       setOperators(ops);
       setControlTowerRecords(ct);
+
     } catch (err) {
       console.error("Critical Sync Error:", err);
     } finally {
@@ -862,7 +862,7 @@ const App: React.FC = () => {
                             { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
                             { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
                             { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
-                            { id: 'preventivos', label: 'Preventivos', icon: <Clock size={18}/> },
+                            { id: 'torre_preventivos', label: 'PREVENTIVO', icon: <Zap size={18}/> },
                             { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
                             { id: 'indisponibilidad', label: 'Indisponibilidad', icon: <AlertTriangle size={18}/> },
                             { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
@@ -874,7 +874,7 @@ const App: React.FC = () => {
                                 setActiveView(item.id as ActiveView); 
                                 setIsSidebarOpen(false); 
                                 setExpandedSection(null);
-                                if (item.id === 'preventivos' || item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos' || item.id === 'indisponibilidad') {
+                                if (item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos' || item.id === 'indisponibilidad' || item.id === 'torre_preventivos') {
                                   handleSyncData();
                                 }
                               }} 
@@ -969,7 +969,6 @@ const App: React.FC = () => {
                     else if(activeView === 'lavados') setShowWashForm(true);
                     else if(activeView === 'limpieza') setShowCleaningForm(true);
                     else if(activeView === 'calibraciones') setShowCalibrationForm(true);
-                    else if(activeView === 'preventivos') setShowPreventiveForm(true);
                  }} className="p-2 md:p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20">
                     <Plus size={18} className="md:size-5" />
                  </button>
@@ -1031,18 +1030,8 @@ const App: React.FC = () => {
             />
           )}
 
-          {activeView === 'preventivos' && (
-            <PreventiveModule 
-              vehicles={vehicles}
-              mileageLogs={mileageLogs}
-              searchTerm={searchTerm}
-              externalPreventives={preventives}
-              selectedMonth={selectedMonth}
-              filterCd={filterCd}
-              filterContractor={filterContractor}
-              onFilterCdChange={setFilterCd}
-              onUpdate={(v) => { setUpdatingPreventive(v); setShowPreventiveForm(true); }}
-            />
+          {activeView === 'torre_preventivos' && (
+            <PreventiveControlTower data={controlTowerRecords} />
           )}
 
           {activeView === 'disponibilidad' && (
@@ -1400,12 +1389,11 @@ const App: React.FC = () => {
               onSubmit={async (data) => {
                 try {
                   await submitMileageToSheet(data);
-                  alert("✅ Kilometraje guardado con éxito.");
+                  console.log("✅ Kilometraje guardado con éxito.");
                   // Intentamos sincronizar pero no bloqueamos el éxito previo
                   handleSyncData().catch(e => console.error("Error syncing after save:", e));
                 } catch (err) {
                   console.error("Error submitting mileage:", err);
-                  alert("❌ Error al guardar el kilometraje. Verifique su conexión y reintente.");
                 }
               }} 
               externalCd={filterCd} 

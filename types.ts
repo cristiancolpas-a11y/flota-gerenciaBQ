@@ -166,24 +166,28 @@ export interface WashReport {
 
 export interface Preventive {
   id: string;
-  cd: string;
-  contractor: string;
-  plate: string;
-  brand?: string;
-  line?: string;
-  lastMaintenanceMileage: number;
-  nextMaintenanceMileage: number;
-  currentMileage: number;
-  kmsToNext: number;
-  status: 'ok' | 'warning' | 'critical';
-  lastUpdate?: string;
-  week?: string;
-  month?: string;
-  evidenceUrl?: string;
-  complianceStatus?: string;
-  validationStatus?: string;
-  frequency?: number;
-  difference?: number;
+  semProgramado?: string;      // Index 0
+  fechaProgramada?: string;    // Index 1
+  week: string;                // Index 2 (SEM)
+  month: string;               // Index 3 (MES)
+  date: string;                // Index 4 (FECHA DE EJECUCION)
+  plate: string;               // Index 5
+  frequency: number;           // Index 6
+  lastMaintenanceMileage: number; // Index 7
+  nextMaintenanceMileage: number; // Index 8
+  currentMileage: number;      // Index 9
+  difference: number;          // Index 11
+  complianceRange: string;     // Index 12 (CUMPLIMIENTO EN RANGOS)
+  validationStatus: string;    // Index 13 (VALIDACIÓN CUMPLIMIENTO)
+  complianceProgram: string;   // Index 14 (CUMPLIMIENTO POR PROGRAMACION)
+  cd: string;                  // Index 16
+  line: string;                // Index 17 (MARCA/LINEA)
+  status: 'ok' | 'warning' | 'critical'; // Derived
+  kmsToNext: number;           // Derived
+  lastUpdate?: string;         // Alias for date
+  evidenceUrl?: string;        // Add if needed, though not in specific list
+  contractor?: string;         // Derived from CD or other logic
+  brand?: string;              // Alias for line
 }
 
 export interface FleetComposition {
@@ -283,6 +287,8 @@ export interface ControlTowerRecord {
   workshopGoal: number;      // Indice 16: META RT
   workshopResponsePercentage: number; // Indice 17: PORCENTAJE DE RESPUESTA TALLER
   observations: string;      // Indice 18: OBSERVACIONES
+  evidenceBefore?: string;   // Indice 19: EVIDENCIA ANTES (Col T)
+  evidenceAfter?: string;    // Indice 20: EVIDENCIA DESPUES (Col U)
 }
 
 export interface UnavailabilityRecord {

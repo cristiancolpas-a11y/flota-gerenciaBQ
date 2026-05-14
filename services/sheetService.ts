@@ -2,10 +2,10 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec';
-const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec';
-const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec';
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec'; 
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
+const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
+const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -15,21 +15,70 @@ const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID
 const BACKEND_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv`;
 
+const CORRECTIVES_DOC_ID = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
+const BASE_URL_CORRECTIVES = `https://docs.google.com/spreadsheets/d/${CORRECTIVES_DOC_ID}/export?format=csv`;
+
 // ID de la hoja de Comparendos
 const FINES_SHEET_ID = '1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M';
 const BASE_URL_FINES = `https://docs.google.com/spreadsheets/d/${FINES_SHEET_ID}/export?format=csv`;
 
 const OPERATORS_DOC_ID = '1qLEXUCt1RAr28lwOX2sCJhjoEoG4vKVOrv2d45iZ6kU';
 
+// GIDs for fallbacks
+const VEHICLES_GID = '1506825194';
+const DRIVERS_GID = '1834987510';
+const NOVEDADES_GID = '1789987673';
+const VISITAS_GID = '239875479';
+const MILEAGE_GID = '1929496440';
+const CALIBRATIONS_GID = '505557891';
+const CLEANING_GID = '1853969081';
+const DISPONIBILIDAD_GID = '1143899477'; // Aproximate, check later if needed
+
 // ID de la hoja de Check List
 const CHECKLIST_DOC_ID = '1i6qGjwhQW3AeR1ja5UxZkOXjJU3oh0f_8Grt131NQzk';
 const CHECKLIST_GALAPA_DOC_ID = '14kak0CqSnX9oOXk0GKD0G_QIt5aJxuCu9-_Livst70Y';
 
 // TORRE DE CONTROL
-const CONTROL_TOWER_DOC_ID = '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60';
-const CONTROL_TOWER_GID = '1012312873';
+const CONTROL_TOWER_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+const CONTROL_TOWER_GID = '2041116370';
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
+
+const fetchDataFromGAS = async (docId: string, sheetName?: string): Promise<any[][] | null> => {
+  try {
+    let url = `${GOOGLE_SCRIPT_WEB_APP_URL}?method=GET_DATA&docId=${docId}`;
+    if (sheetName) url += `&sheetName=${encodeURIComponent(sheetName)}`;
+    
+    // Usamos un timeout para el fetch para evitar esperas infinitas
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // Aumentado a 30s
+
+    const response = await fetch(url, { 
+      signal: controller.signal,
+      cache: 'no-cache',
+      mode: 'cors'
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      if (response.status === 429) console.warn(`GAS Rate limited for ${sheetName}`);
+      return null;
+    }
+
+    const text = await response.text();
+    try {
+      const json = JSON.parse(text);
+      if (json.status === 'success' && json.message) return json.message as any[][];
+      return null;
+    } catch (parseError) {
+      return null;
+    }
+  } catch (e) {
+    // Silence common fetch errors if we have fallbacks
+    return null;
+  }
+};
 
 const cleanSheetValue = (val: any): string => {
   if (val === null || val === undefined) return '';
@@ -97,88 +146,100 @@ const getWeekNumber = (d: Date): number => {
  */
 export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
   try {
-    const url = `${BASE_URL_MASTER}&gid=1506825194${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(REAL_MASTER_ID, 'ALERTA_CAMIONES');
+    if (!rows || rows.length === 0) {
+      console.warn("GAS fetch vehicles failed, attempting CSV fallback");
+      return fetchVehiclesFromSheetCSV();
+    }
+    return processVehicleRows(rows);
+  } catch (e) { 
+    return fetchVehiclesFromSheetCSV(); 
+  }
+};
+
+const fetchVehiclesFromSheetCSV = async (): Promise<Vehicle[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/gviz/tq?tqx=out:csv&gid=${VEHICLES_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
-
+    
     return new Promise((resolve) => {
       Papa.parse(csvText, {
-        header: false, 
-        skipEmptyLines: 'greedy',
+        header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length === 0) { resolve([]); return; }
-          
-          const vehicles: Vehicle[] = [];
-          let lastCd = 'GENERAL';
-          let lastCnt = 'GENERAL';
-
-          for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row || row.length < 3) continue;
-
-            const currentCd = cleanSheetValue(row[0]).toUpperCase();
-            const currentCnt = cleanSheetValue(row[1]).toUpperCase();
-            if (currentCd && !currentCd.includes('CENTRO') && !currentCd.includes('CD')) lastCd = currentCd;
-            if (currentCnt && !currentCnt.includes('CONTRATISTA') && !currentCnt.includes('OPERADOR')) lastCnt = currentCnt;
-
-            const rawPlate = cleanSheetValue(row[2]);
-            const plate = normalizePlate(rawPlate);
-
-            if (plate && !plate.includes("PLACA") && plate.length >= 2) {
-              const soatDate = parseFlexibleDate(row[3]);
-              const rtmDate = parseFlexibleDate(row[5]);
-              const plcDate = parseFlexibleDate(row[7]);
-              const extDate = parseFlexibleDate(row[9]);
-              
-              vehicles.push({
-                id: `v-${plate}-${i}`, 
-                cd: lastCd,
-                contractor: lastCnt,
-                brand: "Vehículo", 
-                plate, 
-                model: "Unidad",
-                soat: { 
-                  expiryDate: soatDate, 
-                  lastRenewalDate: '', 
-                  status: calculateStatus(soatDate), 
-                  daysPending: getDaysDiff(soatDate), 
-                  url: cleanSheetValue(row[20])
-                },
-                rtm: { 
-                  expiryDate: rtmDate, 
-                  lastRenewalDate: '', 
-                  status: calculateStatus(rtmDate),
-                  daysPending: getDaysDiff(rtmDate),
-                  url: cleanSheetValue(row[21])
-                },
-                plc: {
-                  expiryDate: plcDate,
-                  lastRenewalDate: '',
-                  status: calculateStatus(plcDate),
-                  daysPending: getDaysDiff(plcDate),
-                  url: cleanSheetValue(row[22])
-                },
-                extinguisher: {
-                  expiryDate: extDate,
-                  lastRenewalDate: '',
-                  status: calculateStatus(extDate),
-                  daysPending: getDaysDiff(extDate)
-                },
-                propertyCardUrl: cleanSheetValue(row[19]),
-                lastUpdate: new Date().toISOString()
-              });
-            }
-          }
-          resolve(vehicles);
+          resolve(processVehicleRows(rows));
         },
         error: () => resolve([])
       });
     });
-  } catch (e) { 
-    return []; 
+  } catch (e) { return []; }
+};
+
+const processVehicleRows = (rows: any[][]): Vehicle[] => {
+  const vehicles: Vehicle[] = [];
+  let lastCd = 'GENERAL';
+  let lastCnt = 'GENERAL';
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length < 3) continue;
+
+    const currentCd = cleanSheetValue(row[0]).toUpperCase();
+    const currentCnt = cleanSheetValue(row[1]).toUpperCase();
+    if (currentCd && !currentCd.includes('CENTRO') && !currentCd.includes('CD')) lastCd = currentCd;
+    if (currentCnt && !currentCnt.includes('CONTRATISTA') && !currentCnt.includes('OPERADOR')) lastCnt = currentCnt;
+
+    const rawPlate = cleanSheetValue(row[2]);
+    const plate = normalizePlate(rawPlate);
+
+    if (plate && !plate.includes("PLACA") && plate.length >= 2) {
+      const soatDate = parseFlexibleDate(row[3]);
+      const rtmDate = parseFlexibleDate(row[5]);
+      const plcDate = parseFlexibleDate(row[7]);
+      const extDate = parseFlexibleDate(row[9]);
+      
+      vehicles.push({
+        id: `v-${plate}-${i}`, 
+        cd: lastCd,
+        contractor: lastCnt,
+        brand: "Vehículo", 
+        plate, 
+        model: "Unidad",
+        soat: { 
+          expiryDate: soatDate, 
+          lastRenewalDate: '', 
+          status: calculateStatus(soatDate), 
+          daysPending: getDaysDiff(soatDate), 
+          url: cleanSheetValue(row[20])
+        },
+        rtm: { 
+          expiryDate: rtmDate, 
+          lastRenewalDate: '', 
+          status: calculateStatus(rtmDate),
+          daysPending: getDaysDiff(rtmDate),
+          url: cleanSheetValue(row[21])
+        },
+        plc: {
+          expiryDate: plcDate,
+          lastRenewalDate: '',
+          status: calculateStatus(plcDate),
+          daysPending: getDaysDiff(plcDate),
+          url: cleanSheetValue(row[22])
+        },
+        extinguisher: {
+          expiryDate: extDate,
+          lastRenewalDate: '',
+          status: calculateStatus(extDate),
+          daysPending: getDaysDiff(extDate)
+        },
+        propertyCardUrl: cleanSheetValue(row[19]),
+        lastUpdate: new Date().toISOString()
+      });
+    }
   }
+  return vehicles;
 };
 
 /**
@@ -186,55 +247,69 @@ export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
  */
 export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
   try {
-    const url = `${BASE_URL_BACKEND}&gid=239875479${getCacheBuster()}`;
-    const response = await fetch(url);
+    // Intentar primero con GAS
+    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'VISITAS A TALLER');
+    if (rows && rows.length >= 2) {
+      return processWorkshopVisitRows(rows);
+    }
+  } catch (e) { 
+    // Fallback silencioso
+  }
+  return fetchWorkshopVisitsFromSheetCSV();
+};
+
+const fetchWorkshopVisitsFromSheetCSV = async (): Promise<Report[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${VISITAS_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
-
+    
     return new Promise((resolve) => {
       Papa.parse(csvText, {
-        header: false, skipEmptyLines: true,
+        header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          
-          const visits = rows.slice(1)
-            .filter(row => row && row[2]) 
-            .map((row, i): Report => {
-              const week = cleanSheetValue(row[0]);
-              const dateProg = parseFlexibleDate(row[1]);
-              const identifier = cleanSheetValue(row[2]);
-              const workshop = cleanSheetValue(row[3]);
-              const dateVis = parseFlexibleDate(row[4]);
-              const evidence = cleanSheetValue(row[5]);
-              const statusRaw = cleanSheetValue(row[6]).toUpperCase();
-              const hashId = cleanSheetValue(row[7]); 
-              const driverName = cleanSheetValue(row[8]);
-              
-              // Solo es CERRADO si el estado es CERRADO o COMPLETADOS
-              const isClosed = statusRaw.includes('CERRADO') || statusRaw.includes('COMPLETADOS');
-              
-              return {
-                id: hashId || `vprog-${i}`,
-                week: week,
-                date: dateProg,
-                plate: normalizePlate(identifier),
-                workshop: workshop,
-                closureDate: dateVis,
-                status: isClosed ? 'COMPLETADOS' : 'PENDIENTES',
-                novelty: 'VISITA TÉCNICA PROGRAMADA',
-                source: 'CALENDARIO',
-                initialEvidence: evidence,
-                cd: 'GENERAL',
-                driverName: driverName
-              } as any;
-            });
-          resolve(visits);
+          resolve(processWorkshopVisitRows(rows));
         },
         error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processWorkshopVisitRows = (rows: any[][]): Report[] => {
+  return rows.slice(1)
+    .filter(row => row && row[2]) 
+    .map((row, i): Report => {
+      const week = cleanSheetValue(row[0]);
+      const dateProg = parseFlexibleDate(row[1]);
+      const identifier = cleanSheetValue(row[2]);
+      const workshop = cleanSheetValue(row[3]);
+      const dateVis = parseFlexibleDate(row[4]);
+      const evidence = cleanSheetValue(row[5]);
+      const statusRaw = cleanSheetValue(row[6]).toUpperCase();
+      const hashId = cleanSheetValue(row[7]); 
+      const driverName = cleanSheetValue(row[8]);
+      
+      // Solo es CERRADO si el estado es CERRADO o COMPLETADOS
+      const isClosed = statusRaw.includes('CERRADO') || statusRaw.includes('COMPLETADOS');
+      
+      return {
+        id: hashId || `vprog-${i}`,
+        week: week,
+        date: dateProg,
+        plate: normalizePlate(identifier),
+        workshop: workshop,
+        closureDate: dateVis,
+        status: isClosed ? 'COMPLETADOS' : 'PENDIENTES',
+        novelty: 'VISITA TÉCNICA PROGRAMADA',
+        source: 'CALENDARIO',
+        initialEvidence: evidence,
+        cd: 'GENERAL',
+        driverName: driverName
+      } as any;
+    });
 };
 
 /**
@@ -242,30 +317,45 @@ export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
  */
 export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
   try {
-    const url = `${BASE_URL_BACKEND}&gid=1929496440${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'KILOMETRAJE');
+    if (!rows || rows.length < 2) {
+      return fetchMileageLogsFromSheetCSV();
+    }
+    return processMileageRows(rows);
+  } catch (e) { 
+    return fetchMileageLogsFromSheetCSV(); 
+  }
+};
+
+const fetchMileageLogsFromSheetCSV = async (): Promise<MileageLog[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${MILEAGE_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
     return new Promise((resolve) => {
       Papa.parse(csvText, {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          const logs = rows.slice(1).filter(row => row && row[4]).map((row): MileageLog => ({
-            cd: cleanSheetValue(row[0]),          
-            contractor: cleanSheetValue(row[1]),  
-            week: cleanSheetValue(row[2]),        
-            date: parseFlexibleDate(row[3]),      
-            plate: normalizePlate(cleanSheetValue(row[4])), 
-            mileage: parseInt(cleanSheetValue(row[5])) || 0 
-          }));
-          resolve(logs);
+          resolve(processMileageRows(rows));
         },
         error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processMileageRows = (rows: any[][]): MileageLog[] => {
+  return rows.slice(1).filter(row => row && row[4]).map((row): MileageLog => ({
+    cd: cleanSheetValue(row[0]),          
+    contractor: cleanSheetValue(row[1]),  
+    week: cleanSheetValue(row[2]),        
+    date: parseFlexibleDate(row[3]),      
+    plate: normalizePlate(cleanSheetValue(row[4])), 
+    mileage: parseInt(cleanSheetValue(row[5])) || 0 
+  }));
 };
 
 /**
@@ -273,51 +363,66 @@ export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
  */
 export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
   try {
-    const url = `${BASE_URL_BACKEND}&gid=505557891${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'CALIBRACIONES');
+    if (!rows || rows.length < 2) {
+      return fetchCalibrationsFromSheetCSV();
+    }
+    return processCalibrationRows(rows);
+  } catch (e) { 
+    return fetchCalibrationsFromSheetCSV(); 
+  }
+};
+
+const fetchCalibrationsFromSheetCSV = async (): Promise<Calibration[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${CALIBRATIONS_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
     return new Promise((resolve) => {
       Papa.parse(csvText, {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          const calibrations = rows.slice(1).filter(row => row && row[3]).map((row, index): Calibration => {
-            const calDateStr = parseFlexibleDate(row[1]);
-            const expDate = calDateStr ? new Date(calDateStr + 'T12:00:00') : null;
-            const year = expDate ? expDate.getFullYear() : undefined;
-            const monthVal = cleanSheetValue(row[0]) || (expDate ? expDate.toLocaleString('es-ES', { month: 'long' }).toUpperCase() : 'GENERAL');
-            const week = cleanSheetValue(row[2]);
-            const plate = normalizePlate(cleanSheetValue(row[3])); 
-            const workshop = cleanSheetValue(row[4]);             
-            const evidenceUrl = cleanSheetValue(row[5]);
-            const estado = cleanSheetValue(row[6]).toUpperCase();
-            
-            if (expDate) expDate.setFullYear(expDate.getFullYear() + 1);
-            const expDateStr = expDate ? expDate.toISOString().split('T')[0] : '';
-            return {
-              id: `cal-${plate}-${calDateStr}-${index}`,
-              plate,
-              equipment: workshop || 'TALLER NO ESPECIFICADO',
-              calibrationDate: calDateStr,
-              expiryDate: expDateStr,
-              certificateUrl: evidenceUrl,
-              status: calculateStatus(expDateStr),
-              daysPending: getDaysDiff(expDateStr),
-              month: monthVal,
-              week,
-              estado,
-              year,
-              cd: 'GENERAL'
-            };
-          });
-          resolve(calibrations);
+          resolve(processCalibrationRows(rows));
         },
         error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processCalibrationRows = (rows: any[][]): Calibration[] => {
+  return rows.slice(1).filter(row => row && row[3]).map((row, index): Calibration => {
+    const calDateStr = parseFlexibleDate(row[1]);
+    const expDate = calDateStr ? new Date(calDateStr + 'T12:00:00') : null;
+    const year = expDate ? expDate.getFullYear() : undefined;
+    const monthVal = cleanSheetValue(row[0]) || (expDate ? expDate.toLocaleString('es-ES', { month: 'long' }).toUpperCase() : 'GENERAL');
+    const week = cleanSheetValue(row[2]);
+    const plate = normalizePlate(cleanSheetValue(row[3])); 
+    const workshop = cleanSheetValue(row[4]);             
+    const evidenceUrl = cleanSheetValue(row[5]);
+    const estado = cleanSheetValue(row[6]).toUpperCase();
+    
+    if (expDate) expDate.setFullYear(expDate.getFullYear() + 1);
+    const expDateStr = expDate ? expDate.toISOString().split('T')[0] : '';
+    return {
+      id: `cal-${plate}-${calDateStr}-${index}`,
+      plate,
+      equipment: workshop || 'TALLER NO ESPECIFICADO',
+      calibrationDate: calDateStr,
+      expiryDate: expDateStr,
+      certificateUrl: evidenceUrl,
+      status: calculateStatus(expDateStr),
+      daysPending: getDaysDiff(expDateStr),
+      month: monthVal,
+      week,
+      estado,
+      year,
+      cd: 'GENERAL'
+    };
+  });
 };
 
 /**
@@ -325,9 +430,20 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
  */
 export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
   try {
-    // Usamos el nombre de la hoja en lugar del GID para mayor fiabilidad
+    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'LAVADOS');
+    if (!rows || rows.length < 2) {
+      return fetchWashReportsFromSheetCSV();
+    }
+    return processWashRows(rows);
+  } catch (e) { 
+    return fetchWashReportsFromSheetCSV(); 
+  }
+};
+
+const fetchWashReportsFromSheetCSV = async (): Promise<WashReport[]> => {
+  try {
     const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&sheet=LAVADOS${getCacheBuster()}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -336,58 +452,59 @@ export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          
-          // Intentamos identificar las columnas si hay cabecera
-          const header = rows[0].map(h => String(h).toUpperCase());
-          let plateIdx = header.findIndex(h => h.includes('PLACA'));
-          let dateIdx = header.findIndex(h => h.includes('FECHA'));
-          let monthIdx = header.findIndex(h => h.includes('MES'));
-          let weekIdx = header.findIndex(h => h.includes('SEMANA'));
-          let evidenceIdx = header.findIndex(h => h.includes('EVIDENCIA') || h.includes('FOTO'));
-
-          // Fallbacks si no hay cabecera clara
-          if (plateIdx === -1) plateIdx = 4;
-          if (dateIdx === -1) dateIdx = 3;
-          if (monthIdx === -1) monthIdx = 1;
-          if (weekIdx === -1) weekIdx = 2;
-          if (evidenceIdx === -1) evidenceIdx = 5;
-
-          const reports = rows.slice(1)
-            .filter(row => row && (row[plateIdx] || row[dateIdx]))
-            .map((row, i): WashReport => {
-              const plate = normalizePlate(cleanSheetValue(row[plateIdx]));
-              const date = parseFlexibleDate(row[dateIdx]);
-              let month = cleanSheetValue(row[monthIdx]);
-              const evidence = cleanSheetValue(row[evidenceIdx]);
-              
-              if (!month && date) {
-                const d = new Date(date + "T12:00:00");
-                if (!isNaN(d.getTime())) {
-                  month = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
-                }
-              }
-
-              return {
-                id: `wash-${i}-${plate}-${date}`,
-                month: month || 'GENERAL',
-                week: cleanSheetValue(row[weekIdx]),
-                date: date,
-                plate: plate,
-                evidenceUrl: evidence,
-                initialEvidenceUrl: evidence,
-                finalEvidenceUrl: evidence,
-                mapUrl: cleanSheetValue(row[6]),
-                workshop: cleanSheetValue(row[7]),
-                status: 'CERRADO'
-              };
-            });
-          resolve(reports);
+          resolve(processWashRows(rows));
         },
         error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processWashRows = (rows: any[][]): WashReport[] => {
+  // Intentamos identificar las columnas si hay cabecera
+  const header = rows[0].map(h => String(h).toUpperCase());
+  let plateIdx = header.findIndex(h => h.includes('PLACA'));
+  let dateIdx = header.findIndex(h => h.includes('FECHA'));
+  let monthIdx = header.findIndex(h => h.includes('MES'));
+  let weekIdx = header.findIndex(h => h.includes('SEMANA'));
+  let evidenceIdx = header.findIndex(h => h.includes('EVIDENCIA') || h.includes('FOTO'));
+
+  // Fallbacks si no hay cabecera clara
+  if (plateIdx === -1) plateIdx = 4;
+  if (dateIdx === -1) dateIdx = 3;
+  if (monthIdx === -1) monthIdx = 1;
+  if (weekIdx === -1) weekIdx = 2;
+  if (evidenceIdx === -1) evidenceIdx = 5;
+
+  return rows.slice(1)
+    .filter(row => row && (row[plateIdx] || row[dateIdx]))
+    .map((row, i): WashReport => {
+      const plate = normalizePlate(cleanSheetValue(row[plateIdx]));
+      const date = parseFlexibleDate(row[dateIdx]);
+      let month = cleanSheetValue(row[monthIdx]);
+      const evidence = cleanSheetValue(row[evidenceIdx]);
+      
+      if (!month && date) {
+        const d = new Date(date + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          month = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+        }
+      }
+
+      return {
+        id: `wash-${i}-${plate}-${date}`,
+        month: month || 'GENERAL',
+        week: cleanSheetValue(row[weekIdx]),
+        date: date,
+        plate: plate,
+        evidenceUrl: evidence,
+        initialEvidenceUrl: evidence,
+        finalEvidenceUrl: evidence,
+        mapUrl: cleanSheetValue(row[6]),
+        workshop: cleanSheetValue(row[7]),
+        status: 'CERRADO'
+      };
+    });
 };
 
 /**
@@ -395,60 +512,73 @@ export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
  */
 export const fetchCleaningReportsFromSheet = async (): Promise<WashReport[]> => {
   try {
-    const url = `${BASE_URL_BACKEND}&gid=1853969081${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'CRONOGRAMA 5S');
+    if (!rows || rows.length < 2) {
+      return fetchCleaningReportsFromSheetCSV();
+    }
+    return processCleaningRows(rows);
+  } catch (e) { 
+    return fetchCleaningReportsFromSheetCSV(); 
+  }
+};
+
+const fetchCleaningReportsFromSheetCSV = async (): Promise<WashReport[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${CLEANING_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
     return new Promise((resolve) => {
       Papa.parse(csvText, {
-        header: false, skipEmptyLines: true,
+        header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          
-          const reports = rows.slice(1)
-            .filter(row => row && (row[3] || row[0]))
-            .map((row, i): WashReport => {
-              const dateProg = parseFlexibleDate(row[0]);
-              let month = cleanSheetValue(row[1]);
-              const week = cleanSheetValue(row[2]);
-              const plate = normalizePlate(cleanSheetValue(row[3]));
-              const statusRaw = cleanSheetValue(row[4]).toUpperCase();
-              const initialEvidence = cleanSheetValue(row[5]);
-              const finalEvidence = cleanSheetValue(row[6]);
-              
-              // Fallback: if month is empty, try to derive it from date
-              if (!month && dateProg) {
-                const d = new Date(dateProg + "T12:00:00");
-                if (!isNaN(d.getTime())) {
-                  month = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
-                }
-              }
-
-              const isClosed = statusRaw.includes('COMPLETADO') || statusRaw.includes('CERRADO');
-
-              return {
-                id: `clean-${i}-${plate}-${dateProg}`, 
-                month: month || 'GENERAL', 
-                week: week,
-                date: dateProg, 
-                plate: plate,
-                evidenceUrl: finalEvidence || initialEvidence, 
-                initialEvidenceUrl: initialEvidence,
-                finalEvidenceUrl: finalEvidence,
-                mapUrl: '', 
-                workshop: '', 
-                status: isClosed ? 'CERRADO' : 'ABIERTO',
-                closureDate: isClosed ? dateProg : undefined 
-              };
-            });
-          resolve(reports);
+          resolve(processCleaningRows(rows));
         },
         error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processCleaningRows = (rows: any[][]): WashReport[] => {
+  return rows.slice(1)
+    .filter(row => row && (row[3] || row[0]))
+    .map((row, i): WashReport => {
+      const dateProg = parseFlexibleDate(row[0]);
+      let month = cleanSheetValue(row[1]);
+      const week = cleanSheetValue(row[2]);
+      const plate = normalizePlate(cleanSheetValue(row[3]));
+      const statusRaw = cleanSheetValue(row[4]).toUpperCase();
+      const initialEvidence = cleanSheetValue(row[5]);
+      const finalEvidence = cleanSheetValue(row[6]);
+      
+      // Fallback: if month is empty, try to derive it from date
+      if (!month && dateProg) {
+        const d = new Date(dateProg + "T12:00:00");
+        if (!isNaN(d.getTime())) {
+          month = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+        }
+      }
+
+      const isClosed = statusRaw.includes('COMPLETADO') || statusRaw.includes('CERRADO');
+
+      return {
+        id: `clean-${i}-${plate}-${dateProg}`, 
+        month: month || 'GENERAL', 
+        week: week,
+        date: dateProg, 
+        plate: plate,
+        evidenceUrl: finalEvidence || initialEvidence, 
+        initialEvidenceUrl: initialEvidence,
+        finalEvidenceUrl: finalEvidence,
+        mapUrl: '', 
+        workshop: '', 
+        status: isClosed ? 'CERRADO' : 'ABIERTO',
+        closureDate: isClosed ? dateProg : undefined 
+      };
+    });
 };
 
 /**
@@ -456,61 +586,78 @@ export const fetchCleaningReportsFromSheet = async (): Promise<WashReport[]> => 
  */
 export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
   try {
-    const url = `${BASE_URL_MASTER}&gid=1834987510${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(REAL_MASTER_ID, 'ALERTA_CONDUCTORES');
+    if (!rows || rows.length < 2) {
+      console.warn("GAS fetch drivers failed, attempting CSV fallback");
+      return fetchDriversFromSheetCSV();
+    }
+    return processDriverRows(rows);
+  } catch (e) { 
+    return fetchDriversFromSheetCSV();
+  }
+};
+
+const fetchDriversFromSheetCSV = async (): Promise<Driver[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/gviz/tq?tqx=out:csv&gid=${DRIVERS_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
     return new Promise((resolve) => {
       Papa.parse(csvText, {
-        header: false, skipEmptyLines: true,
+        header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          const drivers = rows.slice(1).filter(row => row && row[2]).map((row): Driver => {
-            const licExp = parseFlexibleDate(row[9]);
-            const courseExp = parseFlexibleDate(row[11]);
-            const medicalExp = parseFlexibleDate(row[13]);
-            
-            return {
-              id: `d-${cleanSheetValue(row[3])}`,
-              name: cleanSheetValue(row[2]),
-              identification: cleanSheetValue(row[3]),
-              hireDate: parseFlexibleDate(row[6]),
-              position: cleanSheetValue(row[4]),
-              status: cleanSheetValue(row[5]),
-              experienceTime: cleanSheetValue(row[8]),
-              licenseIssueDate: parseFlexibleDate(row[7]),
-              photoUrl: cleanSheetValue(row[21]),
-              cd: cleanSheetValue(row[0]),
-              contractor: cleanSheetValue(row[1]),
-              license: { 
-                expiryDate: licExp, 
-                lastRenewalDate: '', 
-                status: calculateStatus(licExp), 
-                url: cleanSheetValue(row[18]), 
-                daysPending: getDaysDiff(licExp) 
-              },
-              defensiveDriving: { 
-                expiryDate: courseExp, 
-                lastRenewalDate: '', 
-                status: calculateStatus(courseExp), 
-                url: cleanSheetValue(row[19]),
-                daysPending: getDaysDiff(courseExp)
-              },
-              medicalExam: { 
-                expiryDate: medicalExp, 
-                lastRenewalDate: '', 
-                status: calculateStatus(medicalExp), 
-                url: cleanSheetValue(row[20]),
-                daysPending: getDaysDiff(medicalExp)
-              }
-            };
-          });
-          resolve(drivers);
-        }
+          resolve(processDriverRows(rows));
+        },
+        error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processDriverRows = (rows: any[][]): Driver[] => {
+  return rows.slice(1).filter(row => row && row[2]).map((row): Driver => {
+    const licExp = parseFlexibleDate(row[9]);
+    const courseExp = parseFlexibleDate(row[11]);
+    const medicalExp = parseFlexibleDate(row[13]);
+    
+    return {
+      id: `d-${cleanSheetValue(row[3])}`,
+      name: cleanSheetValue(row[2]),
+      identification: cleanSheetValue(row[3]),
+      hireDate: parseFlexibleDate(row[6]),
+      position: cleanSheetValue(row[4]),
+      status: cleanSheetValue(row[5]),
+      experienceTime: cleanSheetValue(row[8]),
+      licenseIssueDate: parseFlexibleDate(row[7]),
+      photoUrl: cleanSheetValue(row[21]),
+      cd: cleanSheetValue(row[0]),
+      contractor: cleanSheetValue(row[1]),
+      license: { 
+        expiryDate: licExp, 
+        lastRenewalDate: '', 
+        status: calculateStatus(licExp), 
+        url: cleanSheetValue(row[18]), 
+        daysPending: getDaysDiff(licExp) 
+      },
+      defensiveDriving: { 
+        expiryDate: courseExp, 
+        lastRenewalDate: '', 
+        status: calculateStatus(courseExp), 
+        url: cleanSheetValue(row[19]),
+        daysPending: getDaysDiff(courseExp)
+      },
+      medicalExam: { 
+        expiryDate: medicalExp, 
+        lastRenewalDate: '', 
+        status: calculateStatus(medicalExp), 
+        url: cleanSheetValue(row[20]),
+        daysPending: getDaysDiff(medicalExp)
+      }
+    };
+  });
 };
 
 /**
@@ -518,47 +665,63 @@ export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
  */
 export const fetchReportsFromSheet = async (): Promise<Report[]> => {
   try {
-    const url = `${BASE_URL_BACKEND}&gid=1789987673${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'NOVEDADES');
+    if (!rows || rows.length === 0) {
+      return fetchReportsFromSheetCSV();
+    }
+    return processReportRows(rows);
+  } catch (e) { 
+    return fetchReportsFromSheetCSV(); 
+  }
+};
+
+const fetchReportsFromSheetCSV = async (): Promise<Report[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${NOVEDADES_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
     return new Promise((resolve) => {
       Papa.parse(csvText, {
-        header: false, skipEmptyLines: true,
+        header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows) { resolve([]); return; }
-          const reports = rows.slice(1).filter(row => row && row[0]).map((row): Report => {
-            const statusRaw = cleanSheetValue(row[11]).toUpperCase();
-            const isClosed = statusRaw.includes('CERRADO') || statusRaw.includes('COMPLETADOS');
-
-            return {
-              id: cleanSheetValue(row[0]), 
-              date: parseFlexibleDate(row[1]), 
-              cd: cleanSheetValue(row[2]),
-              contractor: cleanSheetValue(row[3]),
-              plate: normalizePlate(cleanSheetValue(row[4])), 
-              source: cleanSheetValue(row[5]), 
-              workshopDate: parseFlexibleDate(row[6]),
-              initialEvidence: cleanSheetValue(row[7]), 
-              novelty: cleanSheetValue(row[8]), 
-              daysToAttend: parseInt(cleanSheetValue(row[9])) || 0,
-              entryMap: cleanSheetValue(row[10]), 
-              status: isClosed ? 'COMPLETADOS' : 'PENDIENTES', 
-              workshopEvidence: cleanSheetValue(row[12]), 
-              closureDate: parseFlexibleDate(row[13]), 
-              solutionEvidence: cleanSheetValue(row[14]), 
-              exitMap: cleanSheetValue(row[15]), 
-              daysInShop: parseInt(cleanSheetValue(row[16])) || 0, 
-              closureComments: cleanSheetValue(row[17]), 
-              workshop: cleanSheetValue(row[18])
-            };
-          });
-          resolve(reports);
-        }
+          resolve(processReportRows(rows));
+        },
+        error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processReportRows = (rows: any[][]): Report[] => {
+  return rows.slice(1).filter(row => row && row[0]).map((row): Report => {
+    const statusRaw = cleanSheetValue(row[11]).toUpperCase();
+    const isClosed = statusRaw.includes('CERRADO') || statusRaw.includes('COMPLETADOS');
+
+    return {
+      id: cleanSheetValue(row[0]), 
+      date: parseFlexibleDate(row[1]), 
+      cd: cleanSheetValue(row[2]),
+      contractor: cleanSheetValue(row[3]),
+      plate: normalizePlate(cleanSheetValue(row[4])), 
+      source: cleanSheetValue(row[5]), 
+      workshopDate: parseFlexibleDate(row[6]),
+      initialEvidence: cleanSheetValue(row[7]), 
+      novelty: cleanSheetValue(row[8]), 
+      daysToAttend: parseInt(cleanSheetValue(row[9])) || 0,
+      entryMap: cleanSheetValue(row[10]), 
+      status: isClosed ? 'COMPLETADOS' : 'PENDIENTES', 
+      workshopEvidence: cleanSheetValue(row[12]), 
+      closureDate: parseFlexibleDate(row[13]), 
+      solutionEvidence: cleanSheetValue(row[14]), 
+      exitMap: cleanSheetValue(row[15]), 
+      daysInShop: parseInt(cleanSheetValue(row[16])) || 0, 
+      closureComments: cleanSheetValue(row[17]), 
+      workshop: cleanSheetValue(row[18])
+    };
+  });
 };
 
 /**
@@ -566,46 +729,62 @@ export const fetchReportsFromSheet = async (): Promise<Report[]> => {
  */
 export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
   try {
-    const url = `${BASE_URL_FINES}&gid=0${getCacheBuster()}`;
-    const response = await fetch(url);
-    const csvText = (await response.text()) + "\n";
+    const rows = await fetchDataFromGAS(FINES_SHEET_ID, 'COMPARENDOS');
+    if (!rows || rows.length === 0) {
+      return fetchFinesFromSheetCSV();
+    }
+    return processFineRows(rows);
+  } catch (e) { 
+    return fetchFinesFromSheetCSV(); 
+  }
+};
+
+const fetchFinesFromSheetCSV = async (): Promise<Fine[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${FINES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=0${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
     return new Promise((resolve) => {
       Papa.parse(csvText, {
-        header: false, skipEmptyLines: false,
+        header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length === 0) { resolve([]); return; }
-          
-          // Skip the first row if it's the header "MES"
-          const startIdx = (rows[0] && cleanSheetValue(rows[0][0]).toUpperCase() === 'MES') ? 1 : 0;
-          
-          const fines = rows.slice(startIdx)
-            .filter(r => r && r.some(c => cleanSheetValue(c).length > 0))
-            .map((row, i): Fine => {
-              return {
-                id: `row-${startIdx + i + 1}`,
-                month: cleanSheetValue(row[0]),
-                registrationDate: parseFlexibleDate(row[1]),
-                cd: cleanSheetValue(row[2]),
-                contractor: cleanSheetValue(row[3]),
-                driverName: cleanSheetValue(row[4]),
-                driverId: cleanSheetValue(row[5]),
-                driverPosition: cleanSheetValue(row[6]),
-                amount: parseFloat(cleanSheetValue(row[9])) || 0,
-                status: cleanSheetValue(row[8]).toUpperCase().includes('SI') ? 'PENDIENTE' : 'PAGADO',
-                paymentAgreement: cleanSheetValue(row[8]),
-                evidenceUrl: cleanSheetValue(row[7]).startsWith('http') ? cleanSheetValue(row[7]) : '',
-                infractionCode: cleanSheetValue(row[10]),
-                date: parseFlexibleDate(row[11]),
-                description: cleanSheetValue(row[12]),
-                plate: normalizePlate(cleanSheetValue(row[17]))
-              } as any;
-            });
-          resolve(fines);
-        }
+          resolve(processFineRows(rows));
+        },
+        error: () => resolve([])
       });
     });
-  } catch { return []; }
+  } catch (e) { return []; }
+};
+
+const processFineRows = (rows: any[][]): Fine[] => {
+  // Skip the first row if it's the header "MES"
+  const startIdx = (rows[0] && cleanSheetValue(rows[0][0]).toUpperCase() === 'MES') ? 1 : 0;
+  
+  return rows.slice(startIdx)
+    .filter(r => r && r.some(c => cleanSheetValue(c).length > 0))
+    .map((row, i): Fine => {
+      return {
+        id: `row-${startIdx + i + 1}`,
+        month: cleanSheetValue(row[0]),
+        registrationDate: parseFlexibleDate(row[1]),
+        cd: cleanSheetValue(row[2]),
+        contractor: cleanSheetValue(row[3]),
+        driverName: cleanSheetValue(row[4]),
+        driverId: cleanSheetValue(row[5]),
+        driverPosition: cleanSheetValue(row[6]),
+        amount: parseFloat(cleanSheetValue(row[9])) || 0,
+        status: cleanSheetValue(row[8]).toUpperCase().includes('SI') ? 'PENDIENTE' : 'PAGADO',
+        paymentAgreement: cleanSheetValue(row[8]),
+        evidenceUrl: cleanSheetValue(row[7]).startsWith('http') ? cleanSheetValue(row[7]) : '',
+        infractionCode: cleanSheetValue(row[10]),
+        date: parseFlexibleDate(row[11]),
+        description: cleanSheetValue(row[12]),
+        plate: normalizePlate(cleanSheetValue(row[17]))
+      } as any;
+    });
 };
 
 /**
@@ -613,8 +792,20 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
  */
 export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
   try {
-    const url = `${BASE_URL_BACKEND}&gid=2086109634${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'PREVENTIVO');
+    if (!rows || rows.length < 2) {
+      return fetchPreventivesFromSheetCSV();
+    }
+    return processPreventiveRows(rows);
+  } catch (e) { 
+    return fetchPreventivesFromSheetCSV(); 
+  }
+};
+
+const fetchPreventivesFromSheetCSV = async (): Promise<Preventive[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=2086109634${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -623,62 +814,82 @@ export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          
-          // SEM: 0, MES: 1, FECHA: 2, PLACA: 3, FREC: 4, ULTIMO: 5, PROX: 6, REGISTRADO: 7, DIF: 8, RANGO: 9, VALIDACION: 10, EVIDENCIA: 11
-          const preventives = rows.slice(1)
-            .filter(row => row && row[3]) // Placa en indice 3
-            .map((row, i): Preventive => {
-              const plate = normalizePlate(cleanSheetValue(row[3]));
-              const lastKm = parseInt(cleanSheetValue(row[5])) || 0;
-              const nextKm = parseInt(cleanSheetValue(row[6])) || 0;
-              const currentKm = parseInt(cleanSheetValue(row[7])) || 0;
-              const kmsToNext = parseInt(cleanSheetValue(row[8])) || (nextKm - currentKm);
-              const complianceStatus = cleanSheetValue(row[9]); // CUMPLIMIENTO EN RANGOS (Col J)
-              const validationStatus = cleanSheetValue(row[10]); // VALIDACIÓN CUMPLIMIENTO (Col K)
-              const evidence = cleanSheetValue(row[11]); // EVIDENCIA (Col L)
-              
-              const combinedStatus = (complianceStatus + " " + validationStatus).toLowerCase();
-              
-              let status: 'ok' | 'warning' | 'critical' = 'ok';
-              if (combinedStatus.includes('no cumplió') || combinedStatus.includes('no cumplio') || combinedStatus.includes('critico') || combinedStatus.includes('vencido') || combinedStatus.includes('fuera')) status = 'critical';
-              else if (combinedStatus.includes('proximo') || combinedStatus.includes('alerta') || combinedStatus.includes('rango')) status = 'warning';
-              else if (kmsToNext < 500) status = 'critical';
-              else if (kmsToNext < 1000) status = 'warning';
-
-              return {
-                id: `prev-${plate}-${i}`,
-                cd: cleanSheetValue(row[12]) || 'GENERAL',
-                contractor: cleanSheetValue(row[14]) || cleanSheetValue(row[13]) || 'GENERAL',
-                brand: cleanSheetValue(row[13]) || 'GENERAL',
-                plate: plate,
-                currentMileage: currentKm,
-                nextMaintenanceMileage: nextKm,
-                lastMaintenanceMileage: lastKm,
-                kmsToNext: kmsToNext,
-                status: status,
-                lastUpdate: parseFlexibleDate(row[2]),
-                week: cleanSheetValue(row[0]),
-                month: cleanSheetValue(row[1]),
-                complianceStatus: complianceStatus,
-                validationStatus: validationStatus,
-                evidenceUrl: evidence,
-                frequency: parseInt(cleanSheetValue(row[4])) || 5000,
-                difference: parseInt(cleanSheetValue(row[8])) || 0
-              };
-            });
-          resolve(preventives);
+          resolve(processPreventiveRows(rows));
         },
         error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processPreventiveRows = (rows: any[][]): Preventive[] => {
+  // 0: SEM (PROG), 1: FECHA PROG, 2: SEM, 3: MES, 4: FECHA EJEC, 5: PLACA, 6: FREC, 7: ULTIMO, 8: PROX, 9: REGISTRADO, 11: DIF, 12: RANGO, 13: VAL, 14: PROG, 16: CD, 17: MARCA
+  return rows.slice(1)
+    .filter(row => row && row[5]) // Placa en indice 5
+    .map((row, i): Preventive => {
+      const plate = normalizePlate(cleanSheetValue(row[5]));
+      const lastKm = parseInt(cleanSheetValue(row[7])) || 0;
+      const nextKm = parseInt(cleanSheetValue(row[8])) || 0;
+      const currentKm = parseInt(cleanSheetValue(row[9])) || 0;
+      const kmsToNext = nextKm - currentKm;
+      
+      const complianceRange = cleanSheetValue(row[12]); 
+      const validationStatus = cleanSheetValue(row[13]); 
+      const complianceProgram = cleanSheetValue(row[14]);
+      
+      const combinedStatus = (complianceRange + " " + validationStatus).toLowerCase();
+      
+      let status: 'ok' | 'warning' | 'critical' = 'ok';
+      if (combinedStatus.includes('no cumplio') || combinedStatus.includes('no cumplio') || combinedStatus.includes('critico') || combinedStatus.includes('vencido') || combinedStatus.includes('fuera')) status = 'critical';
+      else if (combinedStatus.includes('proximo') || combinedStatus.includes('alerta') || combinedStatus.includes('rango')) status = 'warning';
+      else if (kmsToNext < 500) status = 'critical';
+      else if (kmsToNext < 1000) status = 'warning';
+
+      return {
+        id: `prev-${plate}-${i}`,
+        semProgramado: cleanSheetValue(row[0]),
+        fechaProgramada: parseFlexibleDate(row[1]),
+        week: cleanSheetValue(row[2]),
+        month: cleanSheetValue(row[3]),
+        date: parseFlexibleDate(row[4]),
+        plate: plate,
+        frequency: parseInt(cleanSheetValue(row[6])) || 5000,
+        lastMaintenanceMileage: lastKm,
+        nextMaintenanceMileage: nextKm,
+        currentMileage: currentKm,
+        difference: parseInt(cleanSheetValue(row[11])) || 0,
+        complianceRange,
+        validationStatus,
+        complianceProgram,
+        cd: cleanSheetValue(row[16]) || 'GENERAL',
+        line: cleanSheetValue(row[17]),
+        brand: cleanSheetValue(row[17]),
+        contractor: 'BAVARIA', // Default or derived
+        status,
+        kmsToNext,
+        lastUpdate: parseFlexibleDate(row[4])
+      };
+    });
 };
 
 export const fetchAvailabilityFromSheet = async (): Promise<AvailabilityRecord[]> => {
+  const docId = '1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E';
   try {
-    const url = `https://docs.google.com/spreadsheets/d/1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E/gviz/tq?tqx=out:csv&sheet=disponibilidadd${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(docId, 'disponibilidadd');
+    if (!rows || rows.length < 2) {
+      return fetchAvailabilityFromSheetCSV();
+    }
+    return processAvailabilityRows(rows);
+  } catch (e) { 
+    return fetchAvailabilityFromSheetCSV(); 
+  }
+};
+
+const fetchAvailabilityFromSheetCSV = async (): Promise<AvailabilityRecord[]> => {
+  try {
+    const docId = '1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E';
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=disponibilidadd${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -687,70 +898,62 @@ export const fetchAvailabilityFromSheet = async (): Promise<AvailabilityRecord[]
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          
-          const records = rows.slice(1)
-            .filter(row => row && row[9]) // Placa en indice 9 (Col J)
-            .map((row, i): AvailabilityRecord => {
-              return {
-                id: `avail-${i}`,
-                date: cleanSheetValue(row[1]),
-                cd: cleanSheetValue(row[18]),
-                system: cleanSheetValue(row[3]),
-                detail: cleanSheetValue(row[4]),
-                workshop: cleanSheetValue(row[6]),
-                entryDate: cleanSheetValue(row[7]),
-                estimatedExitDate: cleanSheetValue(row[8]),
-                plate: cleanSheetValue(row[9]),
-                contractor: cleanSheetValue(row[10]),
-                daysUnavailable: parseInt(cleanSheetValue(row[11])) || 0,
-                fullPlate: normalizePlate(cleanSheetValue(row[9]))
-              };
-            });
-          resolve(records);
+          resolve(processAvailabilityRows(rows));
         },
         error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
+  return rows.slice(1)
+    .filter(row => row && row[9]) // Placa en indice 9 (Col J)
+    .map((row, i): AvailabilityRecord => {
+      return {
+        id: `avail-${i}`,
+        date: cleanSheetValue(row[1]),
+        cd: cleanSheetValue(row[18]),
+        system: cleanSheetValue(row[3]),
+        detail: cleanSheetValue(row[4]),
+        workshop: cleanSheetValue(row[6]),
+        entryDate: cleanSheetValue(row[7]),
+        estimatedExitDate: cleanSheetValue(row[8]),
+        plate: cleanSheetValue(row[9]),
+        contractor: cleanSheetValue(row[10]),
+        daysUnavailable: parseInt(cleanSheetValue(row[11])) || 0,
+        fullPlate: normalizePlate(cleanSheetValue(row[9]))
+      };
+    });
 };
 
 export const fetchOperationalIndicatorsFromSheet = async (): Promise<OperationalIndicator[]> => {
+  const docId = '1nKlDzFSZxh9NiWTJgkx2ASIJMbHMSribN3MZ-4mClVU';
+  try {
+    const rows = await fetchDataFromGAS(docId, 'TABLERO');
+    if (!rows || rows.length < 2) {
+      return fetchOperationalIndicatorsFromSheetCSV();
+    }
+    return processIndicatorRows(rows);
+  } catch (e) { 
+    return fetchOperationalIndicatorsFromSheetCSV(); 
+  }
+};
+
+const fetchOperationalIndicatorsFromSheetCSV = async (): Promise<OperationalIndicator[]> => {
   try {
     const docId = '1nKlDzFSZxh9NiWTJgkx2ASIJMbHMSribN3MZ-4mClVU';
-    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=TABLERO${getCacheBuster()}`;
-    const response = await fetch(url);
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=TABLERO${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
-    const parseNumericValue = (val: string): number => {
-      if (!val) return 0;
-      const cleaned = val.replace('%', '').replace(',', '.').trim();
-      return parseFloat(cleaned) || 0;
-    };
-
     return new Promise((resolve) => {
       Papa.parse(csvText, {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          
-          const indicators = rows.slice(1)
-            .filter(row => row && row[3]) // Indicador en indice 3
-            .map((row, i): OperationalIndicator => {
-              return {
-                id: `op-${i}`,
-                month: cleanSheetValue(row[0]),
-                week: cleanSheetValue(row[1]),
-                cd: cleanSheetValue(row[2]),
-                indicator: cleanSheetValue(row[3]),
-                actual: parseNumericValue(cleanSheetValue(row[4])),
-                trigger: parseNumericValue(cleanSheetValue(row[5])),
-                meta: parseNumericValue(cleanSheetValue(row[6])),
-              };
-            });
-          resolve(indicators);
+          resolve(processIndicatorRows(rows));
         },
         error: () => resolve([])
       });
@@ -758,12 +961,47 @@ export const fetchOperationalIndicatorsFromSheet = async (): Promise<Operational
   } catch (e) { return []; }
 };
 
+const processIndicatorRows = (rows: any[][]): OperationalIndicator[] => {
+  const parseNumericValue = (val: string): number => {
+    if (!val) return 0;
+    const cleaned = val.replace('%', '').replace(',', '.').trim();
+    return parseFloat(cleaned) || 0;
+  };
+
+  return rows.slice(1)
+    .filter(row => row && row[3]) // Indicador en indice 3
+    .map((row, i): OperationalIndicator => {
+      return {
+        id: `op-${i}`,
+        month: cleanSheetValue(row[0]),
+        week: cleanSheetValue(row[1]),
+        cd: cleanSheetValue(row[2]),
+        indicator: cleanSheetValue(row[3]),
+        actual: parseNumericValue(cleanSheetValue(row[4])),
+        trigger: parseNumericValue(cleanSheetValue(row[5])),
+        meta: parseNumericValue(cleanSheetValue(row[6])),
+      };
+    });
+};
+
 export const fetchWorkshopRecordsFromSheet = async (): Promise<WorkshopRecord[]> => {
+  const docId = '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo';
   try {
-    const url = 'https://docs.google.com/spreadsheets/d/1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo/gviz/tq?tqx=out:csv&sheet=TALLERES';
-    const response = await fetch(url);
-    if (!response.ok) return [];
-    
+    const rows = await fetchDataFromGAS(docId, 'TALLERES');
+    if (!rows || rows.length < 2) {
+      return fetchWorkshopRecordsFromSheetCSV();
+    }
+    return processWorkshopRecordRows(rows);
+  } catch (e) { 
+    return fetchWorkshopRecordsFromSheetCSV(); 
+  }
+};
+
+const fetchWorkshopRecordsFromSheetCSV = async (): Promise<WorkshopRecord[]> => {
+  try {
+    const docId = '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo';
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=TALLERES${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -772,38 +1010,51 @@ export const fetchWorkshopRecordsFromSheet = async (): Promise<WorkshopRecord[]>
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          
-          // 0:MES, 1:SEMANA, 2:FECHA, 3:PLACA, 4:ESTADO, 5:NOVEDAD, 6:EVIDENCIA_1, 7:EVIDENCIA_2, 8:MÁS ALTO
-          const records = rows.slice(1)
-            .filter(row => row && row[3]) // Placa en indice 3
-            .map((row, i): WorkshopRecord => {
-              return {
-                id: `workshop-${i}`,
-                month: cleanSheetValue(row[0]),
-                week: cleanSheetValue(row[1]),
-                date: parseFlexibleDate(row[2]),
-                plate: normalizePlate(cleanSheetValue(row[3])),
-                status: cleanSheetValue(row[4]),
-                novelty: cleanSheetValue(row[5]),
-                evidence1Url: cleanSheetValue(row[6]),
-                evidence2Url: cleanSheetValue(row[7]),
-                workshopName: cleanSheetValue(row[8]),
-              };
-            });
-          resolve(records);
+          resolve(processWorkshopRecordRows(rows));
         },
         error: () => resolve([])
       });
     });
   } catch (e) { return []; }
+};
+
+const processWorkshopRecordRows = (rows: any[][]): WorkshopRecord[] => {
+  // 0:MES, 1:SEMANA, 2:FECHA, 3:PLACA, 4:ESTADO, 5:NOVEDAD, 6:EVIDENCIA_1, 7:EVIDENCIA_2, 8:MÁS ALTO
+  return rows.slice(1)
+    .filter(row => row && row[3]) // Placa en indice 3
+    .map((row, i): WorkshopRecord => {
+      return {
+        id: `workshop-${i}`,
+        month: cleanSheetValue(row[0]),
+        week: cleanSheetValue(row[1]),
+        date: parseFlexibleDate(row[2]),
+        plate: normalizePlate(cleanSheetValue(row[3])),
+        status: cleanSheetValue(row[4]),
+        novelty: cleanSheetValue(row[5]),
+        evidence1Url: cleanSheetValue(row[6]),
+        evidence2Url: cleanSheetValue(row[7]),
+        workshopName: cleanSheetValue(row[8]),
+      };
+    });
 };
 
 export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
   const fetchFromSource = async (docId: string, sheetName: string, defaultCd: string): Promise<CheckList[]> => {
     try {
-      const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${sheetName}${getCacheBuster()}`;
-      const response = await fetch(url);
+      const rows = await fetchDataFromGAS(docId, sheetName);
+      if (!rows || rows.length < 2) {
+        return fetchFromSourceCSV(docId, sheetName, defaultCd);
+      }
+      return processCheckListRows(rows, docId, defaultCd);
+    } catch (e) { 
+      return fetchFromSourceCSV(docId, sheetName, defaultCd); 
+    }
+  };
+
+  const fetchFromSourceCSV = async (docId: string, sheetName: string, defaultCd: string): Promise<CheckList[]> => {
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`;
+      const response = await fetch(url, { mode: 'cors' });
       const csvText = await response.text();
       if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
       
@@ -812,64 +1063,58 @@ export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
           header: false, skipEmptyLines: 'greedy',
           complete: (results) => {
             const rows = results.data as any[][];
-            if (!rows || rows.length < 2) { resolve([]); return; }
-            
-            const records = rows.slice(1)
-              .filter(row => {
-                // Indice 8 (Columna I) es EMPRESA según el usuario
-                if (!row || !row[8]) return false;
-                const empresa = cleanSheetValue(row[8]).toUpperCase();
-                // Solo mostrar BAVARIA
-                return empresa === 'BAVARIA';
-              })
-              .map((row, i): CheckList => {
-                // Según el usuario (indices B=1, C=2...): 
-                // B: Fecha (row[1]), C: vehiculo (row[2]), D: Salida (row[3]), E: Retorno (row[4]), 
-                // G: Estado (row[6]), H: Contratista (row[7]), I: EMPRESA (row[8]), J: CONDUCTOR (row[9])
-                // K: Semana (row[10]), M: Novedades (row[12])
-                const fecha = parseFlexibleDate(row[1]);
-                const rawConductor = cleanSheetValue(row[9]);
-                const rawSalida = cleanSheetValue(row[3]);
-                const rawRetorno = cleanSheetValue(row[4]);
-                const rawSemana = cleanSheetValue(row[10]);
-
-                // Usar semana de la hoja si existe, de lo contrario calcularla
-                let semanaStr = rawSemana;
-                if (!semanaStr || semanaStr.trim() === '') {
-                  try {
-                    if (fecha) {
-                      const d = new Date(fecha + 'T12:00:00');
-                      if (!isNaN(d.getTime())) {
-                        semanaStr = String(getWeekNumber(d));
-                      }
-                    }
-                  } catch (e) {
-                    semanaStr = '';
-                  }
-                }
-
-                return {
-                  id: `check-${docId}-${i}`,
-                  fecha: fecha,
-                  vehiculo: normalizePlate(cleanSheetValue(row[2])),
-                  salida: rawSalida === '1' ? '100%' : '0%',
-                  retorno: rawRetorno === '1' ? '100%' : '0%',
-                  estado: cleanSheetValue(row[6]),
-                  contratista: cleanSheetValue(row[7]),
-                  empresa: cleanSheetValue(row[8]),
-                  conductor: rawConductor.trim() === '' ? '#N/A' : rawConductor,
-                  semana: semanaStr,
-                  novedades: cleanSheetValue(row[12]) || '', // Indice 12
-                  cd: defaultCd,
-                  source: defaultCd === 'LA ARENOSA' ? 'ARENOSA' : 'GALAPA'
-                };
-              });
-            resolve(records);
+            resolve(processCheckListRows(rows, docId, defaultCd));
           },
           error: () => resolve([])
         });
       });
     } catch (e) { return []; }
+  };
+
+  const processCheckListRows = (rows: any[][], docId: string, defaultCd: string): CheckList[] => {
+    return rows.slice(1)
+      .filter(row => {
+        if (!row || !row[8]) return false;
+        const empresa = cleanSheetValue(row[8]).toUpperCase();
+        return empresa === 'BAVARIA';
+      })
+      .map((row, i): CheckList => {
+        const fecha = parseFlexibleDate(row[1]);
+        const rawConductor = cleanSheetValue(row[9]);
+        const rawSalida = cleanSheetValue(row[3]);
+        const rawRetorno = cleanSheetValue(row[4]);
+        const rawSemana = cleanSheetValue(row[10]);
+
+        let semanaStr = rawSemana;
+        if (!semanaStr || semanaStr.trim() === '') {
+          try {
+            if (fecha) {
+              const d = new Date(fecha + 'T12:00:00');
+              if (!isNaN(d.getTime())) {
+                semanaStr = String(getWeekNumber(d));
+              }
+            }
+          } catch (e) {
+            semanaStr = '';
+          }
+        }
+
+        return {
+          id: `check-${docId}-${i}`,
+          fecha: fecha,
+          vehiculo: normalizePlate(cleanSheetValue(row[2])),
+          salida: rawSalida === '1' ? '100%' : '0%',
+          retorno: rawRetorno === '1' ? '100%' : '0%',
+          estado: cleanSheetValue(row[6]),
+          contratista: cleanSheetValue(row[7]),
+          empresa: cleanSheetValue(row[8]),
+          conductor: rawConductor.trim() === '' ? '#N/A' : rawConductor,
+          semana: semanaStr,
+          novedades: cleanSheetValue(row[12]) || '',
+          cd: defaultCd,
+          source: defaultCd === 'LA ARENOSA' ? 'ARENOSA' : 'GALAPA'
+        };
+      });
   };
 
   const [arenosa, galapa] = await Promise.all([
@@ -883,6 +1128,58 @@ export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
 export const fetchUnavailabilityFromSheet = async (): Promise<UnavailabilityRecord[]> => {
   try {
     const docId = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
+    const rows = await fetchDataFromGAS(docId, 'INDISPONIBILIDAD');
+    
+    if (!rows || rows.length < 2) {
+      console.warn("GAS fetch unavail failed, attempting CSV fallback");
+      return fetchUnavailabilityFromSheetCSV();
+    }
+
+    return rows.slice(1)
+      .filter(row => row && row[2]) // Placa en indice 2
+      .map((row, i): UnavailabilityRecord => {
+        const plate = normalizePlate(cleanSheetValue(row[2]));
+        const entryDate = parseFlexibleDate(row[10]);
+        const exitDate = parseFlexibleDate(row[11]);
+        let days = parseInt(cleanSheetValue(row[12]));
+
+        if (isNaN(days) || cleanSheetValue(row[12]) === '') {
+          if (entryDate) {
+            const start = new Date(entryDate + 'T00:00:00');
+            const end = exitDate ? new Date(exitDate + 'T00:00:00') : new Date();
+            const diffTime = end.getTime() - start.getTime();
+            days = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+          } else {
+            days = 0;
+          }
+        }
+
+        return {
+          id: `unavail-${i}-${plate}`,
+          fecha: parseFlexibleDate(row[0]),
+          semana: cleanSheetValue(row[1]),
+          placa: plate,
+          contratista: cleanSheetValue(row[3]),
+          cd: cleanSheetValue(row[4]),
+          estado: cleanSheetValue(row[5]),
+          sistema: cleanSheetValue(row[6]),
+          novedad: cleanSheetValue(row[7]),
+          criticidad: cleanSheetValue(row[8]),
+          taller: cleanSheetValue(row[9]),
+          fechaIngreso: entryDate,
+          fechaSalida: exitDate,
+          diasTaller: days
+        };
+      });
+  } catch (e) {
+    console.error("Error fetching unavail from GAS:", e);
+    return fetchUnavailabilityFromSheetCSV();
+  }
+};
+
+const fetchUnavailabilityFromSheetCSV = async (): Promise<UnavailabilityRecord[]> => {
+  try {
+    const docId = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
     const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=INDISPONIBILIDAD${getCacheBuster()}`;
     const response = await fetch(url);
     const csvText = await response.text();
@@ -894,27 +1191,21 @@ export const fetchUnavailabilityFromSheet = async (): Promise<UnavailabilityReco
         complete: (results) => {
           const rows = results.data as any[][];
           if (!rows || rows.length < 2) { resolve([]); return; }
-          
           const records = rows.slice(1)
-            .filter(row => row && row[2]) // Placa en indice 2
+            .filter(row => row && row[2]) 
             .map((row, i): UnavailabilityRecord => {
               const plate = normalizePlate(cleanSheetValue(row[2]));
               const entryDate = parseFlexibleDate(row[10]);
               const exitDate = parseFlexibleDate(row[11]);
               let days = parseInt(cleanSheetValue(row[12]));
-
-              // Cálculo automático de días en taller si está vacío
               if (isNaN(days) || cleanSheetValue(row[12]) === '') {
                 if (entryDate) {
                   const start = new Date(entryDate + 'T00:00:00');
                   const end = exitDate ? new Date(exitDate + 'T00:00:00') : new Date();
                   const diffTime = end.getTime() - start.getTime();
                   days = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-                } else {
-                  days = 0;
-                }
+                } else { days = 0; }
               }
-
               return {
                 id: `unavail-${i}-${plate}`,
                 fecha: parseFlexibleDate(row[0]),
@@ -941,7 +1232,7 @@ export const fetchUnavailabilityFromSheet = async (): Promise<UnavailabilityReco
 };
 
 export const saveUnavailabilityRecords = async (records: Partial<UnavailabilityRecord>[]): Promise<boolean> => {
-  const UNAVAILABILITY_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzaJ-CCjZ0Q2Ktgul4WBsTbtdKTB8qYBgtFqTbc5amisfwC6T_XI3k-wroLhnmSFzvZ/exec';
+  const UNAVAILABILITY_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
   
   // Función para formatear YYYY-MM-DD a DD/MM/YYYY
   const formatSheetDate = (dateStr: string | undefined) => {
@@ -976,7 +1267,7 @@ export const saveUnavailabilityRecords = async (records: Partial<UnavailabilityR
 export const fetchFuelPerformanceFromSheet = async (): Promise<FuelPerformance[]> => {
   try {
     const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vTaur0xTXFcug2tg_CW5gBBHnh9QtH8psRy0nLHcYSPqoPfs3Tt2d-X3nNWuvUnxRKjxvmJIFryPnTK/pub?gid=1098828384&single=true&output=csv${getCacheBuster()}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -1069,24 +1360,38 @@ export const fetchPlateAdherenceFromSheet = async (): Promise<PlateAdherence[]> 
 
 export const fetchCorrectivesFromSheet = async (): Promise<Corrective[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('PROGRAMACIÓN')}${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(CORRECTIVES_DOC_ID, 'PROGRAMACIÓN');
+    
+    if (!rows || rows.length < 1) {
+      console.warn("GAS fetch correctives failed, attempting CSV fallback");
+      return fetchCorrectivesFromSheetCSV();
+    }
+
+    const headers = rows[0].map((h: any) => cleanSheetValue(h).toUpperCase());
+    return processCorrectiveRows(rows, headers);
+  } catch (e) {
+    console.error("Error fetching correctives from GAS:", e);
+    return fetchCorrectivesFromSheetCSV();
+  }
+};
+
+const fetchCorrectivesFromSheetCSV = async (): Promise<Corrective[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${CORRECTIVES_DOC_ID}/gviz/tq?tqx=out:csv&sheet=PROGRAMACIÓN${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
 
     return new Promise((resolve) => {
       Papa.parse(csvText, {
-        header: true,
-        skipEmptyLines: 'greedy',
+        header: true, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[];
           if (!rows || rows.length === 0) { resolve([]); return; }
-          
           const records = rows
             .filter(row => row && (row['PLACA'] || row[3])) 
             .map((row, i): Corrective => {
               const getValue = (key: string, index: number) => row[key] || row[index] || '';
-              
               return {
                 id: `corr-${i}`,
                 date: parseFlexibleDate(getValue('FECHA DE PROGRAMACION', 0)),
@@ -1110,6 +1415,34 @@ export const fetchCorrectivesFromSheet = async (): Promise<Corrective[]> => {
       });
     });
   } catch (e) { return []; }
+};
+
+const processCorrectiveRows = (rows: any[][], headers: string[]): Corrective[] => {
+  return rows.slice(1)
+    .filter(row => row && (cleanSheetValue(row[3]) || cleanSheetValue(row[headers.indexOf('PLACA')])))
+    .map((row, i): Corrective => {
+      const getV = (key: string, idx: number) => {
+        const hIdx = headers.indexOf(key.toUpperCase());
+        return cleanSheetValue(row[hIdx !== -1 ? hIdx : idx]);
+      };
+      
+      return {
+        id: `corr-${i}`,
+        date: parseFlexibleDate(getV('FECHA DE PROGRAMACION', 0)),
+        contractor: getV('CONTRATISTA', 1),
+        cd: getV('CENTRO DE DISTRIBUCION', 2),
+        plate: normalizePlate(getV('PLACA', 3)),
+        system: getV('SISTEMA', 4),
+        novelty: getV('NOVEDADES CORRECTIVAS', 5),
+        workshop: getV('TALLER PROPUESTO', 6),
+        status: getV('ESTADO', 7),
+        exitDate: parseFlexibleDate(getV('FECHA DE SALIDA', 8)),
+        evidence1: getV('EVIDDENCIA 1', 9),
+        evidence2: getV('EVIDENCIA 2', 10),
+        evidence3: getV('ENVIDENCIA', 11),
+        evidence4: getV('EVIDENCIA 4', 12)
+      };
+    });
 };
 
 const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL) => {
@@ -1185,9 +1518,62 @@ export const submitFineToSheet = async (data: any): Promise<boolean> => {
 
 export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
   try {
-    // Usando export?format=csv y gid=2049753520 que es más fiable
-    const url = `https://docs.google.com/spreadsheets/d/${OPERATORS_DOC_ID}/export?format=csv&gid=2049753520${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(OPERATORS_DOC_ID, 'MAESTRO');
+    
+    if (!rows || rows.length < 2) {
+      console.warn("GAS fetch operators failed, attempting CSV fallback");
+      return fetchOperatorsFromSheetCSV();
+    }
+
+    const parseDays = (val: any): number => {
+      const cleaned = cleanSheetValue(val).replace(/[,.]/g, '');
+      return parseInt(cleaned) || 0;
+    };
+
+    const HEADER_IDENTIFIER = "NOMBRES Y APELLIDOS";
+    return rows.slice(1)
+      .filter(row => row && row[3] && cleanSheetValue(row[3]) !== "" && cleanSheetValue(row[3]).toUpperCase() !== HEADER_IDENTIFIER)
+      .map((row, i): OperatorRecord => {
+      return {
+        id: `op-${i}-${cleanSheetValue(row[3])}-${cleanSheetValue(row[4])}`,
+        cd: cleanSheetValue(row[12]),
+        provider: cleanSheetValue(row[2]),
+        name: cleanSheetValue(row[3]),
+        identification: cleanSheetValue(row[4]),
+        position: cleanSheetValue(row[5]),
+        hireDate: parseFlexibleDate(row[7]),
+        licenseExpiry: parseFlexibleDate(row[14]),
+        licenseDaysPending: parseDays(row[15]),
+        category: cleanSheetValue(row[16]),
+        restrictions: cleanSheetValue(row[17]),
+        fines: cleanSheetValue(row[18]),
+        courseExpiry: parseFlexibleDate(row[22]),
+        courseDaysPending: parseDays(row[23]),
+        entity: cleanSheetValue(row[24]),
+        examStatus: cleanSheetValue(row[25]),
+        examExpiry: parseFlexibleDate(row[26]),
+        examDaysPending: parseDays(row[27]),
+        opmCourseDate: parseFlexibleDate(row[28]),
+        opmExpiry: parseFlexibleDate(row[29]),
+        opmDaysPending: parseDays(row[30]),
+        opmEntity: cleanSheetValue(row[31]),
+        licenseUrl: cleanSheetValue(row[32]),
+        courseUrl: cleanSheetValue(row[33]),
+        examUrl: cleanSheetValue(row[34]),
+        opmUrl: cleanSheetValue(row[35]),
+        photoUrl: cleanSheetValue(row[36])
+      };
+    });
+  } catch (e) {
+    console.error("Error fetching operators from GAS:", e);
+    return fetchOperatorsFromSheetCSV();
+  }
+};
+
+const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${OPERATORS_DOC_ID}/gviz/tq?tqx=out:csv&gid=2049753520${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
 
@@ -1208,35 +1594,34 @@ export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
           const operators = rows.slice(1)
             .filter(row => row && row[3] && cleanSheetValue(row[3]) !== "" && cleanSheetValue(row[3]).toUpperCase() !== HEADER_IDENTIFIER)
             .map((row, i): OperatorRecord => {
-            // Mapping based on provided columns: A=0, B=1, C=2, D=3, E=4, F=5, H=7, O=14, P=15, Q=16, R=17, S=18, W=22, X=23, Y=24, Z=25, AA=26, AB=27, AC=28, AD=29, AE=30, AF=31, AG=32, AH=33, AI=34, AJ=35, AK=36
             return {
               id: `op-${i}-${cleanSheetValue(row[3])}-${cleanSheetValue(row[4])}`,
-              cd: cleanSheetValue(row[12]),                 // Col M (12)
-              provider: cleanSheetValue(row[2]),            // Col C (2)
-              name: cleanSheetValue(row[3]),                // Col D (3)
-              identification: cleanSheetValue(row[4]),      // Col E (4)
-              position: cleanSheetValue(row[5]),            // Col F (5)
-              hireDate: parseFlexibleDate(row[7]),           // Col H (7)
-              licenseExpiry: parseFlexibleDate(row[14]),    // Col O (14)
-              licenseDaysPending: parseDays(row[15]),       // Col P (15)
-              category: cleanSheetValue(row[16]),           // Col Q (16)
-              restrictions: cleanSheetValue(row[17]),       // Col R (17)
-              fines: cleanSheetValue(row[18]),              // Col S (18)
-              courseExpiry: parseFlexibleDate(row[22]),     // Col W (22)
-              courseDaysPending: parseDays(row[23]),        // Col X (23)
-              entity: cleanSheetValue(row[24]),             // Col Y (24)
-              examStatus: cleanSheetValue(row[25]),         // Col Z (25)
-              examExpiry: parseFlexibleDate(row[26]),       // Col AA (26)
-              examDaysPending: parseDays(row[27]),          // Col AB (27)
-              opmCourseDate: parseFlexibleDate(row[28]),    // Col AC (28)
-              opmExpiry: parseFlexibleDate(row[29]),        // Col AD (29)
-              opmDaysPending: parseDays(row[30]),           // Col AE (30)
-              opmEntity: cleanSheetValue(row[31]),          // Col AF (31)
-              licenseUrl: cleanSheetValue(row[32]),         // Col AG (32)
-              courseUrl: cleanSheetValue(row[33]),          // Col AH (33)
-              examUrl: cleanSheetValue(row[34]),            // Col AI (34)
-              opmUrl: cleanSheetValue(row[35]),             // Col AJ (35)
-              photoUrl: cleanSheetValue(row[36])           // Col AK (36)
+              cd: cleanSheetValue(row[12]),
+              provider: cleanSheetValue(row[2]),
+              name: cleanSheetValue(row[3]),
+              identification: cleanSheetValue(row[4]),
+              position: cleanSheetValue(row[5]),
+              hireDate: parseFlexibleDate(row[7]),
+              licenseExpiry: parseFlexibleDate(row[14]),
+              licenseDaysPending: parseDays(row[15]),
+              category: cleanSheetValue(row[16]),
+              restrictions: cleanSheetValue(row[17]),
+              fines: cleanSheetValue(row[18]),
+              courseExpiry: parseFlexibleDate(row[22]),
+              courseDaysPending: parseDays(row[23]),
+              entity: cleanSheetValue(row[24]),
+              examStatus: cleanSheetValue(row[25]),
+              examExpiry: parseFlexibleDate(row[26]),
+              examDaysPending: parseDays(row[27]),
+              opmCourseDate: parseFlexibleDate(row[28]),
+              opmExpiry: parseFlexibleDate(row[29]),
+              opmDaysPending: parseDays(row[30]),
+              opmEntity: cleanSheetValue(row[31]),
+              licenseUrl: cleanSheetValue(row[32]),
+              courseUrl: cleanSheetValue(row[33]),
+              examUrl: cleanSheetValue(row[34]),
+              opmUrl: cleanSheetValue(row[35]),
+              photoUrl: cleanSheetValue(row[36])
             };
           });
           resolve(operators);
@@ -1245,15 +1630,67 @@ export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
       });
     });
   } catch (e) {
-    console.error("Error fetching operators:", e);
+    console.error("Error fetching operators CSV:", e);
     return [];
   }
 };
 
+export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolean> => {
+  return await sendToGAS({ method: 'POST_CONTROL_TOWER_UPDATE', data });
+};
+
 export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${CONTROL_TOWER_DOC_ID}/export?format=csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
-    const response = await fetch(url);
+    const rows = await fetchDataFromGAS(CONTROL_TOWER_DOC_ID, 'CIERRE DE NOVEDADES');
+    
+    if (!rows || rows.length < 2) {
+      console.warn("GAS fetch control tower failed, attempting CSV fallback");
+      return fetchControlTowerFromSheetCSV();
+    }
+
+    return rows.slice(1)
+      .filter(row => row && row[5]) // Placa en indice 5
+      .map((row, i): ControlTowerRecord => {
+        const parseNum = (val: any) => {
+          const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
+          return parseFloat(clean) || 0;
+        };
+
+        return {
+          id: `ct-${i}-${cleanSheetValue(row[5])}`,
+          contractor: cleanSheetValue(row[0]),
+          cd: cleanSheetValue(row[1]),
+          reportDate: parseFlexibleDate(row[2]),
+          week: cleanSheetValue(row[3]),
+          month: cleanSheetValue(row[4]),
+          plate: normalizePlate(cleanSheetValue(row[5])),
+          source: cleanSheetValue(row[6]),
+          novelty: cleanSheetValue(row[7]),
+          system: cleanSheetValue(row[8]),
+          status: cleanSheetValue(row[9]),
+          criticality: cleanSheetValue(row[10]),
+          solutionDate: parseFlexibleDate(row[11]),
+          closureDays: parseNum(row[12]),
+          daysToClose: parseNum(row[13]),
+          maintenanceCompliance: cleanSheetValue(row[14]),
+          maintenanceGoal: parseNum(row[15]),
+          workshopGoal: parseNum(row[16]),
+          workshopResponsePercentage: parseNum(row[17]),
+          observations: cleanSheetValue(row[18]),
+          evidenceBefore: cleanSheetValue(row[19]),
+          evidenceAfter: cleanSheetValue(row[20]),
+        };
+      });
+  } catch (e) {
+    console.error("Error fetching control tower from GAS:", e);
+    return fetchControlTowerFromSheetCSV();
+  }
+};
+
+const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${CONTROL_TOWER_DOC_ID}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
 
@@ -1294,6 +1731,8 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
                 workshopGoal: parseNum(row[16]),
                 workshopResponsePercentage: parseNum(row[17]),
                 observations: cleanSheetValue(row[18]),
+                evidenceBefore: cleanSheetValue(row[19]),
+                evidenceAfter: cleanSheetValue(row[20]),
               };
             });
           resolve(records);
@@ -1302,7 +1741,7 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
       });
     });
   } catch (e) {
-    console.error("Error fetching control tower data:", e);
+    console.error("Error fetching control tower CSV:", e);
     return [];
   }
 };
