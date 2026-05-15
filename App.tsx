@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -48,6 +48,7 @@ import CorrectivesModule from './components/CorrectivesModule';
 import UnavailabilityModule from './components/UnavailabilityModule';
 import OperatorsModule from './components/OperatorsModule';
 import ControlTowerModule from './components/ControlTowerModule';
+import FleetStandardModule from './components/FleetStandardModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -82,19 +83,20 @@ import {
   fetchCorrectivesFromSheet,
   fetchUnavailabilityFromSheet,
   fetchOperatorsFromSheet,
-  fetchControlTowerFromSheet
+  fetchControlTowerFromSheet,
+  fetchAuditRecordsFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
 import { 
-  RefreshCw, Users, Truck, Search, Shield, Gavel, Menu, LogOut, Loader2, 
+  RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
   UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -132,6 +134,8 @@ const App: React.FC = () => {
   const [unavailabilityRecords, setUnavailabilityRecords] = useState<UnavailabilityRecord[]>([]);
   const [operators, setOperators] = useState<OperatorRecord[]>([]);
   const [controlTowerRecords, setControlTowerRecords] = useState<ControlTowerRecord[]>([]);
+  const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
+  const [auditMasterVehicles, setAuditMasterVehicles] = useState<AuditMasterVehicle[]>([]);
 
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
@@ -242,16 +246,18 @@ const App: React.FC = () => {
       setOperationalIndicators(oi);
 
       // Grupo 4: Listas de control e indicadores de rendimiento
-      const [ch, fp, pa, corr, unav, ops, ct] = await Promise.all([
+      const [ch, fp, pa, corr, unav, ops, ct, aud, amv] = await Promise.all([
         fetchCheckListFromSheet(),
         fetchFuelPerformanceFromSheet(),
         fetchPlateAdherenceFromSheet(),
         fetchCorrectivesFromSheet(),
         fetchUnavailabilityFromSheet(),
         fetchOperatorsFromSheet(),
-        fetchControlTowerFromSheet()
+        fetchControlTowerFromSheet(),
+        fetchAuditRecordsFromSheet(),
+        import('./services/sheetService').then(m => m.fetchAuditMasterListFromSheet())
       ]);
-
+      
       setCheckLists(ch);
       setFuelPerformanceData(fp);
       setPlateAdherenceData(pa);
@@ -259,6 +265,8 @@ const App: React.FC = () => {
       setUnavailabilityRecords(unav);
       setOperators(ops);
       setControlTowerRecords(ct);
+      setAuditRecords(aud);
+      setAuditMasterVehicles(amv);
 
     } catch (err) {
       console.error("Critical Sync Error:", err);
@@ -865,6 +873,7 @@ const App: React.FC = () => {
                             { id: 'torre_preventivos', label: 'PREVENTIVO', icon: <Zap size={18}/> },
                             { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
                             { id: 'indisponibilidad', label: 'Indisponibilidad', icon: <AlertTriangle size={18}/> },
+                            { id: 'estandar_flota', label: 'Estándar', icon: <ShieldCheck size={18}/> },
                             { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
                             { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
                           ].map(item => (
@@ -1032,6 +1041,15 @@ const App: React.FC = () => {
 
           {activeView === 'torre_preventivos' && (
             <PreventiveControlTower data={controlTowerRecords} />
+          )}
+
+
+
+          {activeView === 'estandar_flota' && (
+            <FleetStandardModule 
+              data={auditRecords} 
+              masterList={auditMasterVehicles}
+            />
           )}
 
           {activeView === 'disponibilidad' && (

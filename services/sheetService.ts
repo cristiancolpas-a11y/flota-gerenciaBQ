@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec'; 
@@ -42,6 +42,8 @@ const CHECKLIST_GALAPA_DOC_ID = '14kak0CqSnX9oOXk0GKD0G_QIt5aJxuCu9-_Livst70Y';
 const CONTROL_TOWER_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const CONTROL_TOWER_GID = '2041116370';
 
+const AUDIT_DOC_ID = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
+
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
 const fetchDataFromGAS = async (docId: string, sheetName?: string): Promise<any[][] | null> => {
@@ -51,18 +53,20 @@ const fetchDataFromGAS = async (docId: string, sheetName?: string): Promise<any[
     
     // Usamos un timeout para el fetch para evitar esperas infinitas
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // Aumentado a 30s
+    const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
     const response = await fetch(url, { 
-      signal: controller.signal,
-      cache: 'no-cache',
-      mode: 'cors'
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      redirect: 'follow',
+      signal: controller.signal
     });
     
     clearTimeout(timeoutId);
     
     if (!response.ok) {
-      if (response.status === 429) console.warn(`GAS Rate limited for ${sheetName}`);
+      console.warn(`GAS Fetch failed for ${sheetName}: ${response.status} ${response.statusText}`);
       return null;
     }
 
@@ -70,12 +74,19 @@ const fetchDataFromGAS = async (docId: string, sheetName?: string): Promise<any[
     try {
       const json = JSON.parse(text);
       if (json.status === 'success' && json.message) return json.message as any[][];
+      if (json.status === 'error') console.warn(`GAS Error for ${sheetName}:`, json.message);
       return null;
     } catch (parseError) {
+      console.warn(`Error parsing GAS response for ${sheetName}`);
       return null;
     }
   } catch (e) {
-    // Silence common fetch errors if we have fallbacks
+    if (e instanceof Error && e.name === 'AbortError') {
+      console.warn(`GAS fetch timeout for ${sheetName}`);
+    } else {
+      // Usamos warn en vez de error para no alarmar si hay fallback CSV
+      console.warn(`GAS lookup bypassed for ${sheetName} (Network/CORS redirect). Falling back to CSV/Direct.`);
+    }
     return null;
   }
 };
@@ -159,8 +170,8 @@ export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
 
 const fetchVehiclesFromSheetCSV = async (): Promise<Vehicle[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/gviz/tq?tqx=out:csv&gid=${VEHICLES_GID}${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/export?format=csv&gid=${VEHICLES_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -260,8 +271,8 @@ export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
 
 const fetchWorkshopVisitsFromSheetCSV = async (): Promise<Report[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${VISITAS_GID}${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${VISITAS_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -329,8 +340,8 @@ export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
 
 const fetchMileageLogsFromSheetCSV = async (): Promise<MileageLog[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${MILEAGE_GID}${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${MILEAGE_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -375,8 +386,8 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
 
 const fetchCalibrationsFromSheetCSV = async (): Promise<Calibration[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${CALIBRATIONS_GID}${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${CALIBRATIONS_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -442,8 +453,8 @@ export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
 
 const fetchWashReportsFromSheetCSV = async (): Promise<WashReport[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&sheet=LAVADOS${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&sheet=LAVADOS${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -524,8 +535,8 @@ export const fetchCleaningReportsFromSheet = async (): Promise<WashReport[]> => 
 
 const fetchCleaningReportsFromSheetCSV = async (): Promise<WashReport[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${CLEANING_GID}${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${CLEANING_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -599,8 +610,8 @@ export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
 
 const fetchDriversFromSheetCSV = async (): Promise<Driver[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/gviz/tq?tqx=out:csv&gid=${DRIVERS_GID}${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/export?format=csv&gid=${DRIVERS_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -677,8 +688,8 @@ export const fetchReportsFromSheet = async (): Promise<Report[]> => {
 
 const fetchReportsFromSheetCSV = async (): Promise<Report[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${NOVEDADES_GID}${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${NOVEDADES_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -742,7 +753,7 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
 const fetchFinesFromSheetCSV = async (): Promise<Fine[]> => {
   try {
     const url = `https://docs.google.com/spreadsheets/d/${FINES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=0${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -805,7 +816,7 @@ export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
 const fetchPreventivesFromSheetCSV = async (): Promise<Preventive[]> => {
   try {
     const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=2086109634${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -875,7 +886,7 @@ const processPreventiveRows = (rows: any[][]): Preventive[] => {
 export const fetchAvailabilityFromSheet = async (): Promise<AvailabilityRecord[]> => {
   const docId = '1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E';
   try {
-    const rows = await fetchDataFromGAS(docId, 'disponibilidadd');
+    const rows = await fetchDataFromGAS(docId, 'disponibilidad');
     if (!rows || rows.length < 2) {
       return fetchAvailabilityFromSheetCSV();
     }
@@ -888,8 +899,8 @@ export const fetchAvailabilityFromSheet = async (): Promise<AvailabilityRecord[]
 const fetchAvailabilityFromSheetCSV = async (): Promise<AvailabilityRecord[]> => {
   try {
     const docId = '1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E';
-    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=disponibilidadd${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=disponibilidad${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -944,7 +955,7 @@ const fetchOperationalIndicatorsFromSheetCSV = async (): Promise<OperationalIndi
   try {
     const docId = '1nKlDzFSZxh9NiWTJgkx2ASIJMbHMSribN3MZ-4mClVU';
     const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=TABLERO${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -1001,7 +1012,7 @@ const fetchWorkshopRecordsFromSheetCSV = async (): Promise<WorkshopRecord[]> => 
   try {
     const docId = '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo';
     const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=TALLERES${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -1054,7 +1065,7 @@ export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
   const fetchFromSourceCSV = async (docId: string, sheetName: string, defaultCd: string): Promise<CheckList[]> => {
     try {
       const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`;
-      const response = await fetch(url, { mode: 'cors' });
+      const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
       const csvText = await response.text();
       if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
       
@@ -1181,7 +1192,7 @@ const fetchUnavailabilityFromSheetCSV = async (): Promise<UnavailabilityRecord[]
   try {
     const docId = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
     const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=INDISPONIBILIDAD${getCacheBuster()}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -1267,7 +1278,7 @@ export const saveUnavailabilityRecords = async (records: Partial<UnavailabilityR
 export const fetchFuelPerformanceFromSheet = async (): Promise<FuelPerformance[]> => {
   try {
     const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vTaur0xTXFcug2tg_CW5gBBHnh9QtH8psRy0nLHcYSPqoPfs3Tt2d-X3nNWuvUnxRKjxvmJIFryPnTK/pub?gid=1098828384&single=true&output=csv${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -1326,7 +1337,7 @@ export const fetchFuelPerformanceFromSheet = async (): Promise<FuelPerformance[]
 export const fetchPlateAdherenceFromSheet = async (): Promise<PlateAdherence[]> => {
   try {
     const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vQZ7_kRXNquJ468yEWrpOxrytSu6BEeXN5K838BPD4seHFrHBfnFYGFWf1z6dh7-tubjf0nAF3kV0gd/pub?gid=2011902930&single=true&output=csv${getCacheBuster()}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -1360,7 +1371,7 @@ export const fetchPlateAdherenceFromSheet = async (): Promise<PlateAdherence[]> 
 
 export const fetchCorrectivesFromSheet = async (): Promise<Corrective[]> => {
   try {
-    const rows = await fetchDataFromGAS(CORRECTIVES_DOC_ID, 'PROGRAMACIÓN');
+    const rows = await fetchDataFromGAS(CORRECTIVES_DOC_ID, 'PROGRAMACION');
     
     if (!rows || rows.length < 1) {
       console.warn("GAS fetch correctives failed, attempting CSV fallback");
@@ -1377,8 +1388,8 @@ export const fetchCorrectivesFromSheet = async (): Promise<Corrective[]> => {
 
 const fetchCorrectivesFromSheetCSV = async (): Promise<Corrective[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${CORRECTIVES_DOC_ID}/gviz/tq?tqx=out:csv&sheet=PROGRAMACIÓN${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${CORRECTIVES_DOC_ID}/gviz/tq?tqx=out:csv&sheet=PROGRAMACION${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
 
@@ -1518,7 +1529,7 @@ export const submitFineToSheet = async (data: any): Promise<boolean> => {
 
 export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(OPERATORS_DOC_ID, 'MAESTRO');
+    const rows = await fetchDataFromGAS(OPERATORS_DOC_ID); // Get first sheet by default if MAESTRO name is wrong
     
     if (!rows || rows.length < 2) {
       console.warn("GAS fetch operators failed, attempting CSV fallback");
@@ -1570,12 +1581,45 @@ export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
   }
 };
 
-const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
+export const fetchAuditMasterListFromSheet = async (): Promise<AuditMasterVehicle[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${OPERATORS_DOC_ID}/gviz/tq?tqx=out:csv&gid=2049753520${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/export?format=csv&gid=244265623${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length === 0) { resolve([]); return; }
+          
+          // Column B (1): Placa, C (2): Contratista, E (4): CD
+          const records = rows.slice(1)
+            .filter(r => r && r[1])
+            .map(row => ({
+              plate: normalizePlate(cleanSheetValue(row[1])),
+              contractor: cleanSheetValue(row[2]),
+              cd: cleanSheetValue(row[4])
+            }));
+          resolve(records);
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${OPERATORS_DOC_ID}/export?format=csv&gid=2049753520${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) {
+      console.warn("CSV fetch operators returned HTML or empty - spreadsheet might be private");
+      return [];
+    }
 
     const parseDays = (val: any): number => {
       const cleaned = cleanSheetValue(val).replace(/[,.]/g, '');
@@ -1626,7 +1670,10 @@ const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
           });
           resolve(operators);
         },
-        error: () => resolve([])
+        error: (err) => {
+          console.error("PapaParse error (operators):", err);
+          resolve([]);
+        }
       });
     });
   } catch (e) {
@@ -1689,10 +1736,13 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
 
 const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${CONTROL_TOWER_DOC_ID}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors' });
+    const url = `https://docs.google.com/spreadsheets/d/${CONTROL_TOWER_DOC_ID}/export?format=csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
+    const response = await fetch(url);
     const csvText = await response.text();
-    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    if (!csvText || csvText.includes("<!DOCTYPE html")) {
+      console.warn("CSV fetch control tower returned HTML or empty - spreadsheet might be private");
+      return [];
+    }
 
     return new Promise((resolve) => {
       Papa.parse(csvText, {
@@ -1737,7 +1787,10 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
             });
           resolve(records);
         },
-        error: () => resolve([])
+        error: (err) => {
+          console.error("PapaParse error (control tower):", err);
+          resolve([]);
+        }
       });
     });
   } catch (e) {
@@ -1745,3 +1798,93 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
     return [];
   }
 };
+
+export const submitAuditUpdateToSheet = async (data: any): Promise<boolean> => {
+  return await sendToGAS({ method: 'POST_AUDIT_UPDATE', data });
+};
+
+export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
+  try {
+    const rows = await fetchDataFromGAS(AUDIT_DOC_ID, 'DATA');
+    
+    if (!rows || rows.length < 2) {
+      return fetchAuditRecordsFromSheetCSV();
+    }
+
+    return processAuditRows(rows);
+  } catch (e) {
+    console.error("Error fetching audits from GAS:", e);
+    return fetchAuditRecordsFromSheetCSV();
+  }
+};
+
+const fetchAuditRecordsFromSheetCSV = async (): Promise<AuditRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/export?format=csv&sheet=DATA${getCacheBuster()}`;
+    const response = await fetch(url);
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          resolve(processAuditRows(rows));
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+const processAuditRows = (rows: any[][]): AuditRecord[] => {
+  const parseScore = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    const clean = String(val).replace('%', '').replace(',', '.').trim();
+    const num = parseFloat(clean);
+    if (isNaN(num)) return 0;
+    return num <= 1 ? num * 100 : num;
+  };
+
+  const parseBin = (val: any): number => {
+    const n = parseInt(String(val));
+    return isNaN(n) ? 0 : n;
+  };
+
+  return rows.slice(1)
+    .filter(row => row && row[10]) 
+    .map((row, i): AuditRecord => {
+      return {
+        id: cleanSheetValue(row[0]) || `audit-${i}`,
+        regional: cleanSheetValue(row[6]),
+        cd: cleanSheetValue(row[7]),
+        auditType: cleanSheetValue(row[8]),
+        auditor: cleanSheetValue(row[9]),
+        plate: normalizePlate(cleanSheetValue(row[10])),
+        observations: cleanSheetValue(row[35]),
+        month: cleanSheetValue(row[36]),
+        year: parseInt(cleanSheetValue(row[37])) || 0,
+        docBin: row.slice(39, 49).map(parseBin),
+        signBin: row.slice(49, 60).map(parseBin),
+        imgBin: row.slice(60, 63).map(parseBin),
+        docNoMand: parseScore(row[63]),
+        signNoMand: parseScore(row[64]),
+        imgNoMand: parseScore(row[65]),
+        totalNoMand: parseScore(row[66]),
+        docMand: parseScore(row[67]),
+        signMand: parseScore(row[68]),
+        imgMand: parseScore(row[69]),
+        totalMand: parseScore(row[70]),
+        date: parseFlexibleDate(row[1]) || parseFlexibleDate(row[2]) || '',
+        noveltyDate: parseFlexibleDate(row[72]) || '',
+        status: cleanSheetValue(row[73]) || 'PENDIENTE',
+        evidence: cleanSheetValue(row[74]) || '',
+        noveltyObservation: cleanSheetValue(row[75]) || '',
+      };
+    });
+};
+
+

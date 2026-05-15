@@ -446,6 +446,47 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("success", "Lote de indisponibilidad procesado.");
       }
+      else if (m === 'POST_AUDIT_UPDATE') {
+        var docId = d.docId || '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
+        var auditSS = SpreadsheetApp.openById(docId);
+        var s = getS(auditSS, "DATA");
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var idSearch = (d.id || "").toString().trim();
+
+        for (var i = 1; i < rows.length; i++) {
+          if ((rows[i][0] || "").toString().trim() === idSearch) {
+            foundIdx = i + 1;
+            break;
+          }
+        }
+
+        if (foundIdx !== -1) {
+          if (d.status) s.getRange(foundIdx, 74).setValue(d.status); // Col BV (74)
+          if (d.noveltyObservation) s.getRange(foundIdx, 76).setValue(d.noveltyObservation); // Col BX (76)
+          if (d.evidence) {
+            var evidenceUrl = "";
+            if (Array.isArray(d.evidence)) {
+              var links = [];
+              for(var j=0; j<d.evidence.length; j++) {
+                if (d.evidence[j]) {
+                  links.push(sImg(d.evidence[j], "AUDIT_" + idSearch + "_" + j));
+                }
+              }
+              evidenceUrl = links.join(", ");
+            } else {
+              evidenceUrl = sImg(d.evidence, "AUDIT_" + idSearch);
+            }
+            s.getRange(foundIdx, 75).setValue(evidenceUrl); // Col BW (75)
+          }
+          if (d.noveltyDate) s.getRange(foundIdx, 73).setValue(d.noveltyDate); // Col BU (73)
+          
+          if (lock.hasLock()) lock.releaseLock();
+          return output("success", "Auditoria actualizada correctamente.");
+        }
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "Auditoria no encontrada con ID: " + idSearch);
+      }
       else if (m === 'POST_CONTROL_TOWER_UPDATE') {
         var s = getS(ss, "CIERRE DE NOVEDADES");
         var rows = s.getDataRange().getValues();

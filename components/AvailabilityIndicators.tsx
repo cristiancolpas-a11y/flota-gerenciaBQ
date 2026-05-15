@@ -239,7 +239,7 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
           <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
             <TrendingUp size={40} className="text-indigo-600" /> Disponibilidad
           </h2>
-          <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Análisis operativo basado en disponibilidadd</p>
+          <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Análisis operativo basado en disponibilidad</p>
         </div>
       </div>
 

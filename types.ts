@@ -337,3 +337,38 @@ export interface OperatorRecord {
   opmUrl?: string;           // Indice 35 (AJ)
   photoUrl?: string;         // Indice 36 (AK)
 }
+
+export interface AuditRecord {
+  id: string;
+  regional: string;
+  cd: string;
+  auditType: string;
+  auditor: string;
+  plate: string;
+  observations: string;
+  month: string;
+  year: number;
+  docBin: number[]; 
+  signBin: number[]; 
+  imgBin: number[]; 
+  docNoMand: number;
+  signNoMand: number;
+  imgNoMand: number;
+  totalNoMand: number;
+  docMand: number;
+  signMand: number;
+  imgMand: number;
+  totalMand: number;
+  date: string;
+  status: string;
+  noveltyDate: string;
+  evidence?: string;
+  noveltyObservation?: string;
+}
+
+export interface AuditMasterVehicle {
+  plate: string;
+  contractor: string;
+  cd: string;
+}
+
