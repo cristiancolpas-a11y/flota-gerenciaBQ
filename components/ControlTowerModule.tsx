@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { ControlTowerRecord, Vehicle } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getDriveDirectLink } from '../utils';
 
 interface ControlTowerModuleProps {
   data: ControlTowerRecord[];
@@ -74,27 +75,6 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
   useEffect(() => {
     setCurrentPage(1);
   }, [filters]);
-
-  // Helper to fix Google Drive URLs for direct embedding
-  const fixDriveUrl = (url: string) => {
-    if (!url) return '';
-    if (url.startsWith('data:')) return url;
-    if (url.includes('drive.google.com')) {
-      let id = '';
-      const dMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-      if (dMatch) id = dMatch[1];
-      else {
-        const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-        if (idMatch) id = idMatch[1];
-      }
-      
-      if (id) {
-        // Use a more reliable endpoint for Google Drive images
-        return `https://lh3.googleusercontent.com/u/0/d/${id}=w1000-h1000-nu-iv1`;
-      }
-    }
-    return url;
-  };
 
   const generateCollage = async (images: string[]): Promise<string> => {
     if (images.length === 0) return '';
@@ -943,7 +923,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                     <div className="grid grid-cols-3 gap-2 mt-2">
                       {beforeImages.map((src, idx) => (
                         <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
-                          <img src={src} className="w-full h-full object-cover" />
+                          <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
                           <button 
                             type="button"
                             onClick={() => setBeforeImages(prev => prev.filter((_, i) => i !== idx))}
@@ -995,7 +975,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                     <div className="grid grid-cols-3 gap-2 mt-2">
                       {afterImages.map((src, idx) => (
                         <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
-                          <img src={src} className="w-full h-full object-cover" />
+                          <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
                           <button 
                             type="button"
                             onClick={() => setAfterImages(prev => prev.filter((_, i) => i !== idx))}
@@ -1121,7 +1101,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                               <Clock className="w-8 h-8 text-slate-700 animate-spin" />
                             </div>
                             <img 
-                              src={fixDriveUrl(viewingRecord.evidenceBefore)} 
+                              src={getDriveDirectLink(viewingRecord.evidenceBefore)} 
                               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl relative z-10" 
                               alt="Evidencia Antes"
                               referrerPolicy="no-referrer"
@@ -1150,7 +1130,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                               <Clock className="w-8 h-8 text-slate-700 animate-spin" />
                             </div>
                             <img 
-                              src={fixDriveUrl(viewingRecord.evidenceAfter)} 
+                              src={getDriveDirectLink(viewingRecord.evidenceAfter)} 
                               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl relative z-10" 
                               alt="Evidencia Después"
                               referrerPolicy="no-referrer"

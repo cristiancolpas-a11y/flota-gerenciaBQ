@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { submitAuditUpdateToSheet } from '../services/sheetService';
+import { getDriveDirectLink, createMosaic } from '../utils';
 
 interface FleetStandardModuleProps {
   data: AuditRecord[];
@@ -164,46 +165,14 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({ data, masterL
     if (!selectedNovelty) return;
     setIsSubmitting(true);
     try {
-      // Crear collage si hay múltiples fotos
       let finalEvidence = '';
       if (noveltyEvidence.length > 0) {
         if (noveltyEvidence.length === 1) {
           finalEvidence = noveltyEvidence[0];
         } else {
-          // Generar collage en canvas
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            canvas.width = 800;
-            canvas.height = 800;
-            const images = await Promise.all(noveltyEvidence.map(src => {
-              return new Promise<HTMLImageElement>((resolve) => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.src = src;
-              });
-            }));
-
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, 800, 800);
-
-            if (images.length === 2) {
-              ctx.drawImage(images[0], 0, 0, 400, 800);
-              ctx.drawImage(images[1], 400, 0, 400, 800);
-            } else if (images.length === 3) {
-              ctx.drawImage(images[0], 0, 0, 400, 800);
-              ctx.drawImage(images[1], 400, 0, 400, 400);
-              ctx.drawImage(images[2], 400, 400, 400, 400);
-            } else if (images.length === 4) {
-              ctx.drawImage(images[0], 0, 0, 400, 400);
-              ctx.drawImage(images[1], 400, 0, 400, 400);
-              ctx.drawImage(images[2], 0, 400, 400, 400);
-              ctx.drawImage(images[3], 400, 400, 400, 400);
-            }
-            finalEvidence = canvas.toDataURL('image/jpeg', 0.5);
-          } else {
-            finalEvidence = noveltyEvidence.join(',');
-          }
+          // Use the robust utility from utils.ts
+          const title = `EVIDENCIA: ${selectedNovelty.plate} - ${selectedNovelty.auditType}`;
+          finalEvidence = await createMosaic(noveltyEvidence, title);
         }
       }
 
@@ -508,12 +477,8 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({ data, masterL
         
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 relative z-10">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Shield size={20} className="text-indigo-400" />
-              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em]">Ecosistema de Auditoría v4.0</span>
-            </div>
             <h1 className="text-5xl font-black text-white tracking-tighter uppercase leading-none">
-              ESTÁNDAR <span className="text-indigo-500">FLOTA</span>
+              ESTÁNDAR <span className="text-indigo-500">FLOTA DOC-IMG</span>
             </h1>
             <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-2 flex items-center gap-2">
               <TrendingUp size={14} className="text-emerald-500" /> Auditoría Mensual de Cumplimiento - Camiones
@@ -1752,7 +1717,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({ data, masterL
                   <div className="grid grid-cols-4 gap-4">
                     {noveltyEvidence.map((img, idx) => (
                       <div key={idx} className="aspect-square bg-[#0f172a] rounded-2xl border border-slate-800 relative group overflow-hidden">
-                        <img src={img} alt="Preview" className="w-full h-full object-cover" />
+                        <img src={getDriveDirectLink(img)} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         <button 
                           onClick={() => setNoveltyEvidence(prev => prev.filter((_, i) => i !== idx))}
                           className="absolute top-2 right-2 p-1 bg-rose-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1859,7 +1824,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({ data, masterL
                 <div className={`grid gap-4 ${galleryImages.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   {galleryImages.map((img, i) => (
                     <div key={i} className="aspect-video rounded-3xl overflow-hidden border border-white/5 shadow-2xl relative group bg-[#0f172a]">
-                       <img src={img} alt={`Evidence ${i}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                       <img src={getDriveDirectLink(img)} alt={`Evidence ${i}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
                        <a 
                         href={img} 

@@ -77,11 +77,22 @@ export const formatDate = (dateString: string): string => {
 export const getDriveDirectLink = (url: string): string => {
   if (!url || typeof url !== 'string') return '';
   const cleanUrl = url.trim();
-  if (!cleanUrl.includes('drive.google.com')) return cleanUrl;
-  const patterns = [/\/d\/([a-zA-Z0-9_-]+)/, /id=([a-zA-Z0-9_-]+)/, /\/file\/d\/([a-zA-Z0-9_-]+)/];
+  if (cleanUrl.startsWith('data:image')) return cleanUrl;
+  if (!cleanUrl.includes('drive.google.com') && !cleanUrl.includes('docs.google.com')) return cleanUrl;
+  
+  const patterns = [
+    /\/d\/([a-zA-Z0-9_-]+)/, 
+    /id=([a-zA-Z0-9_-]+)/, 
+    /\/file\/d\/([a-zA-Z0-9_-]+)/,
+    /\/file\/([a-zA-Z0-9_-]+)/
+  ];
+  
   for (const pattern of patterns) {
     const match = cleanUrl.match(pattern);
-    if (match && match[1]) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+    if (match && match[1]) {
+      // thumbnail?id= is very reliable for public/shared Drive files
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+    }
   }
   return cleanUrl;
 };

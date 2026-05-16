@@ -873,7 +873,7 @@ const App: React.FC = () => {
                             { id: 'torre_preventivos', label: 'PREVENTIVO', icon: <Zap size={18}/> },
                             { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
                             { id: 'indisponibilidad', label: 'Indisponibilidad', icon: <AlertTriangle size={18}/> },
-                            { id: 'estandar_flota', label: 'Estándar', icon: <ShieldCheck size={18}/> },
+                            { id: 'estandar_flota', label: 'ESTÁNDAR DOC-IMG', icon: <ShieldCheck size={18}/> },
                             { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
                             { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
                           ].map(item => (
