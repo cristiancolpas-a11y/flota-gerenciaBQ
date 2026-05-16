@@ -449,7 +449,7 @@ function doPost(e) {
       else if (m === 'POST_AUDIT_UPDATE') {
         var docId = d.docId || '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
         var auditSS = SpreadsheetApp.openById(docId);
-        var s = getS(auditSS, "DATA");
+        var s = getS(auditSS, "ESTANDAR");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var idSearch = (d.id || "").toString().trim();

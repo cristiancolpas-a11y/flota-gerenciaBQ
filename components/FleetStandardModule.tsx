@@ -7,7 +7,7 @@ import {
 import { 
   Shield, AlertTriangle, CheckCircle, TrendingUp, Filter, 
   MapPin, Calendar, Search, Info, BarChart3, List, ChevronRight, X, User, Fuel, Target, ExternalLink,
-  Camera, Image as ImageIcon, Upload, Save, Loader2, Trash2
+  Camera, Image as ImageIcon, Upload, Save, Loader2, Trash2, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { submitAuditUpdateToSheet } from '../services/sheetService';
@@ -303,9 +303,44 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({ data, masterL
       return acc;
     }, {} as Record<string, any>);
     const contractorChart = Object.values(byContractor).sort((a: any, b: any) => b.total - a.total).slice(0, 10);
+    
+    // 4. Auditor Time Performance (Tiempos de ejecución)
+    const byAuditorTime = filteredData.reduce((acc, r) => {
+      const auditor = r.auditor || 'SIN AUDITOR';
+      const time = r.executionTime || 0;
+      if (time > 0) {
+        if (!acc[auditor]) acc[auditor] = { name: auditor, totalTime: 0, count: 0 };
+        acc[auditor].totalTime += time;
+        acc[auditor].count += 1;
+      }
+      return acc;
+    }, {} as Record<string, any>);
 
-    return { monthlyTrend, cdChart, contractorChart };
-  }, [joinedNovedades]);
+    const executionTimeChart = Object.values(byAuditorTime)
+      .map((a: any) => ({
+        name: a.name,
+        avgTime: a.totalTime / a.count,
+        count: a.count
+      }))
+      .sort((a: any, b: any) => a.avgTime - b.avgTime); // Menor tiempo primero (menor a mayor)
+
+    // 5. Time distribution (Histogram)
+    const timeBuckets = filteredData.reduce((acc, r) => {
+      const time = r.executionTime || 0;
+      if (time > 0) {
+        const bucket = Math.floor(time);
+        const bucketLabel = bucket === 0 ? '< 1 min' : `${bucket} min`;
+        if (!acc[bucket]) acc[bucket] = { name: bucketLabel, count: 0, order: bucket };
+        acc[bucket].count += 1;
+      }
+      return acc;
+    }, {} as Record<number, any>);
+
+    const timeDistributionChart = Object.values(timeBuckets)
+      .sort((a: any, b: any) => a.order - b.order);
+
+    return { monthlyTrend, cdChart, contractorChart, executionTimeChart, timeDistributionChart };
+  }, [joinedNovedades, filteredData]);
 
   const novedadesStats = useMemo(() => {
     if (novedadesData.length === 0) return { pending: 0, completed: 0, compliance: 0 };
@@ -1046,6 +1081,150 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({ data, masterL
         </div>
       </div>
 
+      {/* DISTRIBUCIÓN DE TIEMPOS CHART */}
+      <div className="bg-[#1a1a2e] rounded-[3.5rem] p-12 shadow-2xl border border-slate-800 mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h2 className="text-4xl font-black text-white tracking-tighter uppercase leading-none underline decoration-sky-500 underline-offset-8 flex items-center gap-4">
+              <BarChart3 size={32} className="text-sky-500" /> DISTRIBUCIÓN POR DURACIÓN
+            </h2>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-4">Cantidad de auditorías según el tiempo de ejecución (Frecuencia)</p>
+          </div>
+          <div className="px-6 py-3 bg-sky-500/10 rounded-2xl border border-sky-500/20 shadow-xl">
+            <p className="text-[11px] font-black text-sky-400 uppercase tracking-widest">ANÁLISIS DE PRODUCTIVIDAD</p>
+          </div>
+        </div>
+        <div className="h-[300px] w-full bg-[#0f172a] p-8 rounded-[2.5rem] border border-slate-800">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={novedadesChartsData.timeDistributionChart} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+              <XAxis 
+                dataKey="name" 
+                tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis 
+                tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip 
+                contentStyle={{backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '24px'}}
+                cursor={{fill: '#1e293b', opacity: 0.4}}
+                labelStyle={{ color: '#ffffff', fontWeight: 'bold' }}
+                itemStyle={{ color: '#0ea5e9' }}
+              />
+              <Bar dataKey="count" name="Cantidad de Auditorías" fill="#0ea5e9" radius={[12, 12, 0, 0]} barSize={40}>
+                {novedadesChartsData.timeDistributionChart.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.order < 3 ? '#f43f5e' : entry.order < 7 ? '#f59e0b' : '#10b981'} 
+                    fillOpacity={0.8}
+                  />
+                ))}
+                <LabelList dataKey="count" position="top" style={{ fill: '#ffffff', fontSize: 12, fontWeight: 900 }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* EXPRESS AUDITS ALERT LIST */}
+      <div className="bg-[#1a1a2e] rounded-[3.5rem] p-12 shadow-2xl border border-slate-800 mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h2 className="text-4xl font-black text-white tracking-tighter uppercase leading-none underline decoration-rose-500 underline-offset-8 flex items-center gap-4">
+              <AlertTriangle size={32} className="text-rose-500" /> ALERTAS: TIEMPOS ATÍPICOS
+            </h2>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-4">Auditorías realizadas en menos de 3 minutos (Posible falta de rigor)</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[400px] overflow-y-auto p-4 custom-scrollbar">
+          {filteredData
+            .filter(r => (r.executionTime || 0) > 0 && (r.executionTime || 0) < 3)
+            .sort((a, b) => (a.executionTime || 0) - (b.executionTime || 0))
+            .map((r) => (
+              <div key={r.id} className="bg-[#0f172a] p-6 rounded-3xl border border-slate-800 hover:border-rose-500/50 transition-all group cursor-pointer shadow-lg hover:shadow-rose-500/5"
+                   onClick={() => setSelectedAudit(r)}>
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-rose-500/20 flex items-center justify-center">
+                      <Clock size={18} className="text-rose-500" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest leading-none">{(r.executionTime || 0).toFixed(1)} min</p>
+                      <p className="text-lg font-black text-white tracking-tighter mt-1">{r.plate}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase leading-none">{r.date}</p>
+                    <p className="text-[11px] font-black text-sky-400 mt-1 uppercase tracking-tighter truncate max-w-[100px]">{r.auditor}</p>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-slate-800 flex justify-between items-center text-[10px] font-black uppercase text-slate-400">
+                  <span className="truncate max-w-[120px]">{r.auditType}</span>
+                  <span className="px-2 py-1 bg-slate-800 rounded-lg text-slate-300">{r.cd}</span>
+                </div>
+              </div>
+            ))}
+        </div>
+        {filteredData.filter(r => (r.executionTime || 0) > 0 && (r.executionTime || 0) < 3).length === 0 && (
+          <div className="text-center py-12">
+            <CheckCircle size={48} className="text-emerald-500 mx-auto mb-4 opacity-20" />
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">No se encontraron auditorías con tiempos atípicos</p>
+          </div>
+        )}
+      </div>
+
+      {/* TIEMPOS DE EJECUCIÓN CHART */}
+      <div className="bg-[#1a1a2e] rounded-[3.5rem] p-12 shadow-2xl border border-slate-800">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h2 className="text-4xl font-black text-white tracking-tighter uppercase leading-none underline decoration-rose-500 underline-offset-8 flex items-center gap-4">
+              <Clock size={32} className="text-rose-500" /> TIEMPOS DE EJECUCIÓN
+            </h2>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-4">Auditores ordenados por tiempo promedio de ejecución (Menor a Mayor)</p>
+          </div>
+          <div className="px-6 py-3 bg-rose-500/10 rounded-2xl border border-rose-500/20 shadow-xl">
+            <p className="text-[11px] font-black text-rose-400 uppercase tracking-widest">ALERTA DE CALIDAD OPERATIVA</p>
+          </div>
+        </div>
+        <div className="h-[600px] w-full bg-[#0f172a] p-8 rounded-[2.5rem] border border-slate-800 overflow-y-auto">
+          <ResponsiveContainer width="100%" height={Math.max(400, novedadesChartsData.executionTimeChart.length * 35)}>
+            <BarChart layout="vertical" data={novedadesChartsData.executionTimeChart} margin={{ left: 40, right: 60, top: 20, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={true} stroke="#1e293b" vertical={false} />
+              <XAxis type="number" hide />
+              <YAxis 
+                dataKey="name" 
+                type="category" 
+                width={120} 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fill: '#ffffff', fontSize: 10, fontWeight: 900}} 
+              />
+              <Tooltip 
+                contentStyle={{backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '24px'}}
+                formatter={(value: any, name: any, props: any) => [
+                  `${value.toFixed(2)} min`, 
+                  `Tiempo Promedio (${props.payload.count} audits)`
+                ]}
+              />
+              <Bar dataKey="avgTime" name="Tiempo Promedio" fill="#f43f5e" radius={[0, 12, 12, 0]} barSize={20}>
+                {novedadesChartsData.executionTimeChart.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={entry.avgTime < 5 ? '#f43f5e' : entry.avgTime < 10 ? '#f59e0b' : '#10b981'} 
+                    fillOpacity={0.9} 
+                  />
+                ))}
+                <LabelList dataKey="avgTime" position="right" formatter={(v: any) => `${v.toFixed(1)}m`} style={{ fill: '#fb7185', fontSize: 12, fontWeight: 900 }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
       {/* SECTION 5: TOP PROBLEMS (Bars horizontales) */}
       <div className="bg-[#1a1a2e] rounded-[3.5rem] p-10 shadow-2xl border border-slate-800">
         <div className="flex justify-between items-center mb-10">
@@ -1286,7 +1465,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({ data, masterL
                </div>
             </div>
 
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
             <div>
               <h2 className="text-4xl font-black text-white tracking-tighter uppercase leading-none underline decoration-indigo-500 underline-offset-8">Cierre de Novedades</h2>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-4">Seguimiento y cierre de hallazgos detectados en auditorías</p>

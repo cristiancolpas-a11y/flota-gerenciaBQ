@@ -1805,7 +1805,7 @@ export const submitAuditUpdateToSheet = async (data: any): Promise<boolean> => {
 
 export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(AUDIT_DOC_ID, 'DATA');
+    const rows = await fetchDataFromGAS(AUDIT_DOC_ID, 'ESTANDAR');
     
     if (!rows || rows.length < 2) {
       return fetchAuditRecordsFromSheetCSV();
@@ -1820,7 +1820,7 @@ export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
 
 const fetchAuditRecordsFromSheetCSV = async (): Promise<AuditRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/export?format=csv&sheet=DATA${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/export?format=csv&sheet=ESTANDAR${getCacheBuster()}`;
     const response = await fetch(url);
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -1867,6 +1867,7 @@ const processAuditRows = (rows: any[][]): AuditRecord[] => {
         observations: cleanSheetValue(row[35]),
         month: cleanSheetValue(row[36]),
         year: parseInt(cleanSheetValue(row[37])) || 0,
+        executionTime: parseFloat(cleanSheetValue(row[38])) || 0,
         docBin: row.slice(39, 49).map(parseBin),
         signBin: row.slice(49, 60).map(parseBin),
         imgBin: row.slice(60, 63).map(parseBin),

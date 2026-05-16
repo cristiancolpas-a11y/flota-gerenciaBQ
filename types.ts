@@ -364,6 +364,7 @@ export interface AuditRecord {
   noveltyDate: string;
   evidence?: string;
   noveltyObservation?: string;
+  executionTime?: number;
 }
 
 export interface AuditMasterVehicle {
