@@ -6,6 +6,7 @@ const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwYju
 const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
 const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
 const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
+const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbwyxqsovsJqxTTlfnhfXGnj4cKNdlfbRhIPnn8NHv5fcuaUNzPuioXk8X4un2nV3dUdOA/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -46,9 +47,9 @@ const AUDIT_DOC_ID = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
-const fetchDataFromGAS = async (docId: string, sheetName?: string): Promise<any[][] | null> => {
+const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: string = GOOGLE_SCRIPT_WEB_APP_URL): Promise<any[][] | null> => {
   try {
-    let url = `${GOOGLE_SCRIPT_WEB_APP_URL}?method=GET_DATA&docId=${docId}`;
+    let url = `${scriptUrl}?method=GET_DATA&docId=${docId}`;
     if (sheetName) url += `&sheetName=${encodeURIComponent(sheetName)}`;
     
     // Usamos un timeout para el fetch para evitar esperas infinitas
@@ -1800,12 +1801,12 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
 };
 
 export const submitAuditUpdateToSheet = async (data: any): Promise<boolean> => {
-  return await sendToGAS({ method: 'POST_AUDIT_UPDATE', data });
+  return await sendToGAS({ method: 'POST_AUDIT_UPDATE', data }, GOOGLE_SCRIPT_AUDIT_URL);
 };
 
 export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(AUDIT_DOC_ID, 'ESTANDAR');
+    const rows = await fetchDataFromGAS(AUDIT_DOC_ID, 'ESTANDAR', GOOGLE_SCRIPT_AUDIT_URL);
     
     if (!rows || rows.length < 2) {
       return fetchAuditRecordsFromSheetCSV();

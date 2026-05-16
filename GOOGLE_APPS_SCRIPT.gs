@@ -462,27 +462,38 @@ function doPost(e) {
         }
 
         if (foundIdx !== -1) {
-          if (d.status) s.getRange(foundIdx, 74).setValue(d.status); // Col BV (74)
-          if (d.noveltyObservation) s.getRange(foundIdx, 76).setValue(d.noveltyObservation); // Col BX (76)
+          // Columnas Novedad Auditoría:
+          // Col 73 (BU): Fecha Novedad
+          // Col 74 (BV): Estado (REALIZADO/PENDIENTE)
+          // Col 75 (BW): Evidencia (Link)
+          // Col 76 (BX): Observación Novedad
+
+          if (d.status) s.getRange(foundIdx, 74).setValue(d.status); 
+          if (d.noveltyObservation) s.getRange(foundIdx, 76).setValue(d.noveltyObservation);
+          if (d.noveltyDate) s.getRange(foundIdx, 73).setValue(d.noveltyDate);
+          
           if (d.evidence) {
             var evidenceUrl = "";
             if (Array.isArray(d.evidence)) {
               var links = [];
               for(var j=0; j<d.evidence.length; j++) {
-                if (d.evidence[j]) {
-                  links.push(sImg(d.evidence[j], "AUDIT_" + idSearch + "_" + j));
+                if (d.evidence[j] && (d.evidence[j].indexOf("data:image") === 0 || d.evidence[j].indexOf("http") !== 0)) {
+                  links.push(sImg(d.evidence[j], "EVI_" + idSearch + "_" + j));
+                } else if (d.evidence[j]) {
+                  links.push(d.evidence[j]);
                 }
               }
               evidenceUrl = links.join(", ");
+            } else if (typeof d.evidence === 'string' && d.evidence.indexOf("data:image") === 0) {
+              evidenceUrl = sImg(d.evidence, "EVI_" + idSearch);
             } else {
-              evidenceUrl = sImg(d.evidence, "AUDIT_" + idSearch);
+              evidenceUrl = d.evidence;
             }
-            s.getRange(foundIdx, 75).setValue(evidenceUrl); // Col BW (75)
+            s.getRange(foundIdx, 75).setValue(evidenceUrl); // SIEMPRE EN BW (75)
           }
-          if (d.noveltyDate) s.getRange(foundIdx, 73).setValue(d.noveltyDate); // Col BU (73)
           
           if (lock.hasLock()) lock.releaseLock();
-          return output("success", "Auditoria actualizada correctamente.");
+          return output("success", "Audit record updated in column BW for row " + foundIdx);
         }
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "Auditoria no encontrada con ID: " + idSearch);
