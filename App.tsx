@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -84,7 +84,8 @@ import {
   fetchUnavailabilityFromSheet,
   fetchOperatorsFromSheet,
   fetchControlTowerFromSheet,
-  fetchAuditRecordsFromSheet
+  fetchAuditRecordsFromSheet,
+  fetchAvailabilitySummaryFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -126,6 +127,8 @@ const App: React.FC = () => {
   const [workshopVisits, setWorkshopVisits] = useState<Report[]>([]);
   const [preventives, setPreventives] = useState<Preventive[]>([]);
   const [availabilityRecords, setAvailabilityRecords] = useState<AvailabilityRecord[]>([]);
+  const [availabilitySummary, setAvailabilitySummary] = useState<AvailabilitySummary[]>([]);
+  const [fleetBase, setFleetBase] = useState<FleetListRecord[]>([]);
   const [operationalIndicators, setOperationalIndicators] = useState<OperationalIndicator[]>([]);
   const [checkLists, setCheckLists] = useState<CheckList[]>([]);
   const [fuelPerformanceData, setFuelPerformanceData] = useState<FuelPerformance[]>([]);
@@ -233,20 +236,22 @@ const App: React.FC = () => {
       setCleaningReports(cl);
 
       // Grupo 3: Datos técnicos y de mantenimiento
-      const [c, p, a, oi] = await Promise.all([
+      const [c, p, a, oi, as] = await Promise.all([
         fetchCalibrationsFromSheet(),
         fetchPreventivesFromSheet(),
         fetchAvailabilityFromSheet(),
-        fetchOperationalIndicatorsFromSheet()
+        fetchOperationalIndicatorsFromSheet(),
+        fetchAvailabilitySummaryFromSheet()
       ]);
 
       setCalibrations(c);
       setPreventives(p);
       setAvailabilityRecords(a);
       setOperationalIndicators(oi);
+      setAvailabilitySummary(as);
 
       // Grupo 4: Listas de control e indicadores de rendimiento
-      const [ch, fp, pa, corr, unav, ops, ct, aud, amv] = await Promise.all([
+      const [ch, fp, pa, corr, unav, ops, ct, aud, amv, fb] = await Promise.all([
         fetchCheckListFromSheet(),
         fetchFuelPerformanceFromSheet(),
         fetchPlateAdherenceFromSheet(),
@@ -255,7 +260,8 @@ const App: React.FC = () => {
         fetchOperatorsFromSheet(),
         fetchControlTowerFromSheet(),
         fetchAuditRecordsFromSheet(),
-        import('./services/sheetService').then(m => m.fetchAuditMasterListFromSheet())
+        import('./services/sheetService').then(m => m.fetchAuditMasterListFromSheet()),
+        import('./services/sheetService').then(m => m.fetchFleetBaseData())
       ]);
       
       setCheckLists(ch);
@@ -267,6 +273,7 @@ const App: React.FC = () => {
       setControlTowerRecords(ct);
       setAuditRecords(aud);
       setAuditMasterVehicles(amv);
+      setFleetBase(fb);
 
     } catch (err) {
       console.error("Critical Sync Error:", err);
@@ -282,15 +289,25 @@ const App: React.FC = () => {
   
   const derivedFleetComposition = useMemo((): FleetComposition[] => {
     const compositionMap: Record<string, number> = {};
-    vehicles.forEach(v => {
-      const key = `${v.cd || 'GENERAL'}|${v.contractor || 'GENERAL'}`;
+    // Use fleetBase for availability-related components as it's the official denominator defined by the user
+    fleetBase.forEach(v => {
+      const key = `${v.cd || 'GENERAL'}|${v.contratista || 'GENERAL'}`;
       compositionMap[key] = (compositionMap[key] || 0) + 1;
     });
+    
+    if (Object.keys(compositionMap).length === 0) {
+      // Fallback to vehicles if fleetBase is not yet loaded or empty
+      vehicles.forEach(v => {
+        const key = `${v.cd || 'GENERAL'}|${v.contractor || 'GENERAL'}`;
+        compositionMap[key] = (compositionMap[key] || 0) + 1;
+      });
+    }
+
     return Object.entries(compositionMap).map(([key, count]) => {
       const [cd, contractor] = key.split('|');
       return { cd, contractor, count };
     });
-  }, [vehicles]);
+  }, [fleetBase, vehicles]);
 
   const filteredWashReports = useMemo(() => {
     return washReports.filter(r => {
@@ -874,6 +891,7 @@ const App: React.FC = () => {
                             { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
                             { id: 'indisponibilidad', label: 'Indisponibilidad', icon: <AlertTriangle size={18}/> },
                             { id: 'estandar_flota', label: 'ESTÁNDAR DOC-IMG', icon: <ShieldCheck size={18}/> },
+                            { id: 'disponibilidad', label: 'DISPO-', icon: <Activity size={18}/> },
                             { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
                             { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
                           ].map(item => (
@@ -1007,7 +1025,7 @@ const App: React.FC = () => {
         </nav>
 
         {/* CONTENT AREA */}
-        <div className="flex-grow p-3 md:p-8 overflow-y-auto bg-[#f8fafc] custom-scrollbar">
+        <div className="flex-grow p-3 md:p-8 overflow-y-auto bg-[#F0F4FF] custom-scrollbar">
           
           {activeView === 'indicadoresOperativos' && (
             <OperationalDashboard 
@@ -1035,6 +1053,7 @@ const App: React.FC = () => {
             <AvailabilityIndicators 
               vehicles={vehicles}
               availabilityRecords={availabilityRecords}
+              availabilitySummary={availabilitySummary}
               fleetComposition={derivedFleetComposition}
             />
           )}
@@ -1054,11 +1073,8 @@ const App: React.FC = () => {
 
           {activeView === 'disponibilidad' && (
             <AvailabilityModule 
-              vehicles={vehicles}
-              availabilityRecords={availabilityRecords}
-              searchTerm={searchTerm}
-              filterCd={filterCd}
-              filterContractor={filterContractor}
+              availability={availabilityRecords}
+              fleetBase={fleetBase}
             />
           )}
 

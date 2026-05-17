@@ -128,9 +128,10 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
 
       // Monthly
       let month = 'N/A';
-      if (d.fecha) {
+      if (d.fecha && typeof d.fecha === 'string' && d.fecha.includes('-')) {
         // Optimization: Use string splitting for simple YYYY-MM-DD
-        const monthIndex = parseInt(d.fecha.split('-')[1]) - 1;
+        const parts = d.fecha.split('-');
+        const monthIndex = parts.length > 1 ? parseInt(parts[1]) - 1 : -1;
         if (!isNaN(monthIndex) && monthIndex >= 0 && monthIndex < 12) {
           const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
           month = months[monthIndex];

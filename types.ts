@@ -198,17 +198,44 @@ export interface FleetComposition {
 
 export interface AvailabilityRecord {
   id: string;
-  date: string;
-  cd: string;
-  system: string;
-  detail: string;
-  plate: string;
-  workshop: string;
-  entryDate: string;
-  estimatedExitDate: string;
-  contractor: string;
-  daysUnavailable: number;
-  fullPlate: string;
+  fecha: string;               // Col B
+  cdRegistro: string;          // Col S (cd)
+  sistema: string;             // Col D
+  detalle: string;             // Col E
+  placa: string;               // Col F
+  taller: string;              // Col G
+  fechaIngreso: string;        // Col H
+  fechaEstimadaSalida: string; // Col I
+  placasKey: string;           // Col J
+  contratista: string;         // Col K
+  diasIndisponible: number;    // Col L
+  totalVH: number;             // Col M
+  vehiculoIndisponible: number;// Col N
+  vehiculosDisponibles: number;// Col O
+  indisponibilidadPrc: number; // Col P
+  disponibilidadPrc: number;    // Col Q
+  vhsCd: number;               // Col R
+  cdOriginal?: string;         // Col C
+  mes?: string;                // Col T (Index 19)
+  semana?: string;             // Col U (Index 20)
+}
+
+export interface AvailabilitySummary {
+  fecha: string;               // Col B
+  cd: string;                  // Col C
+  contratista: string;         // Col D
+  indisponibles: number;       // Col E
+  disponibles: number;         // Col F
+  total: number;               // Col G
+  promedio: number;            // Col H
+}
+
+export interface FleetListRecord {
+  placa: string;               // INDICE 0
+  cd: string;                  // INDICE 1
+  canal: string;               // INDICE 2
+  distribuidor: string;        // INDICE 3
+  contratista: string;         // INDICE 4
 }
 
 export interface OperationalIndicator {
