@@ -29,7 +29,7 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
   const [filterContractor, setFilterContractor] = useState('all');
   const [filterSystem, setFilterSystem] = useState('all');
   const [filterWorkshop, setFilterWorkshop] = useState('all');
-  const [dateRange, setDateRange] = useState({ start: '2024-01-01', end: new Date().toISOString().split('T')[0] });
+  const [dateRange, setDateRange] = useState({ start: '2026-01-01', end: new Date().toISOString().split('T')[0] });
 
   // Options for filters
   const cds = useMemo(() => Array.from(new Set(availabilityRecords.map(r => r.cdRegistro || r.cdOriginal).filter(Boolean))), [availabilityRecords]);
@@ -442,7 +442,8 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
   const systemFrequencyData = useMemo(() => {
     const dataMap: Record<string, Record<string, number>> = {};
     filteredRecords.forEach(r => {
-      const system = r.sistema || 'N/A';
+      let system = r.sistema?.trim() || 'SIN SISTEMA';
+      system = system.toUpperCase();
       let cd = (r.cdRegistro || r.cdOriginal || 'SIN CD').toUpperCase();
       if (cd.includes('GALAPA')) cd = 'GALAPA';
       else if (cd.includes('ARENOSA')) cd = 'LA ARENOSA';
@@ -450,20 +451,24 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
       if (!dataMap[system]) dataMap[system] = {};
       dataMap[system][cd] = (dataMap[system][cd] || 0) + 1;
     });
+    
+    const getSum = (obj: any) => Object.entries(obj)
+      .filter(([k, v]) => k !== 'name' && typeof v === 'number')
+      .reduce((sum, [k, v]) => sum + (v as number), 0);
+
     return Object.entries(dataMap).map(([system, cdsData]) => ({
       name: system,
       ...cdsData
-    })).sort((a, b) => {
-      const totalA = Object.values(a).filter(v => typeof v === 'number').reduce((s, v) => s + Number(v), 0);
-      const totalB = Object.values(b).filter(v => typeof v === 'number').reduce((s, v) => s + Number(v), 0);
-      return totalB - totalA;
-    });
+    }))
+    .sort((a, b) => getSum(b) - getSum(a)) // Highest at index 0 (top of chart)
+    .slice(0, 15); // Show top 15
   }, [filteredRecords]);
 
   const workshopFrequencyData = useMemo(() => {
     const dataMap: Record<string, Record<string, number>> = {};
     filteredRecords.forEach(r => {
-      const workshop = r.taller || 'N/A';
+      let workshop = r.taller?.trim() || 'SIN TALLER';
+      workshop = workshop.toUpperCase();
       let cd = (r.cdRegistro || r.cdOriginal || 'SIN CD').toUpperCase();
       if (cd.includes('GALAPA')) cd = 'GALAPA';
       else if (cd.includes('ARENOSA')) cd = 'LA ARENOSA';
@@ -471,20 +476,24 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
       if (!dataMap[workshop]) dataMap[workshop] = {};
       dataMap[workshop][cd] = (dataMap[workshop][cd] || 0) + 1;
     });
+
+    const getSum = (obj: any) => Object.entries(obj)
+      .filter(([k, v]) => k !== 'name' && typeof v === 'number')
+      .reduce((sum, [k, v]) => sum + (v as number), 0);
+
     return Object.entries(dataMap).map(([workshop, cdsData]) => ({
       name: workshop,
       ...cdsData
-    })).sort((a, b) => {
-      const totalA = Object.values(a).filter(v => typeof v === 'number').reduce((s, v) => s + Number(v), 0);
-      const totalB = Object.values(b).filter(v => typeof v === 'number').reduce((s, v) => s + Number(v), 0);
-      return totalB - totalA;
-    }).slice(0, 10);
+    }))
+    .sort((a, b) => getSum(b) - getSum(a))
+    .slice(0, 10); // Show top 10
   }, [filteredRecords]);
 
   const plateFrequencyData = useMemo(() => {
     const dataMap: Record<string, Record<string, number>> = {};
     filteredRecords.forEach(r => {
-      const plate = r.placa || 'N/A';
+      let plate = r.placa?.trim() || 'N/A';
+      plate = plate.toUpperCase();
       let cd = (r.cdRegistro || r.cdOriginal || 'SIN CD').toUpperCase();
       if (cd.includes('GALAPA')) cd = 'GALAPA';
       else if (cd.includes('ARENOSA')) cd = 'LA ARENOSA';
@@ -492,14 +501,17 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
       if (!dataMap[plate]) dataMap[plate] = {};
       dataMap[plate][cd] = (dataMap[plate][cd] || 0) + 1;
     });
+
+    const getSum = (obj: any) => Object.entries(obj)
+      .filter(([k, v]) => k !== 'name' && typeof v === 'number')
+      .reduce((sum, [k, v]) => sum + (v as number), 0);
+
     return Object.entries(dataMap).map(([plate, cdsData]) => ({
       name: plate,
       ...cdsData
-    })).sort((a, b) => {
-      const totalA = Object.values(a).filter(v => typeof v === 'number').reduce((s, v) => s + Number(v), 0);
-      const totalB = Object.values(b).filter(v => typeof v === 'number').reduce((s, v) => s + Number(v), 0);
-      return totalB - totalA;
-    }).slice(0, 12);
+    }))
+    .sort((a, b) => getSum(b) - getSum(a))
+    .slice(0, 12);
   }, [filteredRecords]);
 
   const formatDateLabel = (dateStr: string) => {
@@ -864,7 +876,7 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
             </div>
             <div style={{ position: 'relative', height: '380px', width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart layout="vertical" data={systemFrequencyData} margin={{ left: 40, right: 30 }}>
+                <BarChart layout="vertical" data={systemFrequencyData} margin={{ left: 40, right: 30 }} barGap={2}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={COLORS.GRID} />
                   <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: COLORS.TEXT, fontSize: 10 }} />
                   <YAxis 
@@ -872,13 +884,21 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: COLORS.TEXT, fontSize: 9, fontWeight: 800 }}
+                    tick={{ fill: COLORS.TEXT, fontSize: 8, fontWeight: 800 }}
                     width={100}
+                    interval={0}
                   />
                   <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', backgroundColor: COLORS.TOOLTIP, color: '#fff' }} />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                   {chartCds.map(cd => (
-                    <Bar key={cd} dataKey={cd} name={cd} fill={getCdColor(cd)} radius={[0, 4, 4, 0]} stackId="a" />
+                    <Bar key={cd} dataKey={cd} name={cd} fill={getCdColor(cd)} radius={[0, 4, 4, 0]}>
+                      <LabelList 
+                        dataKey={cd} 
+                        position="right" 
+                        style={{ fill: getCdColor(cd), fontSize: 9, fontWeight: 900 }} 
+                        formatter={(v: number) => v > 0 ? v : ''}
+                      />
+                    </Bar>
                   ))}
                 </BarChart>
               </ResponsiveContainer>
@@ -894,7 +914,7 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
             </div>
             <div style={{ position: 'relative', height: '300px', width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart layout="vertical" data={workshopFrequencyData} margin={{ left: 40, right: 30 }}>
+                <BarChart layout="vertical" data={workshopFrequencyData} margin={{ left: 40, right: 30 }} barGap={2}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={COLORS.GRID} />
                   <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: COLORS.TEXT, fontSize: 10 }} />
                   <YAxis 
@@ -902,13 +922,21 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fill: COLORS.TEXT, fontSize: 9, fontWeight: 800 }}
+                    tick={{ fill: COLORS.TEXT, fontSize: 8, fontWeight: 800 }}
                     width={100}
+                    interval={0}
                   />
                   <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', backgroundColor: COLORS.TOOLTIP, color: '#fff' }} />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                   {chartCds.map(cd => (
-                    <Bar key={cd} dataKey={cd} name={cd} fill={getCdColor(cd)} radius={[0, 4, 4, 0]} stackId="a" />
+                    <Bar key={cd} dataKey={cd} name={cd} fill={getCdColor(cd)} radius={[0, 4, 4, 0]}>
+                      <LabelList 
+                        dataKey={cd} 
+                        position="right" 
+                        style={{ fill: getCdColor(cd), fontSize: 9, fontWeight: 900 }} 
+                        formatter={(v: number) => v > 0 ? v : ''}
+                      />
+                    </Bar>
                   ))}
                 </BarChart>
               </ResponsiveContainer>
@@ -925,7 +953,7 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
           </div>
           <div style={{ position: 'relative', height: '340px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart layout="vertical" data={plateFrequencyData} margin={{ left: 40, right: 30 }}>
+              <BarChart layout="vertical" data={plateFrequencyData} margin={{ left: 40, right: 30 }} barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={COLORS.GRID} />
                 <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: COLORS.TEXT, fontSize: 10 }} />
                 <YAxis 
@@ -933,13 +961,21 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: COLORS.TEXT, fontSize: 9, fontWeight: 800 }}
+                  tick={{ fill: COLORS.TEXT, fontSize: 8, fontWeight: 800 }}
                   width={100}
+                  interval={0}
                 />
                 <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', backgroundColor: COLORS.TOOLTIP, color: '#fff' }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                 {chartCds.map(cd => (
-                  <Bar key={cd} dataKey={cd} name={cd} fill={getCdColor(cd)} radius={[0, 4, 4, 0]} stackId="a" />
+                  <Bar key={cd} dataKey={cd} name={cd} fill={getCdColor(cd)} radius={[0, 4, 4, 0]}>
+                    <LabelList 
+                      dataKey={cd} 
+                      position="right" 
+                      style={{ fill: getCdColor(cd), fontSize: 9, fontWeight: 900 }} 
+                      formatter={(v: number) => v > 0 ? v : ''}
+                    />
+                  </Bar>
                 ))}
               </BarChart>
             </ResponsiveContainer>

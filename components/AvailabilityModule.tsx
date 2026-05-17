@@ -42,7 +42,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
   // Default to current month or range of data
   const initialRange = useMemo(() => {
     if (availability.length === 0) return { start: '2026-01-01', end: new Date().toISOString().split('T')[0] };
-    const dates = availability.map(r => r.fecha).filter(Boolean).sort();
+    const dates = availability.map(r => r.fecha).filter(d => d && d >= '2026-01-01').sort();
     return { 
       start: dates[0] || '2026-01-01', 
       end: dates[dates.length - 1] || new Date().toISOString().split('T')[0] 
