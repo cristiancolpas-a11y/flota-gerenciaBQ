@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AuditQualitySafety } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
@@ -1994,20 +1994,34 @@ const fetchAuditRecordsFromSheetCSV = async (): Promise<AuditRecord[]> => {
   } catch (e) { return []; }
 };
 
-export const fetchAuditQualitySafetyFromSheet = async (): Promise<AuditQualitySafety[]> => {
+export const FLEET_STANDARD_SECURITY_ITEMS = [
+  'Cinturones de seguridad', 'Cinturones de seguridad 3 puntos', 'Sillas', 'Telemetría', 'Caja fuerte',
+  'Botiquín', 'Extintor', 'Dashcam', 'Cámaras auxiliares laterales', 'Vidrios y espejos',
+  '3 Puntos de apoyo', 'Accesos a cabina', 'Calapies', 'Seguros de puerta', 'Claxón / Bocina',
+  'Sistema de iluminación', 'Sistema de frenos', 'Cámara reversa', 'Sensor proximidad punto ciego',
+  'Sensor proximidad marcha atrás', 'Seguros de cortinas', 'Manijas de acceso', 'Peldaños o estribos',
+  'Neumáticos', 'Parales', 'Kit de carretera (Conos/Paleta/Tacos)', 'Kit de carretera (Herramientas)'
+];
+
+export const FLEET_STANDARD_QUALITY_ITEMS = [
+  'Carpas y/o Cortinas', 'Soportes para PFN', 'Techo carrocería', 'Cumplimiento 5S', 
+  'Correas de amarre y malacates', 'Carretillas'
+];
+
+export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardAudit[]> => {
   try {
     const rows = await fetchDataFromGAS(AUDIT_QS_DOC_ID, 'ESTANDAR', GOOGLE_SCRIPT_AUDIT_URL);
     if (!rows || rows.length < 2) {
-      return fetchAuditQualitySafetyFromSheetCSV();
+      return fetchFleetStandardAuditFromSheetCSV();
     }
-    return processAuditQualitySafetyRows(rows);
+    return processFleetStandardAuditRows(rows);
   } catch (e) {
-    console.error("Error fetching QS audits from GAS:", e);
-    return fetchAuditQualitySafetyFromSheetCSV();
+    console.error("Error fetching Fleet Standard audits from GAS:", e);
+    return fetchFleetStandardAuditFromSheetCSV();
   }
 };
 
-const fetchAuditQualitySafetyFromSheetCSV = async (): Promise<AuditQualitySafety[]> => {
+const fetchFleetStandardAuditFromSheetCSV = async (): Promise<FleetStandardAudit[]> => {
   try {
     const url = `https://docs.google.com/spreadsheets/d/${AUDIT_QS_DOC_ID}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
@@ -2021,7 +2035,7 @@ const fetchAuditQualitySafetyFromSheetCSV = async (): Promise<AuditQualitySafety
         complete: (results) => {
           const rows = results.data as any[][];
           if (!rows || rows.length < 2) { resolve([]); return; }
-          resolve(processAuditQualitySafetyRows(rows));
+          resolve(processFleetStandardAuditRows(rows));
         },
         error: () => resolve([])
       });
@@ -2029,74 +2043,55 @@ const fetchAuditQualitySafetyFromSheetCSV = async (): Promise<AuditQualitySafety
   } catch (e) { return []; }
 };
 
-const processAuditQualitySafetyRows = (rows: any[][]): AuditQualitySafety[] => {
+const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
   const parseScore = (val: any): number => {
     if (val === null || val === undefined) return 0;
     const clean = String(val).replace('%', '').replace(',', '.').trim();
     const num = parseFloat(clean);
     if (isNaN(num)) return 0;
-    // User wants percentages. If it's 0.85, return 85. If it's 85, return 85.
     return num <= 1 ? num * 100 : num;
   };
 
   return rows.slice(1)
-    .filter(row => row && (row[8] || row[7])) // Placa or Auditor
-    .map((row, i): AuditQualitySafety => {
+    .filter(row => row && row[8]) // Placa
+    .map((row, i): FleetStandardAudit => {
+      // Binary Security Scores: Index 46 to 72 (27 items)
+      const securityScores: number[] = [];
+      for (let j = 0; j < 27; j++) {
+        securityScores.push(parseInt(cleanSheetValue(row[46 + j])) || 0);
+      }
+
+      // Binary Quality Scores: Index 73 to 78 (6 items)
+      const qualityScores: number[] = [];
+      for (let j = 0; j < 6; j++) {
+        qualityScores.push(parseInt(cleanSheetValue(row[73 + j])) || 0);
+      }
+
       return {
-        id: cleanSheetValue(row[0]) || `qs-audit-${i}`,
+        id: cleanSheetValue(row[0]) || `std-audit-${i}`,
         startTime: cleanSheetValue(row[1]),
         endTime: cleanSheetValue(row[2]),
-        date: parseFlexibleDate(row[1]) || parseFlexibleDate(row[2]) || '',
         email: cleanSheetValue(row[3]),
         regional: cleanSheetValue(row[4]),
         centro: cleanSheetValue(row[5]),
         tipoAuditoria: cleanSheetValue(row[6]),
-        nombre: cleanSheetValue(row[7]),
+        auditor: cleanSheetValue(row[7]),
         placa: normalizePlate(cleanSheetValue(row[8])),
-        cinturonesSeguridad: cleanSheetValue(row[9]),
-        cinturones3Puntos: cleanSheetValue(row[10]),
-        sillas: cleanSheetValue(row[11]),
-        telemetria: cleanSheetValue(row[12]),
-        cajaFuerte: cleanSheetValue(row[13]),
-        botiquin: cleanSheetValue(row[14]),
-        extintor: cleanSheetValue(row[15]),
-        dashcam: cleanSheetValue(row[16]),
-        camarasAuxiliares: cleanSheetValue(row[17]),
-        vidriosEspejos: cleanSheetValue(row[18]),
-        puntosApoyo: cleanSheetValue(row[19]),
-        accesosCabina: cleanSheetValue(row[20]),
-        calapies: cleanSheetValue(row[21]),
-        segurosPuerta: cleanSheetValue(row[22]),
-        claxonBocina: cleanSheetValue(row[23]),
-        sistemaIluminacion: cleanSheetValue(row[24]),
-        sistemaFrenos: cleanSheetValue(row[25]),
-        camaraReversa: cleanSheetValue(row[26]),
-        alarmaReversa: cleanSheetValue(row[27]),
-        pitoReversa: cleanSheetValue(row[28]),
-        carpa: cleanSheetValue(row[29]),
-        varillas: cleanSheetValue(row[30]),
-        amarresCarpa: cleanSheetValue(row[31]),
-        escaleras: cleanSheetValue(row[32]),
-        guardabarros: cleanSheetValue(row[33]),
-        llantas: cleanSheetValue(row[34]),
-        rines: cleanSheetValue(row[35]),
-        pinturaCabina: cleanSheetValue(row[36]),
-        pinturaFurgon: cleanSheetValue(row[37]),
-        pinturaChasis: cleanSheetValue(row[38]),
-        pinturaRines: cleanSheetValue(row[39]),
-        publicidad: cleanSheetValue(row[40]),
-        estadoFurgon: cleanSheetValue(row[41]),
-        observations: cleanSheetValue(row[42]), // Col AQ
-        month: cleanSheetValue(row[43]), // Col AR
-        year: parseInt(cleanSheetValue(row[44])) || 0, // Col AS
-        timeMin: parseFloat(cleanSheetValue(row[45])) || 0, // Col AT
-        scoreSegNoMand: parseScore(row[79]), // Col CB
-        scoreCalNoMand: parseScore(row[80]), // Col CC
-        scoreTotalNoMand: parseScore(row[81]), // Col CD
-        scoreSegMand: parseScore(row[82]), // Col CE
-        scoreCalMand: parseScore(row[83]), // Col CF
-        scoreCG: parseScore(row[84]), // Col CG
-        timestamp: cleanSheetValue(row[1]) || new Date().toISOString()
+        securityScores,
+        qualityScores,
+        scoreSegNoMand: parseScore(row[79]), // CB
+        scoreCalNoMand: parseScore(row[80]), // CC
+        scoreTotalNoMand: parseScore(row[81]), // CD
+        scoreSegMand: parseScore(row[82]), // CE
+        scoreCalMand: parseScore(row[83]), // CF
+        scoreTotalMand: parseScore(row[84]), // CG
+        observations: cleanSheetValue(row[42]), // AQ
+        mes: cleanSheetValue(row[43]), // AR
+        año: parseInt(cleanSheetValue(row[44])) || 2026, // AS
+        tiempoMin: parseFloat(cleanSheetValue(row[45])) || 0, // AT
+        fechaCierre: parseFlexibleDate(row[86]), // CI
+        diasCierre: parseInt(cleanSheetValue(row[87])) || 0, // CJ
+        estado: cleanSheetValue(row[88]) // CK
       };
     });
 };

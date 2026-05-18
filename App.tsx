@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, AuditQualitySafety } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -47,7 +47,7 @@ import UnavailabilityModule from './components/UnavailabilityModule';
 import OperatorsModule from './components/OperatorsModule';
 import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
-import FleetStandardAuditDashboard from './components/FleetStandardAuditDashboard';
+import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -84,7 +84,7 @@ import {
   fetchControlTowerFromSheet,
   fetchAuditRecordsFromSheet,
   fetchAvailabilitySummaryFromSheet,
-  fetchAuditQualitySafetyFromSheet
+  fetchFleetStandardAuditFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -137,7 +137,7 @@ const App: React.FC = () => {
   const [operators, setOperators] = useState<OperatorRecord[]>([]);
   const [controlTowerRecords, setControlTowerRecords] = useState<ControlTowerRecord[]>([]);
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
-  const [auditQualitySafetyRecords, setAuditQualitySafetyRecords] = useState<AuditQualitySafety[]>([]);
+  const [fleetStandardAuditRecords, setFleetStandardAuditRecords] = useState<FleetStandardAudit[]>([]);
   const [auditMasterVehicles, setAuditMasterVehicles] = useState<AuditMasterVehicle[]>([]);
 
   // UI States
@@ -249,7 +249,7 @@ const App: React.FC = () => {
       setAvailabilitySummary(as);
 
       // Grupo 4: Listas de control e indicadores de rendimiento
-      const [ch, fp, pa, corr, unav, ops, ct, aud, audQS, amv, fb] = await Promise.all([
+      const [ch, fp, pa, corr, unav, ops, ct, aud, fsa, amv, fb] = await Promise.all([
         fetchCheckListFromSheet(),
         fetchFuelPerformanceFromSheet(),
         fetchPlateAdherenceFromSheet(),
@@ -258,7 +258,7 @@ const App: React.FC = () => {
         fetchOperatorsFromSheet(),
         fetchControlTowerFromSheet(),
         fetchAuditRecordsFromSheet(),
-        fetchAuditQualitySafetyFromSheet(),
+        fetchFleetStandardAuditFromSheet(),
         import('./services/sheetService').then(m => m.fetchAuditMasterListFromSheet()),
         import('./services/sheetService').then(m => m.fetchFleetBaseData())
       ]);
@@ -271,7 +271,7 @@ const App: React.FC = () => {
       setOperators(ops);
       setControlTowerRecords(ct);
       setAuditRecords(aud);
-      setAuditQualitySafetyRecords(audQS);
+      setFleetStandardAuditRecords(fsa);
       setAuditMasterVehicles(amv);
       setFleetBase(fb);
 
@@ -891,7 +891,7 @@ const App: React.FC = () => {
                              { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
                              { id: 'indisponibilidad', label: 'Indisponibilidad', icon: <AlertTriangle size={18}/> },
                              { id: 'estandar_flota', label: 'ESTÁNDAR DOC-IMG', icon: <ShieldCheck size={18}/> },
-                             { id: 'auditoria_calidad_seguridad', label: 'Auditoría Calidad y Seg.', icon: <Shield size={18}/> },
+                             { id: 'auditoria_calidad_seguridad', label: 'Estándar Calidad y Seg.', icon: <Shield size={18}/> },
                              { id: 'disponibilidad', label: 'DISPO-', icon: <Activity size={18}/> },
                              { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
                              { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
@@ -1071,9 +1071,7 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'auditoria_calidad_seguridad' && (
-            <FleetStandardAuditDashboard 
-              data={auditQualitySafetyRecords}
-            />
+            <ExecutiveAuditDashboard />
           )}
 
           {activeView === 'disponibilidad' && (

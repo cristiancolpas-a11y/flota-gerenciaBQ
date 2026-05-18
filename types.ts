@@ -362,61 +362,36 @@ export interface OperatorRecord {
   photoUrl?: string;         // Indice 36 (AK)
 }
 
-export interface AuditQualitySafety {
-  id: string;
-  startTime: string;
-  endTime: string;
-  date: string;
-  email: string;
-  regional: string;
-  centro: string;
-  tipoAuditoria: string;
-  nombre: string;
-  placa: string;
-  cinturonesSeguridad: string;
-  cinturones3Puntos: string;
-  sillas: string;
-  telemetria: string;
-  cajaFuerte: string;
-  botiquin: string;
-  extintor: string;
-  dashcam: string;
-  camarasAuxiliares: string;
-  vidriosEspejos: string;
-  puntosApoyo: string;
-  accesosCabina: string;
-  calapies: string;
-  segurosPuerta: string;
-  claxonBocina: string;
-  sistemaIluminacion: string;
-  sistemaFrenos: string;
-  camaraReversa: string;
-  alarmaReversa: string;
-  pitoReversa: string;
-  carpa: string;
-  varillas: string;
-  amarresCarpa: string;
-  escaleras: string;
-  guardabarros: string;
-  llantas: string;
-  rines: string;
-  pinturaCabina: string;
-  pinturaFurgon: string;
-  pinturaChasis: string;
-  pinturaRines: string;
-  publicidad: string;
-  estadoFurgon: string;
-  observations: string;
-  month: string;
-  year: number;
-  timeMin: number;
-  scoreSegNoMand: number;  // Col CB
-  scoreCalNoMand: number;  // Col CC
-  scoreTotalNoMand: number; // Col CD
-  scoreSegMand: number;    // Col CE
-  scoreCalMand: number;    // Col CF
-  scoreCG: number;         // Col CG (Mandatorios)
-  timestamp: string;
+export interface FleetStandardAudit {
+  id: string;               // Col A
+  startTime: string;        // Col B
+  endTime: string;          // Col C
+  email: string;            // Col D
+  regional: string;         // Col E
+  centro: string;           // Col F
+  tipoAuditoria: string;    // Col G
+  auditor: string;          // Col H
+  placa: string;            // Col I
+  // Security Items (Scores AU-BQ)
+  securityScores: number[]; // AU to BQ (27 cols)
+  // Quality Items (Scores BR-BW)
+  qualityScores: number[];  // BR to BW (6 cols)
+  // Scores Finales
+  scoreSegNoMand: number;   // Col BX
+  scoreCalNoMand: number;   // Col BY
+  scoreTotalNoMand: number; // Col BZ
+  scoreSegMand: number;     // Col CA
+  scoreCalMand: number;     // Col CB
+  scoreTotalMand: number;   // Col CC
+  // Meta
+  observations: string;     // Col AQ
+  mes: string;              // Col AR
+  año: number;              // Col AS
+  tiempoMin: number;        // Col AT
+  // Novedades
+  estado?: string;          // Col CK
+  fechaCierre?: string;     // Col CI
+  diasCierre?: number;       // Col CJ
 }
 
 export interface AuditRecord {
