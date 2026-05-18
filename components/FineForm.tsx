@@ -33,11 +33,11 @@ const FineForm: React.FC<FineFormProps> = ({ vehicles, drivers, onClose, onSubmi
   });
 
   const availableDrivers = useMemo(() => {
-    return drivers.sort((a, b) => a.name.localeCompare(b.name));
+    return [...drivers].sort((a, b) => a.name.localeCompare(b.name));
   }, [drivers]);
 
   const filteredVehicles = useMemo(() => {
-    let list = vehicles;
+    let list = [...vehicles];
     if (plateSearch) {
       const search = plateSearch.toUpperCase().trim();
       list = list.filter(v => v.plate.includes(search));

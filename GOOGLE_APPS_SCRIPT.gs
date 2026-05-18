@@ -236,7 +236,7 @@ function doPost(e) {
         var plateSearch = (d.plate || "").toString().toUpperCase().trim();
         
         for (var i = 1; i < rows.length; i++) {
-          var rowPlate = (rows[i][3] || "").toString().toUpperCase().trim();
+          var rowPlate = (rows[i][5] || "").toString().toUpperCase().trim();
           if (rowPlate === plateSearch) {
             foundIdx = i + 1;
             break;
@@ -256,12 +256,7 @@ function doPost(e) {
           }
           var img = imgUrls.join(", ");
           
-          s.getRange(foundIdx, 3).setValue(d.date); // FECHA DE EJECUCION (Columna C)
-          s.getRange(foundIdx, 8).setValue(d.currentKm); // KM REGISTRADO (Columna H)
-          s.getRange(foundIdx, 9).setValue(d.difference); // DIFERENCIA (Columna I)
-          s.getRange(foundIdx, 10).setValue(d.compliance); // CUMPLIMIENTO EN RANGOS (Columna J)
-          s.getRange(foundIdx, 11).setValue(d.validation); // VALIDACION CUMPLIMIENTO (Columna K)
-          s.getRange(foundIdx, 12).setValue(img); // EVIDENCIA (Columna L)
+          s.getRange(foundIdx, 19).setValue(img); // EVIDENCIA (Columna S)
         }
       }
       else if (m === 'POST_CORRECTIVE_UPDATE') {

@@ -729,20 +729,22 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
                       dataKey={cd} 
                       position="top" 
                       content={(props: any) => {
-                        const { x, y, value, index } = props;
+                        const { x, y, value, index, data } = props;
+                        if (value === null || value === undefined) return null;
                         // Avoid overcrowding: only show first, last, and points that change significantly, 
-                        // or just show them all but very small. Let's try showing all first.
-                        if (value === null) return null;
+                        // or just show them every 5 points.
+                        if (index % 5 !== 0 && index !== (data?.length || 0) - 1) return null;
+                        
                         return (
                           <text 
                             x={x} 
-                            y={y - 10} 
+                            y={y - 12} 
                             fill={getCdColor(cd)} 
                             fontSize={8} 
                             fontWeight="bold" 
                             textAnchor="middle"
                           >
-                            {value}%
+                            {Math.round(value)}%
                           </text>
                         );
                       }}

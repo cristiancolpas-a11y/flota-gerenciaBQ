@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, AuditQualitySafety } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -34,9 +34,7 @@ import DocumentUpdateForm from './components/DocumentUpdateForm';
 import WorkshopCalendar from './components/WorkshopCalendar';
 import WashCalendar from './components/WashCalendar';
 import Dashboard from './components/Dashboard';
-import PreventiveModule from './components/PreventiveModule';
-import PreventiveUpdateForm from './components/PreventiveUpdateForm';
-import PreventiveControlTower from './components/PreventiveControlTower';
+import PreventiveMaintenanceModule from './components/PreventiveMaintenanceModule';
 import AvailabilityModule from './components/AvailabilityModule';
 import AvailabilityIndicators from './components/AvailabilityIndicators';
 import OperationalDashboard from './components/OperationalDashboard';
@@ -49,6 +47,7 @@ import UnavailabilityModule from './components/UnavailabilityModule';
 import OperatorsModule from './components/OperatorsModule';
 import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
+import FleetStandardAuditDashboard from './components/FleetStandardAuditDashboard';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -74,7 +73,6 @@ import {
   submitDocumentUpdateToSheet,
   submitWorkshopVisitUpdateToSheet,
   fetchPreventivesFromSheet,
-  submitPreventiveUpdateToSheet,
   fetchAvailabilityFromSheet,
   fetchOperationalIndicatorsFromSheet,
   fetchCheckListFromSheet,
@@ -85,7 +83,8 @@ import {
   fetchOperatorsFromSheet,
   fetchControlTowerFromSheet,
   fetchAuditRecordsFromSheet,
-  fetchAvailabilitySummaryFromSheet
+  fetchAvailabilitySummaryFromSheet,
+  fetchAuditQualitySafetyFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -97,7 +96,7 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -138,6 +137,7 @@ const App: React.FC = () => {
   const [operators, setOperators] = useState<OperatorRecord[]>([]);
   const [controlTowerRecords, setControlTowerRecords] = useState<ControlTowerRecord[]>([]);
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
+  const [auditQualitySafetyRecords, setAuditQualitySafetyRecords] = useState<AuditQualitySafety[]>([]);
   const [auditMasterVehicles, setAuditMasterVehicles] = useState<AuditMasterVehicle[]>([]);
 
   // UI States
@@ -150,8 +150,6 @@ const App: React.FC = () => {
   const [showCleaningForm, setShowCleaningForm] = useState(false);
   const [showCalibrationForm, setShowCalibrationForm] = useState(false);
   const [updatingCalibration, setUpdatingCalibration] = useState<Calibration | null>(null);
-  const [showPreventiveForm, setShowPreventiveForm] = useState(false);
-  const [updatingPreventive, setUpdatingPreventive] = useState<Preventive | null>(null);
   const [showDocUpdateForm, setShowDocUpdateForm] = useState(false);
   const [closingReport, setClosingReport] = useState<Report | null>(null);
   const [registeringEntry, setRegisteringEntry] = useState<Report | null>(null);
@@ -251,7 +249,7 @@ const App: React.FC = () => {
       setAvailabilitySummary(as);
 
       // Grupo 4: Listas de control e indicadores de rendimiento
-      const [ch, fp, pa, corr, unav, ops, ct, aud, amv, fb] = await Promise.all([
+      const [ch, fp, pa, corr, unav, ops, ct, aud, audQS, amv, fb] = await Promise.all([
         fetchCheckListFromSheet(),
         fetchFuelPerformanceFromSheet(),
         fetchPlateAdherenceFromSheet(),
@@ -260,6 +258,7 @@ const App: React.FC = () => {
         fetchOperatorsFromSheet(),
         fetchControlTowerFromSheet(),
         fetchAuditRecordsFromSheet(),
+        fetchAuditQualitySafetyFromSheet(),
         import('./services/sheetService').then(m => m.fetchAuditMasterListFromSheet()),
         import('./services/sheetService').then(m => m.fetchFleetBaseData())
       ]);
@@ -272,6 +271,7 @@ const App: React.FC = () => {
       setOperators(ops);
       setControlTowerRecords(ct);
       setAuditRecords(aud);
+      setAuditQualitySafetyRecords(audQS);
       setAuditMasterVehicles(amv);
       setFleetBase(fb);
 
@@ -881,35 +881,36 @@ const App: React.FC = () => {
                       {expandedSection === 'gestion' && (
                         <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
                           {[
-                            { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
-                            { id: 'cierre_novedades', label: 'Cierre de Novedades', icon: <Lock size={18}/> },
-                            { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
-                            { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
-                            { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
-                            { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
-                            { id: 'torre_preventivos', label: 'PREVENTIVO', icon: <Zap size={18}/> },
-                            { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
-                            { id: 'indisponibilidad', label: 'Indisponibilidad', icon: <AlertTriangle size={18}/> },
-                            { id: 'estandar_flota', label: 'ESTÁNDAR DOC-IMG', icon: <ShieldCheck size={18}/> },
-                            { id: 'disponibilidad', label: 'DISPO-', icon: <Activity size={18}/> },
-                            { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
-                            { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
-                          ].map(item => (
-                            <button 
-                              key={item.id}
-                              onClick={() => { 
-                                setActiveView(item.id as ActiveView); 
-                                setIsSidebarOpen(false); 
-                                setExpandedSection(null);
-                                if (item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos' || item.id === 'indisponibilidad' || item.id === 'torre_preventivos') {
-                                  handleSyncData();
-                                }
-                              }} 
-                              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                            >
-                              {item.icon} {item.label}
-                            </button>
-                          ))}
+                             { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
+                             { id: 'cierre_novedades', label: 'Cierre de Novedades', icon: <Lock size={18}/> },
+                             { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
+                             { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
+                             { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
+                             { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
+                             { id: 'torre_preventivos', label: 'Mtto Preventivo', icon: <Zap size={18}/> },
+                             { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
+                             { id: 'indisponibilidad', label: 'Indisponibilidad', icon: <AlertTriangle size={18}/> },
+                             { id: 'estandar_flota', label: 'ESTÁNDAR DOC-IMG', icon: <ShieldCheck size={18}/> },
+                             { id: 'auditoria_calidad_seguridad', label: 'Auditoría Calidad y Seg.', icon: <Shield size={18}/> },
+                             { id: 'disponibilidad', label: 'DISPO-', icon: <Activity size={18}/> },
+                             { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
+                             { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
+                           ].map(item => (
+                             <button 
+                               key={item.id}
+                               onClick={() => { 
+                                 setActiveView(item.id as ActiveView); 
+                                 setIsSidebarOpen(false); 
+                                 setExpandedSection(null);
+                                 if (item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos' || item.id === 'indisponibilidad' || item.id === 'torre_preventivos') {
+                                   handleSyncData();
+                                 }
+                               }} 
+                               className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                             >
+                               {item.icon} {item.label}
+                             </button>
+                           ))}
                         </div>
                       )}
                     </div>
@@ -1058,16 +1059,20 @@ const App: React.FC = () => {
             />
           )}
 
-          {activeView === 'torre_preventivos' && (
-            <PreventiveControlTower data={controlTowerRecords} />
-          )}
-
-
-
           {activeView === 'estandar_flota' && (
             <FleetStandardModule 
               data={auditRecords} 
               masterList={auditMasterVehicles}
+            />
+          )}
+
+          {activeView === 'torre_preventivos' && (
+            <PreventiveMaintenanceModule data={preventives} />
+          )}
+
+          {activeView === 'auditoria_calidad_seguridad' && (
+            <FleetStandardAuditDashboard 
+              data={auditQualitySafetyRecords}
             />
           )}
 
@@ -2289,14 +2294,6 @@ const App: React.FC = () => {
             }
             handleSyncData(); 
           }} 
-        />
-      )}
-      {showPreventiveForm && (
-        <PreventiveUpdateForm 
-          onClose={() => { setShowPreventiveForm(false); setUpdatingPreventive(null); }}
-          onSubmit={async (d: any) => { await submitPreventiveUpdateToSheet(d); handleSyncData(); }}
-          vehicles={vehicles}
-          initialData={updatingPreventive}
         />
       )}
       {closingReport && (

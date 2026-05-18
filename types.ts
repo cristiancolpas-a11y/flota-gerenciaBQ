@@ -166,28 +166,25 @@ export interface WashReport {
 
 export interface Preventive {
   id: string;
-  semProgramado?: string;      // Index 0
-  fechaProgramada?: string;    // Index 1
-  week: string;                // Index 2 (SEM)
-  month: string;               // Index 3 (MES)
-  date: string;                // Index 4 (FECHA DE EJECUCION)
-  plate: string;               // Index 5
-  frequency: number;           // Index 6
-  lastMaintenanceMileage: number; // Index 7
-  nextMaintenanceMileage: number; // Index 8
-  currentMileage: number;      // Index 9
-  difference: number;          // Index 11
-  complianceRange: string;     // Index 12 (CUMPLIMIENTO EN RANGOS)
-  validationStatus: string;    // Index 13 (VALIDACIÓN CUMPLIMIENTO)
-  complianceProgram: string;   // Index 14 (CUMPLIMIENTO POR PROGRAMACION)
+  semProgramado: string;       // Index 0
+  fechaProgramada: string;     // Index 1
+  semEjecucion: string;        // Index 2
+  mes: string;                 // Index 3
+  fechaEjecucion: string;      // Index 4
+  placa: string;               // Index 5
+  frecuencia: number;          // Index 6
+  ultimoKm: number;            // Index 7
+  proximoKm: number;           // Index 8
+  kmRegistrado: number;        // Index 9
+  tipo: string;                // Index 10
+  diferencia: number;          // Index 11
+  cumplimientoRango: string;   // Index 12
+  validaccionCumplimiento: number; // Index 13 (1 o 0)
+  cumplimientoProgramacion: number; // Index 14 (1 o 0)
   cd: string;                  // Index 16
-  line: string;                // Index 17 (MARCA/LINEA)
+  linea: string;               // Index 17
+  evidenceUrl?: string;        // Index 15
   status: 'ok' | 'warning' | 'critical'; // Derived
-  kmsToNext: number;           // Derived
-  lastUpdate?: string;         // Alias for date
-  evidenceUrl?: string;        // Add if needed, though not in specific list
-  contractor?: string;         // Derived from CD or other logic
-  brand?: string;              // Alias for line
 }
 
 export interface FleetComposition {
@@ -363,6 +360,63 @@ export interface OperatorRecord {
   examUrl?: string;          // Indice 34 (AI)
   opmUrl?: string;           // Indice 35 (AJ)
   photoUrl?: string;         // Indice 36 (AK)
+}
+
+export interface AuditQualitySafety {
+  id: string;
+  startTime: string;
+  endTime: string;
+  date: string;
+  email: string;
+  regional: string;
+  centro: string;
+  tipoAuditoria: string;
+  nombre: string;
+  placa: string;
+  cinturonesSeguridad: string;
+  cinturones3Puntos: string;
+  sillas: string;
+  telemetria: string;
+  cajaFuerte: string;
+  botiquin: string;
+  extintor: string;
+  dashcam: string;
+  camarasAuxiliares: string;
+  vidriosEspejos: string;
+  puntosApoyo: string;
+  accesosCabina: string;
+  calapies: string;
+  segurosPuerta: string;
+  claxonBocina: string;
+  sistemaIluminacion: string;
+  sistemaFrenos: string;
+  camaraReversa: string;
+  alarmaReversa: string;
+  pitoReversa: string;
+  carpa: string;
+  varillas: string;
+  amarresCarpa: string;
+  escaleras: string;
+  guardabarros: string;
+  llantas: string;
+  rines: string;
+  pinturaCabina: string;
+  pinturaFurgon: string;
+  pinturaChasis: string;
+  pinturaRines: string;
+  publicidad: string;
+  estadoFurgon: string;
+  observations: string;
+  month: string;
+  year: number;
+  timeMin: number;
+  scoreSegNoMand: number;  // Col CB
+  scoreCalNoMand: number;  // Col CC
+  scoreTotalNoMand: number; // Col CD
+  scoreSegMand: number;    // Col CE
+  scoreCalMand: number;    // Col CF
+  scoreCG: number;         // Col CG (Mandatorios)
+  timestamp: string;
 }
 
 export interface AuditRecord {

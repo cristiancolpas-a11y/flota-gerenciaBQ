@@ -41,7 +41,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
   }, [vehicles, filterCd]);
 
   const filteredVehicles = useMemo(() => {
-    let list = vehicles.filter(v => {
+    let list = [...vehicles].filter(v => {
       const matchCd = filterCd === 'all' || normalizeStr(v.cd || "") === normalizeStr(filterCd);
       const matchContractor = filterContractor === 'all' || normalizeStr(v.contractor || "") === normalizeStr(filterContractor);
       return matchCd && matchContractor;

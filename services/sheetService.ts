@@ -1,11 +1,11 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AuditQualitySafety } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
-const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
-const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbwYjuq6x1ZAlLi9ctIDl_d66J4RrE3Y0qmiUGeRAcxuHUbbi5oTtOxyv6E-7FNu1Oc/exec';
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
+const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
+const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbwyxqsovsJqxTTlfnhfXGnj4cKNdlfbRhIPnn8NHv5fcuaUNzPuioXk8X4un2nV3dUdOA/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
@@ -45,6 +45,7 @@ const CONTROL_TOWER_GID = '2041116370';
 
 const AUDIT_DOC_ID = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
 const FLEET_AVAILABILITY_DOC_ID = '1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E';
+const AUDIT_QS_DOC_ID = '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM';
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
@@ -172,8 +173,8 @@ export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
 
 const fetchVehiclesFromSheetCSV = async (): Promise<Vehicle[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/export?format=csv&gid=${VEHICLES_GID}${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/gviz/tq?tqx=out:csv&gid=${VEHICLES_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
@@ -830,91 +831,6 @@ const processFineRows = (rows: any[][]): Fine[] => {
         description: cleanSheetValue(row[12]),
         plate: normalizePlate(cleanSheetValue(row[17]))
       } as any;
-    });
-};
-
-/**
- * PREVENTIVOS (GID 1668814480)
- */
-export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
-  try {
-    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'PREVENTIVO');
-    if (!rows || rows.length < 2) {
-      return fetchPreventivesFromSheetCSV();
-    }
-    return processPreventiveRows(rows);
-  } catch (e) { 
-    return fetchPreventivesFromSheetCSV(); 
-  }
-};
-
-const fetchPreventivesFromSheetCSV = async (): Promise<Preventive[]> => {
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=2086109634${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
-    const csvText = await response.text();
-    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
-    
-    return new Promise((resolve) => {
-      Papa.parse(csvText, {
-        header: false, skipEmptyLines: 'greedy',
-        complete: (results) => {
-          const rows = results.data as any[][];
-          resolve(processPreventiveRows(rows));
-        },
-        error: () => resolve([])
-      });
-    });
-  } catch (e) { return []; }
-};
-
-const processPreventiveRows = (rows: any[][]): Preventive[] => {
-  // 0: SEM (PROG), 1: FECHA PROG, 2: SEM, 3: MES, 4: FECHA EJEC, 5: PLACA, 6: FREC, 7: ULTIMO, 8: PROX, 9: REGISTRADO, 11: DIF, 12: RANGO, 13: VAL, 14: PROG, 16: CD, 17: MARCA
-  return rows.slice(1)
-    .filter(row => row && row[5]) // Placa en indice 5
-    .map((row, i): Preventive => {
-      const plate = normalizePlate(cleanSheetValue(row[5]));
-      const lastKm = parseInt(cleanSheetValue(row[7])) || 0;
-      const nextKm = parseInt(cleanSheetValue(row[8])) || 0;
-      const currentKm = parseInt(cleanSheetValue(row[9])) || 0;
-      const kmsToNext = nextKm - currentKm;
-      
-      const complianceRange = cleanSheetValue(row[12]); 
-      const validationStatus = cleanSheetValue(row[13]); 
-      const complianceProgram = cleanSheetValue(row[14]);
-      
-      const combinedStatus = (complianceRange + " " + validationStatus).toLowerCase();
-      
-      let status: 'ok' | 'warning' | 'critical' = 'ok';
-      if (combinedStatus.includes('no cumplio') || combinedStatus.includes('no cumplio') || combinedStatus.includes('critico') || combinedStatus.includes('vencido') || combinedStatus.includes('fuera')) status = 'critical';
-      else if (combinedStatus.includes('proximo') || combinedStatus.includes('alerta') || combinedStatus.includes('rango')) status = 'warning';
-      else if (kmsToNext < 500) status = 'critical';
-      else if (kmsToNext < 1000) status = 'warning';
-
-      return {
-        id: `prev-${plate}-${i}`,
-        semProgramado: cleanSheetValue(row[0]),
-        fechaProgramada: parseFlexibleDate(row[1]),
-        week: cleanSheetValue(row[2]),
-        month: cleanSheetValue(row[3]),
-        date: parseFlexibleDate(row[4]),
-        plate: plate,
-        frequency: parseInt(cleanSheetValue(row[6])) || 5000,
-        lastMaintenanceMileage: lastKm,
-        nextMaintenanceMileage: nextKm,
-        currentMileage: currentKm,
-        difference: parseInt(cleanSheetValue(row[11])) || 0,
-        complianceRange,
-        validationStatus,
-        complianceProgram,
-        cd: cleanSheetValue(row[16]) || 'GENERAL',
-        line: cleanSheetValue(row[17]),
-        brand: cleanSheetValue(row[17]),
-        contractor: 'BAVARIA', // Default or derived
-        status,
-        kmsToNext,
-        lastUpdate: parseFlexibleDate(row[4])
-      };
     });
 };
 
@@ -1659,7 +1575,81 @@ export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<
   }
 };
 export const submitWorkshopRecordToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_RECORD', data }, GOOGLE_SCRIPT_WORKSHOP_URL); };
-export const submitPreventiveUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_PREVENTIVE_UPDATE', data }); };
+
+/**
+ * PREVENTIVOS (GID 2086109634)
+ */
+export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
+  try {
+    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'PREVENTIVO');
+    if (!rows || rows.length < 2) {
+      return fetchPreventivesFromSheetCSV();
+    }
+    return processPreventiveRows(rows);
+  } catch (e) { 
+    return fetchPreventivesFromSheetCSV(); 
+  }
+};
+
+const fetchPreventivesFromSheetCSV = async (): Promise<Preventive[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=2086109634${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          resolve(processPreventiveRows(rows));
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+const processPreventiveRows = (rows: any[][]): Preventive[] => {
+  return rows.slice(1)
+    .filter(row => row && row[5]) // Placa en indice 5
+    .map((row, i): Preventive => {
+      const placa = normalizePlate(cleanSheetValue(row[5]));
+      const valCumplimiento = parseInt(cleanSheetValue(row[13])) || 0;
+      
+      let status: 'ok' | 'warning' | 'critical' = 'ok';
+      if (valCumplimiento === 0) status = 'critical';
+      else {
+        const diff = parseInt(cleanSheetValue(row[11])) || 0;
+        if (diff > 200) status = 'warning'; // Pequeña tolerancia de advertencia
+      }
+
+      return {
+        id: `prev-${placa}-${i}`,
+        semProgramado: cleanSheetValue(row[0]),
+        fechaProgramada: parseFlexibleDate(row[1]),
+        semEjecucion: cleanSheetValue(row[2]),
+        mes: cleanSheetValue(row[3]),
+        fechaEjecucion: parseFlexibleDate(row[4]),
+        placa: placa,
+        frecuencia: parseInt(cleanSheetValue(row[6])) || 0,
+        ultimoKm: parseInt(cleanSheetValue(row[7])) || 0,
+        proximoKm: parseInt(cleanSheetValue(row[8])) || 0,
+        kmRegistrado: parseInt(cleanSheetValue(row[9])) || 0,
+        tipo: cleanSheetValue(row[10]),
+        diferencia: parseInt(cleanSheetValue(row[11])) || 0,
+        cumplimientoRango: cleanSheetValue(row[12]),
+        validaccionCumplimiento: valCumplimiento,
+        cumplimientoProgramacion: parseInt(cleanSheetValue(row[14])) || 0,
+        evidenceUrl: cleanSheetValue(row[18]),
+        cd: cleanSheetValue(row[16]) || 'GENERAL',
+        linea: cleanSheetValue(row[17]),
+        status
+      };
+    });
+};
+
 export const submitCorrectiveUpdateToSheet = async (data: any): Promise<{success: boolean, message?: string}> => { 
   try {
     const result = await sendToGAS({ method: 'POST_CORRECTIVE_UPDATE', data }, GOOGLE_SCRIPT_DAILY_PROGRAM_URL); 
@@ -1764,11 +1754,11 @@ export const fetchAuditMasterListFromSheet = async (): Promise<AuditMasterVehicl
 
 const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${OPERATORS_DOC_ID}/export?format=csv&gid=2049753520${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    const url = `https://docs.google.com/spreadsheets/d/${OPERATORS_DOC_ID}/gviz/tq?tqx=out:csv&gid=2049753520${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) {
-      console.warn("CSV fetch operators returned HTML or empty - spreadsheet might be private");
+      console.warn("CSV fetch operators returned HTML or empty - spreadsheet might be private or ID/GID is wrong");
       return [];
     }
 
@@ -1887,11 +1877,11 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
 
 const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${CONTROL_TOWER_DOC_ID}/export?format=csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
-    const response = await fetch(url);
+    const url = `https://docs.google.com/spreadsheets/d/${CONTROL_TOWER_DOC_ID}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) {
-      console.warn("CSV fetch control tower returned HTML or empty - spreadsheet might be private");
+      console.warn("CSV fetch control tower returned HTML or empty - spreadsheet might be private or ID/GID is wrong");
       return [];
     }
 
@@ -1954,6 +1944,19 @@ export const submitAuditUpdateToSheet = async (data: any): Promise<boolean> => {
   return await sendToGAS({ method: 'POST_AUDIT_UPDATE', data }, GOOGLE_SCRIPT_AUDIT_URL);
 };
 
+export const submitPreventiveUpdateToSheet = async (data: {
+  plate: string;
+  date: string;
+  currentKm?: number;
+  evidence: string | string[];
+}): Promise<boolean> => {
+  const result = await sendToGAS({ 
+    method: 'POST_PREVENTIVE_UPDATE', 
+    data 
+  });
+  return result === true;
+};
+
 export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
   try {
     const rows = await fetchDataFromGAS(AUDIT_DOC_ID, 'ESTANDAR', GOOGLE_SCRIPT_AUDIT_URL);
@@ -1971,8 +1974,8 @@ export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
 
 const fetchAuditRecordsFromSheetCSV = async (): Promise<AuditRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/export?format=csv&sheet=ESTANDAR${getCacheBuster()}`;
-    const response = await fetch(url);
+    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
 
@@ -1989,6 +1992,113 @@ const fetchAuditRecordsFromSheetCSV = async (): Promise<AuditRecord[]> => {
       });
     });
   } catch (e) { return []; }
+};
+
+export const fetchAuditQualitySafetyFromSheet = async (): Promise<AuditQualitySafety[]> => {
+  try {
+    const rows = await fetchDataFromGAS(AUDIT_QS_DOC_ID, 'ESTANDAR', GOOGLE_SCRIPT_AUDIT_URL);
+    if (!rows || rows.length < 2) {
+      return fetchAuditQualitySafetyFromSheetCSV();
+    }
+    return processAuditQualitySafetyRows(rows);
+  } catch (e) {
+    console.error("Error fetching QS audits from GAS:", e);
+    return fetchAuditQualitySafetyFromSheetCSV();
+  }
+};
+
+const fetchAuditQualitySafetyFromSheetCSV = async (): Promise<AuditQualitySafety[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_QS_DOC_ID}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          resolve(processAuditQualitySafetyRows(rows));
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+const processAuditQualitySafetyRows = (rows: any[][]): AuditQualitySafety[] => {
+  const parseScore = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    const clean = String(val).replace('%', '').replace(',', '.').trim();
+    const num = parseFloat(clean);
+    if (isNaN(num)) return 0;
+    // User wants percentages. If it's 0.85, return 85. If it's 85, return 85.
+    return num <= 1 ? num * 100 : num;
+  };
+
+  return rows.slice(1)
+    .filter(row => row && (row[8] || row[7])) // Placa or Auditor
+    .map((row, i): AuditQualitySafety => {
+      return {
+        id: cleanSheetValue(row[0]) || `qs-audit-${i}`,
+        startTime: cleanSheetValue(row[1]),
+        endTime: cleanSheetValue(row[2]),
+        date: parseFlexibleDate(row[1]) || parseFlexibleDate(row[2]) || '',
+        email: cleanSheetValue(row[3]),
+        regional: cleanSheetValue(row[4]),
+        centro: cleanSheetValue(row[5]),
+        tipoAuditoria: cleanSheetValue(row[6]),
+        nombre: cleanSheetValue(row[7]),
+        placa: normalizePlate(cleanSheetValue(row[8])),
+        cinturonesSeguridad: cleanSheetValue(row[9]),
+        cinturones3Puntos: cleanSheetValue(row[10]),
+        sillas: cleanSheetValue(row[11]),
+        telemetria: cleanSheetValue(row[12]),
+        cajaFuerte: cleanSheetValue(row[13]),
+        botiquin: cleanSheetValue(row[14]),
+        extintor: cleanSheetValue(row[15]),
+        dashcam: cleanSheetValue(row[16]),
+        camarasAuxiliares: cleanSheetValue(row[17]),
+        vidriosEspejos: cleanSheetValue(row[18]),
+        puntosApoyo: cleanSheetValue(row[19]),
+        accesosCabina: cleanSheetValue(row[20]),
+        calapies: cleanSheetValue(row[21]),
+        segurosPuerta: cleanSheetValue(row[22]),
+        claxonBocina: cleanSheetValue(row[23]),
+        sistemaIluminacion: cleanSheetValue(row[24]),
+        sistemaFrenos: cleanSheetValue(row[25]),
+        camaraReversa: cleanSheetValue(row[26]),
+        alarmaReversa: cleanSheetValue(row[27]),
+        pitoReversa: cleanSheetValue(row[28]),
+        carpa: cleanSheetValue(row[29]),
+        varillas: cleanSheetValue(row[30]),
+        amarresCarpa: cleanSheetValue(row[31]),
+        escaleras: cleanSheetValue(row[32]),
+        guardabarros: cleanSheetValue(row[33]),
+        llantas: cleanSheetValue(row[34]),
+        rines: cleanSheetValue(row[35]),
+        pinturaCabina: cleanSheetValue(row[36]),
+        pinturaFurgon: cleanSheetValue(row[37]),
+        pinturaChasis: cleanSheetValue(row[38]),
+        pinturaRines: cleanSheetValue(row[39]),
+        publicidad: cleanSheetValue(row[40]),
+        estadoFurgon: cleanSheetValue(row[41]),
+        observations: cleanSheetValue(row[42]), // Col AQ
+        month: cleanSheetValue(row[43]), // Col AR
+        year: parseInt(cleanSheetValue(row[44])) || 0, // Col AS
+        timeMin: parseFloat(cleanSheetValue(row[45])) || 0, // Col AT
+        scoreSegNoMand: parseScore(row[79]), // Col CB
+        scoreCalNoMand: parseScore(row[80]), // Col CC
+        scoreTotalNoMand: parseScore(row[81]), // Col CD
+        scoreSegMand: parseScore(row[82]), // Col CE
+        scoreCalMand: parseScore(row[83]), // Col CF
+        scoreCG: parseScore(row[84]), // Col CG
+        timestamp: cleanSheetValue(row[1]) || new Date().toISOString()
+      };
+    });
 };
 
 const processAuditRows = (rows: any[][]): AuditRecord[] => {

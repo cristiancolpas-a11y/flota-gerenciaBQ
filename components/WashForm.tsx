@@ -34,7 +34,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   }, [vehicles]);
 
   const filteredVehiclesList = useMemo(() => {
-    let list = vehicles.filter(v => {
+    let list = [...vehicles].filter(v => {
       const vCd = (v.cd || "GENERAL").toUpperCase().trim();
       const matchCd = filterCd === 'all' || normalizeStr(vCd) === normalizeStr(filterCd);
       return matchCd;
