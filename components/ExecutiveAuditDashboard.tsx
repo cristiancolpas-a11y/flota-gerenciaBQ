@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { 
   Shield, CheckCircle2, AlertCircle, XCircle, Users, Truck, Calendar, 
-  Filter, Download, ArrowUpRight, TrendingUp, Target, Award, Activity, Search
+  Filter, Download, ArrowUpRight, TrendingUp, Target, Award, Activity, Search, Camera, Image, ExternalLink, X, Upload, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -13,6 +13,8 @@ import {
 } from '../types';
 import { 
   fetchFleetStandardAuditFromSheet,
+  submitFleetStandardAuditUpdateToSheet,
+  uploadImageToDrive,
   FLEET_STANDARD_SECURITY_ITEMS,
   FLEET_STANDARD_QUALITY_ITEMS
 } from '../services/sheetService';
@@ -53,15 +55,32 @@ const ExecutiveAuditDashboard: React.FC = () => {
   const [filterTipo, setFilterTipo] = useState('Mensual del estándar');
   const [filterAuditor, setFilterAuditor] = useState('TODOS');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedAudit, setSelectedAudit] = useState<FleetStandardAudit | null>(null);
+  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+  const [evidenceData, setEvidenceData] = useState({ antes: '', despues: '', fechaCierre: '' });
+  const [antesFiles, setAntesFiles] = useState<File[]>([]);
+  const [despuesFiles, setDespuesFiles] = useState<File[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const getEmbedUrl = (url: string) => {
+    if (!url) return '';
+    if (url.includes('drive.google.com')) {
+      const id = url.split('/d/')[1]?.split('/')[0];
+      if (id) return `https://lh3.googleusercontent.com/u/0/d/${id}=w1000`;
+    }
+    return url;
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    const audits = await fetchFleetStandardAuditFromSheet();
+    setData(audits);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      const audits = await fetchFleetStandardAuditFromSheet();
-      setData(audits);
-      setLoading(false);
-    };
-    loadData();
+    fetchData();
   }, []);
 
   const filteredData = useMemo(() => {
@@ -80,7 +99,152 @@ const ExecutiveAuditDashboard: React.FC = () => {
     });
   }, [data, filterCentro, filterMes, filterTipo, filterAuditor, searchTerm]);
 
+  const fileToImage = (file: File): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new window.Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const generateCollage = async (files: File[], title: string, plate: string): Promise<string> => {
+    if (files.length === 0) return '';
+    
+    const images = await Promise.all(files.map(fileToImage));
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    
+    // Adjusted for Drive storage - 800px is good balance
+    const baseSize = 800;
+    canvas.width = baseSize;
+    canvas.height = baseSize;
+
+    ctx.fillStyle = '#05070A';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const n = images.length;
+    let cols = n <= 2 ? n : (n <= 4 ? 2 : 3);
+    let rows = Math.ceil(n / cols);
+    
+    const headerHeight = 70;
+    const padding = 12;
+    const availableH = canvas.height - headerHeight - (padding * 2);
+    const availableW = canvas.width - (padding * 2);
+
+    const cellW = availableW / cols;
+    const cellH = availableH / rows;
+
+    images.forEach((img, i) => {
+      const r = Math.floor(i / cols);
+      const c = i % cols;
+      const x = padding + c * cellW;
+      const y = headerHeight + padding + r * cellH;
+
+      const imgRatio = img.width / img.height;
+      const cellRatio = cellW / cellH;
+      let sw, sh, sx, sy;
+      
+      if (imgRatio > cellRatio) {
+        sh = img.height;
+        sw = img.height * cellRatio;
+        sx = (img.width - sw) / 2;
+        sy = 0;
+      } else {
+        sw = img.width;
+        sh = img.width / cellRatio;
+        sx = 0;
+        sy = (img.height - sh) / 2;
+      }
+      
+      ctx.drawImage(img, sx, sy, sw, sh, x + 2, y + 2, cellW - 4, cellH - 4);
+      ctx.strokeStyle = '#00D4FF';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4);
+    });
+
+    ctx.fillStyle = '#00D4FF';
+    ctx.font = 'bold 24px Inter, sans-serif';
+    ctx.fillText(`AUDITORÍA - ${title}`, padding, 45);
+    
+    ctx.fillStyle = '#FFF';
+    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${plate} • ${new Date().toLocaleDateString()}`, canvas.width - padding, 45);
+
+    return canvas.toDataURL('image/jpeg', 0.7); // Better quality for Drive storage
+  };
+
   // Case Closure Metrics (Cierre de Novedades)
+  const handleOpenEvidence = (audit: FleetStandardAudit) => {
+    setSelectedAudit(audit);
+    setEvidenceData({
+      antes: audit.evidenciaAntes || '',
+      despues: audit.evidenciaDespues || '',
+      fechaCierre: audit.fechaCierre || new Date().toISOString().split('T')[0]
+    });
+    setAntesFiles([]);
+    setDespuesFiles([]);
+    setShowEvidenceModal(true);
+  };
+
+  const handleUpdateEvidence = async () => {
+    if (!selectedAudit) return;
+    setIsUpdating(true);
+    try {
+      // Validar que se seleccionaron fotos
+      if (antesFiles.length === 0 && !evidenceData.antes) {
+        alert("Debe subir al menos una foto de evidencia 'Antes'");
+        setIsUpdating(false);
+        return;
+      }
+
+      // Generar y subir collages a Drive
+      let finalAntes = evidenceData.antes;
+      if (antesFiles.length > 0) {
+        const base64 = await generateCollage(antesFiles, 'ANTES', selectedAudit.placa);
+        finalAntes = await uploadImageToDrive(base64, `AUDIT_ANTES_${selectedAudit.placa}_${Date.now()}.jpg`);
+      }
+        
+      let finalDespues = evidenceData.despues;
+      if (despuesFiles.length > 0) {
+        const base64 = await generateCollage(despuesFiles, 'DESPUÉS', selectedAudit.placa);
+        finalDespues = await uploadImageToDrive(base64, `AUDIT_DESPUES_${selectedAudit.placa}_${Date.now()}.jpg`);
+      }
+
+      // Enviar a la hoja (Ahora enviamos los links de Drive)
+      const success = await submitFleetStandardAuditUpdateToSheet({
+        id: selectedAudit.id,
+        placa: selectedAudit.placa,
+        evidenciaAntes: finalAntes,
+        evidenciaDespues: finalDespues,
+        fechaCierre: evidenceData.fechaCierre,
+        estado: 'CERRADO'
+      });
+
+      if (success) {
+        // Pequeña espera para asegurar que GAS procese
+        setTimeout(async () => {
+          await fetchData();
+          setShowEvidenceModal(false);
+          setIsUpdating(false);
+          alert('Evidencias registradas y novedad cerrada con éxito en Drive y Hoja.');
+        }, 3000);
+      } else {
+        alert('Error al registrar evidencias en el servidor.');
+        setIsUpdating(false);
+      }
+    } catch (error) {
+      console.error("Error al actualizar evidencia:", error);
+      alert('Error de conexión o timeout. Verifique su internet.');
+      setIsUpdating(false);
+    }
+  };
+
   const closureMetrics = useMemo(() => {
     const records = filteredData.filter(r => r.observations && r.observations.trim() !== '');
     const total = records.length;
@@ -626,6 +790,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Placa</th>
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Observación</th>
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Estado</th>
+                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Evidencias</th>
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Fecha Cierre</th>
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Días</th>
                   </tr>
@@ -633,14 +798,14 @@ const ExecutiveAuditDashboard: React.FC = () => {
                 <tbody className="divide-y divide-white/5">
                   {filteredData.filter(item => item.observations && item.observations.trim() !== '').map((item, idx) => (
                     <tr key={idx} className="hover:bg-white/[0.02] transition-colors group">
-                      <td className="p-6 text-[11px] font-bold text-slate-400 whitespace-nowrap">{item.fecha || 'N/A'}</td>
+                      <td className="p-6 text-[11px] font-bold text-slate-400 whitespace-nowrap">{item.startTime ? item.startTime.split(' ')[0] : 'N/A'}</td>
                       <td className="p-6 text-[11px] font-black text-[#00D4FF] uppercase">{item.centro}</td>
                       <td className="p-6">
                         <span className="px-3 py-1 bg-white/10 rounded-lg text-[11px] font-mono font-black text-white border border-white/10 group-hover:border-[#00D4FF]/30 transition-colors">
                           {item.placa}
                         </span>
                       </td>
-                      <td className="p-6 text-[11px] text-slate-300 font-medium max-w-xs truncate">
+                      <td className="p-6 text-[11px] text-slate-300 font-medium max-w-xs truncate" title={item.observations}>
                         {item.observations || '-'}
                       </td>
                       <td className="p-6 text-center">
@@ -652,13 +817,52 @@ const ExecutiveAuditDashboard: React.FC = () => {
                           {item.estado || 'PENDIENTE'}
                         </span>
                       </td>
+                      <td className="p-6">
+                        <div className="flex items-center justify-center gap-3">
+                          {!item.evidenciaAntes || !item.evidenciaDespues ? (
+                            <button 
+                              onClick={() => handleOpenEvidence(item)}
+                              className="p-2 bg-[#00D4FF10] hover:bg-[#00D4FF20] text-[#00D4FF] rounded-lg transition-all border border-[#00D4FF20]"
+                              title="Registrar Evidencias"
+                            >
+                              <Camera size={14} />
+                            </button>
+                          ) : (
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleOpenEvidence(item)}
+                                className="p-2 bg-[#00FF8810] hover:bg-[#00FF8820] text-[#00FF88] rounded-lg transition-all border border-[#00FF8820]"
+                                title="Ver/Editar Evidencias"
+                              >
+                                <Image size={14} />
+                              </button>
+                              {item.evidenciaAntes && (
+                                <button 
+                                  onClick={() => setSelectedImage(getEmbedUrl(item.evidenciaAntes))}
+                                  className="text-slate-400 hover:text-[#00D4FF] transition-colors"
+                                >
+                                  <span className="text-[8px] font-black block">ANTES</span>
+                                </button>
+                              )}
+                              {item.evidenciaDespues && (
+                                <button 
+                                  onClick={() => setSelectedImage(getEmbedUrl(item.evidenciaDespues))}
+                                  className="text-slate-400 hover:text-[#00FF88] transition-colors"
+                                >
+                                  <span className="text-[8px] font-black block">DESPUÉS</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-6 text-[11px] font-bold text-slate-400">{item.fechaCierre || '-'}</td>
                       <td className="p-6 text-center font-mono text-[11px] font-black text-white">{item.diasCierre || 0}</td>
                     </tr>
                   ))}
                   {filteredData.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-20 text-center text-slate-600 font-black uppercase tracking-widest text-xs">
+                      <td colSpan={8} className="p-20 text-center text-slate-600 font-black uppercase tracking-widest text-xs">
                         No se han encontrado registros
                       </td>
                     </tr>
@@ -669,6 +873,216 @@ const ExecutiveAuditDashboard: React.FC = () => {
           </div>
         </div>
       )}
+      <AnimatePresence>
+        {showEvidenceModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowEvidenceModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-[#0F172A] border border-white/10 rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00D4FF] to-transparent opacity-50" />
+              
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">
+                    Registro de <span className="text-[#00D4FF]">Evidencias</span>
+                  </h2>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Placa: {selectedAudit?.placa}</p>
+                </div>
+                <button onClick={() => setShowEvidenceModal(false)} className="p-2 hover:bg-white/5 rounded-xl text-slate-500 hover:text-white transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-[#00D4FF] uppercase tracking-widest flex items-center justify-between">
+                    <span className="flex items-center gap-2"><Camera size={12} /> Evidencia Antes (Máx 6)</span>
+                    <span className="text-slate-500">{antesFiles.length}/6</span>
+                  </label>
+                  
+                  <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                    {antesFiles.map((file, i) => (
+                      <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
+                        <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                        <button 
+                          onClick={() => setAntesFiles(antesFiles.filter((_, idx) => idx !== i))}
+                          className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                    {antesFiles.length < 6 && (
+                      <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00D4FF]/40 cursor-pointer flex items-center justify-center transition-all">
+                        <Upload size={16} className="text-[#00D4FF]/40" />
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="image/*" 
+                          multiple 
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            setAntesFiles(prev => [...prev, ...files].slice(0, 6));
+                          }} 
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {evidenceData.antes && !antesFiles.length && (
+                    <div className="group relative w-full h-32 rounded-xl border border-white/10 overflow-hidden bg-white/5">
+                      <img src={getEmbedUrl(evidenceData.antes)} alt="Antes" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                        <button 
+                          onClick={() => setSelectedImage(getEmbedUrl(evidenceData.antes))}
+                          className="p-2 bg-white/10 rounded-full hover:bg-white/20 text-white"
+                        >
+                          <Search size={16} />
+                        </button>
+                        <a href={evidenceData.antes} target="_blank" rel="noreferrer" className="p-2 bg-white/10 rounded-full hover:bg-white/20 text-white">
+                          <ExternalLink size={16} />
+                        </a>
+                      </div>
+                      <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-[#00D4FF]/20 border border-[#00D4FF]/30 rounded text-[8px] font-black text-[#00D4FF] uppercase backdrop-blur-md">
+                        Actual Antes
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-[#00FF88] uppercase tracking-widest flex items-center justify-between">
+                    <span className="flex items-center gap-2"><Camera size={12} /> Evidencia Después (Máx 6)</span>
+                    <span className="text-slate-500">{despuesFiles.length}/6</span>
+                  </label>
+
+                  <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                    {despuesFiles.map((file, i) => (
+                      <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
+                        <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                        <button 
+                          onClick={() => setDespuesFiles(despuesFiles.filter((_, idx) => idx !== i))}
+                          className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                    {despuesFiles.length < 6 && (
+                      <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00FF88]/40 cursor-pointer flex items-center justify-center transition-all">
+                        <Upload size={16} className="text-[#00FF88]/40" />
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="image/*" 
+                          multiple 
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            setDespuesFiles(prev => [...prev, ...files].slice(0, 6));
+                          }} 
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {evidenceData.despues && !despuesFiles.length && (
+                    <div className="group relative w-full h-32 rounded-xl border border-white/10 overflow-hidden bg-white/5">
+                      <img src={getEmbedUrl(evidenceData.despues)} alt="Después" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                        <button 
+                          onClick={() => setSelectedImage(getEmbedUrl(evidenceData.despues))}
+                          className="p-2 bg-white/10 rounded-full hover:bg-white/20 text-white"
+                        >
+                          <Search size={16} />
+                        </button>
+                        <a href={evidenceData.despues} target="_blank" rel="noreferrer" className="p-2 bg-white/10 rounded-full hover:bg-white/20 text-white">
+                          <ExternalLink size={16} />
+                        </a>
+                      </div>
+                      <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-[#00FF88]/20 border border-[#00FF88]/30 rounded text-[8px] font-black text-[#00FF88] uppercase backdrop-blur-md">
+                        Actual Después
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Calendar size={12} /> Fecha de Cierre
+                  </label>
+                  <input 
+                    type="date"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-white/20 transition-all"
+                    value={evidenceData.fechaCierre}
+                    onChange={(e) => setEvidenceData({...evidenceData, fechaCierre: e.target.value})}
+                  />
+                </div>
+
+                <button 
+                  onClick={handleUpdateEvidence}
+                  disabled={isUpdating}
+                  className="w-full bg-[#00D4FF] hover:bg-[#00B4DD] disabled:opacity-50 text-black py-4 rounded-xl font-black uppercase tracking-widest text-[11px] shadow-[0_0_20px_rgba(0,212,255,0.3)] transition-all flex items-center justify-center gap-2"
+                >
+                  {isUpdating ? <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : <Save size={16} />}
+                  {isUpdating ? 'Guardando...' : 'Registrar y Cerrar Novedad'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedImage && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedImage(null)}
+              className="absolute inset-0 bg-black/95 backdrop-blur-xl"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative max-w-5xl w-full max-h-[90vh] flex flex-col items-center"
+            >
+              <button 
+                onClick={() => setSelectedImage(null)}
+                className="absolute -top-12 right-0 p-3 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all z-10"
+              >
+                <X size={24} />
+              </button>
+              <img 
+                src={selectedImage} 
+                alt="Enlarged evidence" 
+                className="w-full h-full object-contain rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10"
+              />
+              <div className="mt-6 flex gap-4">
+                <a 
+                  href={selectedImage} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="px-6 py-2 bg-[#00D4FF] text-black rounded-full font-black uppercase text-[10px] tracking-widest flex items-center gap-2 hover:bg-[#00B4DD] transition-all"
+                >
+                  <ExternalLink size={14} /> Abrir Original
+                </a>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -6,7 +6,7 @@ const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D
 const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
-const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbwyxqsovsJqxTTlfnhfXGnj4cKNdlfbRhIPnn8NHv5fcuaUNzPuioXk8X4un2nV3dUdOA/exec';
+const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbxSrmZSoQp1l98M3Hcfktl31gel3ynU2eVT2d1_IOg0UKCRVJQVCTKwSmMjZ54EORB1-w/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -1523,32 +1523,38 @@ const processCorrectiveRows = (rows: any[][], headers: string[]): Corrective[] =
     });
 };
 
-const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL) => {
+const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL, useCors: boolean = false) => {
   console.log(`🚀 Enviando a GAS (${payload.method}):`, payload);
   try {
-    // Usamos un timeout corto para no dejar la UI bloqueada si hay problemas de red
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    const fetchPromise = fetch(url, { 
+    const options: RequestInit = { 
       method: 'POST',
-      mode: 'no-cors', // Evita preflights de CORS, permite que la petición llegue siempre
       headers: {
         'Content-Type': 'text/plain',
       },
       body: JSON.stringify(payload) 
-    });
+    };
 
-    await fetchPromise;
+    if (useCors) {
+      options.mode = 'cors';
+    } else {
+      options.mode = 'no-cors';
+    }
+
+    const response = await fetch(url, options);
     clearTimeout(timeoutId);
+
+    if (useCors) {
+      const result = await response.json();
+      return result; // Devuelve {status, message}
+    }
     
-    console.log("✅ Petición enviada exitosamente (modo no-cors)");
     return true; 
   } catch (err) { 
-    console.warn("GAS - Error en el envío (o timeout), pero la data podría llegar:", err);
-    // En GAS, fallar aquí suele ser un problema de CORS al intentar leer, 
-    // pero el POST suele llegar al servidor. Retornamos true para no bloquear la UI.
-    return true; 
+    console.warn("GAS - Error en el envío:", err);
+    return false; 
   }
 };
 
@@ -1575,6 +1581,39 @@ export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<
   }
 };
 export const submitWorkshopRecordToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_RECORD', data }, GOOGLE_SCRIPT_WORKSHOP_URL); };
+
+/**
+ * DRIVE UPLOAD
+ */
+export const uploadImageToDrive = async (base64Data: string, fileName: string): Promise<string> => {
+  try {
+    const payload = {
+      method: 'UPLOAD_IMAGE',
+      data: {
+        base64: base64Data,
+        name: fileName
+      }
+    };
+    
+    const response = await fetch(GOOGLE_SCRIPT_AUDIT_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'text/plain',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    if (result.status === 'success') {
+      return result.message; // El URL viene en el campo message según el formato estándar de GAS
+    }
+    throw new Error(result.message || 'Error al subir a Drive');
+  } catch (error) {
+    console.error("Error uploadImageToDrive:", error);
+    throw error;
+  }
+};
 
 /**
  * PREVENTIVOS (GID 2086109634)
@@ -2010,11 +2049,16 @@ export const FLEET_STANDARD_QUALITY_ITEMS = [
 
 export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardAudit[]> => {
   try {
-    const rows = await fetchDataFromGAS(AUDIT_QS_DOC_ID, 'ESTANDAR', GOOGLE_SCRIPT_AUDIT_URL);
+    // Try ESTRANDAR first on QS doc, then ESTANDAR
+    let rows = await fetchDataFromGAS(AUDIT_QS_DOC_ID, 'ESTRANDAR', GOOGLE_SCRIPT_AUDIT_URL);
     if (!rows || rows.length < 2) {
-      return fetchFleetStandardAuditFromSheetCSV();
+      rows = await fetchDataFromGAS(AUDIT_QS_DOC_ID, 'ESTANDAR', GOOGLE_SCRIPT_AUDIT_URL);
     }
-    return processFleetStandardAuditRows(rows);
+    
+    if (rows && rows.length >= 2) {
+      return processFleetStandardAuditRows(rows);
+    }
+    return fetchFleetStandardAuditFromSheetCSV();
   } catch (e) {
     console.error("Error fetching Fleet Standard audits from GAS:", e);
     return fetchFleetStandardAuditFromSheetCSV();
@@ -2023,9 +2067,16 @@ export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardA
 
 const fetchFleetStandardAuditFromSheetCSV = async (): Promise<FleetStandardAudit[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_QS_DOC_ID}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
-    const csvText = await response.text();
+    // Try both sheet names for CSV fallback
+    let url = `https://docs.google.com/spreadsheets/d/${AUDIT_QS_DOC_ID}/gviz/tq?tqx=out:csv&sheet=ESTRANDAR${getCacheBuster()}`;
+    let response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+    let csvText = await response.text();
+    
+    if (!csvText || csvText.includes("<!DOCTYPE html") || csvText.length < 100) {
+      url = `https://docs.google.com/spreadsheets/d/${AUDIT_QS_DOC_ID}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
+      response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+      csvText = await response.text();
+    }
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
 
     return new Promise((resolve) => {
@@ -2089,11 +2140,18 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
         mes: cleanSheetValue(row[43]), // AR
         año: parseInt(cleanSheetValue(row[44])) || 2026, // AS
         tiempoMin: parseFloat(cleanSheetValue(row[45])) || 0, // AT
+        evidenciaAntes: cleanSheetValue(row[85]), // CH
         fechaCierre: parseFlexibleDate(row[86]), // CI
         diasCierre: parseInt(cleanSheetValue(row[87])) || 0, // CJ
-        estado: cleanSheetValue(row[88]) // CK
+        estado: cleanSheetValue(row[88]), // CK
+        evidenciaDespues: cleanSheetValue(row[89]) // CL
       };
     });
+};
+
+export const submitFleetStandardAuditUpdateToSheet = async (data: any): Promise<boolean> => {
+  const result = await sendToGAS({ method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: AUDIT_QS_DOC_ID } }, GOOGLE_SCRIPT_AUDIT_URL, true);
+  return result && (result as any).status === 'success';
 };
 
 const processAuditRows = (rows: any[][]): AuditRecord[] => {

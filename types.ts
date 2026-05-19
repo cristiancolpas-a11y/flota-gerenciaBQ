@@ -391,7 +391,9 @@ export interface FleetStandardAudit {
   // Novedades
   estado?: string;          // Col CK
   fechaCierre?: string;     // Col CI
-  diasCierre?: number;       // Col CJ
+  diasCierre?: number;      // Col CJ
+  evidenciaAntes?: string;  // Col CH
+  evidenciaDespues?: string; // Col CL
 }
 
 export interface AuditRecord {

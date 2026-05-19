@@ -535,6 +535,53 @@ function doPost(e) {
           return output("error", "No se encontró el registro para " + plateSearch + " (" + dateSearch + ")");
         }
       }
+      else if (m === 'POST_FLEET_STANDARD_AUDIT_UPDATE') {
+        var docId = d.docId || '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
+        var ssA = SpreadsheetApp.openById(docId);
+        // Prioritize "ESTRANDAR" as the user explicitly mentioned it, then fallback to "ESTANDAR" or first sheet.
+        var s = ssA.getSheetByName("ESTRANDAR") || ssA.getSheetByName("ESTANDAR") || ssA.getSheets()[0];
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var idVal = (d.id || "").toString().trim().toUpperCase();
+        var plateVal = (d.placa || "").toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+        for (var i = 1; i < rows.length; i++) {
+          var rowId = (rows[i][0] || "").toString().trim().toUpperCase();
+          var rowPlate = (rows[i][8] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, ""); // Col I
+          
+          if (idVal && !idVal.startsWith("STD-AUDIT-") && rowId === idVal) {
+            foundIdx = i + 1;
+            break;
+          }
+          if (plateVal && rowPlate === plateVal) {
+             foundIdx = i + 1;
+             // Check status (Col CK - index 88)
+             var rowStatus = (rows[i][88] || "").toString().trim().toUpperCase();
+             if (rowStatus === "PENDIENTE" || rowStatus === "ABIERTO" || rowStatus === "") {
+               // If it's pending, this is definitely the one we want to close
+               break; 
+             }
+             // If not pending, keep searching for a pending one, but remember this index as fallback
+          }
+        }
+
+        if (foundIdx !== -1) {
+          if (d.evidenciaAntes) s.getRange(foundIdx, 86).setValue(d.evidenciaAntes);
+          if (d.fechaCierre) s.getRange(foundIdx, 87).setValue(d.fechaCierre);
+          if (d.estado) s.getRange(foundIdx, 89).setValue(d.estado);
+          if (d.evidenciaDespues) s.getRange(foundIdx, 90).setValue(d.evidenciaDespues);
+          
+          if (lock.hasLock()) lock.releaseLock();
+          return output("success", "Auditoria actualizada en fila " + foundIdx);
+        }
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "No se encontró auditoria " + idSearch);
+      }
+      else if (m === 'UPLOAD_IMAGE') {
+        var url = sImg(d.base64, d.name);
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", url);
+      }
     }
 
     lock.releaseLock();
