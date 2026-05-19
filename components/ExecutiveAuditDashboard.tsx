@@ -910,34 +910,36 @@ const ExecutiveAuditDashboard: React.FC = () => {
                     <span className="text-slate-500">{antesFiles.length}/6</span>
                   </label>
                   
-                  <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                    {antesFiles.map((file, i) => (
-                      <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
-                        <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
-                        <button 
-                          onClick={() => setAntesFiles(antesFiles.filter((_, idx) => idx !== i))}
-                          className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ))}
-                    {antesFiles.length < 6 && (
-                      <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00D4FF]/40 cursor-pointer flex items-center justify-center transition-all">
-                        <Upload size={16} className="text-[#00D4FF]/40" />
-                        <input 
-                          type="file" 
-                          className="hidden" 
-                          accept="image/*" 
-                          multiple 
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files || []);
-                            setAntesFiles(prev => [...prev, ...files].slice(0, 6));
-                          }} 
-                        />
-                      </label>
-                    )}
-                  </div>
+                  {!evidenceData.antes && (
+                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                      {antesFiles.map((file, i) => (
+                        <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
+                          <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                          <button 
+                            onClick={() => setAntesFiles(antesFiles.filter((_, idx) => idx !== i))}
+                            className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                      {antesFiles.length < 6 && (
+                        <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00D4FF]/40 cursor-pointer flex items-center justify-center transition-all">
+                          <Upload size={16} className="text-[#00D4FF]/40" />
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*" 
+                            multiple 
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              setAntesFiles(prev => [...prev, ...files].slice(0, 6));
+                            }} 
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
 
                   {evidenceData.antes && !antesFiles.length && (
                     <div className="group relative w-full h-32 rounded-xl border border-white/10 overflow-hidden bg-white/5">
@@ -966,34 +968,36 @@ const ExecutiveAuditDashboard: React.FC = () => {
                     <span className="text-slate-500">{despuesFiles.length}/6</span>
                   </label>
 
-                  <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                    {despuesFiles.map((file, i) => (
-                      <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
-                        <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
-                        <button 
-                          onClick={() => setDespuesFiles(despuesFiles.filter((_, idx) => idx !== i))}
-                          className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ))}
-                    {despuesFiles.length < 6 && (
-                      <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00FF88]/40 cursor-pointer flex items-center justify-center transition-all">
-                        <Upload size={16} className="text-[#00FF88]/40" />
-                        <input 
-                          type="file" 
-                          className="hidden" 
-                          accept="image/*" 
-                          multiple 
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files || []);
-                            setDespuesFiles(prev => [...prev, ...files].slice(0, 6));
-                          }} 
-                        />
-                      </label>
-                    )}
-                  </div>
+                  {!evidenceData.despues && (
+                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                      {despuesFiles.map((file, i) => (
+                        <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
+                          <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                          <button 
+                            onClick={() => setDespuesFiles(despuesFiles.filter((_, idx) => idx !== i))}
+                            className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                      {despuesFiles.length < 6 && (
+                        <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00FF88]/40 cursor-pointer flex items-center justify-center transition-all">
+                          <Upload size={16} className="text-[#00FF88]/40" />
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*" 
+                            multiple 
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              setDespuesFiles(prev => [...prev, ...files].slice(0, 6));
+                            }} 
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
 
                   {evidenceData.despues && !despuesFiles.length && (
                     <div className="group relative w-full h-32 rounded-xl border border-white/10 overflow-hidden bg-white/5">
@@ -1028,14 +1032,32 @@ const ExecutiveAuditDashboard: React.FC = () => {
                   />
                 </div>
 
-                <button 
-                  onClick={handleUpdateEvidence}
-                  disabled={isUpdating}
-                  className="w-full bg-[#00D4FF] hover:bg-[#00B4DD] disabled:opacity-50 text-black py-4 rounded-xl font-black uppercase tracking-widest text-[11px] shadow-[0_0_20px_rgba(0,212,255,0.3)] transition-all flex items-center justify-center gap-2"
-                >
-                  {isUpdating ? <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : <Save size={16} />}
-                  {isUpdating ? 'Guardando...' : 'Registrar y Cerrar Novedad'}
-                </button>
+                {(antesFiles.length > 0 || despuesFiles.length > 0 || (!evidenceData.antes || !evidenceData.despues)) ? (
+                  <button 
+                    onClick={handleUpdateEvidence}
+                    disabled={isUpdating}
+                    className="w-full bg-[#00D4FF] hover:bg-[#00B4DD] disabled:opacity-50 text-black py-4 rounded-xl font-black uppercase tracking-widest text-[11px] shadow-[0_0_20px_rgba(0,212,255,0.3)] transition-all flex items-center justify-center gap-2"
+                  >
+                    {isUpdating ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        Finalizar Registro
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setShowEvidenceModal(false)}
+                    className="w-full bg-white/10 hover:bg-white/20 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all flex items-center justify-center gap-2 border border-white/5"
+                  >
+                    Cerrar Vista
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
