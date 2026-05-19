@@ -285,7 +285,21 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Taller / Equipo</label>
-              <input required type="text" placeholder="Ej: AUTECO" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none uppercase disabled:opacity-50" value={formData.taller} onChange={e => setFormData({ ...formData, taller: e.target.value.toUpperCase() })} />
+              <select 
+                required 
+                className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:opacity-50 uppercase" 
+                value={formData.taller} 
+                onChange={e => setFormData({ ...formData, taller: e.target.value })}
+              >
+                <option value="">-- SELECCIONE --</option>
+                <option value="AUTOMUNDIAL">AUTOMUNDIAL</option>
+                <option value="GARCILLANTAS">GARCILLANTAS</option>
+                <option value="OMNIPOTENTE">OMNIPOTENTE</option>
+                <option value="LLANTERIA PATIÑO">LLANTERIA PATIÑO</option>
+                {formData.taller && !["AUTOMUNDIAL", "GARCILLANTAS", "OMNIPOTENTE", "LLANTERIA PATIÑO"].includes(formData.taller) && (
+                  <option value={formData.taller}>{formData.taller}</option>
+                )}
+              </select>
             </div>
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Fecha</label>
