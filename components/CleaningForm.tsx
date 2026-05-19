@@ -16,6 +16,8 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const [isDraggingInitial, setIsDraggingInitial] = useState(false);
+  const [isDraggingFinal, setIsDraggingFinal] = useState(false);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
 
   const [filterCd, setFilterCd] = useState<string>('all');
@@ -59,6 +61,68 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
   const handleCdChange = (val: string) => {
     setFilterCd(val);
     setFormData(prev => ({ ...prev, plate: '' }));
+  };
+
+  const handleDragOver = (e: React.DragEvent, type: 'INICIAL' | 'FINAL') => {
+    e.preventDefault();
+    if (type === 'INICIAL') setIsDraggingInitial(true);
+    else setIsDraggingFinal(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent, type: 'INICIAL' | 'FINAL') => {
+    e.preventDefault();
+    if (type === 'INICIAL') setIsDraggingInitial(false);
+    else setIsDraggingFinal(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent, type: 'INICIAL' | 'FINAL') => {
+    e.preventDefault();
+    setIsDraggingInitial(false);
+    setIsDraggingFinal(false);
+    
+    if (!formData.plate) {
+      alert("Seleccione la placa antes de capturar la evidencia.");
+      return;
+    }
+
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+
+    setIsProcessingPhoto(true);
+
+    const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(undefined),
+          { timeout: 5000 }
+        );
+      });
+    };
+
+    const coords = await getCoords();
+
+    for (const file of files) {
+      const currentPhotos = type === 'INICIAL' ? initialPhotos : finalPhotos;
+      if (currentPhotos.length >= 4) break;
+      
+      const watermarked = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const res = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
+          resolve(res);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      if (type === 'INICIAL') {
+        setInitialPhotos(prev => [...prev, watermarked].slice(0, 4));
+      } else {
+        setFinalPhotos(prev => [...prev, watermarked].slice(0, 4));
+      }
+    }
+    
+    setIsProcessingPhoto(false);
   };
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -276,7 +340,12 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div 
+                  className={`grid grid-cols-4 gap-2 transition-all duration-300 ${isDraggingInitial ? 'scale-105 bg-cyan-50 border-2 border-cyan-400 rounded-xl p-1' : ''}`}
+                  onDragOver={(e) => handleDragOver(e, 'INICIAL')}
+                  onDragLeave={(e) => handleDragLeave(e, 'INICIAL')}
+                  onDrop={(e) => handleDrop(e, 'INICIAL')}
+                >
                   {initialPhotos.map((photo, idx) => (
                     <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border-2 border-slate-100 shadow-sm">
                       <img src={photo} className="w-full h-full object-cover" />
@@ -316,7 +385,12 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div 
+                  className={`grid grid-cols-4 gap-2 transition-all duration-300 ${isDraggingFinal ? 'scale-105 bg-cyan-50 border-2 border-cyan-400 rounded-xl p-1' : ''}`}
+                  onDragOver={(e) => handleDragOver(e, 'FINAL')}
+                  onDragLeave={(e) => handleDragLeave(e, 'FINAL')}
+                  onDrop={(e) => handleDrop(e, 'FINAL')}
+                >
                   {finalPhotos.map((photo, idx) => (
                     <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border-2 border-slate-100 shadow-sm">
                       <img src={photo} className="w-full h-full object-cover" />

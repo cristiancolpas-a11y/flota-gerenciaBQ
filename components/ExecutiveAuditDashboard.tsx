@@ -403,7 +403,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
               </h1>
               <p className="text-[#00D4FF]/60 text-xs font-bold uppercase tracking-[0.4em] mt-2 flex items-center gap-2">
                 <span className="w-2 h-2 bg-[#00FF88] rounded-full animate-ping" />
-                Regional Norte
+                BARRANQUILLA
               </p>
             </div>
           </div>

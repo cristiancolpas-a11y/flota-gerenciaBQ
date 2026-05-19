@@ -48,6 +48,7 @@ import OperatorsModule from './components/OperatorsModule';
 import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
 import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
+import CalibrationVisuals from './components/CalibrationVisuals';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -156,7 +157,7 @@ const App: React.FC = () => {
   const [closingWorkshopVisit, setClosingWorkshopVisit] = useState<Report | null>(null);
   const [closingCleaning, setClosingCleaning] = useState<WashReport | null>(null);
   const [workshopViewMode, setWorkshopViewMode] = useState<'list' | 'calendar'>('calendar');
-  const [calibrationViewMode, setCalibrationViewMode] = useState<'list' | 'calendar'>('calendar');
+  const [calibrationViewMode, setCalibrationViewMode] = useState<'list' | 'calendar' | 'visual'>('calendar');
   const [washViewMode, setWashViewMode] = useState<'list' | 'calendar'>('calendar');
   const [cleaningViewMode, setCleaningViewMode] = useState<'list' | 'calendar'>('calendar');
 
@@ -314,7 +315,7 @@ const App: React.FC = () => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate));
       const rMonth = normalizeStr(r.month);
       const sMonth = normalizeStr(selectedMonth);
-      const matchMonth = rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth));
+      const matchMonth = selectedMonth === 'TODOS' || (rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth)));
       
       // Year check
       let matchYear = true;
@@ -345,7 +346,7 @@ const App: React.FC = () => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate));
       const rMonth = normalizeStr(r.month);
       const sMonth = normalizeStr(selectedMonth);
-      const matchMonth = rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth));
+      const matchMonth = selectedMonth === 'TODOS' || (rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth)));
       
       // Year check
       let matchYear = true;
@@ -392,7 +393,7 @@ const App: React.FC = () => {
         if (!isNaN(d.getTime())) {
           const rMonth = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
           const sMonth = selectedMonth;
-          matchMonth = rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth));
+          matchMonth = selectedMonth === 'TODOS' || (rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth)));
           matchYear = d.getFullYear() === selectedYear;
         }
       }
@@ -419,7 +420,7 @@ const App: React.FC = () => {
         if (!isNaN(d.getTime())) {
           const rMonth = d.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
           const sMonth = selectedMonth;
-          matchMonth = rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth));
+          matchMonth = selectedMonth === 'TODOS' || (rMonth !== "" && (rMonth === sMonth || rMonth.includes(sMonth) || sMonth.includes(rMonth)));
           matchYear = d.getFullYear() === selectedYear;
         }
       }
@@ -476,10 +477,12 @@ const App: React.FC = () => {
   const filteredCalibrations = useMemo(() => {
     return calibrations.filter(c => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(c.plate));
-      const matchMonth = c.month?.trim().toUpperCase() === selectedMonth.trim().toUpperCase();
+      const cMonth = (c.month || "").trim().toUpperCase();
+      const sMonth = selectedMonth.trim().toUpperCase();
+      const matchMonth = selectedMonth === 'TODOS' || cMonth === sMonth || cMonth.includes(sMonth) || sMonth.includes(cMonth);
       const matchYear = c.year === selectedYear;
-      const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || c.cd === filterCd;
-      const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || c.contractor === filterContractor;
+      const matchCd = filterCd === 'all' || (vehicle && vehicle.cd === filterCd) || (c.cd && c.cd.toUpperCase().trim() === filterCd.toUpperCase().trim());
+      const matchContractor = filterContractor === 'all' || (vehicle && vehicle.contractor === filterContractor) || (c.contractor && c.contractor.toUpperCase().trim() === filterContractor.toUpperCase().trim());
       const matchSearch = normalizePlate(c.plate).includes(normalizePlate(searchTerm));
       return matchMonth && matchYear && matchCd && matchContractor && matchSearch;
     });
@@ -488,8 +491,14 @@ const App: React.FC = () => {
   const statsCalibrations = useMemo(() => {
     return {
       total: filteredCalibrations.length,
-      completed: filteredCalibrations.filter(c => c.estado === 'COMPLETADO').length,
-      pending: filteredCalibrations.filter(c => c.estado !== 'COMPLETADO').length,
+      completed: filteredCalibrations.filter(c => {
+        const est = (c.estado || "").toUpperCase().trim();
+        return est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK';
+      }).length,
+      pending: filteredCalibrations.filter(c => {
+        const est = (c.estado || "").toUpperCase().trim();
+        return !(est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK');
+      }).length,
       searchCount: filteredCalibrations.length
     };
   }, [filteredCalibrations]);
@@ -509,7 +518,7 @@ const App: React.FC = () => {
         }
       }
 
-      const matchMonth = (fMonth !== "" && (fMonth === sMonth || fMonth.includes(sMonth) || sMonth.includes(fMonth))) || 
+      const matchMonth = selectedMonth === 'TODOS' || (fMonth !== "" && (fMonth === sMonth || fMonth.includes(sMonth) || sMonth.includes(fMonth))) || 
                          (fMonth === "" && matchMonthByDate);
       
       let matchYear = true;
@@ -517,7 +526,7 @@ const App: React.FC = () => {
         const d = new Date(f.date + "T12:00:00");
         if (!isNaN(d.getTime())) {
           // Si el mes coincide plenamente, permitimos el registro aunque el año varíe ligeramente (evita discrepancias por typos)
-          matchYear = d.getFullYear() === selectedYear || matchMonth;
+          matchYear = selectedMonth === 'TODOS' || d.getFullYear() === selectedYear || matchMonth;
         }
       }
 
@@ -556,7 +565,7 @@ const App: React.FC = () => {
       // If the record has a month, it must match. 
       // If it doesn't have a month, we try to match by date.
       // If it has neither, it's only shown if we are in a special "SIN MES" view (not implemented yet, so we'll skip for now to avoid duplicates)
-      const matchMonth = (fMonth !== "" && (fMonth === sMonth || fMonth.includes(sMonth) || sMonth.includes(fMonth))) || 
+      const matchMonth = selectedMonth === 'TODOS' || (fMonth !== "" && (fMonth === sMonth || fMonth.includes(sMonth) || sMonth.includes(fMonth))) || 
                          (fMonth === "" && matchMonthByDate);
       
       // Para el conteo total, priorizamos el mes para que coincida con el Excel
@@ -1343,6 +1352,7 @@ const App: React.FC = () => {
                               value={selectedMonth}
                               onChange={e => setSelectedMonth(e.target.value)}
                             >
+                              <option value="TODOS">TODOS</option>
                               {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
                                 <option key={m} value={m}>{m}</option>
                               ))}
@@ -1523,6 +1533,7 @@ const App: React.FC = () => {
                               value={selectedMonth}
                               onChange={e => setSelectedMonth(e.target.value)}
                             >
+                              <option value="TODOS">TODOS</option>
                               {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
                                 <option key={m} value={m}>{m}</option>
                               ))}
@@ -1744,6 +1755,7 @@ const App: React.FC = () => {
                               value={selectedMonth}
                               onChange={e => setSelectedMonth(e.target.value)}
                             >
+                              <option value="TODOS">TODOS</option>
                               {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
                                 <option key={m} value={m}>{m}</option>
                               ))}
@@ -1875,6 +1887,7 @@ const App: React.FC = () => {
                               value={selectedMonth}
                               onChange={e => setSelectedMonth(e.target.value)}
                             >
+                              <option value="TODOS">TODOS</option>
                               {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
                                 <option key={m} value={m}>{m}</option>
                               ))}
@@ -1954,20 +1967,26 @@ const App: React.FC = () => {
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-4">
-                    <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center">
-                      <button 
-                        onClick={() => setCalibrationViewMode('list')}
-                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'list' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
-                      >
-                        Lista
-                      </button>
-                      <button 
-                        onClick={() => setCalibrationViewMode('calendar')}
-                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'calendar' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
-                      >
-                        Cronograma
-                      </button>
-                    </div>
+                      <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center">
+                        <button 
+                          onClick={() => setCalibrationViewMode('calendar')}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'calendar' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                        >
+                          Cronograma
+                        </button>
+                        <button 
+                          onClick={() => setCalibrationViewMode('list')}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'list' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                        >
+                          Lista
+                        </button>
+                        <button 
+                          onClick={() => setCalibrationViewMode('visual')}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'visual' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                        >
+                          Visual
+                        </button>
+                      </div>
 
                     <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
                       <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
@@ -1988,6 +2007,7 @@ const App: React.FC = () => {
                               value={selectedMonth}
                               onChange={e => setSelectedMonth(e.target.value)}
                             >
+                              <option value="TODOS">TODOS</option>
                               {['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'].map(m => (
                                 <option key={m} value={m}>{m}</option>
                               ))}
@@ -2037,7 +2057,15 @@ const App: React.FC = () => {
                  month={selectedMonth}
                />
 
-               {calibrationViewMode === 'list' ? (
+               {calibrationViewMode === 'visual' ? (
+                 <CalibrationVisuals 
+                   calibrations={calibrations}
+                   selectedYear={selectedYear}
+                   selectedMonth={selectedMonth}
+                   selectedCd={filterCd}
+                   selectedContractor={filterContractor}
+                 />
+               ) : calibrationViewMode === 'list' ? (
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {filteredCalibrations.map(c => (
                       <CalibrationCard 

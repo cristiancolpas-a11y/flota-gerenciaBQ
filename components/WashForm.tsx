@@ -14,6 +14,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
   const mapInputRef = useRef<HTMLInputElement>(null);
 
@@ -58,6 +59,59 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   const handleCdChange = (val: string) => {
     setFilterCd(val);
     setFormData(prev => ({ ...prev, plate: '' }));
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    if (!formData.plate) {
+      alert("Seleccione la placa antes de añadir evidencia.");
+      return;
+    }
+
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+
+    setIsProcessingPhoto(true);
+    const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(undefined),
+          { timeout: 5000 }
+        );
+      });
+    };
+
+    const coords = await getCoords();
+    
+    for (const file of files) {
+      if (photos.length >= 4) break;
+      
+      const watermarked = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const res = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
+          resolve(res);
+        };
+        reader.readAsDataURL(file);
+      });
+      
+      setPhotos(prev => [...prev, watermarked].slice(0, 4));
+    }
+    
+    setIsProcessingPhoto(false);
   };
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -275,7 +329,12 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{photos.length} / 4</span>
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
+            <div 
+              className={`grid grid-cols-2 gap-3 transition-all duration-300 ${isDragging ? 'scale-105 bg-indigo-50 border-2 border-indigo-400 rounded-2xl p-1' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               {photos.map((p, idx) => (
                 <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden border-2 border-slate-100 shadow-sm">
                   <img src={p} className="w-full h-full object-cover" />

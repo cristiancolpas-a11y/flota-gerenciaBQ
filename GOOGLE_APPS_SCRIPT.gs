@@ -24,7 +24,7 @@ function doGet(e) {
       var ss = SpreadsheetApp.openById(docId);
       var s = sheetName ? ss.getSheetByName(sheetName) : ss.getSheets()[0];
       if (!s) return output("error", "Hoja no encontrada");
-      var values = s.getDataRange().getValues();
+      var values = s.getDataRange().getDisplayValues();
       return output("success", values);
     } catch(e) {
       return output("error", e.toString());
@@ -53,7 +53,7 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "Hoja no encontrada");
       }
-      var values = s.getDataRange().getValues();
+      var values = s.getDataRange().getDisplayValues();
       if (lock.hasLock()) lock.releaseLock();
       return output("success", values);
     }

@@ -30,6 +30,8 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
     certificateUrl: '',
   });
 
+  const [isDragging, setIsDragging] = useState(false);
+
   const isUpdateMode = !!calibrationToUpdate;
 
   const cds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
@@ -61,6 +63,60 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
 
     return sorted;
   }, [vehicles, filterCd, filterContractor, plateSearch, formData.plate]);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    if (!formData.plate) {
+      alert("Seleccione la placa antes de añadir evidencia.");
+      return;
+    }
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    setIsProcessingPhotoLocal(true);
+    
+    const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(undefined),
+          { timeout: 5000 }
+        );
+      });
+    };
+
+    const coords = await getCoords();
+
+    for (const file of files) {
+      if (capturedPhotos.length >= 4) break;
+      if (!file.type.startsWith('image/')) continue;
+      
+      const watermarked = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const res = await processImageWithWatermark(reader.result as string, formData.plate, coords, formData.calibrationDate);
+          resolve(res);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+    }
+    setIsProcessingPhotoLocal(false);
+  };
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -243,7 +299,12 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{capturedPhotos.length} / 4</span>
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
+            <div 
+              className={`grid grid-cols-2 gap-3 transition-all duration-300 ${isDragging ? 'scale-105 border-indigo-500 bg-indigo-50/50' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               {capturedPhotos.map((photo, index) => (
                 <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 shadow-sm">
                   <img src={photo} className="w-full h-full object-cover" />

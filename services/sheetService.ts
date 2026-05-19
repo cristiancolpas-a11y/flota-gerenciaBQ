@@ -377,17 +377,18 @@ const processMileageRows = (rows: any[][]): MileageLog[] => {
  */
 export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
   try {
+    const vehicles = await fetchVehiclesFromSheet();
     const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'CALIBRACIONES');
     if (!rows || rows.length < 2) {
-      return fetchCalibrationsFromSheetCSV();
+      return fetchCalibrationsFromSheetCSV(vehicles);
     }
-    return processCalibrationRows(rows);
+    return processCalibrationRows(rows, vehicles);
   } catch (e) { 
     return fetchCalibrationsFromSheetCSV(); 
   }
 };
 
-const fetchCalibrationsFromSheetCSV = async (): Promise<Calibration[]> => {
+const fetchCalibrationsFromSheetCSV = async (vehicles: Vehicle[] = []): Promise<Calibration[]> => {
   try {
     const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${CALIBRATIONS_GID}${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
@@ -399,7 +400,7 @@ const fetchCalibrationsFromSheetCSV = async (): Promise<Calibration[]> => {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          resolve(processCalibrationRows(rows));
+          resolve(processCalibrationRows(rows, vehicles));
         },
         error: () => resolve([])
       });
@@ -407,7 +408,14 @@ const fetchCalibrationsFromSheetCSV = async (): Promise<Calibration[]> => {
   } catch (e) { return []; }
 };
 
-const processCalibrationRows = (rows: any[][]): Calibration[] => {
+const processCalibrationRows = (rows: any[][], vehicles: Vehicle[] = []): Calibration[] => {
+  const fleetMap = new Map<string, { cd: string, contractor: string }>();
+  vehicles.forEach(v => {
+    if (v.plate) {
+      fleetMap.set(normalizePlate(v.plate), { cd: v.cd, contractor: v.contractor });
+    }
+  });
+
   return rows.slice(1).filter(row => row && row[3]).map((row, index): Calibration => {
     const calDateStr = parseFlexibleDate(row[1]);
     const expDate = calDateStr ? new Date(calDateStr + 'T12:00:00') : null;
@@ -417,7 +425,14 @@ const processCalibrationRows = (rows: any[][]): Calibration[] => {
     const plate = normalizePlate(cleanSheetValue(row[3])); 
     const workshop = cleanSheetValue(row[4]);             
     const evidenceUrl = cleanSheetValue(row[5]);
-    const estado = cleanSheetValue(row[6]).toUpperCase();
+    const estado = cleanSheetValue(row[6]).toUpperCase().trim();
+    
+    const fleetInfo = fleetMap.get(plate);
+    const rawCd = cleanSheetValue(row[7]).trim();
+    const rawContractor = cleanSheetValue(row[8]).trim();
+
+    const cd = (rawCd && rawCd !== "GENERAL" && rawCd !== "0" && rawCd !== "") ? rawCd : (fleetInfo?.cd || 'GENERAL');
+    const contractor = (rawContractor && rawContractor !== "GENERAL" && rawContractor !== "0" && rawContractor !== "") ? rawContractor : (fleetInfo?.contractor || 'GENERAL');
     
     if (expDate) expDate.setFullYear(expDate.getFullYear() + 1);
     const expDateStr = expDate ? expDate.toISOString().split('T')[0] : '';
@@ -434,7 +449,8 @@ const processCalibrationRows = (rows: any[][]): Calibration[] => {
       week,
       estado,
       year,
-      cd: 'GENERAL'
+      cd: cd,
+      contractor: contractor
     };
   });
 };

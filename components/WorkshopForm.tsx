@@ -28,6 +28,8 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
 
   const [evidence1Files, setEvidence1Files] = useState<string[]>([]);
   const [evidence2Files, setEvidence2Files] = useState<string[]>([]);
+  const [isDraggingEv1, setIsDraggingEv1] = useState(false);
+  const [isDraggingEv2, setIsDraggingEv2] = useState(false);
 
   const [formData, setFormData] = useState({
     month: '',
@@ -74,6 +76,26 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
     const selectedFiles = files.slice(0, 4);
     
     const base64Promises = selectedFiles.map(file => {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+    });
+
+    const base64Strings = await Promise.all(base64Promises);
+    setFiles(base64Strings);
+  };
+
+  const handleDrop = async (e: React.DragEvent, setFiles: React.Dispatch<React.SetStateAction<string[]>>) => {
+    e.preventDefault();
+    setIsDraggingEv1(false);
+    setIsDraggingEv2(false);
+    
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')).slice(0, 4);
+    if (files.length === 0) return;
+
+    const base64Promises = files.map(file => {
       return new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -281,7 +303,10 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
                     />
                     <label
                       htmlFor="evidence1"
-                      className="flex items-center justify-center w-full p-4 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors"
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingEv1(true); }}
+                      onDragLeave={(e) => { e.preventDefault(); setIsDraggingEv1(false); }}
+                      onDrop={(e) => handleDrop(e, setEvidence1Files)}
+                      className={`flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer transition-all ${isDraggingEv1 ? 'bg-blue-50 border-blue-500 scale-105' : 'border-slate-300 hover:bg-slate-50'}`}
                     >
                       {evidence1Files.length > 0 ? (
                         <div className="flex flex-col items-center">
@@ -316,7 +341,10 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
                     />
                     <label
                       htmlFor="evidence2"
-                      className="flex items-center justify-center w-full p-4 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors"
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingEv2(true); }}
+                      onDragLeave={(e) => { e.preventDefault(); setIsDraggingEv2(false); }}
+                      onDrop={(e) => handleDrop(e, setEvidence2Files)}
+                      className={`flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer transition-all ${isDraggingEv2 ? 'bg-blue-50 border-blue-500 scale-105' : 'border-slate-300 hover:bg-slate-50'}`}
                     >
                       {evidence2Files.length > 0 ? (
                         <div className="flex flex-col items-center">

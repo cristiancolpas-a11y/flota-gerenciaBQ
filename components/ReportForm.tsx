@@ -14,6 +14,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
   const mapInputRef = useRef<HTMLInputElement>(null);
   
@@ -69,6 +70,60 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
     "ELECTRONIC",
     "IVESUR"
   ];
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    if (!formData.plate) {
+      alert("Seleccione la placa antes de capturar la evidencia.");
+      return;
+    }
+
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+
+    setIsProcessingPhoto(true);
+    
+    const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(undefined),
+          { timeout: 5000 }
+        );
+      });
+    };
+
+    const coords = await getCoords();
+
+    for (const file of files) {
+      if (capturedPhotos.length >= 4) break;
+      
+      const watermarked = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const res = await processImageWithWatermark(reader.result as string, `PLACA: ${formData.plate}`, coords, formData.date);
+          resolve(res);
+        };
+        reader.readAsDataURL(file);
+      });
+      
+      setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
+    }
+    
+    setIsProcessingPhoto(false);
+  };
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -238,7 +293,12 @@ const ReportForm: React.FC<ReportFormProps> = ({ onClose, onSubmit, vehicles }) 
               <span className="flex items-center gap-2"><Camera size={14}/> Evidencia inicial (Max 4)</span>
               <span className="text-[10px] text-slate-400">{capturedPhotos.length} / 4</span>
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div 
+              className={`grid grid-cols-2 gap-3 transition-all duration-300 ${isDragging ? 'scale-105 border-indigo-500 bg-indigo-50/20 rounded-xl' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               {capturedPhotos.map((photo, index) => (
                 <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200">
                   <img src={photo} className="w-full h-full object-cover" />
