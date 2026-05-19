@@ -85,7 +85,7 @@ const CleaningForm: React.FC<CleaningFormProps> = ({ vehicles, onClose, onSubmit
       return;
     }
 
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    const files = (Array.from(e.dataTransfer.files) as File[]).filter(f => f.type.startsWith('image/'));
     if (files.length === 0) return;
 
     setIsProcessingPhoto(true);

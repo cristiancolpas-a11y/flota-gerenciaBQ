@@ -92,7 +92,7 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
     setIsDraggingEv1(false);
     setIsDraggingEv2(false);
     
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/')).slice(0, 4);
+    const files = (Array.from(e.dataTransfer.files) as File[]).filter(f => f.type.startsWith('image/')).slice(0, 4);
     if (files.length === 0) return;
 
     const base64Promises = files.map(file => {

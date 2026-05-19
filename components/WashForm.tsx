@@ -15,6 +15,7 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingMap, setIsDraggingMap] = useState(false);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
   const mapInputRef = useRef<HTMLInputElement>(null);
 
@@ -80,8 +81,19 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
       return;
     }
 
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    const imageExtensions = ['.heic', '.heif', '.jpg', '.jpeg', '.png', '.webp', '.tiff', '.gif'];
+    const files = (Array.from(e.dataTransfer.files) as File[]).filter(f => {
+      const typeStr = f.type ? f.type.toLowerCase() : '';
+      const nameStr = f.name ? f.name.toLowerCase() : '';
+      return typeStr.startsWith('image/') || imageExtensions.some(ext => nameStr.endsWith(ext));
+    });
     if (files.length === 0) return;
+
+    const remainingSlots = 4 - photos.length;
+    if (remainingSlots <= 0) {
+      alert("Ya ha alcanzado el límite máximo de 4 fotos.");
+      return;
+    }
 
     setIsProcessingPhoto(true);
     const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
@@ -95,28 +107,45 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
     };
 
     const coords = await getCoords();
-    
-    for (const file of files) {
-      if (photos.length >= 4) break;
-      
-      const watermarked = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const res = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
-          resolve(res);
-        };
-        reader.readAsDataURL(file);
-      });
-      
-      setPhotos(prev => [...prev, watermarked].slice(0, 4));
+    const newPhotos: string[] = [];
+    const filesToProcess = files.slice(0, remainingSlots);
+
+    for (const file of filesToProcess) {
+      try {
+        const watermarked = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            try {
+              const res = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
+              resolve(res);
+            } catch (err) {
+              reject(err);
+            }
+          };
+          reader.onerror = () => reject(new Error('Error al leer el archivo'));
+          reader.readAsDataURL(file);
+        });
+        newPhotos.push(watermarked);
+      } catch (err) {
+        console.error("Error processing dropped file:", err);
+      }
     }
-    
+
+    if (newPhotos.length > 0) {
+      setPhotos(prev => [...prev, ...newPhotos].slice(0, 4));
+    }
     setIsProcessingPhoto(false);
   };
 
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !formData.plate) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !formData.plate) return;
+
+    const remainingSlots = 4 - photos.length;
+    if (remainingSlots <= 0) {
+      alert("Ya ha alcanzado el límite máximo de 4 fotos.");
+      return;
+    }
 
     setIsProcessingPhoto(true);
     const getCoords = (): Promise<{lat: number, lng: number} | undefined> => {
@@ -130,25 +159,32 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
     };
 
     const coords = await getCoords();
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    const newPhotos: string[] = [];
+    const filesToProcess = (Array.from(files) as File[]).slice(0, remainingSlots);
 
-    setIsProcessingPhoto(true);
-    
-    for (let i = 0; i < files.length; i++) {
-      if (photos.length + i >= 4) break;
-      const file = files[i];
-      
-      const watermarked = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const res = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
-          resolve(res);
-        };
-        reader.readAsDataURL(file);
-      });
-      
-      setPhotos(prev => [...prev, watermarked].slice(0, 4));
+    for (const file of filesToProcess) {
+      try {
+        const watermarked = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = async () => {
+            try {
+              const res = await processImageWithWatermark(reader.result as string, `${formData.plate}`, coords, formData.date);
+              resolve(res);
+            } catch (err) {
+              reject(err);
+            }
+          };
+          reader.onerror = () => reject(new Error('Error al leer el archivo'));
+          reader.readAsDataURL(file);
+        });
+        newPhotos.push(watermarked);
+      } catch (err) {
+        console.error("Error adding photo:", err);
+      }
+    }
+
+    if (newPhotos.length > 0) {
+      setPhotos(prev => [...prev, ...newPhotos].slice(0, 4));
     }
     
     setIsProcessingPhoto(false);
@@ -157,6 +193,38 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
 
   const handleMapCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result as string, 1920);
+        setFormData(prev => ({ ...prev, mapUrl: compressed }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleMapDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingMap(true);
+  };
+
+  const handleMapDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingMap(false);
+  };
+
+  const handleMapDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingMap(false);
+
+    const files = Array.from(e.dataTransfer.files) as File[];
+    const imageExtensions = ['.heic', '.heif', '.jpg', '.jpeg', '.png', '.webp', '.tiff', '.gif'];
+    const file = files.find(f => {
+      const typeStr = f.type ? f.type.toLowerCase() : '';
+      const nameStr = f.name ? f.name.toLowerCase() : '';
+      return typeStr.startsWith('image/') || imageExtensions.some(ext => nameStr.endsWith(ext));
+    });
+
     if (file) {
       const reader = new FileReader();
       reader.onloadend = async () => {
@@ -313,10 +381,22 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
             <button 
               type="button" 
               onClick={() => mapInputRef.current?.click()} 
-              className={`w-full py-6 border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all shadow-inner ${formData.mapUrl ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-indigo-400'}`}
+              onDragOver={handleMapDragOver}
+              onDragLeave={handleMapDragLeave}
+              onDrop={handleMapDrop}
+              className={`w-full py-6 border-4 border-dashed rounded-[2rem] flex flex-col items-center justify-center gap-2 transition-all shadow-inner relative ${isDraggingMap ? 'scale-105 bg-emerald-50 border-emerald-500 text-emerald-600 shadow-md' : formData.mapUrl ? 'bg-indigo-50 border-indigo-500 text-indigo-600' : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-indigo-400'}`}
             >
-              <ImageIcon size={32} />
-              <span className="text-[10px] font-black uppercase tracking-widest">{formData.mapUrl ? 'MAPA CAPTURADO ✓' : 'CAPTURAR MAPA'}</span>
+              {isDraggingMap ? (
+                <>
+                  <Camera size={32} className="animate-bounce" />
+                  <span className="text-[10px] font-black uppercase tracking-widest">SUELTE EL MAPA AQUÍ</span>
+                </>
+              ) : (
+                <>
+                  <ImageIcon size={32} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">{formData.mapUrl ? 'MAPA CAPTURADO ✓' : 'CAPTURAR MAPA'}</span>
+                </>
+              )}
             </button>
             <input type="file" accept="image/*,image/heic,image/heif,image/jpeg,image/png,image/webp" ref={mapInputRef} className="hidden" onChange={handleMapCapture} />
           </div>
@@ -330,11 +410,21 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit }) => {
             </div>
             
             <div 
-              className={`grid grid-cols-2 gap-3 transition-all duration-300 ${isDragging ? 'scale-105 bg-indigo-50 border-2 border-indigo-400 rounded-2xl p-1' : ''}`}
+              className={`grid grid-cols-2 gap-3 transition-all duration-300 relative ${isDragging ? 'scale-[1.02] bg-indigo-50/80 border-4 border-dashed border-indigo-500 rounded-2xl p-3 shadow-lg' : 'border-2 border-transparent'}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
+              {isDragging && (
+                <div className="absolute inset-0 bg-indigo-500/10 backdrop-blur-[2px] rounded-xl flex flex-col items-center justify-center pointer-events-none z-10">
+                  <div className="bg-white p-3 rounded-full shadow-md border border-indigo-200 animate-bounce">
+                    <Camera size={28} className="text-indigo-600" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase text-indigo-600 mt-2 tracking-widest bg-white px-2.5 py-0.5 rounded-full shadow-sm border border-indigo-100">
+                    Suelte las fotos aquí
+                  </span>
+                </div>
+              )}
               {photos.map((p, idx) => (
                 <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden border-2 border-slate-100 shadow-sm">
                   <img src={p} className="w-full h-full object-cover" />

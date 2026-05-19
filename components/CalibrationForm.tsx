@@ -83,7 +83,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
       return;
     }
 
-    const files = Array.from(e.dataTransfer.files);
+    const files = Array.from(e.dataTransfer.files) as File[];
     if (files.length === 0) return;
 
     setIsProcessingPhotoLocal(true);
