@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -45,6 +45,7 @@ import FleetLinksModule from './components/FleetLinksModule';
 import CorrectivesModule from './components/CorrectivesModule';
 import UnavailabilityModule from './components/UnavailabilityModule';
 import OperatorsModule from './components/OperatorsModule';
+import { ForkliftFinesModule } from './components/ForkliftFinesModule';
 import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
 import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
@@ -97,7 +98,7 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -136,6 +137,7 @@ const App: React.FC = () => {
   const [correctives, setCorrectives] = useState<Corrective[]>([]);
   const [unavailabilityRecords, setUnavailabilityRecords] = useState<UnavailabilityRecord[]>([]);
   const [operators, setOperators] = useState<OperatorRecord[]>([]);
+  const [forkliftFines, setForkliftFines] = useState<ForkliftFine[]>([]);
   const [controlTowerRecords, setControlTowerRecords] = useState<ControlTowerRecord[]>([]);
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [fleetStandardAuditRecords, setFleetStandardAuditRecords] = useState<FleetStandardAudit[]>([]);
@@ -250,7 +252,7 @@ const App: React.FC = () => {
       setAvailabilitySummary(as);
 
       // Grupo 4: Listas de control e indicadores de rendimiento
-      const [ch, fp, pa, corr, unav, ops, ct, aud, fsa, amv, fb] = await Promise.all([
+      const [ch, fp, pa, corr, unav, ops, ct, aud, fsa, amv, fb, fFines] = await Promise.all([
         fetchCheckListFromSheet(),
         fetchFuelPerformanceFromSheet(),
         fetchPlateAdherenceFromSheet(),
@@ -261,7 +263,8 @@ const App: React.FC = () => {
         fetchAuditRecordsFromSheet(),
         fetchFleetStandardAuditFromSheet(),
         import('./services/sheetService').then(m => m.fetchAuditMasterListFromSheet()),
-        import('./services/sheetService').then(m => m.fetchFleetBaseData())
+        import('./services/sheetService').then(m => m.fetchFleetBaseData()),
+        import('./services/sheetService').then(m => m.fetchForkliftFinesFromSheet())
       ]);
       
       setCheckLists(ch);
@@ -275,6 +278,7 @@ const App: React.FC = () => {
       setFleetStandardAuditRecords(fsa);
       setAuditMasterVehicles(amv);
       setFleetBase(fb);
+      setForkliftFines(fFines);
 
     } catch (err) {
       console.error("Critical Sync Error:", err);
@@ -837,6 +841,15 @@ const App: React.FC = () => {
                       className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'operadores' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                     >
                       <Users size={18}/> OPERADORES
+                    </button>
+                    <button 
+                      onClick={() => { 
+                        setActiveView('comparendos_montacargas'); 
+                        setIsSidebarOpen(false); 
+                      }} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'comparendos_montacargas' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Gavel size={18}/> COMPARENDOS
                     </button>
                   </div>
                 ) : (
@@ -2246,6 +2259,12 @@ const App: React.FC = () => {
           {activeView === 'operadores' && (
             <div className="max-w-7xl mx-auto pb-20">
               <OperatorsModule data={operators} onRefresh={handleSyncData} />
+            </div>
+          )}
+
+          {activeView === 'comparendos_montacargas' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <ForkliftFinesModule data={forkliftFines} onRefresh={handleSyncData} />
             </div>
           )}
         </div>

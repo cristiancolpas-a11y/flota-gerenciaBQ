@@ -431,3 +431,25 @@ export interface AuditMasterVehicle {
   cd: string;
 }
 
+export interface ForkliftFine {
+  id: string;
+  month: string;              // MES Col A
+  date: string;               // FECHA Col B
+  cd: string;                 // CD Col C
+  contractor: string;         // CONTRATISTA Col D
+  driverName: string;         // NOMBRES Col E
+  driverId: string;           // CÉDULA Col F
+  driverPosition: string;     // CARGO Col G
+  revision01To15Pdf?: string; // REVISION DEL 01 - 15 Col H (links to PDF)
+  revisionDate?: string;      // FECHA Col I
+  revision15To30Pdf?: string; // REVISION 15 - 30 Col J (links to PDF)
+  hasFine: string;            // TIENE SI/NO Col K
+  observation: string;        // OBSERVACION Col L
+  paymentAgreement: string;   // ACUERDO DE PAGO Col M
+  receiptPdf?: string;        // COMPROBANTE Col N
+  amount: number;             // VALOR Col O
+  receiptNo: string;          // N° COMP Col P
+  concept: string;            // CONCEPTO Col Q
+}
+
+

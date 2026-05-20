@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
@@ -847,6 +847,68 @@ const processFineRows = (rows: any[][]): Fine[] => {
         description: cleanSheetValue(row[12]),
         plate: normalizePlate(cleanSheetValue(row[17]))
       } as any;
+    });
+};
+
+export const fetchForkliftFinesFromSheet = async (): Promise<ForkliftFine[]> => {
+  const docId = '1Vz9b-jRZNFbq-0ex4uQcpX0KT9u6GIrAVrhSO9Xhh8g';
+  try {
+    const rows = await fetchDataFromGAS(docId, 'COMPARENDOS');
+    if (!rows || rows.length === 0) {
+      return fetchForkliftFinesFromSheetCSV(docId);
+    }
+    return processForkliftFineRows(rows);
+  } catch (e) {
+    return fetchForkliftFinesFromSheetCSV(docId);
+  }
+};
+
+const fetchForkliftFinesFromSheetCSV = async (docId: string): Promise<ForkliftFine[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=0${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          resolve(processForkliftFineRows(rows));
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+const processForkliftFineRows = (rows: any[][]): ForkliftFine[] => {
+  const startIdx = (rows[0] && cleanSheetValue(rows[0][0]).toUpperCase() === 'MES') ? 1 : 0;
+  
+  return rows.slice(startIdx)
+    .filter(r => r && r.some(c => cleanSheetValue(c).length > 0))
+    .map((row, i): ForkliftFine => {
+      return {
+        id: `ff-${startIdx + i + 1}`,
+        month: cleanSheetValue(row[0]),
+        date: parseFlexibleDate(row[1]),
+        cd: cleanSheetValue(row[2]),
+        contractor: cleanSheetValue(row[3]),
+        driverName: cleanSheetValue(row[4]),
+        driverId: cleanSheetValue(row[5]),
+        driverPosition: cleanSheetValue(row[6]),
+        revision01To15Pdf: cleanSheetValue(row[7]).startsWith('http') ? cleanSheetValue(row[7]) : '',
+        revisionDate: parseFlexibleDate(row[8]),
+        revision15To30Pdf: cleanSheetValue(row[9]).startsWith('http') ? cleanSheetValue(row[9]) : '',
+        hasFine: cleanSheetValue(row[10]),
+        observation: cleanSheetValue(row[11]),
+        paymentAgreement: cleanSheetValue(row[12]),
+        receiptPdf: cleanSheetValue(row[13]).startsWith('http') ? cleanSheetValue(row[13]) : '',
+        amount: parseFloat(cleanSheetValue(row[14]).replace(/[^0-9.-]+/g, '')) || 0,
+        receiptNo: cleanSheetValue(row[15]),
+        concept: cleanSheetValue(row[16])
+      };
     });
 };
 
