@@ -40,26 +40,34 @@ export const ForkliftFinesModule: React.FC<ForkliftFinesModuleProps> = ({ data, 
     }
   };
 
+  // Clean and filter out records with invalid/empty months (e.g. "SIN MES/FECHA")
+  const cleanedData = useMemo(() => {
+    return data.filter(item => {
+      const m = (item.month || '').trim().toUpperCase();
+      return m !== '' && m !== 'SIN MES/FECHA' && m !== 'SIN MES' && m !== 'N/A' && m !== 'S/M' && m !== 'S_M';
+    });
+  }, [data]);
+
   // Extract unique filters from master data
   const uniqueCds = useMemo(() => {
-    return Array.from(new Set(data.map(item => item.cd).filter(Boolean))).sort();
-  }, [data]);
+    return Array.from(new Set(cleanedData.map(item => item.cd).filter(Boolean))).sort();
+  }, [cleanedData]);
 
   const uniqueContractors = useMemo(() => {
-    return Array.from(new Set(data.map(item => item.contractor).filter(Boolean))).sort();
-  }, [data]);
+    return Array.from(new Set(cleanedData.map(item => item.contractor).filter(Boolean))).sort();
+  }, [cleanedData]);
 
   const uniqueStatuses = useMemo(() => {
-    return Array.from(new Set(data.map(item => item.hasFine).filter(Boolean))).sort();
-  }, [data]);
+    return Array.from(new Set(cleanedData.map(item => item.hasFine).filter(Boolean))).sort();
+  }, [cleanedData]);
 
   const uniqueMonths = useMemo(() => {
     const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-    const months = Array.from(new Set(data.map(item => item.month).filter(Boolean))) as string[];
+    const months = Array.from(new Set(cleanedData.map(item => item.month).filter(Boolean))) as string[];
     return months.sort((a, b) => {
       return monthOrder.indexOf(a.toUpperCase()) - monthOrder.indexOf(b.toUpperCase());
     });
-  }, [data]);
+  }, [cleanedData]);
 
   // Calculations for HISTORICAL SUMMARY OF RECORDS BY MONTH
   // Matches the scrollable/grid middle block exactly
@@ -67,7 +75,7 @@ export const ForkliftFinesModule: React.FC<ForkliftFinesModuleProps> = ({ data, 
     const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
     
     // Group all master records
-    const grouped = data.reduce((acc, item) => {
+    const grouped = cleanedData.reduce((acc, item) => {
       const m = (item.month || 'SIN MES/FECHA').toUpperCase();
       if (!acc[m]) {
         acc[m] = {
@@ -97,11 +105,11 @@ export const ForkliftFinesModule: React.FC<ForkliftFinesModuleProps> = ({ data, 
       totalCount: g.totalCount,
       uniqueDrivers: g.uniqueDrivers.size
     }));
-  }, [data]);
+  }, [cleanedData]);
 
   // Apply filters on the list data
   const filteredData = useMemo(() => {
-    return data.filter(item => {
+    return cleanedData.filter(item => {
       const matchSearch = 
         searchTerm === '' ||
         (item.driverName && item.driverName.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -124,7 +132,7 @@ export const ForkliftFinesModule: React.FC<ForkliftFinesModuleProps> = ({ data, 
 
       return matchSearch && matchCd && matchContractor && matchStatus && matchMonth;
     });
-  }, [data, searchTerm, filterCd, filterContractor, filterStatus, filterMonth]);
+  }, [cleanedData, searchTerm, filterCd, filterContractor, filterStatus, filterMonth]);
 
   // Reset page when filters change
   const [lastFilters, setLastFilters] = useState({ filterCd, filterContractor, filterStatus, filterMonth, searchTerm });
@@ -142,7 +150,7 @@ export const ForkliftFinesModule: React.FC<ForkliftFinesModuleProps> = ({ data, 
   // Statistics calculation for KPI cards
   const stats = useMemo(() => {
     // Totals for selected month
-    const monthFiltered = data.filter(item => filterMonth === 'all' || (item.month || '').toUpperCase() === filterMonth.toUpperCase());
+    const monthFiltered = cleanedData.filter(item => filterMonth === 'all' || (item.month || '').toUpperCase() === filterMonth.toUpperCase());
     const totalSelectedMonth = monthFiltered.length;
 
     // Con comparendo (SI)
@@ -163,7 +171,7 @@ export const ForkliftFinesModule: React.FC<ForkliftFinesModuleProps> = ({ data, 
     const withoutSupportAll = filteredData.length - withSupportAll;
 
     // Total master list size loaded
-    const grandTotalLoaded = data.length;
+    const grandTotalLoaded = cleanedData.length;
 
     return {
       totalSelectedMonth,
@@ -173,7 +181,7 @@ export const ForkliftFinesModule: React.FC<ForkliftFinesModuleProps> = ({ data, 
       withSupportAll,
       withoutSupportAll
     };
-  }, [data, filteredData, filterMonth]);
+  }, [cleanedData, filteredData, filterMonth]);
 
   // Paginated operators details
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
