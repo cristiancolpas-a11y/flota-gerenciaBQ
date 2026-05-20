@@ -8,7 +8,8 @@ import {
   Zap, CheckCircle2, AlertCircle, XCircle, Clock, 
   Search, Download, ArrowUpRight, 
   ArrowDownRight, Truck, Activity, Shield, Cpu,
-  Globe, Server, BarChart3, Radio, Camera, ImagePlus, Loader2, Image as ImageIcon
+  Globe, Server, BarChart3, Radio, Camera, ImagePlus, Loader2, Image as ImageIcon,
+  ChevronLeft, ChevronRight, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { submitPreventiveUpdateToSheet } from '../services/sheetService';
@@ -25,6 +26,16 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data }) => {
   const [viewingEvidence, setViewingEvidence] = useState<Preventive | null>(null);
   const [uploading, setUploading] = useState(false);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+
+  // Auto reset page when search or filters change
+  const [lastFilters, setLastFilters] = useState({ filterCd, filterMonth, searchTerm });
+  if (lastFilters.filterCd !== filterCd || lastFilters.filterMonth !== filterMonth || lastFilters.searchTerm !== searchTerm) {
+    setCurrentPage(1);
+    setLastFilters({ filterCd, filterMonth, searchTerm });
+  }
 
   const getDirectImageUrl = (url: string) => {
     if (!url) return '';
@@ -184,6 +195,30 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data }) => {
     return { total, compliant, complianceRate, avgDiff };
   }, [filteredData]);
 
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
+
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredData, currentPage, itemsPerPage]);
+
+  const pageNumbers = useMemo(() => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        pages.push(1, 2, 3, 4, '...', totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  }, [totalPages, currentPage]);
+
   const trendData = useMemo(() => {
     const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
     const groups = filteredData.reduce((acc: any, curr) => {
@@ -293,11 +328,19 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data }) => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input 
                 type="text" 
-                placeholder="BÚSQUEDA..."
+                placeholder="BUSCAR PLACA / LÍNEA..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-12 pr-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-[11px] font-black focus:border-[#00D1FF]/40 focus:bg-white/10 outline-none transition-all w-72 uppercase tracking-widest text-white placeholder:text-slate-600"
+                className="pl-12 pr-10 py-4 bg-white/5 border border-white/10 rounded-2xl text-[11px] font-black focus:border-[#00D1FF]/40 focus:bg-white/10 outline-none transition-all w-72 uppercase tracking-widest text-white placeholder:text-slate-600"
               />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-md">
               <select 
@@ -625,7 +668,7 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data }) => {
             </thead>
             <tbody className="divide-y divide-white/5">
               <AnimatePresence>
-                {filteredData.slice(0, 50).map((item) => (
+                {paginatedData.map((item) => (
                   <motion.tr 
                     key={item.id}
                     initial={{ opacity: 0 }}
@@ -714,6 +757,59 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data }) => {
             </tbody>
           </table>
         </div>
+
+        {/* Control de Pagina / Enrutamiento */}
+        {totalPages > 1 && (
+          <div className="p-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-6 bg-white/[0.01]">
+            <div className="text-[11px] font-black uppercase text-slate-500 tracking-[0.2em] text-center sm:text-left">
+              Mostrando <span className="text-[#00D1FF]">{filteredData.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> a <span className="text-[#00D1FF]">{Math.min(filteredData.length, currentPage * itemsPerPage)}</span> de <span className="text-[#10F9AC]">{filteredData.length}</span> registros
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+              {/* Botón Anterior */}
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className={`p-3 rounded-xl border border-white/5 transition-all flex items-center justify-center ${currentPage === 1 ? 'opacity-35 cursor-not-allowed text-slate-600 bg-transparent' : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white active:scale-95'}`}
+                title="Página Anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              {/* Números de Página */}
+              {pageNumbers.map((p, idx) => {
+                if (typeof p === 'number') {
+                  const isActive = p === currentPage;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentPage(p)}
+                      className={`min-w-[40px] h-[40px] rounded-xl text-[11px] font-black tracking-widest transition-all ${isActive ? 'bg-[#10F9AC] text-black shadow-[0_0_20px_rgba(16,249,172,0.3)]' : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/5'}`}
+                    >
+                      {String(p).padStart(2, '0')}
+                    </button>
+                  );
+                } else {
+                  return (
+                    <span key={idx} className="px-2 text-slate-600 text-xs font-black tracking-widest">
+                      {p}
+                    </span>
+                  );
+                }
+              })}
+
+              {/* Botón Siguiente */}
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className={`p-3 rounded-xl border border-white/5 transition-all flex items-center justify-center ${currentPage === totalPages ? 'opacity-35 cursor-not-allowed text-slate-600 bg-transparent' : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white active:scale-95'}`}
+                title="Siguiente Página"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </motion.section>
 
       {/* Modal de Registro de Evidencia */}
