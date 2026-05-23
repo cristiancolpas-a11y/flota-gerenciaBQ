@@ -452,4 +452,24 @@ export interface ForkliftFine {
   concept: string;            // CONCEPTO Col Q
 }
 
+export interface WorkshopActivityRecord {
+  contratista: string;
+  placa: string;
+  sucursal: string;
+  vehiculo: string;
+  proveedor: string;
+  revision: number;
+  fechaIngreso: string; // YYYY-MM-DD
+  fechaSalida: string; // YYYY-MM-DD
+  diasTaller: number;
+  horasTaller: number;
+  cd: string;
+  componentes: string;
+  sistema: string;
+  insumosMenores: string;
+  actividad: string;
+  tipoIngreso: 'PREVENTIVO' | 'CORRECTIVO';
+}
+
+
 

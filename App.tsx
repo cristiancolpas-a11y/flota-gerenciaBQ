@@ -49,6 +49,7 @@ import { ForkliftFinesModule } from './components/ForkliftFinesModule';
 import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
 import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
+import { MttrModule } from './components/MttrModule';
 import CalibrationVisuals from './components/CalibrationVisuals';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -98,7 +99,7 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
@@ -917,6 +918,7 @@ const App: React.FC = () => {
                              { id: 'disponibilidad', label: 'DISPO-', icon: <Activity size={18}/> },
                              { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
                              { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
+                             { id: 'mttr', label: 'MTTR', icon: <Wrench size={18}/> },
                            ].map(item => (
                              <button 
                                key={item.id}
@@ -1050,6 +1052,10 @@ const App: React.FC = () => {
         {/* CONTENT AREA */}
         <div className="flex-grow p-3 md:p-8 overflow-y-auto bg-[#F0F4FF] custom-scrollbar">
           
+          {activeView === 'mttr' && (
+            <MttrModule />
+          )}
+
           {activeView === 'indicadoresOperativos' && (
             <OperationalDashboard 
               indicators={operationalIndicators}

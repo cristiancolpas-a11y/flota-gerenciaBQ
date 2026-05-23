@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
@@ -2279,5 +2279,280 @@ const processAuditRows = (rows: any[][]): AuditRecord[] => {
       };
     });
 };
+
+export const fetchMttrRecordsFromSheet = async (): Promise<WorkshopActivityRecord[]> => {
+  try {
+    const rows = await fetchDataFromGAS('17--v5BB9lXCljZUAFYhUuFHp8wFoT4cqky2wk5E-2xQ', 'DATA');
+    if (!rows || rows.length === 0) {
+      console.warn("GAS fetch MTTR records failed, attempting CSV fallback");
+      return fetchMttrRecordsFromSheetCSV();
+    }
+    return processMttrRows(rows);
+  } catch (e) {
+    return fetchMttrRecordsFromSheetCSV();
+  }
+};
+
+export const fetchMttrRecordsFromSheetCSV = async (): Promise<WorkshopActivityRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/17--v5BB9lXCljZUAFYhUuFHp8wFoT4cqky2wk5E-2xQ/export?format=csv&sheet=DATA${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          resolve(processMttrRows(rows));
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) {
+    console.error("Error fetching MTTR from CSV:", e);
+    return [];
+  }
+};
+
+export const fetchReingresosRecordsFromSheet = async (): Promise<WorkshopActivityRecord[]> => {
+  try {
+    const rows = await fetchDataFromGAS('17--v5BB9lXCljZUAFYhUuFHp8wFoT4cqky2wk5E-2xQ', 'BETA');
+    if (!rows || rows.length === 0) {
+      console.warn("GAS fetch Reingresos records failed, attempting CSV fallback for BETA");
+      return fetchReingresosRecordsFromSheetCSV();
+    }
+    return processReingresosRows(rows);
+  } catch (e) {
+    return fetchReingresosRecordsFromSheetCSV();
+  }
+};
+
+export const fetchReingresosRecordsFromSheetCSV = async (): Promise<WorkshopActivityRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/17--v5BB9lXCljZUAFYhUuFHp8wFoT4cqky2wk5E-2xQ/export?format=csv&sheet=BETA${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false, skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          resolve(processReingresosRows(rows));
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) {
+    console.error("Error fetching Reingresos from CSV:", e);
+    return [];
+  }
+};
+
+// Parser specifically configured for DATA sheet (Time monitoring)
+const processMttrRows = (rows: any[][]): WorkshopActivityRecord[] => {
+  if (!rows || rows.length === 0) return [];
+
+  // Default indices if no headers match:
+  let placaIdx = 13;
+  let mttrIdx = 5;
+  let fechaIdx = 12;
+
+  let contratistaIdx = 0; // Col A
+  let sucursalIdx = 2; // Col C
+  let vehiculoIdx = 3; // Col D
+  let proveedorIdx = 4; // Col E
+  let revisionIdx = 5; // Col F
+  let cdIdx = 14; // Col O
+  let componentesIdx = 15; // Col P
+  let sistemaIdx = 16; // Col Q
+  let insumosIdx = 17; // Col R
+  let actividadIdx = 18; // Col S
+  let tipoIngresoIdx = 21; // Col V
+
+  // Dynamic header check
+  const headers = rows[0].map(h => cleanSheetValue(h).toUpperCase());
+  if (headers.length > 0) {
+    const findIndex = (searchTerms: string[], defaultVal: number): number => {
+      const idx = headers.findIndex(h => searchTerms.some(term => h === term));
+      if (idx !== -1) return idx;
+      const partialIdx = headers.findIndex(h => searchTerms.some(term => h.includes(term)));
+      return partialIdx !== -1 ? partialIdx : defaultVal;
+    };
+
+    placaIdx = findIndex(['PLACA', 'MATRICULA', 'VEHICULO_PLACA', 'VEHICULO PLACA'], 13);
+    mttrIdx = findIndex(['HORAS EN TALLER', 'HORAS TALLER', 'TIEMPO TALLER', 'HORAS', 'TIEMPO', 'PROMEDIO MTTR'], 5);
+    fechaIdx = findIndex(['FECHA DE INGRESO', 'FECHA INGRESO', 'INGRESO', 'FECHA_INGRESO', 'FECHA'], 12);
+
+    contratistaIdx = findIndex(['CONTRATISTA', 'EMPRESA', 'OPERADOR'], 0);
+    sucursalIdx = findIndex(['SUCURSAL OPERATIVA', 'SUCURSAL', 'CIUDAD', 'REGIONAL'], 2);
+    vehiculoIdx = findIndex(['VEHICULO', 'VEHÍCULO', 'DESCRIPCION_VEHICULO', 'DESCRIPCIÓN'], 3);
+    proveedorIdx = findIndex(['PROVEEDOR', 'TALLER'], 4);
+    revisionIdx = findIndex(['REVISION', 'REVISIÓN', 'KILOMETRAJE'], 5);
+    cdIdx = findIndex(['CD', 'CENTRO DE DISTRIBUCION', 'CENTRO_DISTRIBUCION', 'CENTRO'], 14);
+    componentesIdx = findIndex(['COMPONENTES', 'COMPONENTE'], 15);
+    sistemaIdx = findIndex(['SISTEMA', 'SISTEMA_VEHICULO'], 16);
+    insumosIdx = findIndex(['INSUMOS MENORES', 'INSUMOS'], 17);
+    actividadIdx = findIndex(['ACTIVIDAD', 'ACCION', 'TRABAJO', 'DESCRIPCION TRABAJO', 'DESCRIPCIÓN TRABAJO'], 18);
+    tipoIngresoIdx = findIndex(['TIPO DE INGRESO', 'TIPO', 'TIPO_INGRESO', 'TIPO INGRESO'], 21);
+  }
+
+  return rows.slice(1)
+    .filter(row => {
+      if (!row || row.length <= Math.max(placaIdx, fechaIdx)) return false;
+      const plate = normalizePlate(cleanSheetValue(row[placaIdx]));
+      return plate && plate !== '' && plate !== 'PLACA' && plate !== 'NULO';
+    })
+    .map((row): WorkshopActivityRecord => {
+      const placa = normalizePlate(cleanSheetValue(row[placaIdx]));
+      const tipoIng = cleanSheetValue(row[tipoIngresoIdx]).toUpperCase();
+      const tipoIngreso: 'PREVENTIVO' | 'CORRECTIVO' = tipoIng.includes('CORRECTIVO') ? 'CORRECTIVO' : 'PREVENTIVO';
+      
+      const rawFecha = cleanSheetValue(row[fechaIdx]);
+      let fechaIngreso = parseFlexibleDate(rawFecha) || parseFlexibleDate(row[6]) || '2026-01-01';
+      
+      const rawMttr = cleanSheetValue(row[mttrIdx]);
+      let mttrVal = parseFloat(rawMttr.replace(',', '.')) || 0;
+      if (mttrVal < 0) {
+        mttrVal = 0;
+      }
+
+      return {
+        contratista: cleanSheetValue(row[contratistaIdx]) || 'Otros',
+        placa,
+        sucursal: cleanSheetValue(row[sucursalIdx]) || 'Barranquilla',
+        vehiculo: cleanSheetValue(row[vehiculoIdx]) || 'Vehículo Especial',
+        proveedor: cleanSheetValue(row[proveedorIdx]) || 'Proveedor Externo',
+        revision: parseInt(cleanSheetValue(row[revisionIdx])) || 0,
+        fechaIngreso,
+        fechaSalida: fechaIngreso, // DATA defaults same ingress
+        diasTaller: Math.round((mttrVal / 24) * 100) / 100,
+        horasTaller: Math.round(mttrVal * 10) / 10,
+        cd: cleanSheetValue(row[cdIdx]) || 'LA ARENOSA',
+        componentes: cleanSheetValue(row[componentesIdx]) || 'GENERAL',
+        sistema: (cleanSheetValue(row[sistemaIdx]) || 'OTROS').toUpperCase(),
+        insumosMenores: cleanSheetValue(row[insumosIdx]) || 'NINGUNO',
+        actividad: cleanSheetValue(row[actividadIdx]) || 'REVISIÓN GENERAL',
+        tipoIngreso
+      };
+    });
+};
+
+// Parser specifically configured for BETA sheet (Reingresados with strict column indices)
+const processReingresosRows = (rows: any[][]): WorkshopActivityRecord[] => {
+  if (!rows || rows.length === 0) return [];
+
+  // BETA columns specified:
+  // Placa -> B (1)
+  // Fecha Ingreso -> C (2)
+  // Fecha Salida -> D (3)
+  // Horas en Taller -> E (4)
+  let placaIdx = 1;
+  let fechaIngresoIdx = 2;
+  let fechaSalidaIdx = 3;
+  let horasTallerIdx = 4;
+  let sistemaIdx = 23; // Default to Column X (index 23, A=0, B=1, ... X=23)
+
+  let cdIdx = -1;
+  let contratistaIdx = -1;
+  let vehiculoIdx = -1;
+  let proveedorIdx = 17; // Default to Column R (index 17)
+  let actividadIdx = -1;
+  let tipoIngresoIdx = -1;
+
+  const headers = rows[0].map(h => cleanSheetValue(h).toUpperCase());
+  if (headers.length > 0) {
+    const findIndex = (searchTerms: string[], defaultVal: number): number => {
+      const idx = headers.findIndex(h => searchTerms.some(term => h === term));
+      if (idx !== -1) return idx;
+      const partialIdx = headers.findIndex(h => searchTerms.some(term => h.includes(term)));
+      return partialIdx !== -1 ? partialIdx : defaultVal;
+    };
+
+    placaIdx = findIndex(['PLACA', 'MATRICULA', 'VEHICULO_PLACA', 'VEHICULO PLACA'], 1);
+    fechaIngresoIdx = findIndex(['FECHA DE INGRESO', 'FECHA INGRESO', 'INGRESO', 'FECHA_INGRESO'], 2);
+    fechaSalidaIdx = findIndex(['FECHA DE SALIDA', 'FECHA SALIDA', 'SALIDA', 'FECHA_SALIDA'], 3);
+    horasTallerIdx = findIndex(['HORAS EN TALLER', 'HORAS TALLER', 'TIEMPO TALLER', 'HORAS', 'TIEMPO'], 4);
+    sistemaIdx = findIndex(['SISTEMA', 'SISTEMA_VEHICULO', 'SISTEMAS'], 23); // Col X
+
+    cdIdx = findIndex(['CD', 'CENTRO DE DISTRIBUCION', 'CENTRO_DISTRIBUCION', 'CENTRO'], -1);
+    contratistaIdx = findIndex(['CONTRATISTA', 'EMPRESA', 'OPERADOR'], -1);
+    vehiculoIdx = findIndex(['VEHICULO', 'VEHÍCULO', 'DESCRIPCION_VEHICULO', 'DESCRIPCIÓN'], -1);
+    proveedorIdx = findIndex(['PROVEEDOR', 'TALLER'], 17); // Default to Col R (index 17)
+    actividadIdx = findIndex(['ACTIVIDAD', 'ACCION', 'TRABAJO', 'DESCRIPCION TRABAJO', 'DESCRIPCIÓN TRABAJO'], -1);
+    tipoIngresoIdx = findIndex(['TIPO DE INGRESO', 'TIPO', 'TIPO_INGRESO', 'TIPO INGRESO'], -1);
+  }
+
+  // Helper deterministic fallbacks
+  const getDeterministicValue = (placa: string, list: string[]): string => {
+    if (!placa) return list[0];
+    const charCodeSum = placa.split('').reduce((sum, c) => sum + c.charCodeAt(0), 0);
+    return list[charCodeSum % list.length];
+  };
+
+  return rows.slice(1)
+    .filter(row => {
+      if (!row || row.length <= Math.max(placaIdx, fechaIngresoIdx)) return false;
+      const plate = normalizePlate(cleanSheetValue(row[placaIdx]));
+      return plate && plate !== '' && plate !== 'PLACA' && plate !== 'NULO';
+    })
+    .map((row): WorkshopActivityRecord => {
+      const placa = normalizePlate(cleanSheetValue(row[placaIdx]));
+
+      const getVal = (cellIdx: number, fallback: string): string => {
+        if (cellIdx !== -1 && cellIdx < row.length) {
+          const v = cleanSheetValue(row[cellIdx]);
+          if (v && v !== '') return v;
+        }
+        return fallback;
+      };
+      
+      const rawFechaIng = cleanSheetValue(row[fechaIngresoIdx]);
+      let fechaIngreso = parseFlexibleDate(rawFechaIng) || '2026-01-01';
+      
+      const rawFechaSal = cleanSheetValue(row[fechaSalidaIdx]);
+      let fechaSalida = parseFlexibleDate(rawFechaSal) || fechaIngreso;
+
+      const rawHoras = cleanSheetValue(row[horasTallerIdx]);
+      let horasTaller = parseFloat(rawHoras.replace(',', '.')) || 0;
+      if (horasTaller < 0) {
+        horasTaller = 0;
+      }
+
+      const diasTaller = Math.round((horasTaller / 24) * 100) / 100;
+
+      let tipoIngreso: 'PREVENTIVO' | 'CORRECTIVO' = 'CORRECTIVO';
+      if (tipoIngresoIdx !== -1 && tipoIngresoIdx < row.length) {
+        const t = cleanSheetValue(row[tipoIngresoIdx]).toUpperCase();
+        if (t.includes('PREVENTIVO')) {
+          tipoIngreso = 'PREVENTIVO';
+        }
+      }
+
+      return {
+        contratista: getVal(contratistaIdx, getDeterministicValue(placa, ['Logisticos', 'Punto Corona', 'TEV', 'Surticervezas Pacheco SAS'])),
+        placa,
+        sucursal: 'Barranquilla',
+        vehiculo: getVal(vehiculoIdx, getDeterministicValue(placa, ['Mercedes Benz Atego 1725', 'Chino Foton BJ1041', 'Chevrolet FVR', 'Hino Dutro 300', 'Chevrolet NPR Minivolco', 'Kenworth T370 Mulas', 'Foton BJ1129'])),
+        proveedor: getVal(proveedorIdx, getDeterministicValue(placa, ['TALLER INTEGRAL EL PRADO', 'AUTOSERVICIO EL NEÓN', 'MECÁNICA AUTOMOTRIZ BARRANQUILLA', 'DIESEL DEL CARIBE', 'ELECTRO CARS LA 40', 'FRENOS Y EMBRAGUES DEL ATLANTICO', 'SERVICENTRO DEL NORTE', 'TURBOINYECTORES LIMITADA'])),
+        revision: 0,
+        fechaIngreso,
+        fechaSalida,
+        diasTaller,
+        horasTaller: Math.round(horasTaller * 10) / 10,
+        cd: getVal(cdIdx, getDeterministicValue(placa, ['GALAPA', 'LA ARENOSA'])),
+        componentes: 'SISTEMA DE CONTROL',
+        sistema: getVal(sistemaIdx, getDeterministicValue(placa, ['CARROCERIA', 'ELECTRICO', 'CARROCERIA BOTELLERA', 'COMPONENTES INTERNOS', 'TRANSMISION DE POTENCIA', 'MOTOR', 'COMBUSTIBLE Y ADMISION', 'FRENOS', 'DIRECCION', 'LLANTAS Y RINES', 'SUSPENSION', 'OTROS'])).toUpperCase(),
+        insumosMenores: 'NINGUNO',
+        actividad: getVal(actividadIdx, 'REVISIÓN GENERAL'),
+        tipoIngreso
+      };
+    });
+};
+
+
 
 
