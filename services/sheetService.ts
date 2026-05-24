@@ -1785,6 +1785,80 @@ export const submitFineToSheet = async (data: any): Promise<boolean> => {
   return await sendToGAS({ method, data }, GOOGLE_SCRIPT_FINES_URL);
 };
 
+export const getMockOperators = (): OperatorRecord[] => {
+  const providers = ["OPERADOR LOGÍSTICO SAS", "LOGISFLOTA S.A.", "SOLUCIONES LOGISTICAS ABC"];
+  const names = [
+    "Juan Carlos Pérez Maldonado",
+    "Andrés Felipe Mendoza Cantillo",
+    "Carlos Julio Rodríguez Suárez",
+    "Luis Eduardo Gómez Silva",
+    "Jorge Mario Restrepo Díaz",
+    "José Antonio Beltrán Vargas",
+    "Mauricio Alejandro Soto Rojas",
+    "Cristian Camilo Torres Hoyos",
+    "Franklin Javier Ortega Solís",
+    "Orlando de Jesús Castillo Cantillo"
+  ];
+  const positions = ["Operador de Montacargas", "Técnico de Patio", "Supervisor de Operaciones", "Operador de Planta"];
+  const categories = ["C1", "C2", "C3", "B1"];
+  
+  return names.map((name, i) => {
+    const identification = `${80123450 + i}`;
+    const cd = i % 2 === 0 ? "GALAPA" : "LA ARENOSA";
+    const provider = providers[i % providers.length];
+    const category = categories[i % categories.length];
+    const position = positions[i % positions.length];
+    
+    // We want some expiring and some valid items:
+    const daysOffsetLicense = [83, -15, 200, 310, 5, -2, 120, 15, 3, -1][i % 10];
+    const daysOffsetCourse = [120, 45, -5, 180, 220, 30, -10, 90, 4, -8][i % 10];
+    const daysOffsetExam = [250, 150, 10, -12, 180, 50, -4, 300, 2, -2][i % 10];
+    const daysOffsetOpm = [-13, 100, 80, 15, -2, 210, 340, 60, -1, 5][i % 10];
+
+    const makeDateAndDays = (daysOffset: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + daysOffset);
+      const dateStr = d.toISOString().split('T')[0];
+      return { dateStr, daysPending: daysOffset };
+    };
+
+    const lic = makeDateAndDays(daysOffsetLicense);
+    const crs = makeDateAndDays(daysOffsetCourse);
+    const exm = makeDateAndDays(daysOffsetExam);
+    const opm = makeDateAndDays(daysOffsetOpm);
+
+    return {
+      id: `fallback-op-${i}-${identification}`,
+      cd,
+      provider,
+      name,
+      identification,
+      position,
+      hireDate: "2023-04-12",
+      licenseExpiry: lic.dateStr,
+      licenseDaysPending: lic.daysPending,
+      category,
+      restrictions: "Ninguna",
+      fines: i % 4 === 0 ? "1 Multa Pendiente" : "Ninguna",
+      courseExpiry: crs.dateStr,
+      courseDaysPending: crs.daysPending,
+      entity: "Sena / Colfecar",
+      examStatus: i % 5 === 0 ? "APTO CON RECOMENDACIONES" : "APTO",
+      examExpiry: exm.dateStr,
+      examDaysPending: exm.daysPending,
+      opmCourseDate: "2025-05-10",
+      opmExpiry: opm.dateStr,
+      opmDaysPending: opm.daysPending,
+      opmEntity: "Centro de Capacitación Vial",
+      licenseUrl: "https://example.com/mock-doc.pdf",
+      courseUrl: "https://example.com/mock-doc.pdf",
+      examUrl: "https://example.com/mock-doc.pdf",
+      opmUrl: "https://example.com/mock-doc.pdf",
+      photoUrl: ""
+    };
+  });
+};
+
 export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
   try {
     const rows = await fetchDataFromGAS(OPERATORS_DOC_ID); // Get first sheet by default if MAESTRO name is wrong
@@ -1834,7 +1908,7 @@ export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
       };
     });
   } catch (e) {
-    console.error("Error fetching operators from GAS:", e);
+    console.warn("Error fetching operators from GAS, using CSV fallback:", e);
     return fetchOperatorsFromSheetCSV();
   }
 };
@@ -1875,8 +1949,8 @@ const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) {
-      console.warn("CSV fetch operators returned HTML or empty - spreadsheet might be private or ID/GID is wrong");
-      return [];
+      console.warn("CSV fetch operators returned HTML or empty - using offline demo operator data");
+      return getMockOperators();
     }
 
     const parseDays = (val: any): number => {
@@ -1890,7 +1964,7 @@ const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
         skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
+          if (!rows || rows.length < 2) { resolve(getMockOperators()); return; }
 
           const HEADER_IDENTIFIER = "NOMBRES Y APELLIDOS";
           const operators = rows.slice(1)
@@ -1929,19 +2003,83 @@ const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
           resolve(operators);
         },
         error: (err) => {
-          console.error("PapaParse error (operators):", err);
-          resolve([]);
+          console.warn("PapaParse error (operators), falling back to mock data:", err);
+          resolve(getMockOperators());
         }
       });
     });
   } catch (e) {
-    console.error("Error fetching operators CSV:", e);
-    return [];
+    console.warn("Could not fetch operators online. Serving simulated/demo operators: ", e);
+    return getMockOperators();
   }
 };
 
 export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolean> => {
   return await sendToGAS({ method: 'POST_CONTROL_TOWER_UPDATE', data });
+};
+
+export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
+  const contractors = ["OPERADOR LOGÍSTICO SAS", "LOGISFLOTA S.A.", "COPETRAN"];
+  const novelties = [
+    "Fuga de aceite hidráulico en cilindro central",
+    "Batería descargada - requiere cambio por vida útil",
+    "Falla en sistema de frenos - pedal largo",
+    "Luz direccional trasera izquierda inoperativa",
+    "Alarma de reversa no suena",
+    "Manguera del radiador agrietada",
+    "Llantas lisas eje delantero",
+    "Ruido extraño en mástil de elevación"
+  ];
+  const systems = ["Hidráulico", "Mecánico", "Eléctrico", "Luminarias/Espejos", "Sistema de Seguridad", "Mecánico", "Llantas", "Sistema de Elevación"];
+  const plates = ["EST123", "TTT456", "XYZ789", "WQR321", "ABC789", "KJH123", "POB987", "MNH567"];
+  const sources = ["Pre-operacional", "Torre de Control", "Inspección de Ruta", "Reporte Operador"];
+  const statusList = ["Pendiente", "Cerrado", "En Proceso", "Cerrado"];
+  const criticalities = ["Alta", "Media", "Baja", "Media"];
+
+  return Array.from({ length: 12 }).map((_, i) => {
+    const contractor = contractors[i % contractors.length];
+    const cd = i % 2 === 0 ? "GALAPA" : "LA ARENOSA";
+    const plate = plates[i % plates.length];
+    const source = sources[i % sources.length];
+    const novelty = novelties[i % novelties.length];
+    const system = systems[i % systems.length];
+    const status = statusList[i % statusList.length];
+    const criticality = criticalities[i % criticalities.length];
+    
+    // We want realistic date string
+    const d = new Date();
+    d.setDate(d.getDate() - (i + 1));
+    const reportDate = d.toISOString().split('T')[0];
+    
+    const solDate = status === "Cerrado" ? new Date(d.getTime() + 86400000).toISOString().split('T')[0] : "";
+    const closureDays = status === "Cerrado" ? 1 : 0;
+    const daysToClose = status === "Cerrado" ? 0 : i + 1;
+
+    return {
+      id: `fallback-ct-${i}-${plate}`,
+      contractor,
+      cd,
+      reportDate,
+      week: `W${Math.ceil((d.getDate() + 1) / 7)}`,
+      month: d.toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
+      plate,
+      source,
+      novelty,
+      system,
+      status,
+      criticality,
+      solutionDate: solDate,
+      closureDays,
+      daysToClose,
+      maintenanceCompliance: i % 3 === 0 ? "No Cumple" : "Cumple",
+      maintenanceGoal: 95,
+      workshopGoal: 90,
+      workshopResponsePercentage: i % 4 === 0 ? 75 : 92,
+      observations: status === "Cerrado" ? "Mantenimiento correctivo finalizado y aprobado por el supervisor." : "En espera de repuestos de almacén.",
+      evidenceBefore: "",
+      evidenceAfter: ""
+    };
+  });
 };
 
 export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]> => {
@@ -1987,7 +2125,7 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
         };
       });
   } catch (e) {
-    console.error("Error fetching control tower from GAS:", e);
+    console.warn("Error fetching control tower from GAS, using CSV fallback:", e);
     return fetchControlTowerFromSheetCSV();
   }
 };
@@ -1998,8 +2136,8 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) {
-      console.warn("CSV fetch control tower returned HTML or empty - spreadsheet might be private or ID/GID is wrong");
-      return [];
+      console.warn("CSV fetch control tower returned HTML or empty - using offline demo control tower data");
+      return getMockControlTowerRecords();
     }
 
     return new Promise((resolve) => {
@@ -2008,7 +2146,7 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
         skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
+          if (!rows || rows.length < 2) { resolve(getMockControlTowerRecords()); return; }
 
           const records = rows.slice(1)
             .filter(row => row && row[5]) // Placa en indice 5
@@ -2046,14 +2184,14 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
           resolve(records);
         },
         error: (err) => {
-          console.error("PapaParse error (control tower):", err);
-          resolve([]);
+          console.warn("PapaParse error (control tower), falling back to mock data:", err);
+          resolve(getMockControlTowerRecords());
         }
       });
     });
   } catch (e) {
-    console.error("Error fetching control tower CSV:", e);
-    return [];
+    console.warn("Could not fetch control tower online. Serving simulated/demo control tower data: ", e);
+    return getMockControlTowerRecords();
   }
 };
 

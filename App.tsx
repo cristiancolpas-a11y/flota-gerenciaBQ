@@ -51,6 +51,7 @@ import FleetStandardModule from './components/FleetStandardModule';
 import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
 import { MttrModule } from './components/MttrModule';
 import CalibrationVisuals from './components/CalibrationVisuals';
+import { VclModule } from './components/VclModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -99,12 +100,12 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr';
+type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
   const [activeView, setActiveView] = useState<ActiveView>('vehiculos');
-  const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | null>('doc');
+  const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | 'recursos' | 'otros' | null>('doc');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -969,6 +970,37 @@ const App: React.FC = () => {
                         </div>
                       )}
                     </div>
+
+                    {/* OTROS SECTION */}
+                    <div className="space-y-2">
+                      <button 
+                        onClick={() => setExpandedSection(expandedSection === 'otros' ? null : 'otros')}
+                        className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
+                      >
+                        <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">OTROS</p>
+                        {expandedSection === 'otros' ? <ChevronUp size={14} className="text-purple-400" /> : <ChevronDown size={14} className="text-purple-400" />}
+                      </button>
+
+                      {expandedSection === 'otros' && (
+                        <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                          {[
+                            { id: 'vcl', label: 'Seguimiento VLC vs Budget', icon: <Truck size={18}/> },
+                          ].map(item => (
+                            <button 
+                              key={item.id}
+                              onClick={() => { 
+                                setActiveView(item.id as ActiveView); 
+                                setIsSidebarOpen(false); 
+                                setExpandedSection(null);
+                              }} 
+                              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-purple-600 text-white shadow-xl shadow-purple-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                              {item.icon} {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
               </nav>
@@ -991,7 +1023,9 @@ const App: React.FC = () => {
               className="hidden xl:flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-all group"
             >
               <ChevronLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-              <span className="text-[9px] font-black uppercase tracking-widest">Menú Flota</span>
+              <span className="text-[9px] font-black uppercase tracking-widest">
+                Menú Flota
+              </span>
             </button>
             <div className="bg-slate-50 border rounded-xl px-3 md:px-4 py-1.5 md:py-2 flex items-center gap-2 md:gap-3 w-full max-w-md shadow-inner">
               <Search size={14} className="text-slate-400 md:size-4" />
@@ -1052,6 +1086,10 @@ const App: React.FC = () => {
         {/* CONTENT AREA */}
         <div className="flex-grow p-3 md:p-8 overflow-y-auto bg-[#F0F4FF] custom-scrollbar">
           
+          {activeView === 'vcl' && (
+            <VclModule vehicles={vehicles} />
+          )}
+
           {activeView === 'mttr' && (
             <MttrModule />
           )}

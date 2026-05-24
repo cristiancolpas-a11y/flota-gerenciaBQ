@@ -471,5 +471,16 @@ export interface WorkshopActivityRecord {
   tipoIngreso: 'PREVENTIVO' | 'CORRECTIVO';
 }
 
+export interface VclBillingRecord {
+  id: string;
+  cd: string;
+  fecha: string;
+  proveedor: string;
+  sistema: string;
+  empresaAsume: string;
+  valor: number;
+}
+
+
 
 
