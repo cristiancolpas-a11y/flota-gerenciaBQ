@@ -100,11 +100,68 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl';
+
+const CATEGORY_CHUNKS = {
+  doc: {
+    label: 'DOCUMENTACIÓN',
+    colorTheme: 'indigo',
+    icon: Shield,
+    items: [
+      { id: 'indicadoresOperativos', label: 'Tablero de Indicadores', icon: Activity },
+      { id: 'indicadoresDisponibilidad', label: 'Disponibilidad', icon: TrendingUp },
+      { id: 'conductores', label: 'Conductores', icon: Users },
+      { id: 'vehiculos', label: 'Vehículos', icon: Truck },
+      { id: 'comparendos', label: 'Comparendos', icon: Gavel },
+      { id: 'checklist', label: 'Check List', icon: ClipboardList },
+      { id: 'cierre_novedades', label: 'Cierre de Novedades', icon: Lock },
+      { id: 'estandar_flota', label: 'ESTÁNDAR DOC-IMG', icon: ShieldCheck },
+    ]
+  },
+  gestion: {
+    label: 'GESTIÓN',
+    colorTheme: 'emerald',
+    icon: Settings,
+    items: [
+      { id: 'kilometrajes', label: 'Kilometrajes', icon: Gauge },
+      { id: 'cierre_novedades', label: 'Cierre de Novedades', icon: Lock },
+      { id: 'limpieza', label: 'Limpieza 5S', icon: Sparkles },
+      { id: 'visitas', label: 'Visitas a Taller', icon: Store },
+      { id: 'calibraciones', label: 'Calibración', icon: Disc },
+      { id: 'lavados', label: 'Lavados', icon: Droplets },
+      { id: 'torre_preventivos', label: 'Mtto Preventivo', icon: Zap },
+      { id: 'correctivos', label: 'Programación Diaria', icon: Wrench },
+      { id: 'indisponibilidad', label: 'Indisponibilidad', icon: AlertTriangle },
+      { id: 'estandar_flota', label: 'ESTÁNDAR DOC-IMG', icon: ShieldCheck },
+      { id: 'auditoria_calidad_seguridad', label: 'Estándar Calidad y Seg.', icon: Shield },
+      { id: 'disponibilidad', label: 'DISPO-', icon: Activity },
+      { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: Fuel },
+      { id: 'adherencia', label: 'ADH DE PLACAS', icon: ClipboardCheck },
+      { id: 'mttr', label: 'MTTR', icon: Wrench },
+    ]
+  },
+  recursos: {
+    label: 'RECURSOS',
+    colorTheme: 'cyan',
+    icon: LinkIcon,
+    items: [
+      { id: 'enlaces', label: 'Enlaces Flota', icon: LinkIcon },
+    ]
+  },
+  otros: {
+    label: 'OTROS',
+    colorTheme: 'purple',
+    icon: LayoutGrid,
+    items: [
+      { id: 'vcl', label: 'Seguimiento VLC vs Budget', icon: Truck },
+    ]
+  }
+} as const;
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
   const [activeView, setActiveView] = useState<ActiveView>('vehiculos');
+  const [activeCategory, setActiveCategory] = useState<'root' | 'doc' | 'gestion' | 'recursos' | 'otros'>('root');
   const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | 'recursos' | 'otros' | null>('doc');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -768,7 +825,7 @@ const App: React.FC = () => {
           {/* Menu Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-8 w-full max-w-6xl relative z-10 px-4 md:px-0">
             <button 
-              onClick={() => { setAppMode('camiones'); setActiveView('vehiculos'); }}
+              onClick={() => { setAppMode('camiones'); setActiveCategory('root'); setActiveView('categories_dashboard'); }}
               className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-4 md:p-10 rounded-2xl md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-3 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
               <div className="w-12 h-12 md:w-20 md:h-20 bg-indigo-600/20 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30 shrink-0">
@@ -794,7 +851,7 @@ const App: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => { setAppMode('camiones'); setActiveView('enlaces'); }}
+              onClick={() => { setAppMode('camiones'); setActiveCategory('recursos'); setActiveView('enlaces'); }}
               className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-4 md:p-10 rounded-2xl md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-3 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
               <div className="w-12 h-12 md:w-20 md:h-20 bg-indigo-600/20 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30 shrink-0">
@@ -856,151 +913,99 @@ const App: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    {/* DOCUMENTACIÓN SECTION */}
-                    <div className="space-y-2">
-                      <button 
-                        onClick={() => setExpandedSection(expandedSection === 'doc' ? null : 'doc')}
-                        className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
-                      >
-                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">DOCUMENTACIÓN</p>
-                        {expandedSection === 'doc' ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
-                      </button>
-                      
-                      {expandedSection === 'doc' && (
-                        <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                          {[
-                            { id: 'indicadoresOperativos', label: 'Tablero de Indicadores', icon: <Activity size={18}/> },
-                            { id: 'indicadoresDisponibilidad', label: 'Disponibilidad', icon: <TrendingUp size={18}/> },
-                            { id: 'conductores', label: 'Conductores', icon: <Users size={18}/> },
-                            { id: 'vehiculos', label: 'Vehículos', icon: <Truck size={18}/> },
-                            { id: 'comparendos', label: 'Comparendos', icon: <Gavel size={18}/> },
-                            { id: 'checklist', label: 'Check List', icon: <ClipboardList size={18}/> },
-                          ].map(item => (
-                            <button 
-                              key={item.id}
-                              onClick={() => { 
-                                setActiveView(item.id as ActiveView); 
-                                setIsSidebarOpen(false); 
-                                setExpandedSection(null);
-                              }} 
-                              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                            >
-                              {item.icon} {item.label}
-                            </button>
-                          ))}
+                    {activeCategory === 'root' ? (
+                      <div className="space-y-4 py-2 px-1 text-center">
+                        <p className="text-[10px] font-black text-indigo-400/60 uppercase tracking-widest leading-relaxed">
+                          Seleccione una categoría para comenzar:
+                        </p>
+                        <div className="space-y-2 pt-2">
+                          <button
+                            onClick={() => { setActiveCategory('doc'); setActiveView('categories_dashboard'); }}
+                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-indigo-600/25 border border-indigo-500/20 hover:border-indigo-500/40 rounded-xl text-[10px] font-black text-indigo-300 uppercase tracking-widest transition-all text-left"
+                          >
+                            <span>📘 DOCUMENTACIÓN</span>
+                            <ChevronDown size={12} />
+                          </button>
+                          <button
+                            onClick={() => { setActiveCategory('gestion'); setActiveView('categories_dashboard'); }}
+                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-emerald-600/25 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-[10px] font-black text-emerald-300 uppercase tracking-widest transition-all text-left"
+                          >
+                            <span>⚙️ GESTIÓN</span>
+                            <ChevronDown size={12} />
+                          </button>
+                          <button
+                            onClick={() => { setActiveCategory('recursos'); setActiveView('categories_dashboard'); }}
+                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-cyan-600/25 border border-cyan-500/20 hover:border-cyan-500/40 rounded-xl text-[10px] font-black text-cyan-300 uppercase tracking-widest transition-all text-left"
+                          >
+                            <span>💼 RECURSOS</span>
+                            <ChevronDown size={12} />
+                          </button>
+                          <button
+                            onClick={() => { setActiveCategory('otros'); setActiveView('categories_dashboard'); }}
+                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-purple-600/25 border border-purple-500/20 hover:border-purple-500/40 rounded-xl text-[10px] font-black text-purple-300 uppercase tracking-widest transition-all text-left"
+                          >
+                            <span>🔍 OTROS</span>
+                            <ChevronDown size={12} />
+                          </button>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <button
+                          onClick={() => {
+                            setActiveCategory('root');
+                            setActiveView('categories_dashboard');
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-[10px] font-black uppercase tracking-widest transition-all mb-4"
+                        >
+                          <ChevronLeft size={14} /> VOLVER A CATEGORÍAS
+                        </button>
 
-                    {/* GESTIÓN SECTION */}
-                    <div className="space-y-2">
-                      <button 
-                        onClick={() => setExpandedSection(expandedSection === 'gestion' ? null : 'gestion')}
-                        className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
-                      >
-                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">GESTIÓN</p>
-                        {expandedSection === 'gestion' ? <ChevronUp size={14} className="text-emerald-400" /> : <ChevronDown size={14} className="text-emerald-400" />}
-                      </button>
+                        <div className="space-y-1">
+                          <p className={`text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-md ${
+                            activeCategory === 'doc' ? 'text-indigo-400 bg-indigo-500/5' :
+                            activeCategory === 'gestion' ? 'text-emerald-400 bg-emerald-500/5' :
+                            activeCategory === 'recursos' ? 'text-cyan-400 bg-cyan-500/5' :
+                            'text-purple-400 bg-purple-500/5'
+                          }`}>
+                            {activeCategory === 'doc' ? '📘 DOCUMENTACIÓN' :
+                             activeCategory === 'gestion' ? '⚙️ GESTIÓN' :
+                             activeCategory === 'recursos' ? '💼 RECURSOS' :
+                             '🔍 OTROS'}
+                          </p>
 
-                      {expandedSection === 'gestion' && (
-                        <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                          {[
-                             { id: 'kilometrajes', label: 'Kilometrajes', icon: <Gauge size={18}/> },
-                             { id: 'cierre_novedades', label: 'Cierre de Novedades', icon: <Lock size={18}/> },
-                             { id: 'limpieza', label: 'Limpieza 5S', icon: <Sparkles size={18}/> },
-                             { id: 'visitas', label: 'Visitas a Taller', icon: <Store size={18}/> },
-                             { id: 'calibraciones', label: 'Calibración', icon: <Disc size={18}/> },
-                             { id: 'lavados', label: 'Lavados', icon: <Droplets size={18}/> },
-                             { id: 'torre_preventivos', label: 'Mtto Preventivo', icon: <Zap size={18}/> },
-                             { id: 'correctivos', label: 'Programación Diaria', icon: <Wrench size={18}/> },
-                             { id: 'indisponibilidad', label: 'Indisponibilidad', icon: <AlertTriangle size={18}/> },
-                             { id: 'estandar_flota', label: 'ESTÁNDAR DOC-IMG', icon: <ShieldCheck size={18}/> },
-                             { id: 'auditoria_calidad_seguridad', label: 'Estándar Calidad y Seg.', icon: <Shield size={18}/> },
-                             { id: 'disponibilidad', label: 'DISPO-', icon: <Activity size={18}/> },
-                             { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: <Fuel size={18}/> },
-                             { id: 'adherencia', label: 'ADH DE PLACAS', icon: <ClipboardCheck size={18}/> },
-                             { id: 'mttr', label: 'MTTR', icon: <Wrench size={18}/> },
-                           ].map(item => (
-                             <button 
-                               key={item.id}
-                               onClick={() => { 
-                                 setActiveView(item.id as ActiveView); 
-                                 setIsSidebarOpen(false); 
-                                 setExpandedSection(null);
-                                 if (item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos' || item.id === 'indisponibilidad' || item.id === 'torre_preventivos') {
-                                   handleSyncData();
-                                 }
-                               }} 
-                               className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                             >
-                               {item.icon} {item.label}
-                             </button>
-                           ))}
+                          <div className="space-y-1 pt-2 animate-in fade-in duration-300">
+                            {CATEGORY_CHUNKS[activeCategory].items.map(item => {
+                              const Icon = item.icon;
+                              const isCurrent = activeView === item.id;
+                              const activeColorClass = 
+                                activeCategory === 'doc' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' :
+                                activeCategory === 'gestion' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' :
+                                activeCategory === 'recursos' ? 'bg-cyan-600 text-white shadow-xl shadow-cyan-600/20' :
+                                'bg-purple-600 text-white shadow-xl shadow-purple-600/20';
+
+                              return (
+                                <button
+                                  key={item.id}
+                                  onClick={() => {
+                                    setActiveView(item.id as ActiveView);
+                                    setIsSidebarOpen(false);
+                                    if (item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos' || item.id === 'indisponibilidad' || item.id === 'torre_preventivos') {
+                                      handleSyncData();
+                                    }
+                                  }}
+                                  className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    isCurrent ? activeColorClass : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                  }`}
+                                >
+                                  <Icon size={18} /> {item.label}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      )}
-                    </div>
-
-                    {/* RECURSOS SECTION */}
-                    <div className="space-y-2">
-                      <button 
-                        onClick={() => setExpandedSection(expandedSection === 'recursos' ? null : 'recursos')}
-                        className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
-                      >
-                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">RECURSOS</p>
-                        {expandedSection === 'recursos' ? <ChevronUp size={14} className="text-indigo-400" /> : <ChevronDown size={14} className="text-indigo-400" />}
-                      </button>
-
-                      {expandedSection === 'recursos' && (
-                        <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                          {[
-                            { id: 'enlaces', label: 'Enlaces Flota', icon: <LinkIcon size={18}/> },
-                          ].map(item => (
-                            <button 
-                              key={item.id}
-                              onClick={() => { 
-                                setActiveView(item.id as ActiveView); 
-                                setIsSidebarOpen(false); 
-                                setExpandedSection(null);
-                              }} 
-                              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                            >
-                              {item.icon} {item.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* OTROS SECTION */}
-                    <div className="space-y-2">
-                      <button 
-                        onClick={() => setExpandedSection(expandedSection === 'otros' ? null : 'otros')}
-                        className="w-full px-6 py-2 flex items-center justify-between group hover:bg-white/5 rounded-xl transition-all"
-                      >
-                        <p className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] opacity-80 group-hover:opacity-100 transition-opacity">OTROS</p>
-                        {expandedSection === 'otros' ? <ChevronUp size={14} className="text-purple-400" /> : <ChevronDown size={14} className="text-purple-400" />}
-                      </button>
-
-                      {expandedSection === 'otros' && (
-                        <div className="space-y-1 ml-2 border-l border-white/5 pl-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                          {[
-                            { id: 'vcl', label: 'Seguimiento VLC vs Budget', icon: <Truck size={18}/> },
-                          ].map(item => (
-                            <button 
-                              key={item.id}
-                              onClick={() => { 
-                                setActiveView(item.id as ActiveView); 
-                                setIsSidebarOpen(false); 
-                                setExpandedSection(null);
-                              }} 
-                              className={`w-full flex items-center gap-4 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === item.id ? 'bg-purple-600 text-white shadow-xl shadow-purple-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                            >
-                              {item.icon} {item.label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </>
                 )}
               </nav>
@@ -1027,6 +1032,18 @@ const App: React.FC = () => {
                 Menú Flota
               </span>
             </button>
+
+            {appMode === 'camiones' && activeCategory !== 'root' && (
+              <button 
+                onClick={() => {
+                  setActiveCategory('root');
+                  setActiveView('categories_dashboard');
+                }}
+                className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition-all font-black text-[9px] uppercase tracking-wider border border-indigo-100/50"
+              >
+                <span>Categorías</span>
+              </button>
+            )}
             <div className="bg-slate-50 border rounded-xl px-3 md:px-4 py-1.5 md:py-2 flex items-center gap-2 md:gap-3 w-full max-w-md shadow-inner">
               <Search size={14} className="text-slate-400 md:size-4" />
               <input 
@@ -1086,6 +1103,180 @@ const App: React.FC = () => {
         {/* CONTENT AREA */}
         <div className="flex-grow p-3 md:p-8 overflow-y-auto bg-[#F0F4FF] custom-scrollbar">
           
+          {activeView === 'categories_dashboard' && (
+            <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {activeCategory === 'root' ? (
+                <>
+                  <div className="flex flex-col gap-2 mb-6 text-left">
+                    <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3">
+                      <LayoutGrid className="text-indigo-600" size={32} /> Categorías de Control
+                    </h2>
+                    <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">
+                      Seleccione una de las siguientes áreas para gestionar los módulos de la flota
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* DOCUMENTACION */}
+                    <button 
+                      onClick={() => {
+                        setActiveCategory('doc');
+                      }}
+                      className="group text-left bg-gradient-to-br from-indigo-50/50 to-indigo-100/30 hover:from-indigo-600 hover:to-indigo-700 border border-indigo-200/50 hover:border-indigo-600 p-8 rounded-3xl transition-all duration-300 shadow-xl hover:shadow-indigo-500/20 hover:-translate-y-2 flex flex-col justify-between h-72 relative overflow-hidden"
+                    >
+                      <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 text-indigo-500/5 group-hover:text-white/5 transition-colors duration-300">
+                        <Shield size={220} />
+                      </div>
+                      <div className="w-16 h-16 bg-white shadow-md rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                        <Shield size={32} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 group-hover:text-indigo-200 transition-colors">
+                          MÓDULO DE INFORMACIÓN
+                        </span>
+                        <h3 className="text-2xl font-black text-slate-900 group-hover:text-white uppercase tracking-tight mt-1 mb-2">
+                          DOCUMENTACIÓN
+                        </h3>
+                        <p className="text-slate-500 group-hover:text-white/80 text-xs font-medium leading-relaxed max-w-sm">
+                          Gestione tableros operativos, disponibilidad general, conductores, vehículos, comparendos y check lists de control.
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* GESTION */}
+                    <button 
+                      onClick={() => {
+                        setActiveCategory('gestion');
+                      }}
+                      className="group text-left bg-gradient-to-br from-emerald-50/50 to-emerald-100/30 hover:from-emerald-600 hover:to-emerald-700 border border-emerald-200/50 hover:border-emerald-600 p-8 rounded-3xl transition-all duration-300 shadow-xl hover:shadow-emerald-500/20 hover:-translate-y-2 flex flex-col justify-between h-72 relative overflow-hidden"
+                    >
+                      <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 text-emerald-500/5 group-hover:text-white/5 transition-colors duration-300">
+                        <Settings size={220} />
+                      </div>
+                      <div className="w-16 h-16 bg-white shadow-md rounded-2xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                        <Settings size={32} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600 group-hover:text-emerald-200 transition-colors">
+                          MÓDULO OPERACIONES
+                        </span>
+                        <h3 className="text-2xl font-black text-slate-900 group-hover:text-white uppercase tracking-tight mt-1 mb-2">
+                          GESTIÓN
+                        </h3>
+                        <p className="text-slate-500 group-hover:text-white/80 text-xs font-medium leading-relaxed max-w-sm">
+                          Haga seguimiento a kilometraje, visitas a talleres, lavados, mantenimiento preventivo y correctivo, combustible y rendimiento.
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* RECURSOS */}
+                    <button 
+                      onClick={() => {
+                        setActiveCategory('recursos');
+                      }}
+                      className="group text-left bg-gradient-to-br from-cyan-50/50 to-cyan-100/30 hover:from-cyan-600 hover:to-cyan-700 border border-cyan-200/50 hover:border-cyan-600 p-8 rounded-3xl transition-all duration-300 shadow-xl hover:shadow-cyan-500/20 hover:-translate-y-2 flex flex-col justify-between h-72 relative overflow-hidden"
+                    >
+                      <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 text-cyan-500/5 group-hover:text-white/5 transition-colors duration-300">
+                        <LinkIcon size={220} />
+                      </div>
+                      <div className="w-16 h-16 bg-white shadow-md rounded-2xl flex items-center justify-center text-cyan-600 group-hover:scale-110 transition-transform">
+                        <LinkIcon size={32} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-600 group-hover:text-indigo-200 transition-colors">
+                          MÓDULO DE ENLACES
+                        </span>
+                        <h3 className="text-2xl font-black text-slate-900 group-hover:text-white uppercase tracking-tight mt-1 mb-2">
+                          RECURSOS
+                        </h3>
+                        <p className="text-slate-500 group-hover:text-white/80 text-xs font-medium leading-relaxed max-w-sm">
+                          Acceda a enlaces de la flota, plataformas externas, carpetas consolidadas y recursos de soporte de la operación.
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* OTROS */}
+                    <button 
+                      onClick={() => {
+                        setActiveCategory('otros');
+                      }}
+                      className="group text-left bg-gradient-to-br from-purple-50/50 to-purple-100/30 hover:from-purple-600 hover:to-purple-700 border border-purple-200/50 hover:border-purple-600 p-8 rounded-3xl transition-all duration-300 shadow-xl hover:shadow-purple-500/20 hover:-translate-y-2 flex flex-col justify-between h-72 relative overflow-hidden"
+                    >
+                      <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 text-purple-500/5 group-hover:text-white/5 transition-colors duration-300">
+                        <LayoutGrid size={220} />
+                      </div>
+                      <div className="w-16 h-16 bg-white shadow-md rounded-2xl flex items-center justify-center text-purple-600 group-hover:scale-110 transition-transform">
+                        <LayoutGrid size={32} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-600 group-hover:text-indigo-200 transition-colors">
+                          MÓDULO AUXILIAR
+                        </span>
+                        <h3 className="text-2xl font-black text-slate-900 group-hover:text-white uppercase tracking-tight mt-1 mb-2">
+                          OTROS
+                        </h3>
+                        <p className="text-slate-500 group-hover:text-white/80 text-xs font-medium leading-relaxed max-w-sm">
+                          Módulos complementarios de seguimiento general, proyecciones VLC vs Budget, y demás utilitarios de valor.
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                    <div>
+                      <button 
+                        onClick={() => setActiveCategory('root')} 
+                        className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-black text-xs uppercase tracking-widest mb-2"
+                      >
+                        <ChevronLeft size={16} /> Volver a Categorías
+                      </button>
+                      <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
+                        Módulos de {CATEGORY_CHUNKS[activeCategory].label}
+                      </h2>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {CATEGORY_CHUNKS[activeCategory].items.map(item => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setActiveView(item.id as ActiveView);
+                            if (item.id === 'rendimiento' || item.id === 'adherencia' || item.id === 'correctivos' || item.id === 'indisponibilidad' || item.id === 'torre_preventivos') {
+                              handleSyncData();
+                            }
+                          }}
+                          className="group bg-white hover:bg-slate-50 border border-slate-100 hover:border-slate-200 p-6 rounded-2xl transition-all duration-300 shadow-md hover:shadow-lg hover:-translate-y-1 flex items-center gap-4 text-left"
+                        >
+                          <div className={`p-4 rounded-xl ${
+                            activeCategory === 'doc' ? 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white' :
+                            activeCategory === 'gestion' ? 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white' :
+                            activeCategory === 'recursos' ? 'bg-cyan-50 text-cyan-600 group-hover:bg-cyan-600 group-hover:text-white' :
+                            'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
+                          } transition-colors shadow-sm`}>
+                            <Icon size={24} />
+                          </div>
+                          <div>
+                            <h3 className="font-black text-sm text-slate-800 uppercase tracking-tight group-hover:text-slate-900 transition-colors">
+                              {item.label}
+                            </h3>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest group-hover:text-indigo-600 transition-colors">
+                              Abrir Módulo →
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {activeView === 'vcl' && (
             <VclModule vehicles={vehicles} />
           )}

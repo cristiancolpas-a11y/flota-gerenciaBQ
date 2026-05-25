@@ -386,39 +386,44 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
         {/* Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-6 mb-6">
           {/* Weekly General Compliance */}
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl">
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl lg:col-span-2">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
                 <TrendingUp size={18} className="text-indigo-600" />
-                Cumplimiento Semanal General
+                Cumplimiento Semanal General (Histórico S1 - S22)
               </h3>
+              <span className="text-[10px] font-black uppercase tracking-wider text-indigo-500 bg-indigo-50 px-3 py-1 rounded-full">
+                Vista Ampliada
+              </span>
             </div>
-            <div className="h-64">
+            <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.weeklyGeneralChartData}>
+                <BarChart data={stats.weeklyGeneralChartData} barGap={3}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}}
+                    tick={{fontSize: 9, fontWeight: 800, fill: '#64748b'}}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}}
+                    tick={{fontSize: 9, fontWeight: 800, fill: '#64748b'}}
                     unit="%"
+                    domain={[0, 105]}
                   />
                   <Tooltip 
-                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontFamily: 'inherit'}}
                     cursor={{fill: '#f8fafc'}}
+                    formatter={(value: any) => [`${value}%`]}
                   />
-                  <Legend iconType="circle" wrapperStyle={{fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '20px'}} />
-                  <Bar dataKey="Salida" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={20}>
-                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#6366f1' }} formatter={(v: number) => `${v}%`} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '15px'}} />
+                  <Bar dataKey="Salida" fill="#6366f1" radius={[3, 3, 0, 0]} barSize={10}>
+                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '8px', fontWeight: '800', fill: '#4f46e5' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={5} />
                   </Bar>
-                  <Bar dataKey="Retorno" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20}>
-                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#10b981' }} formatter={(v: number) => `${v}%`} />
+                  <Bar dataKey="Retorno" fill="#10b981" radius={[3, 3, 0, 0]} barSize={10}>
+                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '8px', fontWeight: '800', fill: '#059669' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={5} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -468,37 +473,44 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
           </div>
 
           {/* Monthly General Compliance */}
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 mb-6">
-              <Calendar size={18} className="text-indigo-600" />
-              Cumplimiento Mensual General (Salida vs Retorno)
-            </h3>
-            <div className="h-64">
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl lg:col-span-2">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <Calendar size={18} className="text-indigo-600" />
+                Cumplimiento Mensual General (Salida vs Retorno)
+              </h3>
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full">
+                Vista Ampliada
+              </span>
+            </div>
+            <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.monthlyGeneralChartData}>
+                <BarChart data={stats.monthlyGeneralChartData} barGap={4}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}}
+                    tick={{fontSize: 9, fontWeight: 800, fill: '#64748b'}}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fontSize: 10, fontWeight: 700, fill: '#94a3b8'}}
+                    tick={{fontSize: 9, fontWeight: 800, fill: '#64748b'}}
                     unit="%"
+                    domain={[0, 105]}
                   />
                   <Tooltip 
-                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontFamily: 'inherit'}}
                     cursor={{fill: '#f8fafc'}}
+                    formatter={(value: any) => [`${value}%`]}
                   />
-                  <Legend iconType="circle" wrapperStyle={{fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '20px'}} />
-                  <Bar dataKey="Salida" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={30}>
-                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#6366f1' }} formatter={(v: number) => `${v}%`} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '15px'}} />
+                  <Bar dataKey="Salida" fill="#6366f1" radius={[3, 3, 0, 0]} barSize={16}>
+                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '8px', fontWeight: '800', fill: '#4f46e5' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={5} />
                   </Bar>
-                  <Bar dataKey="Retorno" fill="#10b981" radius={[4, 4, 0, 0]} barSize={30}>
-                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#10b981' }} formatter={(v: number) => `${v}%`} />
+                  <Bar dataKey="Retorno" fill="#10b981" radius={[3, 3, 0, 0]} barSize={16}>
+                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '8px', fontWeight: '800', fill: '#059669' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={5} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

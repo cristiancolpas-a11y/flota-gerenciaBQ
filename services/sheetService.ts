@@ -648,11 +648,20 @@ const fetchDriversFromSheetCSV = async (): Promise<Driver[]> => {
 };
 
 const processDriverRows = (rows: any[][]): Driver[] => {
-  return rows.slice(1).filter(row => row && row[2]).map((row): Driver => {
+  return rows.slice(1).filter(row => {
+    if (!row || !row[2]) return false;
+    const name = cleanSheetValue(row[2]).toLowerCase();
+    const id = cleanSheetValue(row[3]).toLowerCase();
+    return !name.includes('nombres y apellidos') && !name.includes('nombre') && id !== 'cc' && !id.includes('identific');
+  }).map((row): Driver => {
     const licExp = parseFlexibleDate(row[9]);
     const courseExp = parseFlexibleDate(row[11]);
     const medicalExp = parseFlexibleDate(row[13]);
     
+    const rawExp = cleanSheetValue(row[8]);
+    const parsedExp = parseFloat(rawExp);
+    const experienceTime = !isNaN(parsedExp) ? Math.round(parsedExp).toString() : rawExp;
+
     return {
       id: `d-${cleanSheetValue(row[3])}`,
       name: cleanSheetValue(row[2]),
@@ -660,30 +669,30 @@ const processDriverRows = (rows: any[][]): Driver[] => {
       hireDate: parseFlexibleDate(row[6]),
       position: cleanSheetValue(row[4]),
       status: cleanSheetValue(row[5]),
-      experienceTime: cleanSheetValue(row[8]),
+      experienceTime: experienceTime,
       licenseIssueDate: parseFlexibleDate(row[7]),
-      photoUrl: cleanSheetValue(row[21]),
+      photoUrl: cleanSheetValue(row[15]),
       cd: cleanSheetValue(row[0]),
       contractor: cleanSheetValue(row[1]),
       license: { 
         expiryDate: licExp, 
         lastRenewalDate: '', 
         status: calculateStatus(licExp), 
-        url: cleanSheetValue(row[18]), 
+        url: cleanSheetValue(row[16]), 
         daysPending: getDaysDiff(licExp) 
       },
       defensiveDriving: { 
         expiryDate: courseExp, 
         lastRenewalDate: '', 
         status: calculateStatus(courseExp), 
-        url: cleanSheetValue(row[19]),
+        url: cleanSheetValue(row[17]),
         daysPending: getDaysDiff(courseExp)
       },
       medicalExam: { 
         expiryDate: medicalExp, 
         lastRenewalDate: '', 
         status: calculateStatus(medicalExp), 
-        url: cleanSheetValue(row[20]),
+        url: cleanSheetValue(row[18]),
         daysPending: getDaysDiff(medicalExp)
       }
     };
