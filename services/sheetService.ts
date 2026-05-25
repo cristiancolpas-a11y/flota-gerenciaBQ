@@ -838,13 +838,13 @@ const processFineRows = (rows: any[][]): Fine[] => {
         driverName: cleanSheetValue(row[4]),
         driverId: cleanSheetValue(row[5]),
         driverPosition: cleanSheetValue(row[6]),
-        amount: parseFloat(cleanSheetValue(row[9])) || 0,
+        amount: parseFloat(cleanSheetValue(row[10])) || 0,
         status: cleanSheetValue(row[8]).toUpperCase().includes('SI') ? 'PENDIENTE' : 'PAGADO',
-        paymentAgreement: cleanSheetValue(row[8]),
+        paymentAgreement: cleanSheetValue(row[9]),
         evidenceUrl: cleanSheetValue(row[7]).startsWith('http') ? cleanSheetValue(row[7]) : '',
-        infractionCode: cleanSheetValue(row[10]),
-        date: parseFlexibleDate(row[11]),
-        description: cleanSheetValue(row[12]),
+        infractionCode: cleanSheetValue(row[11]),
+        date: parseFlexibleDate(row[12]),
+        description: cleanSheetValue(row[13]),
         plate: normalizePlate(cleanSheetValue(row[17]))
       } as any;
     });

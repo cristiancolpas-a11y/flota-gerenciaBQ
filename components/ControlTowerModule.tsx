@@ -59,6 +59,8 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     status: 'ALL',
     criticality: 'ALL',
     system: 'ALL',
+    brand: 'ALL',
+    plate: 'ALL',
     search: ''
   });
 
@@ -195,7 +197,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     e.target.value = '';
   };
 
-  // Filtered data
+  // Filtered data for table and basic KPIs
   const filteredData = useMemo(() => {
     return dataWithVehicles.filter(item => {
       const matchCd = filters.cd === 'ALL' || item.cd === filters.cd;
@@ -205,11 +207,132 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       const matchStatus = filters.status === 'ALL' || item.status === filters.status;
       const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
       const matchSystem = filters.system === 'ALL' || item.system === filters.system;
+      const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
+      const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
       const matchSearch = !filters.search || 
         item.plate.toLowerCase().includes(filters.search.toLowerCase()) ||
         item.novelty.toLowerCase().includes(filters.search.toLowerCase());
       
-      return matchCd && matchContractor && matchMonth && matchWeek && matchStatus && matchCriticality && matchSystem && matchSearch;
+      return matchCd && matchContractor && matchMonth && matchWeek && matchStatus && matchCriticality && matchSystem && matchBrand && matchPlate && matchSearch;
+    });
+  }, [dataWithVehicles, filters]);
+
+  // Sub-filtered helper datasets for each chart to respect multi-filters crossingly
+  const trendFilteredData = useMemo(() => {
+    return dataWithVehicles.filter(item => {
+      const matchCd = filters.cd === 'ALL' || item.cd === filters.cd;
+      const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
+      const matchStatus = filters.status === 'ALL' || item.status === filters.status;
+      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchSystem = filters.system === 'ALL' || item.system === filters.system;
+      const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
+      const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
+      const matchSearch = !filters.search || 
+        item.plate.toLowerCase().includes(filters.search.toLowerCase()) ||
+        item.novelty.toLowerCase().includes(filters.search.toLowerCase());
+      return matchCd && matchContractor && matchStatus && matchCriticality && matchSystem && matchBrand && matchPlate && matchSearch;
+    });
+  }, [dataWithVehicles, filters]);
+
+  const criticalityFilteredData = useMemo(() => {
+    return dataWithVehicles.filter(item => {
+      const matchCd = filters.cd === 'ALL' || item.cd === filters.cd;
+      const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
+      const matchMonth = filters.month === 'ALL' || item.month === filters.month;
+      const matchWeek = filters.week === 'ALL' || item.week === filters.week;
+      const matchStatus = filters.status === 'ALL' || item.status === filters.status;
+      const matchSystem = filters.system === 'ALL' || item.system === filters.system;
+      const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
+      const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
+      const matchSearch = !filters.search || 
+        item.plate.toLowerCase().includes(filters.search.toLowerCase()) ||
+        item.novelty.toLowerCase().includes(filters.search.toLowerCase());
+      return matchCd && matchContractor && matchMonth && matchWeek && matchStatus && matchSystem && matchBrand && matchPlate && matchSearch;
+    });
+  }, [dataWithVehicles, filters]);
+
+  const systemsFilteredData = useMemo(() => {
+    return dataWithVehicles.filter(item => {
+      const matchCd = filters.cd === 'ALL' || item.cd === filters.cd;
+      const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
+      const matchMonth = filters.month === 'ALL' || item.month === filters.month;
+      const matchWeek = filters.week === 'ALL' || item.week === filters.week;
+      const matchStatus = filters.status === 'ALL' || item.status === filters.status;
+      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
+      const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
+      const matchSearch = !filters.search || 
+        item.plate.toLowerCase().includes(filters.search.toLowerCase()) ||
+        item.novelty.toLowerCase().includes(filters.search.toLowerCase());
+      return matchCd && matchContractor && matchMonth && matchWeek && matchStatus && matchCriticality && matchBrand && matchPlate && matchSearch;
+    });
+  }, [dataWithVehicles, filters]);
+
+  const platesFilteredData = useMemo(() => {
+    return dataWithVehicles.filter(item => {
+      const matchCd = filters.cd === 'ALL' || item.cd === filters.cd;
+      const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
+      const matchMonth = filters.month === 'ALL' || item.month === filters.month;
+      const matchWeek = filters.week === 'ALL' || item.week === filters.week;
+      const matchStatus = filters.status === 'ALL' || item.status === filters.status;
+      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchSystem = filters.system === 'ALL' || item.system === filters.system;
+      const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
+      const matchSearch = !filters.search || 
+        item.plate.toLowerCase().includes(filters.search.toLowerCase()) ||
+        item.novelty.toLowerCase().includes(filters.search.toLowerCase());
+      return matchCd && matchContractor && matchMonth && matchWeek && matchStatus && matchCriticality && matchSystem && matchBrand && matchSearch;
+    });
+  }, [dataWithVehicles, filters]);
+
+  const brandsFilteredData = useMemo(() => {
+    return dataWithVehicles.filter(item => {
+      const matchCd = filters.cd === 'ALL' || item.cd === filters.cd;
+      const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
+      const matchMonth = filters.month === 'ALL' || item.month === filters.month;
+      const matchWeek = filters.week === 'ALL' || item.week === filters.week;
+      const matchStatus = filters.status === 'ALL' || item.status === filters.status;
+      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchSystem = filters.system === 'ALL' || item.system === filters.system;
+      const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
+      const matchSearch = !filters.search || 
+        item.plate.toLowerCase().includes(filters.search.toLowerCase()) ||
+        item.novelty.toLowerCase().includes(filters.search.toLowerCase());
+      return matchCd && matchContractor && matchMonth && matchWeek && matchStatus && matchCriticality && matchSystem && matchPlate && matchSearch;
+    });
+  }, [dataWithVehicles, filters]);
+
+  const statusFilteredData = useMemo(() => {
+    return dataWithVehicles.filter(item => {
+      const matchCd = filters.cd === 'ALL' || item.cd === filters.cd;
+      const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
+      const matchMonth = filters.month === 'ALL' || item.month === filters.month;
+      const matchWeek = filters.week === 'ALL' || item.week === filters.week;
+      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchSystem = filters.system === 'ALL' || item.system === filters.system;
+      const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
+      const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
+      const matchSearch = !filters.search || 
+        item.plate.toLowerCase().includes(filters.search.toLowerCase()) ||
+        item.novelty.toLowerCase().includes(filters.search.toLowerCase());
+      return matchCd && matchContractor && matchMonth && matchWeek && matchCriticality && matchSystem && matchBrand && matchPlate && matchSearch;
+    });
+  }, [dataWithVehicles, filters]);
+
+  const monthlyFilteredData = useMemo(() => {
+    return dataWithVehicles.filter(item => {
+      const matchCd = filters.cd === 'ALL' || item.cd === filters.cd;
+      const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
+      const matchStatus = filters.status === 'ALL' || item.status === filters.status;
+      const matchWeek = filters.week === 'ALL' || item.week === filters.week;
+      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchSystem = filters.system === 'ALL' || item.system === filters.system;
+      const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
+      const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
+      const matchSearch = !filters.search || 
+        item.plate.toLowerCase().includes(filters.search.toLowerCase()) ||
+        item.novelty.toLowerCase().includes(filters.search.toLowerCase());
+      return matchCd && matchContractor && matchStatus && matchWeek && matchCriticality && matchSystem && matchBrand && matchPlate && matchSearch;
     });
   }, [dataWithVehicles, filters]);
 
@@ -246,7 +369,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
   const chartsData = useMemo(() => {
     // Trend by week
     const trendMap: Record<string, { week: string, total: number, closed: number }> = {};
-    filteredData.forEach(item => {
+    trendFilteredData.forEach(item => {
       if (!trendMap[item.week]) trendMap[item.week] = { week: item.week, total: 0, closed: 0 };
       trendMap[item.week].total++;
       if (item.status.toUpperCase() === 'CERRADO' || item.status.toUpperCase() === 'SOLUCIONADO') {
@@ -260,7 +383,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
     // Criticality
     const criticalityMap: Record<string, { name: string, value: number }> = {};
-    filteredData.forEach(item => {
+    criticalityFilteredData.forEach(item => {
       const crit = item.criticality || 'SIN INFO';
       if (!criticalityMap[crit]) criticalityMap[crit] = { name: crit, value: 0 };
       criticalityMap[crit].value++;
@@ -269,7 +392,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
     // Systems
     const systemMap: Record<string, { name: string, count: number }> = {};
-    filteredData.forEach(item => {
+    systemsFilteredData.forEach(item => {
       if (!systemMap[item.system]) systemMap[item.system] = { name: item.system, count: 0 };
       systemMap[item.system].count++;
     });
@@ -277,7 +400,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
     // Top Plates
     const plateMap: Record<string, { plate: string, count: number }> = {};
-    filteredData.forEach(item => {
+    platesFilteredData.forEach(item => {
       if (!plateMap[item.plate]) plateMap[item.plate] = { plate: item.plate, count: 0 };
       plateMap[item.plate].count++;
     });
@@ -285,34 +408,35 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
     // Brands
     const brandMap: Record<string, { name: string, count: number }> = {};
-    filteredData.forEach(item => {
+    brandsFilteredData.forEach(item => {
       if (!brandMap[item.brand]) brandMap[item.brand] = { name: item.brand, count: 0 };
       brandMap[item.brand].count++;
     });
     const brands = Object.values(brandMap).sort((a, b) => b.count - a.count);
 
     return { trend, criticality, systems, topPlates, brands };
-  }, [filteredData]);
+  }, [trendFilteredData, criticalityFilteredData, systemsFilteredData, platesFilteredData, brandsFilteredData]);
 
   // New Metrics from user request 
   const dashboardChartsData = useMemo(() => {
     const monthlyMap: Record<string, { month: string, total: number, conformant: number, maintenanceGoal: number, workshopResponse: number, workshopTotal: number, workshopGoal: number, closureDaysTotal: number, closureDaysCount: number }> = {};
     const statusMap: Record<string, { name: string, value: number }> = {};
     
-    filteredData.forEach(item => {
-      // Estado
+    // Status distribution uses statusFilteredData
+    statusFilteredData.forEach(item => {
       const stat = item.status || 'SIN ESTADO';
       const statUpper = stat.toUpperCase().trim();
       if (!statusMap[statUpper]) statusMap[statUpper] = { name: statUpper, value: 0 };
       statusMap[statUpper].value++;
+    });
 
-      // Monthly metrics
+    // Monthly metrics uses monthlyFilteredData
+    monthlyFilteredData.forEach(item => {
       const m = item.month || 'S/M';
       if (!monthlyMap[m]) {
         monthlyMap[m] = { month: m, total: 0, conformant: 0, maintenanceGoal: 0, workshopResponse: 0, workshopTotal: 0, workshopGoal: 0, closureDaysTotal: 0, closureDaysCount: 0 };
       }
       
-      // Robust compliance check for Column O (maintenanceCompliance)
       const compValue = item.maintenanceCompliance?.toString().toUpperCase().trim() || '';
       const isCompliant = compValue.includes('CUMPLE') || 
                          compValue.includes('CUMPLIO') || 
@@ -327,20 +451,15 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
         monthlyMap[m].conformant++;
       }
       
-      // Maintenance Goal from Column P (maintenanceGoal)
       if (item.maintenanceGoal > 0) {
-        // If meta is provided as a fraction (e.g., 0.95), we store it as is or normalize
-        // But we handle normalization in the display mapping below
         monthlyMap[m].maintenanceGoal = item.maintenanceGoal;
       }
       
-      // Workshop Response from Column R (workshopResponsePercentage)
       if (typeof item.workshopResponsePercentage === 'number' && !isNaN(item.workshopResponsePercentage)) {
         monthlyMap[m].workshopResponse += item.workshopResponsePercentage;
         monthlyMap[m].workshopTotal++;
       }
       
-      // Workshop Goal from Column Q (workshopGoal)
       if (item.workshopGoal > 0) {
         monthlyMap[m].workshopGoal = item.workshopGoal;
       }
@@ -358,9 +477,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       return {
         month: m.month,
         compliancePercent: Number((m.total > 0 ? (m.conformant / m.total) * 100 : 0).toFixed(1)),
-        // meta scale: if 0.95 -> 95, if 95 -> 95
         maintenanceGoal: m.maintenanceGoal > 0 ? (m.maintenanceGoal <= 1.05 ? m.maintenanceGoal * 100 : m.maintenanceGoal) : 95, 
-        // response scale: if 0.8 -> 80, if 80 -> 80
         workshopAvgResponse: Number((avgResponse <= 1.05 && avgResponse > 0 ? avgResponse * 100 : avgResponse).toFixed(1)),
         workshopGoal: m.workshopGoal > 0 ? (m.workshopGoal <= 1.05 ? m.workshopGoal * 100 : m.workshopGoal) : 80,
         avgClosureDays: Number((m.closureDaysCount > 0 ? (m.closureDaysTotal / m.closureDaysCount) : 0).toFixed(1))
@@ -368,7 +485,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     }).sort((a, b) => a.month.localeCompare(b.month));
 
     return { monthlyMetrics, statusDistribution };
-  }, [filteredData]);
+  }, [monthlyFilteredData, statusFilteredData]);
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedData = useMemo(() => {
@@ -472,6 +589,139 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
         <KPICard label="Placas Críticas" value={kpis.criticalPlates} icon={Truck} color={COLORS.NEUTRAL} subtext="Múltiples Fallas" />
       </div>
 
+      {/* MULTIFILTROS ACTIVOS */}
+      {(filters.cd !== 'ALL' || filters.contractor !== 'ALL' || filters.month !== 'ALL' || filters.week !== 'ALL' || filters.status !== 'ALL' || filters.criticality !== 'ALL' || filters.system !== 'ALL' || filters.brand !== 'ALL' || filters.plate !== 'ALL') && (
+        <div className="bg-slate-900/80 border border-indigo-500/30 p-4 rounded-xl flex flex-wrap items-center justify-between gap-3 mb-8 animate-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-2">
+            <Filter size={15} className="text-indigo-400 animate-pulse" />
+            <div>
+              <span className="text-[10px] font-black text-white uppercase tracking-wider">Multi-Filtros Cruzados Activos:</span>
+              <p className="text-[8.5px] text-slate-400 uppercase font-bold tracking-wide mt-0.5">
+                Haz clic en las barras, porciones, tarjetas o puntos de los gráficos para filtrar cruzado; haz clic de nuevo para desmarcar.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {filters.cd !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
+                CD: {filters.cd}
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, cd: 'ALL' }))} 
+                  className="hover:bg-blue-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {filters.contractor !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
+                TRANSP: {filters.contractor}
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, contractor: 'ALL' }))} 
+                  className="hover:bg-purple-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {filters.month !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
+                MES: {filters.month}
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, month: 'ALL' }))} 
+                  className="hover:bg-emerald-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {filters.week !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
+                SEMANA: {filters.week}
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, week: 'ALL' }))} 
+                  className="hover:bg-teal-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {filters.status !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
+                ESTADO: {filters.status}
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, status: 'ALL' }))} 
+                  className="hover:bg-sky-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {filters.criticality !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
+                CRITICIDAD: {filters.criticality}
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, criticality: 'ALL' }))} 
+                  className="hover:bg-rose-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {filters.system !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
+                SISTEMA: {filters.system}
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, system: 'ALL' }))} 
+                  className="hover:bg-indigo-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {filters.brand !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
+                MARCA: {filters.brand}
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, brand: 'ALL' }))} 
+                  className="hover:bg-purple-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            {filters.plate !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
+                PLACA: {filters.plate}
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, plate: 'ALL' }))} 
+                  className="hover:bg-amber-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            )}
+            <button
+              onClick={() => setFilters({
+                cd: 'ALL',
+                contractor: 'ALL',
+                month: 'ALL',
+                week: 'ALL',
+                status: 'ALL',
+                criticality: 'ALL',
+                system: 'ALL',
+                brand: 'ALL',
+                plate: 'ALL',
+                search: ''
+              })}
+              className="px-3 py-1 bg-[#1e293b] text-slate-300 border border-slate-700 hover:border-red-500/50 hover:bg-red-950/20 hover:text-red-400 text-[8.5px] font-black uppercase tracking-wider transition-all rounded-full cursor-pointer ml-1"
+            >
+              Resetear
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Charts Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {/* Trend Total Chart */}
@@ -482,12 +732,59 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
           </h3>
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartsData.trend}>
+              <LineChart 
+                data={chartsData.trend}
+                className="cursor-pointer"
+                onClick={(state) => {
+                  if (state && state.activeLabel) {
+                    const wk = state.activeLabel;
+                    setFilters(f => ({ ...f, week: f.week === wk ? 'ALL' : wk }));
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                 <XAxis dataKey="week" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
-                <Line type="monotone" dataKey="total" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', r: 4 }}>
+                
+                {filters.week !== 'ALL' && (
+                  <ReferenceLine 
+                    x={filters.week} 
+                    stroke="#3b82f6" 
+                    strokeWidth={2} 
+                    strokeDasharray="4 4" 
+                    label={{ 
+                      value: 'Filtrado', 
+                      fill: '#3b82f6', 
+                      fontSize: 9, 
+                      fontWeight: 'bold', 
+                      position: 'top',
+                      offset: 10
+                    }} 
+                  />
+                )}
+
+                <Line 
+                  type="monotone" 
+                  dataKey="total" 
+                  stroke="#3b82f6" 
+                  strokeWidth={3} 
+                  dot={(props: any) => {
+                    const { cx, cy, payload } = props;
+                    const isSelected = filters.week === 'ALL' || payload.week === filters.week;
+                    return (
+                      <circle 
+                        cx={cx} 
+                        cy={cy} 
+                        r={isSelected ? 6 : 3} 
+                        fill="#3b82f6" 
+                        stroke="#0f172a" 
+                        strokeWidth={isSelected ? 2.5 : 1}
+                        opacity={isSelected ? 1 : 0.4}
+                      />
+                    );
+                  }}
+                >
                   <LabelList dataKey="total" position="top" style={{ fill: '#94a3b8', fontSize: '10px' }} />
                 </Line>
               </LineChart>
@@ -503,12 +800,59 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
           </h3>
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartsData.trend}>
+              <LineChart 
+                data={chartsData.trend}
+                className="cursor-pointer"
+                onClick={(state) => {
+                  if (state && state.activeLabel) {
+                    const wk = state.activeLabel;
+                    setFilters(f => ({ ...f, week: f.week === wk ? 'ALL' : wk }));
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                 <XAxis dataKey="week" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} domain={[0, 105]} />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
-                <Line type="monotone" dataKey="percentage" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 4 }}>
+                
+                {filters.week !== 'ALL' && (
+                  <ReferenceLine 
+                    x={filters.week} 
+                    stroke="#10b981" 
+                    strokeWidth={2} 
+                    strokeDasharray="4 4" 
+                    label={{ 
+                      value: 'Filtrado', 
+                      fill: '#10b981', 
+                      fontSize: 9, 
+                      fontWeight: 'bold', 
+                      position: 'top',
+                      offset: 10
+                    }} 
+                  />
+                )}
+
+                <Line 
+                  type="monotone" 
+                  dataKey="percentage" 
+                  stroke="#10b981" 
+                  strokeWidth={3} 
+                  dot={(props: any) => {
+                    const { cx, cy, payload } = props;
+                    const isSelected = filters.week === 'ALL' || payload.week === filters.week;
+                    return (
+                      <circle 
+                        cx={cx} 
+                        cy={cy} 
+                        r={isSelected ? 6 : 3} 
+                        fill="#10b981" 
+                        stroke="#0f172a" 
+                        strokeWidth={isSelected ? 2.5 : 1}
+                        opacity={isSelected ? 1 : 0.4}
+                      />
+                    );
+                  }}
+                >
                   <LabelList dataKey="percentage" position="top" formatter={(v: number) => `${v.toFixed(0)}%`} style={{ fill: '#94a3b8', fontSize: '10px' }} />
                 </Line>
               </LineChart>
@@ -535,10 +879,23 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                   dataKey="value"
                   label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
                   labelLine={{ stroke: '#475569', strokeWidth: 1 }}
+                  onClick={(data) => {
+                    if (data && data.name) {
+                      setFilters(f => ({ ...f, criticality: f.criticality === data.name ? 'ALL' : data.name }));
+                    }
+                  }}
                 >
-                  {chartsData.criticality.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={CRITICIDAD_COLORS[entry.name] || COLORS.PRIMARY} />
-                  ))}
+                  {chartsData.criticality.map((entry, index) => {
+                    const isSelected = filters.criticality === 'ALL' || filters.criticality === entry.name;
+                    return (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={CRITICIDAD_COLORS[entry.name] || COLORS.PRIMARY} 
+                        opacity={isSelected ? 1 : 0.3}
+                        className="cursor-pointer"
+                      />
+                    );
+                  })}
                 </Pie>
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
                 <Legend verticalAlign="bottom" height={36}/>
@@ -562,7 +919,26 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={9} width={80} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
-                <Bar dataKey="count" fill={COLORS.SECONDARY} radius={[0, 4, 4, 0]}>
+                <Bar 
+                  dataKey="count" 
+                  radius={[0, 4, 4, 0]}
+                  onClick={(data) => {
+                    if (data && data.name) {
+                      setFilters(f => ({ ...f, system: f.system === data.name ? 'ALL' : data.name }));
+                    }
+                  }}
+                >
+                  {chartsData.systems.map((entry, index) => {
+                    const isSelected = filters.system === 'ALL' || filters.system === entry.name;
+                    return (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={COLORS.SECONDARY} 
+                        opacity={isSelected ? 1 : 0.3}
+                        className="cursor-pointer"
+                      />
+                    );
+                  })}
                   <LabelList dataKey="count" position="right" style={{ fill: '#94a3b8', fontSize: '10px' }} />
                 </Bar>
               </BarChart>
@@ -583,7 +959,26 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 <XAxis dataKey="plate" stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
-                <Bar dataKey="count" fill={COLORS.HIGH} radius={[4, 4, 0, 0]}>
+                <Bar 
+                  dataKey="count" 
+                  radius={[4, 4, 0, 0]}
+                  onClick={(data) => {
+                    if (data && data.plate) {
+                      setFilters(f => ({ ...f, plate: f.plate === data.plate ? 'ALL' : data.plate }));
+                    }
+                  }}
+                >
+                  {chartsData.topPlates.map((entry, index) => {
+                    const isSelected = filters.plate === 'ALL' || filters.plate === entry.plate;
+                    return (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={COLORS.HIGH} 
+                        opacity={isSelected ? 1 : 0.3}
+                        className="cursor-pointer"
+                      />
+                    );
+                  })}
                   <LabelList dataKey="count" position="top" style={{ fill: '#94a3b8', fontSize: '10px' }} />
                 </Bar>
               </BarChart>
@@ -604,7 +999,26 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]}>
+                <Bar 
+                  dataKey="count" 
+                  radius={[4, 4, 0, 0]}
+                  onClick={(data) => {
+                    if (data && data.name) {
+                      setFilters(f => ({ ...f, brand: f.brand === data.name ? 'ALL' : data.name }));
+                    }
+                  }}
+                >
+                  {chartsData.brands.map((entry, index) => {
+                    const isSelected = filters.brand === 'ALL' || filters.brand === entry.name;
+                    return (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill="#6366f1" 
+                        opacity={isSelected ? 1 : 0.3}
+                        className="cursor-pointer"
+                      />
+                    );
+                  })}
                   <LabelList dataKey="count" position="top" style={{ fill: '#94a3b8', fontSize: '10px' }} />
                 </Bar>
               </BarChart>
@@ -624,13 +1038,51 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
           </h3>
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dashboardChartsData.monthlyMetrics}>
+              <ComposedChart 
+                data={dashboardChartsData.monthlyMetrics}
+                className="cursor-pointer"
+                onClick={(state) => {
+                  if (state && state.activeLabel) {
+                    const m = state.activeLabel;
+                    setFilters(f => ({ ...f, month: f.month === m ? 'ALL' : m }));
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                 <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} domain={[0, 105]} />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
                 <Legend />
-                <Bar dataKey="compliancePercent" name="% Cumplimiento" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                
+                {filters.month !== 'ALL' && (
+                  <ReferenceLine 
+                    x={filters.month} 
+                    stroke="#10b981" 
+                    strokeWidth={2} 
+                    strokeDasharray="4 4" 
+                    label={{ 
+                      value: 'Filtrado', 
+                      fill: '#10b981', 
+                      fontSize: 9, 
+                      fontWeight: 'bold', 
+                      position: 'top',
+                      offset: 10
+                    }} 
+                  />
+                )}
+
+                <Bar dataKey="compliancePercent" name="% Cumplimiento" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                  {dashboardChartsData.monthlyMetrics.map((entry, index) => {
+                    const isSelected = filters.month === 'ALL' || filters.month === entry.month;
+                    return (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill="#10b981" 
+                        opacity={isSelected ? 1 : 0.3}
+                        className="cursor-pointer"
+                      />
+                    );
+                  })}
                   <LabelList dataKey="compliancePercent" position="top" formatter={(v: number) => `${v}%`} style={{ fill: '#94a3b8', fontSize: '10px' }} />
                 </Bar>
                 <Line type="step" dataKey="maintenanceGoal" name="Meta" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="4 4" />
@@ -658,10 +1110,24 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                   dataKey="value"
                   label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
                   labelLine={{ stroke: '#475569', strokeWidth: 1 }}
+                  onClick={(data) => {
+                    if (data && data.name) {
+                      setFilters(f => ({ ...f, status: f.status === data.name ? 'ALL' : data.name }));
+                    }
+                  }}
                 >
-                  {dashboardChartsData.statusDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.name.toUpperCase() === 'CERRADO' || entry.name.toUpperCase() === 'SOLUCIONADO' ? COLORS.LOW : (entry.name.toUpperCase() === 'ABIERTO' || entry.name.toUpperCase() === 'PROCESO' ? COLORS.HIGH : COLORS.MEDIUM)} />
-                  ))}
+                  {dashboardChartsData.statusDistribution.map((entry, index) => {
+                    const isSelected = filters.status === 'ALL' || filters.status === entry.name;
+                    const color = entry.name.toUpperCase() === 'CERRADO' || entry.name.toUpperCase() === 'SOLUCIONADO' ? COLORS.LOW : (entry.name.toUpperCase() === 'ABIERTO' || entry.name.toUpperCase() === 'PROCESO' ? COLORS.HIGH : COLORS.MEDIUM);
+                    return (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={color} 
+                        opacity={isSelected ? 1 : 0.3}
+                        className="cursor-pointer"
+                      />
+                    );
+                  })}
                 </Pie>
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
                 <Legend verticalAlign="bottom" height={36}/>
@@ -678,13 +1144,51 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
           </h3>
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dashboardChartsData.monthlyMetrics}>
+              <ComposedChart 
+                data={dashboardChartsData.monthlyMetrics}
+                className="cursor-pointer"
+                onClick={(state) => {
+                  if (state && state.activeLabel) {
+                    const m = state.activeLabel;
+                    setFilters(f => ({ ...f, month: f.month === m ? 'ALL' : m }));
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                 <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} domain={[0, 105]} />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
                 <Legend />
-                <Bar dataKey="workshopAvgResponse" name="% Respuesta Taller" fill="#f97316" radius={[4, 4, 0, 0]} maxBarSize={50}>
+
+                {filters.month !== 'ALL' && (
+                  <ReferenceLine 
+                    x={filters.month} 
+                    stroke="#f97316" 
+                    strokeWidth={2} 
+                    strokeDasharray="4 4" 
+                    label={{ 
+                      value: 'Filtrado', 
+                      fill: '#f97316', 
+                      fontSize: 9, 
+                      fontWeight: 'bold', 
+                      position: 'top',
+                      offset: 10
+                    }} 
+                  />
+                )}
+
+                <Bar dataKey="workshopAvgResponse" name="% Respuesta Taller" radius={[4, 4, 0, 0]} maxBarSize={50}>
+                  {dashboardChartsData.monthlyMetrics.map((entry, index) => {
+                    const isSelected = filters.month === 'ALL' || filters.month === entry.month;
+                    return (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill="#f97316" 
+                        opacity={isSelected ? 1 : 0.3}
+                        className="cursor-pointer"
+                      />
+                    );
+                  })}
                   <LabelList dataKey="workshopAvgResponse" position="top" formatter={(v: number) => `${v}%`} style={{ fill: '#94a3b8', fontSize: '10px' }} />
                 </Bar>
                 <Line type="step" dataKey="workshopGoal" name="Meta Taller" stroke="#ef4444" strokeWidth={2} dot={false} strokeDasharray="4 4" />
@@ -701,12 +1205,60 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
           </h3>
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={dashboardChartsData.monthlyMetrics}>
+              <LineChart 
+                data={dashboardChartsData.monthlyMetrics}
+                className="cursor-pointer"
+                onClick={(state) => {
+                  if (state && state.activeLabel) {
+                    const m = state.activeLabel;
+                    setFilters(f => ({ ...f, month: f.month === m ? 'ALL' : m }));
+                  }
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                 <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
-                <Line type="monotone" dataKey="avgClosureDays" name="Días Promedio" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', r: 4 }}>
+                
+                {filters.month !== 'ALL' && (
+                  <ReferenceLine 
+                    x={filters.month} 
+                    stroke="#3b82f6" 
+                    strokeWidth={2} 
+                    strokeDasharray="4 4" 
+                    label={{ 
+                      value: 'Filtrado', 
+                      fill: '#3b82f6', 
+                      fontSize: 9, 
+                      fontWeight: 'bold', 
+                      position: 'top',
+                      offset: 10
+                    }} 
+                  />
+                )}
+
+                <Line 
+                  type="monotone" 
+                  dataKey="avgClosureDays" 
+                  name="Días Promedio" 
+                  stroke="#3b82f6" 
+                  strokeWidth={3} 
+                  dot={(props: any) => {
+                    const { cx, cy, payload } = props;
+                    const isSelected = filters.month === 'ALL' || payload.month === filters.month;
+                    return (
+                      <circle 
+                        cx={cx} 
+                        cy={cy} 
+                        r={isSelected ? 6 : 3} 
+                        fill="#3b82f6" 
+                        stroke="#0f172a" 
+                        strokeWidth={isSelected ? 2.5 : 1}
+                        opacity={isSelected ? 1 : 0.4}
+                      />
+                    );
+                  }}
+                >
                   <LabelList dataKey="avgClosureDays" position="top" formatter={(v: number) => v.toFixed(1)} style={{ fill: '#94a3b8', fontSize: '10px' }} />
                 </Line>
               </LineChart>
