@@ -569,8 +569,12 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
               <p className="text-[11px] text-slate-500 font-bold uppercase mt-1">META 85%</p>
             </div>
             <div className="flex items-center gap-6">
-               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#3B82F6]"></div><span className="text-[10px] font-black text-slate-400 uppercase">GALAPA</span></div>
-               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#F97316]"></div><span className="text-[10px] font-black text-slate-400 uppercase">ARENOSA</span></div>
+               {(filterCd === 'all' || filterCd === 'GALAPA') && (
+                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#3B82F6]"></div><span className="text-[10px] font-black text-slate-400 uppercase">GALAPA</span></div>
+               )}
+               {(filterCd === 'all' || filterCd === 'ARENOSA') && (
+                 <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#F97316]"></div><span className="text-[10px] font-black text-slate-400 uppercase">ARENOSA</span></div>
+               )}
             </div>
           </div>
           <div className="h-[400px]">
@@ -592,8 +596,12 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 105]} />
                 <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px', fontSize: '10px', fontWeight: 900 }} />
                 <ReferenceLine y={85} stroke="#EF4444" strokeDasharray="10 10" />
-                <Line type="monotone" dataKey="galapa" stroke="#3B82F6" strokeWidth={5} dot={false} />
-                <Line type="monotone" dataKey="arenosa" stroke="#F97316" strokeWidth={5} dot={false} />
+                {(filterCd === 'all' || filterCd === 'GALAPA') && (
+                  <Line type="monotone" dataKey="galapa" stroke="#3B82F6" strokeWidth={5} dot={false} />
+                )}
+                {(filterCd === 'all' || filterCd === 'ARENOSA') && (
+                  <Line type="monotone" dataKey="arenosa" stroke="#F97316" strokeWidth={5} dot={false} />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -654,12 +662,16 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 100]} />
                   <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
                   <ReferenceLine y={85} stroke="#EF4444" strokeDasharray="5 5" />
-                  <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={20}>
-                    <LabelList dataKey="galapa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
-                  </Bar>
-                  <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={20}>
-                    <LabelList dataKey="arenosa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
-                  </Bar>
+                  {(filterCd === 'all' || filterCd === 'GALAPA') && (
+                    <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={filterCd === 'GALAPA' ? 35 : 20}>
+                      <LabelList dataKey="galapa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                    </Bar>
+                  )}
+                  {(filterCd === 'all' || filterCd === 'ARENOSA') && (
+                    <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={filterCd === 'ARENOSA' ? 35 : 20}>
+                      <LabelList dataKey="arenosa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                    </Bar>
+                  )}
                 </BarChart>
              </ResponsiveContainer>
           </div>
@@ -686,12 +698,16 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 100]} />
                   <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
                   <ReferenceLine y={85} stroke="#EF4444" strokeDasharray="5 5" />
-                  <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={35}>
-                    <LabelList dataKey="galapa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
-                  </Bar>
-                  <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={35}>
-                    <LabelList dataKey="arenosa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
-                  </Bar>
+                  {(filterCd === 'all' || filterCd === 'GALAPA') && (
+                    <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={filterCd === 'GALAPA' ? 55 : 35}>
+                      <LabelList dataKey="galapa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                    </Bar>
+                  )}
+                  {(filterCd === 'all' || filterCd === 'ARENOSA') && (
+                    <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={filterCd === 'ARENOSA' ? 55 : 35}>
+                      <LabelList dataKey="arenosa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                    </Bar>
+                  )}
                 </BarChart>
              </ResponsiveContainer>
           </div>
