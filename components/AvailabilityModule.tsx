@@ -27,6 +27,7 @@ import {
   Line,
   Legend,
   ReferenceLine,
+  LabelList,
 } from 'recharts';
 
 interface AvailabilityDashboardProps {
@@ -284,12 +285,56 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
         topSystem: Object.entries(data.systems).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
       }));
 
+    // Calculate Unified Average Availability across all selected days and filters
+    let totalAvailableSum = 0;
+    let totalCapacitySum = 0;
+
+    allDates.forEach((dateStr) => {
+      const dayRecs = filtered.filter((r) => r.fecha === dateStr);
+
+      const isGalapaSelected = filterCd === 'all' || filterCd.toUpperCase().includes('GALAPA');
+      const isArenosaSelected = filterCd === 'all' || filterCd.toUpperCase().includes('ARENOSA');
+
+      if (isGalapaSelected) {
+        const uG = new Set(
+          dayRecs
+            .filter(
+              (r) =>
+                (r.cdRegistro?.toUpperCase().includes('GALAPA') ||
+                  r.cdOriginal?.toUpperCase().includes('GALAPA')) &&
+                r.vehiculoIndisponible === 1
+            )
+            .map((r) => r.placasKey)
+        ).size;
+        totalAvailableSum += baseGalapa - uG;
+        totalCapacitySum += baseGalapa;
+      }
+
+      if (isArenosaSelected) {
+        const uA = new Set(
+          dayRecs
+            .filter(
+              (r) =>
+                (r.cdRegistro?.toUpperCase().includes('ARENOSA') ||
+                  r.cdOriginal?.toUpperCase().includes('ARENOSA')) &&
+                r.vehiculoIndisponible === 1
+            )
+            .map((r) => r.placasKey)
+        ).size;
+        totalAvailableSum += baseArenosa - uA;
+        totalCapacitySum += baseArenosa;
+      }
+    });
+
+    const unifiedAverageDispo = totalCapacitySum > 0 ? (totalAvailableSum / totalCapacitySum) * 100 : 0;
+
     return {
       kpis: { 
         dispoGalapaToday, 
         dispoArenosaToday, 
         indispTotalToday, 
-        topSystemMonth: topSystemRange 
+        topSystemMonth: topSystemRange,
+        unifiedAverageDispo: Math.round(unifiedAverageDispo * 10) / 10
       },
       dailyTendency,
       weeklyChart,
@@ -415,7 +460,21 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+        <div className="bg-gradient-to-br from-[#1E293B] to-[#1E1B4B] p-8 rounded-[2.5rem] border border-indigo-500/30 shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all duration-500"></div>
+          <div className="relative z-10 space-y-4">
+            <div className="text-[11px] font-black text-indigo-300 uppercase tracking-widest flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div> PROMEDIO COMPLETO
+            </div>
+            <h2 className={`text-5xl font-black ${getEfficiencyColor(processedData.kpis.unifiedAverageDispo)}`}>
+              {processedData.kpis.unifiedAverageDispo}%
+            </h2>
+            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+              Disponibilidad General ({filterCd === 'all' ? 'Ambos CD' : filterCd.toUpperCase()})
+            </p>
+          </div>
+        </div>
         <div className="bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-700/50 shadow-2xl relative group">
           <div className="relative z-10 space-y-4">
             <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -424,6 +483,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
             <h2 className={`text-5xl font-black ${getEfficiencyColor(processedData.kpis.dispoGalapaToday)}`}>
               {Math.round(processedData.kpis.dispoGalapaToday)}%
             </h2>
+            <p className="text-[9px] text-slate-500 font-bold uppercase">ÚLTIMO REGISTRO ACTUAL</p>
           </div>
         </div>
         <div className="bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-700/50 shadow-2xl relative group">
@@ -434,6 +494,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
             <h2 className={`text-5xl font-black ${getEfficiencyColor(processedData.kpis.dispoArenosaToday)}`}>
               {Math.round(processedData.kpis.dispoArenosaToday)}%
             </h2>
+            <p className="text-[9px] text-slate-500 font-bold uppercase">ÚLTIMO REGISTRO ACTUAL</p>
           </div>
         </div>
         <div className="bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-700/50 shadow-2xl relative group">
@@ -507,6 +568,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                 <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
                 <Bar dataKey="count" fill="#F97316" radius={[0, 6, 6, 0]} barSize={15}>
                   {processedData.topFailures.map((_, i) => <Cell key={`c-${i}`} fill={COLORS[i % COLORS.length]} />)}
+                  <LabelList dataKey="count" position="right" fill="#F1F5F9" fontSize={9} fontWeight={900} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -527,8 +589,12 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 100]} />
                   <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
                   <ReferenceLine y={85} stroke="#EF4444" strokeDasharray="5 5" />
-                  <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={20} />
-                  <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={20} />
+                  <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={20}>
+                    <LabelList dataKey="galapa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                  </Bar>
+                  <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={20}>
+                    <LabelList dataKey="arenosa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                  </Bar>
                 </BarChart>
              </ResponsiveContainer>
           </div>
@@ -544,8 +610,12 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 100]} />
                   <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
                   <ReferenceLine y={85} stroke="#EF4444" strokeDasharray="5 5" />
-                  <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={35} />
-                  <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={35} />
+                  <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={35}>
+                    <LabelList dataKey="galapa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                  </Bar>
+                  <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={35}>
+                    <LabelList dataKey="arenosa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                  </Bar>
                 </BarChart>
              </ResponsiveContainer>
           </div>
