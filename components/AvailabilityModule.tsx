@@ -306,7 +306,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
         cd: data.cd,
         dist: data.dist,
         novedades: data.novedades,
-        dias: data.dias,
+        dias: data.novedades > 0 ? Math.round((data.dias / data.novedades) * 10) / 10 : 0,
         topSystem: Object.entries(data.systems).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
       }));
 
@@ -724,7 +724,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                  <th className="pb-4 pr-4">PLACA</th>
                  <th className="pb-4 px-4">CD</th>
                  <th className="pb-4 px-4">DISTRIBUIDOR</th>
-                 <th className="pb-4 px-4">DÍAS</th>
+                 <th className="pb-4 px-4">AVG DÍAS</th>
                  <th className="pb-4 pl-4 text-right">SISTEMA TOP</th>
                </tr>
              </thead>
@@ -734,7 +734,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                     <td className="py-4 pr-4 font-black font-mono">{v.plate}</td>
                     <td className="py-4 px-4 font-black text-slate-500">{v.cd}</td>
                     <td className="py-4 px-4 font-black text-slate-400">{v.dist}</td>
-                    <td className="py-4 px-4 font-black text-rose-500">{v.dias}</td>
+                    <td className="py-4 px-4 font-black text-rose-500">{v.dias} d</td>
                     <td className="py-4 pl-4 font-black text-indigo-400 text-right italic">{v.topSystem}</td>
                   </tr>
                 ))}
