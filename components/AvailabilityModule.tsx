@@ -30,6 +30,14 @@ import {
   LabelList,
 } from 'recharts';
 
+const getWeekNumber = (d: Date) => {
+  const date = new Date(d.getTime());
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  const week1 = new Date(date.getFullYear(), 0, 4);
+  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+};
+
 interface AvailabilityDashboardProps {
   availability: AvailabilityRecord[];
   fleetBase: FleetListRecord[];
@@ -39,6 +47,10 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
   const [filterCd, setFilterCd] = useState<string>('all');
   const [filterContractor, setFilterContractor] = useState<string>('all');
   const [systemView, setSystemView] = useState<'all' | 'GALAPA' | 'ARENOSA'>('all');
+  
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   
   // Default to current month or range of data
   const initialRange = useMemo(() => {
@@ -64,6 +76,26 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                               (r.contratista && r.contratista.toUpperCase().includes(filterContractor.toUpperCase()));
       return isWithinDate && matchCd && matchContractor;
     });
+
+    // 1.5 Subdivide for dynamic card and list filters (cross-filtering)
+    let statsFiltered = filtered;
+    if (selectedDate) {
+      statsFiltered = filtered.filter(r => r.fecha === selectedDate);
+    } else if (selectedWeek) {
+      statsFiltered = filtered.filter(r => {
+        const d = new Date(r.fecha);
+        const w = getWeekNumber(d);
+        const y = d.getFullYear();
+        const key = `${y}-W${w}`;
+        return key === selectedWeek;
+      });
+    } else if (selectedMonth) {
+      statsFiltered = filtered.filter(r => {
+        const d = new Date(r.fecha);
+        const label = d.toLocaleString('es-ES', { month: 'long', year: 'numeric' }).toUpperCase();
+        return label === selectedMonth;
+      });
+    }
 
     // 2. Discover Fleet Bases for the priority CDs
     // We try to find the 'totalVH' reported in the sheet for these CDs
@@ -119,7 +151,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
 
     // Highest frequency system in range
     const rangeSystemMap: Record<string, number> = {};
-    filtered.forEach(r => {
+    statsFiltered.forEach(r => {
       if (r.sistema) rangeSystemMap[r.sistema] = (rangeSystemMap[r.sistema] || 0) + 1;
     });
     const topSystemRange = Object.entries(rangeSystemMap).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A';
@@ -149,14 +181,6 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
     }).slice(-60); // Show last 60 days for better perspective
 
     // B. Weekly Availability
-    const getWeekNumber = (d: Date) => {
-      const date = new Date(d.getTime());
-      date.setHours(0, 0, 0, 0);
-      date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
-      const week1 = new Date(date.getFullYear(), 0, 4);
-      return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-    };
-
     const weeklyMap: Record<string, { galapa: number, arenosa: number, label: string, sumG: number, sumA: number, count: number }> = {};
     allDates.forEach(dateStr => {
       const d = new Date(dateStr);
@@ -182,8 +206,9 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
       weeklyMap[key].count += 1;
     });
 
-    const weeklyChart = Object.values(weeklyMap).map(w => ({
+    const weeklyChart = Object.entries(weeklyMap).map(([key, w]) => ({
       name: w.label,
+      key,
       galapa: Math.round((w.sumG / w.count) * 10) / 10,
       arenosa: Math.round((w.sumA / w.count) * 10) / 10
     })).slice(-12); // Show last 12 weeks
@@ -285,11 +310,30 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
         topSystem: Object.entries(data.systems).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
       }));
 
-    // Calculate Unified Average Availability across all selected days and filters
-    let totalAvailableSum = 0;
-    let totalCapacitySum = 0;
+    // Calculate Unified Average Availability across all selected days/filter
+    let statsDates = allDates;
+    if (selectedDate) {
+      statsDates = [selectedDate];
+    } else if (selectedWeek) {
+      statsDates = allDates.filter(dateStr => {
+        const d = new Date(dateStr);
+        const w = getWeekNumber(d);
+        const y = d.getFullYear();
+        const key = `${y}-W${w}`;
+        return key === selectedWeek;
+      });
+    } else if (selectedMonth) {
+      statsDates = allDates.filter(dateStr => {
+        const d = new Date(dateStr);
+        const label = d.toLocaleString('es-ES', { month: 'long', year: 'numeric' }).toUpperCase();
+        return label === selectedMonth;
+      });
+    }
 
-    allDates.forEach((dateStr) => {
+    let statsAvailableSum = 0;
+    let statsCapacitySum = 0;
+
+    statsDates.forEach((dateStr) => {
       const dayRecs = filtered.filter((r) => r.fecha === dateStr);
 
       const isGalapaSelected = filterCd === 'all' || filterCd.toUpperCase().includes('GALAPA');
@@ -306,8 +350,8 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
             )
             .map((r) => r.placasKey)
         ).size;
-        totalAvailableSum += baseGalapa - uG;
-        totalCapacitySum += baseGalapa;
+        statsAvailableSum += baseGalapa - uG;
+        statsCapacitySum += baseGalapa;
       }
 
       if (isArenosaSelected) {
@@ -321,12 +365,13 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
             )
             .map((r) => r.placasKey)
         ).size;
-        totalAvailableSum += baseArenosa - uA;
-        totalCapacitySum += baseArenosa;
+        statsAvailableSum += baseArenosa - uA;
+        statsCapacitySum += baseArenosa;
       }
     });
 
-    const unifiedAverageDispo = totalCapacitySum > 0 ? (totalAvailableSum / totalCapacitySum) * 100 : 0;
+    const statsUnifiedAverageDispo = statsCapacitySum > 0 ? (statsAvailableSum / statsCapacitySum) * 100 : 0;
+    const statsIndispCount = new Set(statsFiltered.filter(r => r.vehiculoIndisponible === 1).map(r => r.placasKey)).size;
 
     return {
       kpis: { 
@@ -334,7 +379,9 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
         dispoArenosaToday, 
         indispTotalToday, 
         topSystemMonth: topSystemRange,
-        unifiedAverageDispo: Math.round(unifiedAverageDispo * 10) / 10
+        unifiedAverageDispo: Math.round(statsUnifiedAverageDispo * 10) / 10,
+        indispFilterCount: statsIndispCount,
+        topSystemFilter: topSystemRange
       },
       dailyTendency,
       weeklyChart,
@@ -356,7 +403,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
         max: sortedByDate[sortedByDate.length - 1]?.fecha || 'N/A'
       }
     };
-  }, [availability, fleetBase, filterCd, filterContractor, systemView]);
+  }, [availability, fleetBase, filterCd, filterContractor, systemView, selectedDate, selectedWeek, selectedMonth]);
 
   const contractors = useMemo(() => {
     const fromBase = fleetBase.map(v => v.contratista).filter(Boolean);
@@ -383,9 +430,27 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
             </div>
             <div>
               <h1 className="text-4xl font-black uppercase tracking-tighter">Dashboard Disponibilidad</h1>
-              <p className="text-indigo-400 font-bold text-xs uppercase tracking-widest mt-2">
-                Periodo: {processedData.dateRange.min} → {processedData.dateRange.max}
-              </p>
+              <div className="flex flex-wrap items-center gap-3 mt-2">
+                <p className="text-indigo-400 font-bold text-xs uppercase tracking-widest">
+                  Periodo: {processedData.dateRange.min} → {processedData.dateRange.max}
+                </p>
+                {(selectedDate || selectedWeek || selectedMonth) && (
+                  <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[9px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
+                    ⚡ FILTRO ACTIVO: {selectedDate || (selectedWeek ? `SEMANA ${selectedWeek.split('-W')[1]}` : selectedMonth)}
+                    <button 
+                      onClick={() => {
+                        setSelectedDate(null);
+                        setSelectedWeek(null);
+                        setSelectedMonth(null);
+                      }}
+                      className="hover:text-white transition-colors ml-1 font-black bg-amber-500/20 hover:bg-amber-500/40 rounded-full w-4 h-4 flex items-center justify-center text-[8px]"
+                      title="Quitar filtro de gráfico"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -460,60 +525,53 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
         <div className="bg-gradient-to-br from-[#1E293B] to-[#1E1B4B] p-8 rounded-[2.5rem] border border-indigo-500/30 shadow-2xl relative overflow-hidden group">
           <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all duration-500"></div>
           <div className="relative z-10 space-y-4">
             <div className="text-[11px] font-black text-indigo-300 uppercase tracking-widest flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div> PROMEDIO COMPLETO
+              <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div> 
+              {selectedDate || selectedWeek || selectedMonth ? 'PROMEDIO FILTRADO' : 'PROMEDIO COMPLETO'}
             </div>
             <h2 className={`text-5xl font-black ${getEfficiencyColor(processedData.kpis.unifiedAverageDispo)}`}>
               {processedData.kpis.unifiedAverageDispo}%
             </h2>
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-              Disponibilidad General ({filterCd === 'all' ? 'Ambos CD' : filterCd.toUpperCase()})
+              {selectedDate || selectedWeek || selectedMonth ? 'Disponibilidad Periodo Seleccionado' : `Disponibilidad General (${filterCd === 'all' ? 'Ambos CD' : filterCd.toUpperCase()})`}
             </p>
           </div>
         </div>
+
         <div className="bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-700/50 shadow-2xl relative group">
           <div className="relative z-10 space-y-4">
             <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-blue-500"></div> DISPO GALAPA
-            </div>
-            <h2 className={`text-5xl font-black ${getEfficiencyColor(processedData.kpis.dispoGalapaToday)}`}>
-              {Math.round(processedData.kpis.dispoGalapaToday)}%
-            </h2>
-            <p className="text-[9px] text-slate-500 font-bold uppercase">ÚLTIMO REGISTRO ACTUAL</p>
-          </div>
-        </div>
-        <div className="bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-700/50 shadow-2xl relative group">
-          <div className="relative z-10 space-y-4">
-            <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-orange-500"></div> DISPO ARENOSA
-            </div>
-            <h2 className={`text-5xl font-black ${getEfficiencyColor(processedData.kpis.dispoArenosaToday)}`}>
-              {Math.round(processedData.kpis.dispoArenosaToday)}%
-            </h2>
-            <p className="text-[9px] text-slate-500 font-bold uppercase">ÚLTIMO REGISTRO ACTUAL</p>
-          </div>
-        </div>
-        <div className="bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-700/50 shadow-2xl relative group">
-          <div className="relative z-10 space-y-4">
-            <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-rose-500"></div> INDISPONIBLES HOY
+              <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div> 
+              {selectedDate ? `INDISPONIBLES EL ${selectedDate}` : selectedWeek ? `INDISPONIBLES EN ${selectedWeek}` : selectedMonth ? `INDISPONIBLES EN ${selectedMonth}` : 'INDISPONIBLES HOY'}
             </div>
             <div className="flex items-baseline gap-2">
-              <h2 className="text-5xl font-black text-rose-500">{processedData.kpis.indispTotalToday}</h2>
+              <h2 className="text-5xl font-black text-rose-500">
+                {selectedDate || selectedWeek || selectedMonth ? processedData.kpis.indispFilterCount : processedData.kpis.indispTotalToday}
+              </h2>
               <span className="text-xs font-black text-slate-500 uppercase">VH</span>
             </div>
+            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+              {selectedDate || selectedWeek || selectedMonth ? 'Flota detenida en el periodo filtrado' : 'Flota detenida según último reporte'}
+            </p>
           </div>
         </div>
+
         <div className="bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-700/50 shadow-2xl relative group">
           <div className="relative z-10 space-y-4">
             <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-amber-500"></div> SISTEMA CRÍTICO (MES)
+              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> 
+              {selectedDate || selectedWeek || selectedMonth ? 'SISTEMA CRÍTICO (FILTRO)' : 'SISTEMA CRÍTICO'}
             </div>
-            <h2 className="text-2xl font-black text-amber-500 uppercase break-words leading-tight">{processedData.kpis.topSystemMonth}</h2>
+            <h2 className="text-2xl font-black text-amber-500 uppercase break-words leading-tight">
+              {selectedDate || selectedWeek || selectedMonth ? processedData.kpis.topSystemFilter : processedData.kpis.topSystemMonth}
+            </h2>
+            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+              Sistema con mayor frecuencia de parada
+            </p>
           </div>
         </div>
       </div>
@@ -535,7 +593,18 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
           </div>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={processedData.dailyTendency} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+              <LineChart 
+                data={processedData.dailyTendency} 
+                margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
+                onClick={(data) => {
+                  if (data && data.activeLabel) {
+                    setSelectedDate(data.activeLabel);
+                    setSelectedWeek(null);
+                    setSelectedMonth(null);
+                  }
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 900 }} tickFormatter={(v) => v ? v.split('-').slice(1).join('/') : ''}/>
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 105]} />
@@ -584,7 +653,21 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
           </h3>
           <div className="h-[300px]">
              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={processedData.weeklyChart} margin={{ top: 20, right: 10, left: -25, bottom: 20 }}>
+                <BarChart 
+                  data={processedData.weeklyChart} 
+                  margin={{ top: 20, right: 10, left: -25, bottom: 20 }}
+                  onClick={(data: any) => {
+                    if (data && data.activePayload && data.activePayload[0]) {
+                      const payload = data.activePayload[0].payload;
+                      if (payload.key) {
+                        setSelectedWeek(payload.key);
+                        setSelectedDate(null);
+                        setSelectedMonth(null);
+                      }
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 8, fontWeight: 900 }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 100]} />
                   <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
@@ -605,7 +688,18 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
           </h3>
           <div className="h-[300px]">
              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={processedData.monthlyChart} margin={{ top: 20, right: 10, left: -25, bottom: 20 }}>
+                <BarChart 
+                  data={processedData.monthlyChart} 
+                  margin={{ top: 20, right: 10, left: -25, bottom: 20 }}
+                  onClick={(data) => {
+                    if (data && data.activeLabel) {
+                      setSelectedMonth(data.activeLabel);
+                      setSelectedDate(null);
+                      setSelectedWeek(null);
+                    }
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 9, fontWeight: 900 }} tickFormatter={v => v ? v.split(' ')[0] : ''} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 100]} />
                   <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />

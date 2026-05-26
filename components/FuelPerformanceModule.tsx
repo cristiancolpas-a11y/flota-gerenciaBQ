@@ -93,7 +93,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({ fuelData 
         compliance: target > 0 ? (item.kmpg / target) * 100 : 0
       };
     });
-  }, [fuelData, searchTerm, selectedContractor, selectedCd]);
+  }, [fuelData, searchTerm, selectedContractor, selectedCd, selectedMonth, selectedWeek]);
 
   const stats = useMemo(() => {
     const totalMileage = filteredData.reduce((acc, curr) => acc + curr.mileage, 0);
