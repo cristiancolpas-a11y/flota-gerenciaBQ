@@ -4,7 +4,7 @@ import { Search, Filter, Calendar, Truck, User, ClipboardList, Clock, Building2,
 import { normalizePlate } from '../utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  PieChart, Pie, Legend, LabelList, LineChart, Line
+  PieChart, Pie, Legend, LabelList, LineChart, Line, ComposedChart
 } from 'recharts';
 
 interface CheckListModuleProps {
@@ -396,36 +396,71 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
                 Vista Ampliada
               </span>
             </div>
-            <div className="h-72">
+            <div className="h-96">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.weeklyGeneralChartData} barGap={3}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <ComposedChart data={stats.weeklyGeneralChartData} barGap={4}>
+                  <defs>
+                    <linearGradient id="gradSalida" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#4f46e5" stopOpacity={0.85}/>
+                      <stop offset="100%" stopColor="#818cf8" stopOpacity={0.45}/>
+                    </linearGradient>
+                    <linearGradient id="gradRetorno" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.85}/>
+                      <stop offset="100%" stopColor="#34d399" stopOpacity={0.45}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fontSize: 9, fontWeight: 800, fill: '#64748b'}}
+                    tick={{fontSize: 9, fontWeight: 900, fill: '#475569'}}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fontSize: 9, fontWeight: 800, fill: '#64748b'}}
+                    tick={{fontSize: 9, fontWeight: 900, fill: '#475569'}}
                     unit="%"
                     domain={[0, 105]}
                   />
                   <Tooltip 
-                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontFamily: 'inherit'}}
-                    cursor={{fill: '#f8fafc'}}
+                    contentStyle={{
+                      borderRadius: '20px', 
+                      border: '1px solid #e2e8f0', 
+                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', 
+                      fontFamily: 'inherit',
+                      fontSize: '12px',
+                      fontWeight: '800'
+                    }}
+                    cursor={{fill: '#f1f5f9', opacity: 0.5}}
                     formatter={(value: any) => [`${value}%`]}
                   />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '15px'}} />
-                  <Bar dataKey="Salida" fill="#6366f1" radius={[3, 3, 0, 0]} barSize={10}>
-                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '8px', fontWeight: '800', fill: '#4f46e5' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={5} />
+                  <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '15px', color: '#1e293b'}} />
+                  <Bar dataKey="Salida" fill="url(#gradSalida)" radius={[6, 6, 0, 0]} barSize={16}>
+                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '9px', fontWeight: '900', fill: '#4f46e5' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={6} />
                   </Bar>
-                  <Bar dataKey="Retorno" fill="#10b981" radius={[3, 3, 0, 0]} barSize={10}>
-                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '8px', fontWeight: '800', fill: '#059669' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={5} />
+                  <Bar dataKey="Retorno" fill="url(#gradRetorno)" radius={[6, 6, 0, 0]} barSize={16}>
+                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '9px', fontWeight: '900', fill: '#059669' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={6} />
                   </Bar>
-                </BarChart>
+                  <Line 
+                    type="monotone" 
+                    dataKey="Salida" 
+                    stroke="#4338ca" 
+                    strokeWidth={3} 
+                    dot={{ r: 4, fill: '#312e81', strokeWidth: 1 }} 
+                    activeDot={{ r: 6 }} 
+                    name="Tendencia Salida" 
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="Retorno" 
+                    stroke="#047857" 
+                    strokeWidth={3} 
+                    dot={{ r: 4, fill: '#064e3b', strokeWidth: 1 }} 
+                    activeDot={{ r: 6 }} 
+                    name="Tendencia Retorno" 
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -483,36 +518,61 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
                 Vista Ampliada
               </span>
             </div>
-            <div className="h-72">
+            <div className="h-96">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.monthlyGeneralChartData} barGap={4}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <ComposedChart data={stats.monthlyGeneralChartData} barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fontSize: 9, fontWeight: 800, fill: '#64748b'}}
+                    tick={{fontSize: 9, fontWeight: 900, fill: '#475569'}}
                   />
                   <YAxis 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{fontSize: 9, fontWeight: 800, fill: '#64748b'}}
+                    tick={{fontSize: 9, fontWeight: 900, fill: '#475569'}}
                     unit="%"
                     domain={[0, 105]}
                   />
                   <Tooltip 
-                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontFamily: 'inherit'}}
-                    cursor={{fill: '#f8fafc'}}
+                    contentStyle={{
+                      borderRadius: '20px', 
+                      border: '1px solid #e2e8f0', 
+                      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', 
+                      fontFamily: 'inherit',
+                      fontSize: '12px',
+                      fontWeight: '800'
+                    }}
+                    cursor={{fill: '#f1f5f9', opacity: 0.5}}
                     formatter={(value: any) => [`${value}%`]}
                   />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '15px'}} />
-                  <Bar dataKey="Salida" fill="#6366f1" radius={[3, 3, 0, 0]} barSize={16}>
-                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '8px', fontWeight: '800', fill: '#4f46e5' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={5} />
+                  <Legend iconType="circle" iconSize={10} wrapperStyle={{fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px', paddingTop: '15px'}} />
+                  <Bar dataKey="Salida" fill="url(#gradSalida)" radius={[6, 6, 0, 0]} barSize={20}>
+                    <LabelList dataKey="Salida" position="top" style={{ fontSize: '9px', fontWeight: '900', fill: '#4f46e5' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={6} />
                   </Bar>
-                  <Bar dataKey="Retorno" fill="#10b981" radius={[3, 3, 0, 0]} barSize={16}>
-                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '8px', fontWeight: '800', fill: '#059669' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={5} />
+                  <Bar dataKey="Retorno" fill="url(#gradRetorno)" radius={[6, 6, 0, 0]} barSize={20}>
+                    <LabelList dataKey="Retorno" position="top" style={{ fontSize: '9px', fontWeight: '900', fill: '#059669' }} formatter={(v: number) => v > 0 ? `${v}%` : ''} offset={6} />
                   </Bar>
-                </BarChart>
+                  <Line 
+                    type="monotone" 
+                    dataKey="Salida" 
+                    stroke="#4338ca" 
+                    strokeWidth={3} 
+                    dot={{ r: 4, fill: '#312e81', strokeWidth: 1 }} 
+                    activeDot={{ r: 6 }} 
+                    name="Tendencia Salida" 
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="Retorno" 
+                    stroke="#047857" 
+                    strokeWidth={3} 
+                    dot={{ r: 4, fill: '#064e3b', strokeWidth: 1 }} 
+                    activeDot={{ r: 6 }} 
+                    name="Tendencia Retorno" 
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>

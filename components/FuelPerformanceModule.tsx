@@ -14,26 +14,32 @@ interface FuelPerformanceModuleProps {
 
 const TARGETS: Record<string, Record<string, number>> = {
   'LA ARENOSA': {
-    'ENERO': 10.57, 'FEBRERO': 10.57, 'MARZO': 10.42, 'ABRIL': 10.42,
-    'MAYO': 10.37, 'JUNIO': 10.37, 'JULIO': 12.18, 'AGOSTO': 10.36,
+    'ENERO': 10.57, 'FEBRERO': 10.31, 'MARZO': 10.42, 'ABRIL': 10.73,
+    'MAYO': 10.37, 'JUNIO': 10.28, 'JULIO': 12.18, 'AGOSTO': 10.36,
     'SEPTIEMBRE': 10.28, 'OCTUBRE': 10.21, 'NOVIEMBRE': 10.27, 'DICIEMBRE': 10.27
   },
   'GALAPA': {
-    'ENERO': 10.57, 'FEBRERO': 10.57, 'MARZO': 10.42, 'ABRIL': 10.42,
-    'MAYO': 10.37, 'JUNIO': 10.37, 'JULIO': 12.18, 'AGOSTO': 10.36,
-    'SEPTIEMBRE': 10.28, 'OCTUBRE': 10.21, 'NOVIEMBRE': 10.27, 'DICIEMBRE': 10.27
-  },
-  'GALPAA': {
-    'ENERO': 10.57, 'FEBRERO': 10.57, 'MARZO': 10.42, 'ABRIL': 10.42,
-    'MAYO': 10.37, 'JUNIO': 10.37, 'JULIO': 12.18, 'AGOSTO': 10.36,
-    'SEPTIEMBRE': 10.28, 'OCTUBRE': 10.21, 'NOVIEMBRE': 10.27, 'DICIEMBRE': 10.27
+    'ENERO': 11.96, 'FEBRERO': 11.89, 'MARZO': 12.45, 'ABRIL': 11.94,
+    'MAYO': 11.94, 'JUNIO': 12.34, 'JULIO': 11.76, 'AGOSTO': 11.76,
+    'SEPTIEMBRE': 12.15, 'OCTUBRE': 12.56, 'NOVIEMBRE': 12.56, 'DICIEMBRE': 12.56
   }
 };
 
 const getTarget = (cd: string, month: string): number => {
-  const cdKey = cd.toUpperCase();
-  const monthKey = month.toUpperCase();
-  return TARGETS[cdKey]?.[monthKey] || 10.27; // Default target
+  const cdKey = cd.toUpperCase().trim();
+  const monthKey = month.toUpperCase().trim();
+  
+  let cdValue = 'LA ARENOSA';
+  if (cdKey.includes('GALAPA') || cdKey.includes('GALPAA')) {
+    cdValue = 'GALAPA';
+  } else if (cdKey.includes('ARENOSA')) {
+    cdValue = 'LA ARENOSA';
+  } else {
+    // Fallback if there's any other value
+    cdValue = cdKey;
+  }
+  
+  return TARGETS[cdValue]?.[monthKey] || (cdValue === 'GALAPA' ? 12.15 : 10.40); // Smart fallback targets
 };
 
 const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({ fuelData }) => {
