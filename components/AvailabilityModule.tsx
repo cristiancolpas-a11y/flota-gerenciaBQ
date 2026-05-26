@@ -120,7 +120,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
       ).length || (cdKey === 'GALAPA' ? 122 : 105);
     };
 
-    const baseGalapa = getReportedBase('GALAPA');
+    const baseGalapa = filterContractor === 'all' ? 92 : getReportedBase('GALAPA');
     const baseArenosa = getReportedBase('ARENOSA');
     
     const parseDate = (dStr: string) => {
@@ -525,7 +525,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
         <div className="bg-gradient-to-br from-[#1E293B] to-[#1E1B4B] p-8 rounded-[2.5rem] border border-indigo-500/30 shadow-2xl relative overflow-hidden group">
           <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all duration-500"></div>
           <div className="relative z-10 space-y-4">
@@ -538,24 +538,6 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
             </h2>
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
               {selectedDate || selectedWeek || selectedMonth ? 'Disponibilidad Periodo Seleccionado' : `Disponibilidad General (${filterCd === 'all' ? 'Ambos CD' : filterCd.toUpperCase()})`}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-700/50 shadow-2xl relative group">
-          <div className="relative z-10 space-y-4">
-            <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div> 
-              {selectedDate ? `INDISPONIBLES EL ${selectedDate}` : selectedWeek ? `INDISPONIBLES EN ${selectedWeek}` : selectedMonth ? `INDISPONIBLES EN ${selectedMonth}` : 'INDISPONIBLES HOY'}
-            </div>
-            <div className="flex items-baseline gap-2">
-              <h2 className="text-5xl font-black text-rose-500">
-                {selectedDate || selectedWeek || selectedMonth ? processedData.kpis.indispFilterCount : processedData.kpis.indispTotalToday}
-              </h2>
-              <span className="text-xs font-black text-slate-500 uppercase">VH</span>
-            </div>
-            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-              {selectedDate || selectedWeek || selectedMonth ? 'Flota detenida en el periodo filtrado' : 'Flota detenida según último reporte'}
             </p>
           </div>
         </div>
