@@ -717,41 +717,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
       </div>
 
       {/* Tables Section */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <div className="bg-[#1E293B] p-8 rounded-[3rem] border border-slate-700/50 shadow-2xl overflow-x-auto">
-          <h3 className="text-lg font-black uppercase flex items-center gap-3 mb-8 pb-4 border-b border-slate-700/50">Resumen Mensual</h3>
-          <table className="w-full text-left text-[10px]">
-            <thead>
-              <tr className="border-b border-slate-700 uppercase">
-                <th className="p-4">MES</th>
-                <th className="p-4">CD</th>
-                <th className="p-4">FLOTA</th>
-                <th className="p-4">% DISPO</th>
-                <th className="p-4">AVG TALLER</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {processedData.monthlySummary.map((row, i) => (
-                <React.Fragment key={i}>
-                  <tr>
-                    <td rowSpan={2} className="p-4 font-black border-r border-slate-800">{row.name}</td>
-                    <td className="p-4 font-black text-blue-400">GALAPA</td>
-                    <td className="p-4">{row.baseG}</td>
-                    <td className="p-4"><span className={`px-2 py-1 rounded-full font-black ${row.galapaDispo >= 85 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>{row.galapaDispo}%</span></td>
-                    <td className="p-4">{row.galapaAvgDays} d</td>
-                  </tr>
-                  <tr>
-                    <td className="p-4 font-black text-orange-400">ARENOSA</td>
-                    <td className="p-4">{row.baseA}</td>
-                    <td className="p-4"><span className={`px-2 py-1 rounded-full font-black ${row.arenosaDispo >= 85 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>{row.arenosaDispo}%</span></td>
-                    <td className="p-4">{row.arenosaAvgDays} d</td>
-                  </tr>
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
+      <div className="grid grid-cols-1 gap-8">
         <div className="bg-[#1E293B] p-8 rounded-[3rem] border border-slate-700/50 shadow-2xl overflow-x-auto">
           <h3 className="text-lg font-black uppercase flex items-center gap-3 mb-8 pb-4 border-b border-slate-700/50">Top 10 Críticos</h3>
           <table className="w-full text-left text-[9px] uppercase">
