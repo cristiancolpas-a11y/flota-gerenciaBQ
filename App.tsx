@@ -41,7 +41,6 @@ import OperationalDashboard from './components/OperationalDashboard';
 import CheckListModule from './components/CheckListModule';
 import FuelPerformanceModule from './components/FuelPerformanceModule';
 import PlateAdherenceModule from './components/PlateAdherenceModule';
-import FleetLinksModule from './components/FleetLinksModule';
 import CorrectivesModule from './components/CorrectivesModule';
 import UnavailabilityModule from './components/UnavailabilityModule';
 import OperatorsModule from './components/OperatorsModule';
@@ -52,6 +51,7 @@ import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
 import { MttrModule } from './components/MttrModule';
 import CalibrationVisuals from './components/CalibrationVisuals';
 import { VclModule } from './components/VclModule';
+import SustainabilityModule from './components/SustainabilityModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -96,11 +96,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'enlaces' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad';
 
 const CATEGORY_CHUNKS = {
   doc: {
@@ -140,20 +140,13 @@ const CATEGORY_CHUNKS = {
       { id: 'mttr', label: 'MTTR', icon: Wrench },
     ]
   },
-  recursos: {
-    label: 'RECURSOS',
-    colorTheme: 'cyan',
-    icon: LinkIcon,
-    items: [
-      { id: 'enlaces', label: 'Enlaces Flota', icon: LinkIcon },
-    ]
-  },
   otros: {
     label: 'OTROS',
     colorTheme: 'purple',
     icon: LayoutGrid,
     items: [
       { id: 'vcl', label: 'Seguimiento VLC vs Budget', icon: Truck },
+      { id: 'sostenibilidad', label: 'Sostenibilidad KM/HL', icon: Flame },
     ]
   }
 } as const;
@@ -161,8 +154,8 @@ const CATEGORY_CHUNKS = {
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
   const [activeView, setActiveView] = useState<ActiveView>('vehiculos');
-  const [activeCategory, setActiveCategory] = useState<'root' | 'doc' | 'gestion' | 'recursos' | 'otros'>('root');
-  const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | 'recursos' | 'otros' | null>('doc');
+  const [activeCategory, setActiveCategory] = useState<'root' | 'doc' | 'gestion' | 'otros'>('root');
+  const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | 'otros' | null>('doc');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -737,7 +730,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
-      {isSyncing && <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center"><Loader2 size={48} className="text-white animate-spin" /></div>}
+      {isSyncing && (
+        <div className="fixed bottom-6 right-6 bg-slate-900 border border-slate-700 text-slate-300 px-4 py-3 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 animate-bounce">
+          <Loader2 size={16} className="text-indigo-400 animate-spin" />
+          <span className="text-[10px] font-black uppercase tracking-widest">Sincronizando...</span>
+        </div>
+      )}
       
       {appMode === 'root_menu' ? (
         <div className="flex-grow bg-[#0f172a] flex flex-col items-center justify-center p-8 relative overflow-hidden">
@@ -823,7 +821,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Menu Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-8 w-full max-w-6xl relative z-10 px-4 md:px-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl mx-auto w-full relative z-10 px-4 md:px-0">
             <button 
               onClick={() => { setAppMode('camiones'); setActiveCategory('root'); setActiveView('categories_dashboard'); }}
               className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-4 md:p-10 rounded-2xl md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-3 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
@@ -847,19 +845,6 @@ const App: React.FC = () => {
               <div>
                 <h3 className="text-base md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">MONTACARGAS</h3>
                 <p className="text-emerald-400/60 text-[7px] md:text-[10px] font-bold uppercase tracking-widest">Gestión de equipos logísticos</p>
-              </div>
-            </button>
-
-            <button 
-              onClick={() => { setAppMode('camiones'); setActiveCategory('recursos'); setActiveView('enlaces'); }}
-              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-4 md:p-10 rounded-2xl md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-3 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
-            >
-              <div className="w-12 h-12 md:w-20 md:h-20 bg-indigo-600/20 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30 shrink-0">
-                <LinkIcon size={20} className="md:size-9" />
-              </div>
-              <div>
-                <h3 className="text-base md:text-2xl font-black text-white uppercase tracking-widest mb-0.5 md:mb-1">ENLACES FLOTA</h3>
-                <p className="text-indigo-400/60 text-[7px] md:text-[10px] font-bold uppercase tracking-widest">Acceso rápido a plataformas externas</p>
               </div>
             </button>
           </div>
@@ -934,13 +919,6 @@ const App: React.FC = () => {
                             <ChevronDown size={12} />
                           </button>
                           <button
-                            onClick={() => { setActiveCategory('recursos'); setActiveView('categories_dashboard'); }}
-                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-cyan-600/25 border border-cyan-500/20 hover:border-cyan-500/40 rounded-xl text-[10px] font-black text-cyan-300 uppercase tracking-widest transition-all text-left"
-                          >
-                            <span>💼 RECURSOS</span>
-                            <ChevronDown size={12} />
-                          </button>
-                          <button
                             onClick={() => { setActiveCategory('otros'); setActiveView('categories_dashboard'); }}
                             className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-purple-600/25 border border-purple-500/20 hover:border-purple-500/40 rounded-xl text-[10px] font-black text-purple-300 uppercase tracking-widest transition-all text-left"
                           >
@@ -965,12 +943,10 @@ const App: React.FC = () => {
                           <p className={`text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-md ${
                             activeCategory === 'doc' ? 'text-indigo-400 bg-indigo-500/5' :
                             activeCategory === 'gestion' ? 'text-emerald-400 bg-emerald-500/5' :
-                            activeCategory === 'recursos' ? 'text-cyan-400 bg-cyan-500/5' :
                             'text-purple-400 bg-purple-500/5'
                           }`}>
                             {activeCategory === 'doc' ? '📘 DOCUMENTACIÓN' :
                              activeCategory === 'gestion' ? '⚙️ GESTIÓN' :
-                             activeCategory === 'recursos' ? '💼 RECURSOS' :
                              '🔍 OTROS'}
                           </p>
 
@@ -981,7 +957,6 @@ const App: React.FC = () => {
                               const activeColorClass = 
                                 activeCategory === 'doc' ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' :
                                 activeCategory === 'gestion' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' :
-                                activeCategory === 'recursos' ? 'bg-cyan-600 text-white shadow-xl shadow-cyan-600/20' :
                                 'bg-purple-600 text-white shadow-xl shadow-purple-600/20';
 
                               return (
@@ -1169,32 +1144,6 @@ const App: React.FC = () => {
                       </div>
                     </button>
 
-                    {/* RECURSOS */}
-                    <button 
-                      onClick={() => {
-                        setActiveCategory('recursos');
-                      }}
-                      className="group text-left bg-gradient-to-br from-cyan-50/50 to-cyan-100/30 hover:from-cyan-600 hover:to-cyan-700 border border-cyan-200/50 hover:border-cyan-600 p-8 rounded-3xl transition-all duration-300 shadow-xl hover:shadow-cyan-500/20 hover:-translate-y-2 flex flex-col justify-between h-72 relative overflow-hidden"
-                    >
-                      <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 text-cyan-500/5 group-hover:text-white/5 transition-colors duration-300">
-                        <LinkIcon size={220} />
-                      </div>
-                      <div className="w-16 h-16 bg-white shadow-md rounded-2xl flex items-center justify-center text-cyan-600 group-hover:scale-110 transition-transform">
-                        <LinkIcon size={32} />
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-600 group-hover:text-indigo-200 transition-colors">
-                          MÓDULO DE ENLACES
-                        </span>
-                        <h3 className="text-2xl font-black text-slate-900 group-hover:text-white uppercase tracking-tight mt-1 mb-2">
-                          RECURSOS
-                        </h3>
-                        <p className="text-slate-500 group-hover:text-white/80 text-xs font-medium leading-relaxed max-w-sm">
-                          Acceda a enlaces de la flota, plataformas externas, carpetas consolidadas y recursos de soporte de la operación.
-                        </p>
-                      </div>
-                    </button>
-
                     {/* OTROS */}
                     <button 
                       onClick={() => {
@@ -1255,7 +1204,6 @@ const App: React.FC = () => {
                           <div className={`p-4 rounded-xl ${
                             activeCategory === 'doc' ? 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white' :
                             activeCategory === 'gestion' ? 'bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white' :
-                            activeCategory === 'recursos' ? 'bg-cyan-50 text-cyan-600 group-hover:bg-cyan-600 group-hover:text-white' :
                             'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
                           } transition-colors shadow-sm`}>
                             <Icon size={24} />
@@ -1281,6 +1229,10 @@ const App: React.FC = () => {
             <VclModule vehicles={vehicles} />
           )}
 
+          {activeView === 'sostenibilidad' && (
+            <SustainabilityModule />
+          )}
+
           {activeView === 'mttr' && (
             <MttrModule />
           )}
@@ -1301,10 +1253,6 @@ const App: React.FC = () => {
 
           {activeView === 'adherencia' && (
             <PlateAdherenceModule data={plateAdherenceData} />
-          )}
-
-          {activeView === 'enlaces' && (
-            <FleetLinksModule />
           )}
 
           {activeView === 'indicadoresDisponibilidad' && (
