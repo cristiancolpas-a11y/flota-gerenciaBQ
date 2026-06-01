@@ -562,8 +562,6 @@ function doPost(e) {
         }
 
         if (foundIdx !== -1) {
-          if (d.status) s.getRange(foundIdx, 8).setValue(d.status); // Col H (Index 8)
-          
           if (d.evidence) {
             var evidenceUrl = "";
             if (Array.isArray(d.evidence)) {
@@ -589,6 +587,59 @@ function doPost(e) {
         }
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "No se encontró registro en CIERRE para: Placa " + plateSearch + ", Item " + itemSearch);
+      }
+      else if (m === 'POST_CALIDAD_CIERRE_UPDATE') {
+        var docId = d.docId || '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM';
+        var ssA = SpreadsheetApp.openById(docId);
+        var s = ssA.getSheetByName("CIERRE1");
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "Hoja CIERRE1 no encontrada");
+        }
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var plateSearch = (d.plate || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+        var itemSearch = (d.item || "").toString().toLowerCase().trim();
+
+        for (var i = 1; i < rows.length; i++) {
+          var rowPlate = (rows[i][2] || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+          var rowItem = (rows[i][3] || "").toString().toLowerCase().trim();
+          var rowStatus = (rows[i][6] || "").toString().trim().toUpperCase();
+
+          if (rowPlate === plateSearch && rowItem === itemSearch) {
+            foundIdx = i + 1;
+            if (rowStatus === "PENDIENTE") {
+              break;
+            }
+          }
+        }
+
+        if (foundIdx !== -1) {
+          if (d.evidence) {
+            var evidenceUrl = "";
+            if (Array.isArray(d.evidence)) {
+              var links = [];
+              for(var j=0; j<d.evidence.length; j++) {
+                if (d.evidence[j] && (d.evidence[j].indexOf("data:image") === 0 || d.evidence[j].indexOf("http") !== 0)) {
+                  links.push(sImg(d.evidence[j], "CIERRE_CALIDAD_" + plateSearch + "_" + j));
+                } else if (d.evidence[j]) {
+                  links.push(d.evidence[j]);
+                }
+              }
+              evidenceUrl = links.join(", ");
+            } else if (typeof d.evidence === 'string' && d.evidence.indexOf("data:image") === 0) {
+              evidenceUrl = sImg(d.evidence, "CIERRE_CALIDAD_" + plateSearch);
+            } else {
+              evidenceUrl = d.evidence;
+            }
+            s.getRange(foundIdx, 6).setValue(evidenceUrl); // Col F (Index 6)
+          }
+          
+          if (lock.hasLock()) lock.releaseLock();
+          return output("success", "Audit closure updated in sheet CIERRE1 for row " + foundIdx);
+        }
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "No se encontró registro en CIERRE1 para: Placa " + plateSearch + ", Item " + itemSearch);
       }
       else if (m === 'POST_FLEET_STANDARD_AUDIT_UPDATE') {
         var docId = d.docId || '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';

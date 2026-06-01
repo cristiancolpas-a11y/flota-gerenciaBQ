@@ -1273,6 +1273,7 @@ const App: React.FC = () => {
               data={auditRecords} 
               masterList={auditMasterVehicles}
               cierreRecords={fleetCierreRecords}
+              fleetBase={fleetBase}
             />
           )}
 

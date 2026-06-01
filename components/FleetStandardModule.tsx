@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { AuditRecord, AuditMasterVehicle, FleetCierreRecord } from "../types";
+import { AuditRecord, AuditMasterVehicle, FleetCierreRecord, FleetListRecord } from "../types";
 import {
   BarChart,
   Bar,
@@ -53,6 +53,7 @@ interface FleetStandardModuleProps {
   data: AuditRecord[];
   masterList: AuditMasterVehicle[];
   cierreRecords?: FleetCierreRecord[];
+  fleetBase?: FleetListRecord[];
 }
 
 const ITEM_LABELS = {
@@ -222,6 +223,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   data,
   masterList,
   cierreRecords,
+  fleetBase,
 }) => {
   const [filterRegional, setFilterRegional] = useState<string>("Todas");
   const [filterCD, setFilterCD] = useState<string>("Todos");
@@ -235,14 +237,19 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   
   const plates = useMemo(() => {
     const list = new Set<string>();
-    data.forEach((r) => {
-      if (r.plate) list.add(r.plate.toUpperCase().trim());
-    });
     masterList.forEach((m) => {
       if (m.plate) list.add(m.plate.toUpperCase().trim());
     });
+    data.forEach((r) => {
+      if (r.plate) list.add(r.plate.toUpperCase().trim());
+    });
+    if (cierreRecords) {
+      cierreRecords.forEach((c) => {
+        if (c.placa) list.add(c.placa.toUpperCase().trim());
+      });
+    }
     return Array.from(list).sort();
-  }, [data, masterList]);
+  }, [data, masterList, cierreRecords]);
 
   const [activeTab, setActiveTab] = useState<"dashboard" | "novedades">("dashboard");
   const [searchTerm, setSearchTerm] = useState("");
@@ -256,6 +263,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   const [noveltyEvidence, setNoveltyEvidence] = useState<string[]>([]);
   const [noveltyObs, setNoveltyObs] = useState("");
   const [noveltyStatus, setNoveltyStatus] = useState("PENDIENTE");
+  const [noveltyVerification, setNoveltyVerification] = useState("NO");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Gallery View State
@@ -298,7 +306,8 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
           plate: selectedNovelty.plate,
           item: selectedNovelty.observations, // observations maps to c.item
           status: noveltyStatus,
-          evidence: finalEvidence
+          evidence: finalEvidence,
+          verification: noveltyVerification
         });
       } else {
         success = await submitAuditUpdateToSheet({
@@ -1094,7 +1103,32 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   }, [novedadesData]);
 
   const stats = useMemo(() => {
-    if (filteredData.length === 0) return null;
+    if (filteredData.length === 0) {
+      return {
+        totalAudits: 0,
+        uniqueVehicles: 0,
+        avgMand: 0,
+        avgNoMand: 0,
+        avgDocMand: 0,
+        avgSignMand: 0,
+        avgImgMand: 0,
+        avgDocNoMand: 0,
+        avgSignNoMand: 0,
+        avgImgNoMand: 0,
+        catScoresMand: [],
+        catScoresNoMand: [],
+        cdRankingMand: [],
+        cdRankingNoMand: [],
+        auditorRanking: [],
+        auditTypes: [],
+        topFails: [],
+        trend: [],
+        currentExecution: 0,
+        currentAuditados: 0,
+        currentFaltantes: 0,
+        masterCount: 149,
+      };
+    }
 
     const uniquePlates = new Set(filteredData.map((r) => r.plate)).size;
     const avgMand =
@@ -1341,20 +1375,6 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     filteredDataExcludingAuditor,
     filteredDataExcludingCategory,
   ]);
-
-  if (!stats) {
-    return (
-      <div className="bg-[#0f172a] p-12 rounded-3xl text-center">
-        <AlertTriangle size={48} className="text-amber-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
-          No se encontraron datos
-        </h2>
-        <p className="text-slate-500 mt-2">
-          Ajusta los filtros para ver la información.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8 pb-20 text-slate-200">
@@ -1669,7 +1689,18 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
       {/* TAB CONTENT */}
       <div className="relative z-0">
         {activeTab === "dashboard" && (
-          <div className="space-y-8 animate-in fade-in duration-500">
+          filteredData.length === 0 ? (
+            <div className="bg-[#1a1a2e] p-12 rounded-[2.5rem] border border-slate-800 text-center shadow-xl">
+              <AlertTriangle size={48} className="text-amber-500 mx-auto mb-4 animate-bounce" />
+              <h2 className="text-xl font-black text-white uppercase tracking-tighter">
+                No se encontraron datos para el Dashboard
+              </h2>
+              <p className="text-slate-500 mt-2 text-sm">
+                Ajusta los filtros seleccionados para ver la información.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-8 animate-in fade-in duration-500">
             {/* SECTION 1: GLOBAL KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <MetricCard
@@ -3337,6 +3368,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
               </div>
             </div>
           </div>
+          )
         )}
 
         {activeTab === "novedades" && (
@@ -3792,7 +3824,15 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   <AnimatePresence>
-                    {novedadesData.map((r, i) => (
+                    {novedadesData.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500 font-bold uppercase tracking-wider">
+                          <AlertTriangle className="text-amber-500 mx-auto mb-3" size={32} />
+                          No se encontraron novedades para esta placa y filtros
+                        </td>
+                      </tr>
+                    ) : (
+                      novedadesData.map((r, i) => (
                        <motion.tr
                         key={`novelty-${r.id}`}
                         initial={{ opacity: 0, y: 10 }}
@@ -3880,6 +3920,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                                   setSelectedNovelty(r);
                                   setNoveltyObs(r.noveltyObservation || "");
                                   setNoveltyStatus(r.status || "PENDIENTE");
+                                  setNoveltyVerification(r.verification || "NO");
                                   setNoveltyEvidence([]);
                                   setIsEvidenceModalOpen(true);
                                 }}
@@ -3891,7 +3932,8 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                           </div>
                         </td>
                       </motion.tr>
-                    ))}
+                    )))
+                    }
                   </AnimatePresence>
                 </tbody>
               </table>
@@ -4213,6 +4255,29 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                     ))}
                   </div>
                 </div>
+
+                {selectedNovelty.isCierre && (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 px-1">
+                      Verificación (Columna F)
+                    </label>
+                    <div className="flex gap-2">
+                      {["SI", "NO"].map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => setNoveltyVerification(v)}
+                          className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            noveltyVerification === v
+                              ? "bg-[#D97706] text-white shadow-lg shadow-amber-500/20"
+                              : "bg-[#0f172a] text-slate-500 border border-slate-800"
+                          }`}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 px-1">

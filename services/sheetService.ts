@@ -6,7 +6,7 @@ const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D
 const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
-const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
+const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbyWPA_veHmVseG7MlJIMzgY7czzdUlLvqsNqkbGXSEEqjdYggZ_5c5ObkOVdT4z1e-7Vg/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -2397,6 +2397,7 @@ export const submitFleetCierreUpdateToSheet = async (data: {
   item: string;
   status: string;
   evidence: string | string[];
+  verification?: string;
 }): Promise<boolean> => {
   const result = await sendToGAS({
     method: 'POST_FLEET_CIERRE_UPDATE',
@@ -2454,6 +2455,75 @@ const processFleetCierreRows = (rows: any[][]): FleetCierreRecord[] => {
         verificacion: cleanSheetValue(row[5]),
         evidencia: cleanSheetValue(row[6]),
         estado: cleanSheetValue(row[7]) || 'PENDIENTE'
+      };
+    });
+};
+
+/* --- NUEVAS FUNCIONES PARA EL ESTANDAR DE CALIDAD Y SEGURIDAD (HOJA CIERRE1) --- */
+
+export const submitCalidadCierreUpdateToSheet = async (data: {
+  plate: string;
+  item: string;
+  status: string;
+  evidence: string | string[];
+  verification?: string;
+}): Promise<boolean> => {
+  const result = await sendToGAS({
+    method: 'POST_CALIDAD_CIERRE_UPDATE',
+    data: { ...data, docId: AUDIT_QS_DOC_ID }
+  }, GOOGLE_SCRIPT_AUDIT_URL, true);
+  return result && (result as any).status === 'success';
+};
+
+export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
+  try {
+    const rows = await fetchDataFromGAS(AUDIT_QS_DOC_ID, 'CIERRE1', GOOGLE_SCRIPT_AUDIT_URL);
+    if (!rows || rows.length < 2) {
+      return fetchCalidadCierreFromSheetCSV();
+    }
+    return processCalidadCierreRows(rows);
+  } catch (e) {
+    console.error("Error fetching calidad standard closure from GAS:", e);
+    return fetchCalidadCierreFromSheetCSV();
+  }
+};
+
+const fetchCalidadCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_QS_DOC_ID}/gviz/tq?tqx=out:csv&sheet=CIERRE1${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          resolve(processCalidadCierreRows(rows));
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+const processCalidadCierreRows = (rows: any[][]): FleetCierreRecord[] => {
+  return rows.slice(1)
+    .filter(row => row && row[2]) // Placa Check (Col C / Index 2)
+    .map((row, i): FleetCierreRecord => {
+      return {
+        id: `calidad-cierre-${i}-${cleanSheetValue(row[2])}`,
+        fecha: parseFlexibleDate(row[0]),                 // Col A (FECHA)
+        cd: cleanSheetValue(row[1]) || 'GENERAL',         // Col B (CD)
+        placa: normalizePlate(cleanSheetValue(row[2])),   // Col C (PLACA)
+        item: cleanSheetValue(row[3]),                    // Col D (ITEM)
+        verificacion: cleanSheetValue(row[4]),            // Col E (VERIFICACION)
+        evidencia: cleanSheetValue(row[5]),               // Col F (EVIDENCIA)
+        estado: cleanSheetValue(row[6]) || 'PENDIENTE',   // Col G (ESTADO)
+        contratista: 'Otros'
       };
     });
 };

@@ -486,13 +486,13 @@ export interface VclBillingRecord {
 export interface FleetCierreRecord {
   id: string;
   fecha: string;        // Columna A (FECHA)
-  placa: string;        // Columna B (PLACA)
-  cd: string;           // Columna C (CD)
-  contratista: string;  // Columna D (CONTRATIS)
-  item: string;         // Columna E (ITEM)
-  verificacion: string; // Columna F (VERIFICACION)
-  evidencia: string;    // Columna G (EVIDENCIA)
-  estado: string;       // Columna H (ESTADO)
+  cd: string;           // Columna B (CD)
+  placa: string;        // Columna C (PLACA)
+  item: string;         // Columna D (ITEM)
+  verificacion: string; // Columna E (VERIFICACION)
+  evidencia: string;    // Columna F (EVIDENCIA)
+  estado: string;       // Columna G (ESTADO)
+  contratista?: string;  // Derived or optional
 }
 
 

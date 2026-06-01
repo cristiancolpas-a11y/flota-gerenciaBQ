@@ -10,13 +10,16 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   FleetStandardAudit, 
+  FleetCierreRecord,
 } from '../types';
 import { 
   fetchFleetStandardAuditFromSheet,
   submitFleetStandardAuditUpdateToSheet,
   uploadImageToDrive,
   FLEET_STANDARD_SECURITY_ITEMS,
-  FLEET_STANDARD_QUALITY_ITEMS
+  FLEET_STANDARD_QUALITY_ITEMS,
+  fetchCalidadCierreFromSheet,
+  submitCalidadCierreUpdateToSheet
 } from '../services/sheetService';
 
 const COLORS = {
@@ -63,6 +66,17 @@ const ExecutiveAuditDashboard: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+  // States specifically for CIERRE1 (Calidad y Seguridad)
+  const [cierreRecords, setCierreRecords] = useState<FleetCierreRecord[]>([]);
+  const [selectedCierre, setSelectedCierre] = useState<FleetCierreRecord | null>(null);
+  const [showCierreEvidenceModal, setShowCierreEvidenceModal] = useState(false);
+  const [cierreEvidenceData, setCierreEvidenceData] = useState({
+    verificacion: 'SI',
+    evidencia: '',
+    estado: 'CERRADO'
+  });
+  const [cierreFiles, setCierreFiles] = useState<File[]>([]);
+
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
     if (url.includes('drive.google.com')) {
@@ -74,8 +88,16 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
   const fetchData = async () => {
     setLoading(true);
-    const audits = await fetchFleetStandardAuditFromSheet();
-    setData(audits);
+    try {
+      const [audits, cierres] = await Promise.all([
+        fetchFleetStandardAuditFromSheet(),
+        fetchCalidadCierreFromSheet()
+      ]);
+      setData(audits);
+      setCierreRecords(cierres);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
     setLoading(false);
   };
 
@@ -245,18 +267,79 @@ const ExecutiveAuditDashboard: React.FC = () => {
     }
   };
 
+  // Cierres de Novedades (CIERRE1) filtering and metrics
+  const filteredCierreRecords = useMemo(() => {
+    return cierreRecords.filter(item => {
+      // CD filter compatibility (Galapa, Arenosa, etc)
+      const matchCentro = filterCentro === 'TODOS' || 
+        item.cd?.toUpperCase().includes(filterCentro.toUpperCase()) || 
+        item.cd === filterCentro;
+      
+      const matchSearch = !searchTerm || 
+        item.placa.toUpperCase().includes(searchTerm.toUpperCase()) ||
+        (item.item && item.item.toUpperCase().includes(searchTerm.toUpperCase()));
+      return matchCentro && matchSearch;
+    });
+  }, [cierreRecords, filterCentro, searchTerm]);
+
+  const handleOpenCierreEvidence = (cierre: FleetCierreRecord) => {
+    setSelectedCierre(cierre);
+    setCierreEvidenceData({
+      verificacion: cierre.verificacion || 'SI',
+      evidencia: cierre.evidencia || '',
+      estado: cierre.estado || 'CERRADO'
+    });
+    setCierreFiles([]);
+    setShowCierreEvidenceModal(true);
+  };
+
+  const handleSaveCierreEvidence = async () => {
+    if (!selectedCierre) return;
+    setIsUpdating(true);
+    try {
+      let finalEvidence = cierreEvidenceData.evidencia || '';
+      if (cierreFiles.length > 0) {
+        const base64 = await generateCollage(cierreFiles, 'EVIDENCIA', selectedCierre.placa);
+        finalEvidence = await uploadImageToDrive(base64, `CIERRE_QS_${selectedCierre.placa}_${Date.now()}.jpg`);
+      }
+
+      const success = await submitCalidadCierreUpdateToSheet({
+        plate: selectedCierre.placa,
+        item: selectedCierre.item,
+        status: cierreEvidenceData.estado,
+        evidence: finalEvidence,
+        verification: cierreEvidenceData.verificacion
+      });
+
+      if (success) {
+        setTimeout(async () => {
+          await fetchData();
+          setShowCierreEvidenceModal(false);
+          setIsUpdating(false);
+          alert('Evidencia registrada y caso actualizado exitosamente en el servidor de Calidad y Seguridad.');
+        }, 3000);
+      } else {
+        alert('Error al registrar evidencias en el servidor.');
+        setIsUpdating(false);
+      }
+    } catch (error) {
+      console.error("Error al actualizar cierre de novedad:", error);
+      alert('Error de conexión o timeout. Verifique su internet.');
+      setIsUpdating(false);
+    }
+  };
+
   const closureMetrics = useMemo(() => {
-    const records = filteredData.filter(r => r.observations && r.observations.trim() !== '');
-    const total = records.length;
+    const total = filteredCierreRecords.length;
     if (total === 0) return { total: 0, closed: 0, open: 0, uniquePlates: 0, compliance: 0 };
 
-    const closed = records.filter(r => r.estado && r.estado.toUpperCase().includes('CERRADO')).length;
-    const open = records.filter(r => r.estado && r.estado.toUpperCase().includes('ABIERTO')).length;
-    const uniquePlates = new Set(records.map(r => r.placa)).size;
+    const closed = filteredCierreRecords.filter(r => r.estado && r.estado.toUpperCase().includes('CERRADO')).length;
+    const open = filteredCierreRecords.filter(r => r.estado && !r.estado.toUpperCase().includes('CERRADO')).length;
+    const uniquePlates = new Set(filteredCierreRecords.map(r => r.placa)).size;
     const compliance = total > 0 ? (closed / total) * 100 : 0;
 
     return { total, closed, open, uniquePlates, compliance };
-  }, [filteredData]);
+  }, [filteredCierreRecords]);
 
   // Derived Metrics
   const metrics = useMemo(() => {
@@ -785,85 +868,81 @@ const ExecutiveAuditDashboard: React.FC = () => {
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-white/5 border-b border-white/10">
-                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Fecha Reporte</th>
+                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest animate-pulse">Fecha</th>
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">CD</th>
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Placa</th>
-                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Observación</th>
+                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Observación (Item)</th>
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Estado</th>
-                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Evidencias</th>
-                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Fecha Cierre</th>
-                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Días</th>
+                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Evidencias</th>
+                    <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Verificación</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {filteredData.filter(item => item.observations && item.observations.trim() !== '').map((item, idx) => (
+                  {filteredCierreRecords.map((item, idx) => (
                     <tr key={idx} className="hover:bg-white/[0.02] transition-colors group">
-                      <td className="p-6 text-[11px] font-bold text-slate-400 whitespace-nowrap">{item.startTime ? item.startTime.split(' ')[0] : 'N/A'}</td>
-                      <td className="p-6 text-[11px] font-black text-[#00D4FF] uppercase">{item.centro}</td>
+                      <td className="p-6 text-[11px] font-bold text-slate-400 whitespace-nowrap">{item.fecha || 'N/A'}</td>
+                      <td className="p-6 text-[11px] font-black text-[#00D4FF] uppercase">{item.cd}</td>
                       <td className="p-6">
                         <span className="px-3 py-1 bg-white/10 rounded-lg text-[11px] font-mono font-black text-white border border-white/10 group-hover:border-[#00D4FF]/30 transition-colors">
                           {item.placa}
                         </span>
                       </td>
-                      <td className="p-6 text-[11px] text-slate-300 font-medium max-w-xs truncate" title={item.observations}>
-                        {item.observations || '-'}
+                      <td className="p-6 text-[11px] text-slate-300 font-medium max-w-xs truncate" title={item.item}>
+                        {item.item || '-'}
                       </td>
                       <td className="p-6 text-center">
                         <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                          item.estado?.toUpperCase().includes('CERRADO') 
+                          item.estado?.toUpperCase().includes('CERRADO') || item.estado?.toUpperCase().includes('REALIZADO')
                             ? 'bg-[#00FF88]/10 text-[#00FF88] border border-[#00FF88]/20' 
                             : 'bg-[#FF4560]/10 text-[#FF4560] border border-[#FF4560]/20'
                         }`}>
                           {item.estado || 'PENDIENTE'}
                         </span>
                       </td>
-                      <td className="p-6">
+                      <td className="p-6 text-center">
                         <div className="flex items-center justify-center gap-3">
-                          {!item.evidenciaAntes || !item.evidenciaDespues ? (
+                          {!item.evidencia ? (
                             <button 
-                              onClick={() => handleOpenEvidence(item)}
+                              onClick={() => handleOpenCierreEvidence(item)}
                               className="p-2 bg-[#00D4FF10] hover:bg-[#00D4FF20] text-[#00D4FF] rounded-lg transition-all border border-[#00D4FF20]"
-                              title="Registrar Evidencias"
+                              title="Registrar Evidencias de Cierre"
                             >
                               <Camera size={14} />
                             </button>
                           ) : (
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 items-center justify-center">
                               <button 
-                                onClick={() => handleOpenEvidence(item)}
+                                onClick={() => handleOpenCierreEvidence(item)}
                                 className="p-2 bg-[#00FF8810] hover:bg-[#00FF8820] text-[#00FF88] rounded-lg transition-all border border-[#00FF8820]"
                                 title="Ver/Editar Evidencias"
                               >
                                 <Image size={14} />
                               </button>
-                              {item.evidenciaAntes && (
-                                <button 
-                                  onClick={() => setSelectedImage(getEmbedUrl(item.evidenciaAntes))}
-                                  className="text-slate-400 hover:text-[#00D4FF] transition-colors"
-                                >
-                                  <span className="text-[8px] font-black block">ANTES</span>
-                                </button>
-                              )}
-                              {item.evidenciaDespues && (
-                                <button 
-                                  onClick={() => setSelectedImage(getEmbedUrl(item.evidenciaDespues))}
-                                  className="text-slate-400 hover:text-[#00FF88] transition-colors"
-                                >
-                                  <span className="text-[8px] font-black block">DESPUÉS</span>
-                                </button>
-                              )}
+                              {item.evidencia.split(',').map((url, uidx) => {
+                                const cleanUrl = url.trim();
+                                if (!cleanUrl) return null;
+                                return (
+                                  <button 
+                                    key={uidx}
+                                    onClick={() => setSelectedImage(getEmbedUrl(cleanUrl))}
+                                    className="text-slate-400 hover:text-[#00FF88] transition-colors"
+                                    title={`Ver Foto ${uidx + 1}`}
+                                  >
+                                    <span className="text-[9px] font-mono font-black border-r border-white/15 pr-1.5 last:border-0 mr-1.5">F{uidx + 1}</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="p-6 text-[11px] font-bold text-slate-400">{item.fechaCierre || '-'}</td>
-                      <td className="p-6 text-center font-mono text-[11px] font-black text-white">{item.diasCierre || 0}</td>
+                      <td className="p-6 text-[11px] font-bold text-slate-400">{item.verificacion || '-'}</td>
                     </tr>
                   ))}
-                  {filteredData.length === 0 && (
+                  {filteredCierreRecords.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="p-20 text-center text-slate-600 font-black uppercase tracking-widest text-xs">
-                        No se han encontrado registros
+                      <td colSpan={7} className="p-20 text-center text-slate-600 font-black uppercase tracking-widest text-xs">
+                        No se han encontrado registros en CIERRE1
                       </td>
                     </tr>
                   )}
@@ -1058,6 +1137,131 @@ const ExecutiveAuditDashboard: React.FC = () => {
                     Cerrar Vista
                   </button>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showCierreEvidenceModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCierreEvidenceModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-[#0F172A] border border-white/10 rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00FF88] to-transparent opacity-50" />
+              
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h2 className="text-xl font-black italic tracking-tighter uppercase text-white">
+                    Registro de <span className="text-[#00FF88]">Evidencias CIERRE1</span>
+                  </h2>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Placa: {selectedCierre?.placa}</p>
+                </div>
+                <button onClick={() => setShowCierreEvidenceModal(false)} className="p-2 hover:bg-white/5 rounded-xl text-slate-500 hover:text-white transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Novedad / Observación</label>
+                  <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-[11px] text-slate-300 font-medium whitespace-pre-wrap">
+                    {selectedCierre?.item}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black text-[#00FF88] uppercase tracking-widest flex items-center justify-between">
+                    <span className="flex items-center gap-2"><Camera size={12} /> Evidencias de Cierre (Máx 6)</span>
+                    <span className="text-slate-500">{cierreFiles.length}/6</span>
+                  </label>
+                  
+                  {!cierreEvidenceData.evidencia && (
+                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                      {cierreFiles.map((file, i) => (
+                        <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
+                          <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                          <button 
+                            type="button"
+                            onClick={() => setCierreFiles(cierreFiles.filter((_, idx) => idx !== i))}
+                            className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                      {cierreFiles.length < 6 && (
+                        <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00FF88]/40 cursor-pointer flex items-center justify-center transition-all">
+                          <Upload size={16} className="text-[#00FF88]/40" />
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*" 
+                            multiple 
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              setCierreFiles(prev => [...prev, ...files].slice(0, 6));
+                            }} 
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
+
+                  {cierreEvidenceData.evidencia && !cierreFiles.length && (
+                    <div className="flex flex-wrap gap-3 mb-4">
+                      {cierreEvidenceData.evidencia.split(',').map((url, uidx) => {
+                        const cleanUrl = url.trim();
+                        if (!cleanUrl) return null;
+                        return (
+                          <div key={uidx} className="group relative w-20 h-20 rounded-xl border border-white/10 overflow-hidden bg-white/5">
+                            <img src={getEmbedUrl(cleanUrl)} alt={`Evidencia ${uidx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                              <button 
+                                type="button"
+                                onClick={() => setSelectedImage(getEmbedUrl(cleanUrl))}
+                                className="p-1 bg-white/10 rounded-full hover:bg-white/20 text-white"
+                              >
+                                <Search size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-4">
+                  <button 
+                    onClick={handleSaveCierreEvidence}
+                    disabled={isUpdating}
+                    className="w-full bg-[#00FF88] hover:bg-[#00DD77] disabled:opacity-50 text-black py-4 rounded-xl font-black uppercase tracking-widest text-[11px] shadow-[0_0_20px_rgba(0,255,136,0.3)] transition-all flex items-center justify-center gap-2"
+                  >
+                    {isUpdating ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                        Guardando Evidencias...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        Guardar Novedad de Cierre
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
