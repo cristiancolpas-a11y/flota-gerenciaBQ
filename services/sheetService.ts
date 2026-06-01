@@ -1,12 +1,12 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
 const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
-const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbxSrmZSoQp1l98M3Hcfktl31gel3ynU2eVT2d1_IOg0UKCRVJQVCTKwSmMjZ54EORB1-w/exec';
+const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -110,6 +110,19 @@ const parseFlexibleDate = (dateStr: any): string => {
   
   const cleanStr = cleanSheetValue(dateStr);
   if (!cleanStr || cleanStr.toLowerCase().includes('fecha')) return '';
+
+  if (/^\d+$/.test(cleanStr)) {
+    const serial = parseInt(cleanStr);
+    if (serial > 30000 && serial < 60000) {
+      const dateObj = new Date((serial - 25569) * 86400 * 1000);
+      if (!isNaN(dateObj.getTime())) {
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+    }
+  }
   
   try {
     // Si ya viene en formato YYYY-MM-DD, lo devolvemos tal cual para evitar desfases de zona horaria
@@ -2377,6 +2390,72 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
 export const submitFleetStandardAuditUpdateToSheet = async (data: any): Promise<boolean> => {
   const result = await sendToGAS({ method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: AUDIT_QS_DOC_ID } }, GOOGLE_SCRIPT_AUDIT_URL, true);
   return result && (result as any).status === 'success';
+};
+
+export const submitFleetCierreUpdateToSheet = async (data: {
+  plate: string;
+  item: string;
+  status: string;
+  evidence: string | string[];
+}): Promise<boolean> => {
+  const result = await sendToGAS({
+    method: 'POST_FLEET_CIERRE_UPDATE',
+    data: { ...data, docId: AUDIT_DOC_ID }
+  }, GOOGLE_SCRIPT_AUDIT_URL, true);
+  return result && (result as any).status === 'success';
+};
+
+export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
+  try {
+    const rows = await fetchDataFromGAS(AUDIT_DOC_ID, 'CIERRE', GOOGLE_SCRIPT_AUDIT_URL);
+    if (!rows || rows.length < 2) {
+      return fetchFleetCierreFromSheetCSV();
+    }
+    return processFleetCierreRows(rows);
+  } catch (e) {
+    console.error("Error fetching fleet standard closure from GAS:", e);
+    return fetchFleetCierreFromSheetCSV();
+  }
+};
+
+const fetchFleetCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/gviz/tq?tqx=out:csv&sheet=CIERRE${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          const rows = results.data as any[][];
+          if (!rows || rows.length < 2) { resolve([]); return; }
+          resolve(processFleetCierreRows(rows));
+        },
+        error: () => resolve([])
+      });
+    });
+  } catch (e) { return []; }
+};
+
+const processFleetCierreRows = (rows: any[][]): FleetCierreRecord[] => {
+  return rows.slice(1)
+    .filter(row => row && row[1]) // Placa Check
+    .map((row, i): FleetCierreRecord => {
+      return {
+        id: `cierre-${i}-${cleanSheetValue(row[1])}`,
+        fecha: parseFlexibleDate(row[0]),
+        placa: normalizePlate(cleanSheetValue(row[1])),
+        cd: cleanSheetValue(row[2]) || 'GENERAL',
+        contratista: cleanSheetValue(row[3]) || 'Otros',
+        item: cleanSheetValue(row[4]),
+        verificacion: cleanSheetValue(row[5]),
+        evidencia: cleanSheetValue(row[6]),
+        estado: cleanSheetValue(row[7]) || 'PENDIENTE'
+      };
+    });
 };
 
 const processAuditRows = (rows: any[][]): AuditRecord[] => {

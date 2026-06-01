@@ -509,9 +509,9 @@ const SustainabilityModule: React.FC = () => {
                 </div>
               </div>
               <div className="relative z-10 flex-grow w-full flex flex-col items-center justify-end font-sans">
-                <div className="w-full h-[150px] relative mb-2 mt-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                <div className="w-full h-[150px] relative mb-2 mt-4 flex justify-center">
+                  <ResponsiveContainer width={300} height={150}>
+                    <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                       <Pie
                         data={[
                           { value: Math.min(kpis.avgValue, kpis.avgMeta) },
@@ -521,8 +521,8 @@ const SustainabilityModule: React.FC = () => {
                         cy="100%"
                         startAngle={180}
                         endAngle={0}
-                        innerRadius="75%"
-                        outerRadius="100%"
+                        innerRadius={105}
+                        outerRadius={140}
                         dataKey="value"
                         stroke="none"
                         isAnimationActive={false}
@@ -532,7 +532,7 @@ const SustainabilityModule: React.FC = () => {
                       </Pie>
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="absolute bottom-2 left-0 w-full flex flex-col items-center">
+                  <div className="absolute bottom-2 left-0 w-full flex flex-col items-center justify-end">
                     <span className="text-5xl font-black text-white leading-none">{kpis.avgValue.toFixed(2)}</span>
                   </div>
                 </div>

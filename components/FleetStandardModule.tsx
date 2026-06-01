@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { AuditRecord, AuditMasterVehicle } from "../types";
+import { AuditRecord, AuditMasterVehicle, FleetCierreRecord } from "../types";
 import {
   BarChart,
   Bar,
@@ -46,12 +46,13 @@ import {
   Clock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { submitAuditUpdateToSheet } from "../services/sheetService";
+import { submitAuditUpdateToSheet, submitFleetCierreUpdateToSheet } from "../services/sheetService";
 import { getDriveDirectLink, createMosaic } from "../utils";
 
 interface FleetStandardModuleProps {
   data: AuditRecord[];
   masterList: AuditMasterVehicle[];
+  cierreRecords?: FleetCierreRecord[];
 }
 
 const ITEM_LABELS = {
@@ -220,6 +221,7 @@ const NovedadesDonut = ({ compliance }: { compliance: number }) => {
 const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   data,
   masterList,
+  cierreRecords,
 }) => {
   const [filterRegional, setFilterRegional] = useState<string>("Todas");
   const [filterCD, setFilterCD] = useState<string>("Todos");
@@ -229,9 +231,20 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   const [filterContractor, setFilterContractor] = useState<string>("Todos");
   const [filterDuration, setFilterDuration] = useState<string>("Todos");
   const [filterCategory, setFilterCategory] = useState<string>("Todos");
-  const [activeTab, setActiveTab] = useState<"dashboard" | "novedades">(
-    "dashboard",
-  );
+  const [filterPlate, setFilterPlate] = useState<string>("Todos");
+  
+  const plates = useMemo(() => {
+    const list = new Set<string>();
+    data.forEach((r) => {
+      if (r.plate) list.add(r.plate.toUpperCase().trim());
+    });
+    masterList.forEach((m) => {
+      if (m.plate) list.add(m.plate.toUpperCase().trim());
+    });
+    return Array.from(list).sort();
+  }, [data, masterList]);
+
+  const [activeTab, setActiveTab] = useState<"dashboard" | "novedades">("dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAudit, setSelectedAudit] = useState<AuditRecord | null>(null);
 
@@ -279,13 +292,23 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
         }
       }
 
-      const success = await submitAuditUpdateToSheet({
-        id: selectedNovelty.id,
-        status: noveltyStatus,
-        noveltyDate: new Date().toISOString().split("T")[0],
-        evidence: finalEvidence,
-        noveltyObservation: noveltyObs,
-      });
+      let success = false;
+      if (selectedNovelty.isCierre) {
+        success = await submitFleetCierreUpdateToSheet({
+          plate: selectedNovelty.plate,
+          item: selectedNovelty.observations, // observations maps to c.item
+          status: noveltyStatus,
+          evidence: finalEvidence
+        });
+      } else {
+        success = await submitAuditUpdateToSheet({
+          id: selectedNovelty.id,
+          status: noveltyStatus,
+          noveltyDate: new Date().toISOString().split("T")[0],
+          evidence: finalEvidence,
+          noveltyObservation: noveltyObs,
+        });
+      }
       if (success) {
         setIsEvidenceModalOpen(false);
         alert(
@@ -367,6 +390,9 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
       const matchContractor =
         filterContractor === "Todos" || contr === filterContractor;
 
+      const matchPlate =
+        filterPlate === "Todos" || r.plate.toUpperCase().trim() === filterPlate.toUpperCase().trim();
+
       // Duration Filter
       const bucket = r.executionTime ? Math.floor(r.executionTime) : 0;
       const bucketLabel = r.executionTime
@@ -399,6 +425,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
         matchYear &&
         matchAuditor &&
         matchContractor &&
+        matchPlate &&
         matchDuration &&
         matchCategory &&
         matchSearch
@@ -412,6 +439,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     filterYear,
     filterAuditor,
     filterContractor,
+    filterPlate,
     filterDuration,
     filterCategory,
     plateToContractor,
@@ -766,19 +794,122 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     searchTerm,
   ]);
 
-  const novedadesData = useMemo(() => {
-    return filteredData.filter((r) => {
+  const joinedNovedades = useMemo(() => {
+    const rawNovedades = filteredData.filter((r) => {
       const obs = (r.observations || "").trim().toLowerCase();
       return obs !== "" && obs !== "sin observación registrada";
     });
-  }, [filteredData]);
-
-  const joinedNovedades = useMemo(() => {
-    return novedadesData.map((r) => {
+    return rawNovedades.map((r) => {
       const master = masterList.find((m) => m.plate === r.plate);
       return { ...r, contractorName: master?.contractor || "NO ASIGNADO" };
     });
-  }, [novedadesData, masterList]);
+  }, [filteredData, masterList]);
+
+  const mappedCierreRecords = useMemo(() => {
+    if (!cierreRecords || cierreRecords.length === 0) return [];
+    
+    const monthNames = [
+      "enero", "febrero", "marzo", "abril", "mayo", "junio",
+      "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+    ];
+
+    return cierreRecords.map((c) => {
+      let monthName = "enero";
+      let yearVal = 2026;
+      if (c.fecha) {
+        const parts = c.fecha.split("-");
+        if (parts.length === 3) {
+          yearVal = parseInt(parts[0]) || 2026;
+          const monthIdx = parseInt(parts[1]) - 1;
+          if (monthIdx >= 0 && monthIdx < 12) {
+            monthName = monthNames[monthIdx];
+          }
+        }
+      }
+
+      let regionalVal = "Norte";
+      const match = data.find(r => r.cd.trim().toLowerCase() === c.cd.trim().toLowerCase());
+      if (match && match.regional) {
+        regionalVal = match.regional;
+      } else {
+        const cleanCD = c.cd.trim().toLowerCase();
+        if (cleanCD.includes("galapa") || cleanCD.includes("arenosa") || cleanCD.includes("turbaco") || cleanCD.includes("norte") || cleanCD.includes("soledad") || cleanCD.includes("barranquilla")) {
+          regionalVal = "Norte";
+        } else if (cleanCD.includes("pasto") || cleanCD.includes("sur") || cleanCD.includes("cali") || cleanCD.includes("palmira") || cleanCD.includes("popayan")) {
+          regionalVal = "Sur";
+        } else if (cleanCD.includes("siberia") || cleanCD.includes("centro") || cleanCD.includes("bogota") || cleanCD.includes("funza")) {
+          regionalVal = "Centro";
+        } else if (cleanCD.includes("andes") || cleanCD.includes("medellin") || cleanCD.includes("bucaramanga") || cleanCD.includes("pereira")) {
+          regionalVal = "Andes";
+        }
+      }
+
+      return {
+        id: c.id,
+        regional: regionalVal,
+        cd: c.cd,
+        auditType: "CIERRE",
+        auditor: "SISTEMA",
+        plate: c.placa,
+        observations: c.item || "Falla detectada",
+        month: monthName,
+        year: yearVal,
+        status: c.estado || "PENDIENTE",
+        date: c.fecha,
+        noveltyDate: c.fecha,
+        evidence: c.evidencia || "",
+        verification: c.verificacion || "",
+        isCierre: true,
+        docBin: [],
+        signBin: [],
+        imgBin: [],
+        docNoMand: 0,
+        signNoMand: 0,
+        imgNoMand: 0,
+        totalNoMand: 0,
+        docMand: 0,
+        signMand: 0,
+        imgMand: 0,
+        totalMand: 0
+      } as AuditRecord;
+    });
+  }, [cierreRecords, data]);
+
+  const filteredCierreRecords = useMemo(() => {
+    if (mappedCierreRecords.length === 0) return [];
+    return mappedCierreRecords.filter((r) => {
+      const matchRegional = filterRegional === "Todas" || r.regional === filterRegional;
+      const matchCD = filterCD === "Todos" || r.cd === filterCD;
+      const matchMonth = filterMonth === "Todos" || r.month.toLowerCase() === filterMonth.toLowerCase();
+      const matchYear = filterYear === "Todos" || r.year === parseInt(filterYear);
+
+      let matchContractor = true;
+      if (filterContractor !== "Todos") {
+        const master = masterList.find((m) => m.plate === r.plate);
+        const recordContractor = master?.contractor || "Otros";
+        matchContractor = recordContractor.toLowerCase() === filterContractor.toLowerCase();
+      }
+
+      const matchPlate = filterPlate === "Todos" || r.plate.toUpperCase().trim() === filterPlate.toUpperCase().trim();
+
+      const matchSearch =
+        r.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.observations || "").toLowerCase().includes(searchTerm.toLowerCase());
+
+      return matchRegional && matchCD && matchMonth && matchYear && matchContractor && matchPlate && matchSearch;
+    });
+  }, [mappedCierreRecords, filterRegional, filterCD, filterMonth, filterYear, filterContractor, filterPlate, searchTerm, masterList]);
+
+  const novedadesData = useMemo(() => {
+    if (cierreRecords && cierreRecords.length > 0) {
+      return filteredCierreRecords;
+    }
+    const rawNovedades = filteredData.filter((r) => {
+      const obs = (r.observations || "").trim().toLowerCase();
+      return obs !== "" && obs !== "sin observación registrada";
+    });
+    return rawNovedades;
+  }, [cierreRecords, filteredCierreRecords, filteredData]);
 
   const novedadesChartsData = useMemo(() => {
     const monthOrder = [
@@ -1242,7 +1373,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 w-full xl:w-auto">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 w-full xl:w-auto">
             <div className="flex flex-col gap-1">
               <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
                 Regional
@@ -1348,6 +1479,23 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                 ))}
               </select>
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
+                Placa
+              </label>
+              <select
+                value={filterPlate}
+                onChange={(e) => setFilterPlate(e.target.value)}
+                className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
+              >
+                <option value="Todos">Todos</option>
+                {plates.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -1359,6 +1507,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
         filterYear !== "Todos" ||
         filterAuditor !== "Todos" ||
         filterContractor !== "Todos" ||
+        filterPlate !== "Todos" ||
         filterDuration !== "Todos" ||
         filterCategory !== "Todos") && (
         <div className="bg-[#1e1e35]/80 border border-indigo-500/30 p-5 rounded-3xl flex flex-wrap items-center justify-between gap-4 animate-in slide-in-from-top-2 duration-300">
@@ -1436,6 +1585,17 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                 <button
                   onClick={() => setFilterContractor("Todos")}
                   className="hover:bg-sky-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
+            {filterPlate !== "Todos" && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pink-500/10 text-pink-400 border border-pink-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                PLACA: {filterPlate}
+                <button
+                  onClick={() => setFilterPlate("Todos")}
+                  className="hover:bg-pink-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
                 >
                   <X size={12} />
                 </button>
@@ -3620,6 +3780,9 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                       Novedad / Observación
                     </th>
                     <th className="px-6 py-5 text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] border-b border-slate-800 text-center">
+                      Verificación (Col F)
+                    </th>
+                    <th className="px-6 py-5 text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] border-b border-slate-800 text-center">
                       Estado
                     </th>
                     <th className="px-6 py-5 text-[10px] font-black text-indigo-300 uppercase tracking-[0.2em] border-b border-slate-800 text-center">
@@ -3630,7 +3793,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                 <tbody className="divide-y divide-slate-800">
                   <AnimatePresence>
                     {novedadesData.map((r, i) => (
-                      <motion.tr
+                       <motion.tr
                         key={`novelty-${r.id}`}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -3670,6 +3833,19 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                           <p className="text-slate-300 text-xs font-bold leading-relaxed line-clamp-2 max-w-xs">
                             {r.observations || "Sin observación registrada"}
                           </p>
+                        </td>
+                        <td className="px-6 py-5 border-b border-slate-800/50 text-center">
+                          <span
+                            className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                              r.verification?.toUpperCase() === "SI"
+                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                : r.verification?.toUpperCase() === "NO"
+                                ? "bg-rose-500/10 text-rose-450 border border-rose-500/20"
+                                : "bg-[#1e1e35] text-slate-400 border border-slate-700/55"
+                            }`}
+                          >
+                            {r.verification || "N/A"}
+                          </span>
                         </td>
                         <td className="px-6 py-5 border-b border-slate-800/50 text-center">
                           <span
@@ -4052,9 +4228,9 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
 
                 <button
                   onClick={handleSaveEvidence}
-                  disabled={isSubmitting || noveltyEvidence.length === 0}
+                  disabled={isSubmitting}
                   className={`w-full py-5 rounded-[2rem] flex items-center justify-center gap-3 text-sm font-black uppercase tracking-widest transition-all shadow-2xl ${
-                    isSubmitting || noveltyEvidence.length === 0
+                    isSubmitting
                       ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                       : "bg-emerald-600 text-white hover:bg-emerald-500"
                   }`}

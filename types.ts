@@ -422,6 +422,8 @@ export interface AuditRecord {
   noveltyDate: string;
   evidence?: string;
   noveltyObservation?: string;
+  verification?: string;
+  isCierre?: boolean;
   executionTime?: number;
 }
 
@@ -480,6 +482,19 @@ export interface VclBillingRecord {
   empresaAsume: string;
   valor: number;
 }
+
+export interface FleetCierreRecord {
+  id: string;
+  fecha: string;        // Columna A (FECHA)
+  placa: string;        // Columna B (PLACA)
+  cd: string;           // Columna C (CD)
+  contratista: string;  // Columna D (CONTRATIS)
+  item: string;         // Columna E (ITEM)
+  verificacion: string; // Columna F (VERIFICACION)
+  evidencia: string;    // Columna G (EVIDENCIA)
+  estado: string;       // Columna H (ESTADO)
+}
+
 
 
 

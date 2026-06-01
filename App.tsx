@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -88,7 +88,8 @@ import {
   fetchControlTowerFromSheet,
   fetchAuditRecordsFromSheet,
   fetchAvailabilitySummaryFromSheet,
-  fetchFleetStandardAuditFromSheet
+  fetchFleetStandardAuditFromSheet,
+  fetchFleetCierreFromSheet
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -193,6 +194,7 @@ const App: React.FC = () => {
   const [controlTowerRecords, setControlTowerRecords] = useState<ControlTowerRecord[]>([]);
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [fleetStandardAuditRecords, setFleetStandardAuditRecords] = useState<FleetStandardAudit[]>([]);
+  const [fleetCierreRecords, setFleetCierreRecords] = useState<FleetCierreRecord[]>([]);
   const [auditMasterVehicles, setAuditMasterVehicles] = useState<AuditMasterVehicle[]>([]);
 
   // UI States
@@ -304,7 +306,7 @@ const App: React.FC = () => {
       setAvailabilitySummary(as);
 
       // Grupo 4: Listas de control e indicadores de rendimiento
-      const [ch, fp, pa, corr, unav, ops, ct, aud, fsa, amv, fb, fFines] = await Promise.all([
+      const [ch, fp, pa, corr, unav, ops, ct, aud, fsa, fcr, amv, fb, fFines] = await Promise.all([
         fetchCheckListFromSheet(),
         fetchFuelPerformanceFromSheet(),
         fetchPlateAdherenceFromSheet(),
@@ -314,6 +316,7 @@ const App: React.FC = () => {
         fetchControlTowerFromSheet(),
         fetchAuditRecordsFromSheet(),
         fetchFleetStandardAuditFromSheet(),
+        fetchFleetCierreFromSheet(),
         import('./services/sheetService').then(m => m.fetchAuditMasterListFromSheet()),
         import('./services/sheetService').then(m => m.fetchFleetBaseData()),
         import('./services/sheetService').then(m => m.fetchForkliftFinesFromSheet())
@@ -328,6 +331,7 @@ const App: React.FC = () => {
       setControlTowerRecords(ct);
       setAuditRecords(aud);
       setFleetStandardAuditRecords(fsa);
+      setFleetCierreRecords(fcr);
       setAuditMasterVehicles(amv);
       setFleetBase(fb);
       setForkliftFines(fFines);
@@ -1268,6 +1272,7 @@ const App: React.FC = () => {
             <FleetStandardModule 
               data={auditRecords} 
               masterList={auditMasterVehicles}
+              cierreRecords={fleetCierreRecords}
             />
           )}
 
