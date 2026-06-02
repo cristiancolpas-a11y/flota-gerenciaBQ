@@ -494,7 +494,9 @@ function doPost(e) {
         return output("error", "Auditoria no encontrada con ID: " + idSearch);
       }
       else if (m === 'POST_CONTROL_TOWER_UPDATE') {
-        var s = getS(ss, "CIERRE DE NOVEDADES");
+        var targetDocId = d.docId || '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60';
+        var ssCT = SpreadsheetApp.openById(targetDocId);
+        var s = ssCT.getSheetByName("CIERRE DE NOVEDADES") || ssCT.getSheets()[0];
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var plateSearch = (d.plate || "").toString().toUpperCase().trim();
@@ -508,7 +510,7 @@ function doPost(e) {
           var rowDateStr = "";
           
           if (rowDateRaw instanceof Date) {
-            rowDateStr = Utilities.formatDate(rowDateRaw, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+            rowDateStr = Utilities.formatDate(rowDateRaw, ssCT.getSpreadsheetTimeZone(), "yyyy-MM-dd");
           } else if (rowDateRaw) {
             rowDateStr = rowDateRaw.toString();
           }

@@ -73,6 +73,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
   const [afterImages, setAfterImages] = useState<string[]>([]);
   const [viewingRecord, setViewingRecord] = useState<ControlTowerRecord | null>(null);
   const [activeEvidenceTab, setActiveEvidenceTab] = useState<'before' | 'after'>('before');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'cierre'>('dashboard');
 
   useEffect(() => {
     setCurrentPage(1);
@@ -345,6 +346,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     statuses: Array.from(new Set(data.map(item => item.status))).filter(Boolean).sort(),
     criticalities: Array.from(new Set(data.map(item => item.criticality))).filter(Boolean).sort(),
     systems: Array.from(new Set(data.map(item => item.system))).filter(Boolean).sort(),
+    plates: Array.from(new Set(data.map(item => item.plate))).filter(Boolean).sort(),
   }), [data]);
 
   // KPIs
@@ -533,7 +535,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       </div>
 
       {/* Filters Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8 bg-slate-800/30 p-4 rounded-xl border border-slate-700/50 backdrop-blur-sm">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8 bg-slate-800/30 p-4 rounded-xl border border-slate-700/50 backdrop-blur-sm">
         <FilterSelect 
           label="CD" 
           value={filters.cd} 
@@ -576,9 +578,43 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
           options={filterOptions.systems} 
           onChange={(v) => setFilters(f => ({ ...f, system: v }))} 
         />
+        <FilterSelect 
+          label="PLACA" 
+          value={filters.plate} 
+          options={filterOptions.plates} 
+          onChange={(v) => setFilters(f => ({ ...f, plate: v }))} 
+        />
       </div>
 
-      {/* KPI Section */}
+      {/* Tabs Selector */}
+      <div className="flex space-x-1 bg-slate-800/40 p-1 rounded-xl border border-slate-700/50 backdrop-blur-sm max-w-md mb-8">
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-black tracking-widest uppercase transition-all duration-200 flex items-center justify-center gap-2 ${
+            activeTab === 'dashboard'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 font-black'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
+          }`}
+        >
+          <LayoutGrid size={14} />
+          DASHBOARD
+        </button>
+        <button
+          onClick={() => setActiveTab('cierre')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-black tracking-widest uppercase transition-all duration-200 flex items-center justify-center gap-2 ${
+            activeTab === 'cierre'
+              ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 font-black'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
+          }`}
+        >
+          <CheckCircle size={14} />
+          CIERRE DE NOVEDADES
+        </button>
+      </div>
+
+      {activeTab === 'dashboard' && (
+        <>
+          {/* KPI Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-8">
         <KPICard label="Total Novedades" value={kpis.total} icon={Activity} color={COLORS.PRIMARY} />
         <KPICard label="Abiertas" value={kpis.open} icon={AlertTriangle} color={COLORS.HIGH} subtext="Pendientes Gestión" />
@@ -1267,8 +1303,12 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
         </div>
 
       </div>
+      </>
+      )}
 
-      {/* Data Table */}
+      {activeTab === 'cierre' && (
+        <>
+          {/* Data Table */}
       <div className="bg-slate-800/40 rounded-2xl border border-slate-700/50 backdrop-blur-xl overflow-hidden shadow-2xl">
         <div className="p-6 border-b border-slate-700/50 flex flex-col sm:flex-row justify-between items-center gap-4">
           <h3 className="font-semibold text-lg">Detalle Torre de Control</h3>
@@ -1414,6 +1454,8 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
           )}
         </div>
       </div>
+      </>
+      )}
       {/* Evidence Registration Modal */}
       <AnimatePresence>
         {selectedRecord && (

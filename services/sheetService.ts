@@ -40,8 +40,8 @@ const CHECKLIST_DOC_ID = '1i6qGjwhQW3AeR1ja5UxZkOXjJU3oh0f_8Grt131NQzk';
 const CHECKLIST_GALAPA_DOC_ID = '14kak0CqSnX9oOXk0GKD0G_QIt5aJxuCu9-_Livst70Y';
 
 // TORRE DE CONTROL
-const CONTROL_TOWER_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
-const CONTROL_TOWER_GID = '2041116370';
+const CONTROL_TOWER_DOC_ID = '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60';
+const CONTROL_TOWER_GID = '1012312873';
 
 const AUDIT_DOC_ID = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
 const FLEET_AVAILABILITY_DOC_ID = '1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E';
@@ -2037,7 +2037,7 @@ const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
 };
 
 export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolean> => {
-  return await sendToGAS({ method: 'POST_CONTROL_TOWER_UPDATE', data });
+  return await sendToGAS({ method: 'POST_CONTROL_TOWER_UPDATE', data: { ...data, docId: CONTROL_TOWER_DOC_ID } });
 };
 
 export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
