@@ -2037,7 +2037,7 @@ const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
 };
 
 export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolean> => {
-  return await sendToGAS({ method: 'POST_CONTROL_TOWER_UPDATE', data: { ...data, docId: CONTROL_TOWER_DOC_ID } });
+  return await sendToGAS({ method: 'POST_CONTROL_TOWER_UPDATE', data: { ...data, docId: CONTROL_TOWER_DOC_ID } }, GOOGLE_SCRIPT_AUDIT_URL, true);
 };
 
 export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
@@ -2106,7 +2106,7 @@ export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
 
 export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(CONTROL_TOWER_DOC_ID, 'CIERRE DE NOVEDADES');
+    const rows = await fetchDataFromGAS(CONTROL_TOWER_DOC_ID, 'CIERRE DE NOVEDADES', GOOGLE_SCRIPT_AUDIT_URL);
     
     if (!rows || rows.length < 2) {
       console.warn("GAS fetch control tower failed, attempting CSV fallback");
