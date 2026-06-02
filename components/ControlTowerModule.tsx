@@ -68,6 +68,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
   const itemsPerPage = 15;
 
   const [selectedRecord, setSelectedRecord] = useState<ControlTowerRecord | null>(null);
+  const [uploadMode, setUploadMode] = useState<'before' | 'after' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [beforeImages, setBeforeImages] = useState<string[]>([]);
   const [afterImages, setAfterImages] = useState<string[]>([]);
@@ -142,25 +143,31 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
   const handleUpdateEvidence = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRecord) return;
+    if (!selectedRecord || !uploadMode) return;
 
     setIsSubmitting(true);
     try {
-      const finalBefore = beforeImages.length > 0 ? await generateCollage(beforeImages) : selectedRecord.evidenceBefore;
-      const finalAfter = afterImages.length > 0 ? await generateCollage(afterImages) : selectedRecord.evidenceAfter;
-
-      const { submitControlTowerUpdateToSheet } = await import('../services/sheetService');
-      const success = await submitControlTowerUpdateToSheet({
+      const payload: any = {
         plate: selectedRecord.plate,
         reportDate: selectedRecord.reportDate,
         novelty: selectedRecord.novelty,
-        evidenceBefore: finalBefore,
-        evidenceAfter: finalAfter
-      });
+      };
+
+      if (uploadMode === 'before') {
+        const finalBefore = beforeImages.length > 0 ? await generateCollage(beforeImages) : selectedRecord.evidenceBefore;
+        payload.evidenceBefore = finalBefore;
+      } else {
+        const finalAfter = afterImages.length > 0 ? await generateCollage(afterImages) : selectedRecord.evidenceAfter;
+        payload.evidenceAfter = finalAfter;
+      }
+
+      const { submitControlTowerUpdateToSheet } = await import('../services/sheetService');
+      const success = await submitControlTowerUpdateToSheet(payload);
 
       if (success) {
-        alert('Evidencias registradas correctamente.');
+        alert(`Evidencia ${uploadMode === 'before' ? 'Antes' : 'Después'} registrada correctamente.`);
         setSelectedRecord(null);
+        setUploadMode(null);
         setBeforeImages([]);
         setAfterImages([]);
       } else {
@@ -1407,25 +1414,44 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                     </div>
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-3">
-                      {/* Register Button - Only show if one of them is missing */}
-                      {!(item.evidenceBefore && item.evidenceAfter) && (
-                        <button 
-                          onClick={() => {
-                            setSelectedRecord(item);
-                            setBeforeImages([]);
-                            setAfterImages([]);
-                          }}
-                          className={`p-2 rounded-xl transition-all shadow-lg border ${
-                            item.evidenceBefore || item.evidenceAfter 
-                              ? 'bg-slate-800 text-slate-400 hover:bg-slate-700 border-slate-700' 
-                              : 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/40 border-indigo-500/30'
-                          }`}
-                          title={item.evidenceBefore || item.evidenceAfter ? "Completar Evidencias" : "Registrar Evidencias"}
-                        >
-                          <Camera className="w-4 h-4" />
-                        </button>
-                      )}
+                    <div className="flex items-center justify-center gap-2">
+                      {/* Antes (Before) */}
+                      <button 
+                        onClick={() => {
+                          setSelectedRecord(item);
+                          setUploadMode('before');
+                          setBeforeImages([]);
+                          setAfterImages([]);
+                        }}
+                        className={`py-1.5 px-3 rounded-lg transition-all border flex items-center gap-1.5 text-xs font-bold ${
+                          item.evidenceBefore 
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' 
+                            : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/20'
+                        }`}
+                        title="Subir Evidencia ANTES"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Antes</span>
+                      </button>
+
+                      {/* Después (After) */}
+                      <button 
+                        onClick={() => {
+                          setSelectedRecord(item);
+                          setUploadMode('after');
+                          setBeforeImages([]);
+                          setAfterImages([]);
+                        }}
+                        className={`py-1.5 px-3 rounded-lg transition-all border flex items-center gap-1.5 text-xs font-bold ${
+                          item.evidenceAfter 
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' 
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                        }`}
+                        title="Subir Evidencia DESPUÉS"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" />
+                        <span>Después</span>
+                      </button>
 
                       {/* Unified View Button - Gallery Icon */}
                       {(item.evidenceBefore || item.evidenceAfter) && (
@@ -1434,10 +1460,10 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                             setViewingRecord(item);
                             setActiveEvidenceTab(item.evidenceBefore ? 'before' : 'after');
                           }}
-                          className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl hover:bg-emerald-500/40 border border-emerald-500/30 transition-all shadow-lg"
+                          className="p-1.5 bg-slate-850 text-slate-400 rounded-lg hover:bg-slate-750 hover:text-slate-200 border border-slate-705/30 transition-all shadow"
                           title="Ver Galería de Evidencias"
                         >
-                          <ImageIcon className="w-4 h-4" />
+                          <ImageIcon className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
@@ -1458,7 +1484,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       )}
       {/* Evidence Registration Modal */}
       <AnimatePresence>
-        {selectedRecord && (
+        {selectedRecord && uploadMode && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
@@ -1467,20 +1493,23 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
               className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
             >
               <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2 uppercase tracking-wide">
                   <Activity className="w-5 h-5 text-indigo-400" />
-                  Registrar Evidencias
+                  {uploadMode === 'before' ? 'Registrar Evidencia Antes' : 'Registrar Evidencia Después'}
                 </h3>
                 <button 
-                  onClick={() => setSelectedRecord(null)}
+                  onClick={() => {
+                    setSelectedRecord(null);
+                    setUploadMode(null);
+                  }}
                   className="p-2 hover:bg-slate-800 rounded-xl transition-colors text-slate-400"
                 >
                   <ChevronDown className="w-6 h-6 rotate-180" />
                 </button>
               </div>
-
+ 
               <form onSubmit={handleUpdateEvidence} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 mb-4">
+                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 mb-4 font-sans">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">Vehículo</span>
                     <span className="text-sm font-black text-indigo-400">{selectedRecord.plate}</span>
@@ -1489,117 +1518,124 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                     {selectedRecord.novelty}
                   </div>
                 </div>
-
+ 
                 <div className="space-y-6">
                   {/* Evidencia Antes */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">
-                        Evidencia Antes (Max 6 fotos)
-                      </label>
-                      <button 
-                        type="button"
-                        onClick={() => document.getElementById('before-input')?.click()}
-                        className="p-1 bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                      <input 
-                        id="before-input"
-                        type="file" 
-                        multiple 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={(e) => handleImagePick(e, 'before')}
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2 mt-2">
-                      {beforeImages.map((src, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
-                          <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
-                          <button 
-                            type="button"
-                            onClick={() => setBeforeImages(prev => prev.filter((_, i) => i !== idx))}
-                            className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                      {beforeImages.length === 0 && !selectedRecord.evidenceBefore && (
-                        <div className="col-span-3 py-4 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-600 bg-slate-950/20">
-                          <Camera className="w-6 h-6 mb-1 opacity-20" />
-                          <span className="text-xs">Sin fotos seleccionadas</span>
+                  {uploadMode === 'before' && (
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">
+                          Evidencia Antes (Max 6 fotos)
+                        </label>
+                        <button 
+                          type="button"
+                          onClick={() => document.getElementById('before-input')?.click()}
+                          className="p-1.5 bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                        <input 
+                          id="before-input"
+                          type="file" 
+                          multiple 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => handleImagePick(e, 'before')}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 mt-2">
+                        {beforeImages.map((src, idx) => (
+                          <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
+                            <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
+                            <button 
+                              type="button"
+                              onClick={() => setBeforeImages(prev => prev.filter((_, i) => i !== idx))}
+                              className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                        {beforeImages.length === 0 && !selectedRecord.evidenceBefore && (
+                          <div className="col-span-3 py-4 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-600 bg-slate-950/20">
+                            <Camera className="w-6 h-6 mb-1 opacity-20" />
+                            <span className="text-xs">Sin fotos seleccionadas</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {selectedRecord.evidenceBefore && beforeImages.length === 0 && (
+                        <div className="mt-2 p-2 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-between">
+                          <span className="text-[10px] text-slate-500 truncate max-w-[150px]">Link actual guardado</span>
+                          <a href={selectedRecord.evidenceBefore} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:underline">Ver actual</a>
                         </div>
                       )}
                     </div>
-                    
-                    {selectedRecord.evidenceBefore && beforeImages.length === 0 && (
-                      <div className="mt-2 p-2 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-between">
-                        <span className="text-[10px] text-slate-500 truncate max-w-[150px]">Link actual guardado</span>
-                        <a href={selectedRecord.evidenceBefore} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:underline">Ver actual</a>
-                      </div>
-                    )}
-                  </div>
-
+                  )}
+ 
                   {/* Evidencia Después */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">
-                        Evidencia Después (Max 6 fotos)
-                      </label>
-                      <button 
-                        type="button"
-                        onClick={() => document.getElementById('after-input')?.click()}
-                        className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                      <input 
-                        id="after-input"
-                        type="file" 
-                        multiple 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={(e) => handleImagePick(e, 'after')}
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2 mt-2">
-                      {afterImages.map((src, idx) => (
-                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
-                          <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
-                          <button 
-                            type="button"
-                            onClick={() => setAfterImages(prev => prev.filter((_, i) => i !== idx))}
-                            className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                      {afterImages.length === 0 && !selectedRecord.evidenceAfter && (
-                        <div className="col-span-3 py-4 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-600 bg-slate-950/20">
-                          <Camera className="w-6 h-6 mb-1 opacity-20" />
-                          <span className="text-xs">Sin fotos seleccionadas</span>
+                  {uploadMode === 'after' && (
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">
+                          Evidencia Después (Max 6 fotos)
+                        </label>
+                        <button 
+                          type="button"
+                          onClick={() => document.getElementById('after-input')?.click()}
+                          className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                        <input 
+                          id="after-input"
+                          type="file" 
+                          multiple 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => handleImagePick(e, 'after')}
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-3 gap-2 mt-2">
+                        {afterImages.map((src, idx) => (
+                          <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
+                            <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
+                            <button 
+                              type="button"
+                              onClick={() => setAfterImages(prev => prev.filter((_, i) => i !== idx))}
+                              className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                        {afterImages.length === 0 && !selectedRecord.evidenceAfter && (
+                          <div className="col-span-3 py-4 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-600 bg-slate-950/20">
+                            <Camera className="w-6 h-6 mb-1 opacity-20" />
+                            <span className="text-xs">Sin fotos seleccionadas</span>
+                          </div>
+                        )}
+                      </div>
+ 
+                      {selectedRecord.evidenceAfter && afterImages.length === 0 && (
+                        <div className="mt-2 p-2 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-between">
+                          <span className="text-[10px] text-slate-500 truncate max-w-[150px]">Link actual guardado</span>
+                          <a href={selectedRecord.evidenceAfter} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:underline">Ver actual</a>
                         </div>
                       )}
                     </div>
-
-                    {selectedRecord.evidenceAfter && afterImages.length === 0 && (
-                      <div className="mt-2 p-2 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-between">
-                        <span className="text-[10px] text-slate-500 truncate max-w-[150px]">Link actual guardado</span>
-                        <a href={selectedRecord.evidenceAfter} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-400 hover:underline">Ver actual</a>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
-
+ 
                 <div className="pt-4 flex gap-3">
                   <button 
                     type="button"
-                    onClick={() => setSelectedRecord(null)}
+                    onClick={() => {
+                      setSelectedRecord(null);
+                      setUploadMode(null);
+                    }}
                     className="flex-1 px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all"
                   >
                     Cancelar
