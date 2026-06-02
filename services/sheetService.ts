@@ -6,7 +6,7 @@ const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D
 const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
-const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbyWPA_veHmVseG7MlJIMzgY7czzdUlLvqsNqkbGXSEEqjdYggZ_5c5ObkOVdT4z1e-7Vg/exec';
+const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbwrEkalsgNrHXPqEx_MeihznsIM4uIG7WZH42ze_HOyB5EZTgeDZMPi0SaIo4JZMlAppQ/exec';
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
