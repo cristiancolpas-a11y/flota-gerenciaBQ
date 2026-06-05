@@ -121,6 +121,29 @@ const ExecutiveAuditDashboard: React.FC = () => {
     });
   }, [data, filterCentro, filterMes, filterTipo, filterAuditor, searchTerm]);
 
+  const uniqueMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+    data.forEach(item => {
+      if (item.mes) {
+        monthsSet.add(item.mes.toLowerCase().trim());
+      }
+    });
+    
+    const MONTHS_SPANISH_ORDER = [
+      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+    ];
+    
+    return Array.from(monthsSet).sort((a, b) => {
+      const idxA = MONTHS_SPANISH_ORDER.indexOf(a);
+      const idxB = MONTHS_SPANISH_ORDER.indexOf(b);
+      if (idxA === -1 && idxB === -1) return a.localeCompare(b);
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+    });
+  }, [data]);
+
   const fileToImage = (file: File): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -355,9 +378,8 @@ const ExecutiveAuditDashboard: React.FC = () => {
     const avgCalMand = filteredData.reduce((acc, d) => acc + d.scoreCalMand, 0) / count;
 
     // Monthly Evolution - Stacked Bar Chart
-    const monthsOrder = ['febrero', 'marzo', 'abril'];
-    const monthlyData = monthsOrder.map(m => {
-      const monthAudits = filteredData.filter(d => d.mes.toLowerCase() === m);
+    const monthlyData = uniqueMonths.map(m => {
+      const monthAudits = filteredData.filter(d => d.mes && d.mes.toLowerCase().trim() === m);
       if (monthAudits.length === 0) return { name: m.charAt(0).toUpperCase() + m.slice(1), mand: 0, noMand: 0 };
       const c = monthAudits.length;
       return {
@@ -448,7 +470,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
       topFailingItems,
       timeData
     };
-  }, [filteredData]);
+  }, [filteredData, uniqueMonths]);
 
   const uniqueAuditors = useMemo(() => {
     const set = new Set<string>();
@@ -514,9 +536,9 @@ const ExecutiveAuditDashboard: React.FC = () => {
               className="w-full bg-[#0F172A] border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-[#00D4FF]/50 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="TODOS">TODOS LOS MESES</option>
-              <option value="febrero">FEBRERO</option>
-              <option value="marzo">MARZO</option>
-              <option value="abril">ABRIL</option>
+              {uniqueMonths.map(m => (
+                <option key={m} value={m}>{m.toUpperCase()}</option>
+              ))}
             </select>
           </div>
           <div className="space-y-2 lg:w-48">

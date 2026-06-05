@@ -75,6 +75,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
   const [viewingRecord, setViewingRecord] = useState<ControlTowerRecord | null>(null);
   const [activeEvidenceTab, setActiveEvidenceTab] = useState<'before' | 'after'>('before');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'cierre'>('dashboard');
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -181,10 +182,8 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     }
   };
 
-  const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after') => {
-    const files = Array.from(e.target.files || []);
+  const processFiles = (files: File[], type: 'before' | 'after') => {
     if (files.length === 0) return;
-
     const limit = 6;
     const selectedFiles = files.slice(0, limit);
 
@@ -197,12 +196,39 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     });
 
     Promise.all(promises).then(results => {
-      if (type === 'before') setBeforeImages(prev => [...prev, ...results].slice(0, 6));
-      else setAfterImages(prev => [...prev, ...results].slice(0, 6));
+      if (type === 'before') {
+        setBeforeImages(prev => [...prev, ...results].slice(0, 6));
+      } else {
+        setAfterImages(prev => [...prev, ...results].slice(0, 6));
+      }
     });
-    
+  };
+
+  const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>, type: 'before' | 'after') => {
+    const files = Array.from(e.target.files || []) as File[];
+    processFiles(files, type);
     // Reset input
     e.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent, type: 'before' | 'after') => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files || []) as File[];
+    const imageFiles = files.filter(f => f.type && f.type.startsWith('image/'));
+    if (imageFiles.length > 0) {
+      processFiles(imageFiles, type);
+    }
   };
 
   // Filtered data for table and basic KPIs
@@ -1544,26 +1570,45 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                         />
                       </div>
                       
-                      <div className="grid grid-cols-3 gap-2 mt-2">
-                        {beforeImages.map((src, idx) => (
-                          <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
-                            <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
-                            <button 
-                              type="button"
-                              onClick={() => setBeforeImages(prev => prev.filter((_, i) => i !== idx))}
-                              className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                        {beforeImages.length === 0 && !selectedRecord.evidenceBefore && (
-                          <div className="col-span-3 py-4 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-600 bg-slate-950/20">
-                            <Camera className="w-6 h-6 mb-1 opacity-20" />
-                            <span className="text-xs">Sin fotos seleccionadas</span>
-                          </div>
-                        )}
-                      </div>
+                      {beforeImages.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          {beforeImages.map((src, idx) => (
+                            <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
+                              <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
+                              <button 
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setBeforeImages(prev => prev.filter((_, i) => i !== idx));
+                                }}
+                                className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {beforeImages.length < 6 && (
+                        <div 
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, 'before')}
+                          onClick={() => document.getElementById('before-input')?.click()}
+                          className={`py-8 px-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 mt-2 ${
+                            isDragging 
+                              ? 'border-indigo-400 bg-indigo-500/10 text-indigo-300 scale-[1.01]' 
+                              : 'border-slate-700 hover:border-slate-600 bg-slate-950/20 text-slate-400'
+                          }`}
+                        >
+                          <Camera className={`w-8 h-8 mb-2 transition-transform duration-200 ${isDragging ? 'rotate-6 scale-110 text-indigo-400' : 'opacity-40 text-slate-500'}`} />
+                          <span className="text-xs font-bold text-slate-200">
+                            {isDragging ? '¡Suelta las fotos aquí!' : 'Arrastra tus fotos aquí o haz clic para buscarlas'}
+                          </span>
+                          <span className="text-[10px] text-slate-500 mt-1">Soporta múltiples archivos PNG, JPG (Hasta 6 fotos)</span>
+                        </div>
+                      )}
                       
                       {selectedRecord.evidenceBefore && beforeImages.length === 0 && (
                         <div className="mt-2 p-2 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-between">
@@ -1598,26 +1643,45 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                         />
                       </div>
                       
-                      <div className="grid grid-cols-3 gap-2 mt-2">
-                        {afterImages.map((src, idx) => (
-                          <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
-                            <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
-                            <button 
-                              type="button"
-                              onClick={() => setAfterImages(prev => prev.filter((_, i) => i !== idx))}
-                              className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                        {afterImages.length === 0 && !selectedRecord.evidenceAfter && (
-                          <div className="col-span-3 py-4 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-600 bg-slate-950/20">
-                            <Camera className="w-6 h-6 mb-1 opacity-20" />
-                            <span className="text-xs">Sin fotos seleccionadas</span>
-                          </div>
-                        )}
-                      </div>
+                      {afterImages.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          {afterImages.map((src, idx) => (
+                            <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
+                              <img src={getDriveDirectLink(src)} className="w-full h-full object-cover" />
+                              <button 
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAfterImages(prev => prev.filter((_, i) => i !== idx));
+                                }}
+                                className="absolute top-1 right-1 p-1 bg-red-500/80 text-white rounded-full opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {afterImages.length < 6 && (
+                        <div 
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, 'after')}
+                          onClick={() => document.getElementById('after-input')?.click()}
+                          className={`py-8 px-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 mt-2 ${
+                            isDragging 
+                              ? 'border-amber-400 bg-amber-500/10 text-amber-300 scale-[1.01]' 
+                              : 'border-slate-700 hover:border-slate-600 bg-slate-950/20 text-slate-400'
+                          }`}
+                        >
+                          <Camera className={`w-8 h-8 mb-2 transition-transform duration-200 ${isDragging ? 'rotate-6 scale-110 text-amber-400' : 'opacity-40 text-slate-500'}`} />
+                          <span className="text-xs font-bold text-slate-200">
+                            {isDragging ? '¡Suelta las fotos aquí!' : 'Arrastra tus fotos aquí o haz clic para buscarlas'}
+                          </span>
+                          <span className="text-[10px] text-slate-500 mt-1">Soporta múltiples archivos PNG, JPG (Hasta 6 fotos)</span>
+                        </div>
+                      )}
  
                       {selectedRecord.evidenceAfter && afterImages.length === 0 && (
                         <div className="mt-2 p-2 bg-slate-950/50 rounded-lg border border-slate-800 flex items-center justify-between">
