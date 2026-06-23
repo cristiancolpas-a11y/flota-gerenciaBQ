@@ -66,22 +66,20 @@
         }
     </style>
     <script>
-        // Prevenir errores de 'process is not defined' en el navegador
-        window.process = { env: { API_KEY: "" } };
+        // Prevenir errores de 'process is not defined' y 'global is not defined' en el navegador
+        window.global = window;
+        window.process = {
+            env: { 
+                NODE_ENV: "production",
+                API_KEY: "",
+                GEMINI_API_KEY: ""
+            },
+            versions: {},
+            platform: "browser",
+            browser: true,
+            nextTick: function(cb) { setTimeout(cb, 0); }
+        };
     </script>
-<script type="importmap">
-{
-  "imports": {
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.36.0",
-    "papaparse": "https://esm.sh/papaparse@^5.4.1"
-  }
-}
-</script>
 <link rel="stylesheet" href="/index.css">
 </head>
 <body>

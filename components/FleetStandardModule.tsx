@@ -54,6 +54,7 @@ interface FleetStandardModuleProps {
   masterList: AuditMasterVehicle[];
   cierreRecords?: FleetCierreRecord[];
   fleetBase?: FleetListRecord[];
+  onUpdateRecord?: (updatedRecord: any, isCierre: boolean) => void;
 }
 
 const ITEM_LABELS = {
@@ -224,6 +225,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   masterList,
   cierreRecords,
   fleetBase,
+  onUpdateRecord,
 }) => {
   const [filterRegional, setFilterRegional] = useState<string>("Todas");
   const [filterCD, setFilterCD] = useState<string>("Todos");
@@ -361,9 +363,26 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
       }
       if (success) {
         setIsEvidenceModalOpen(false);
-        alert(
-          "EVIDENCIA REGISTRADA EXITOSAMENTE. ACTUALICE LA PÁGINA PARA VER LOS CAMBIOS.",
-        );
+        if (onUpdateRecord) {
+          if (selectedNovelty.isCierre) {
+            onUpdateRecord({
+              plate: selectedNovelty.plate,
+              item: selectedNovelty.observations,
+              status: noveltyStatus,
+              evidence: finalEvidence,
+              verification: noveltyVerification
+            }, true);
+          } else {
+            onUpdateRecord({
+              id: selectedNovelty.id,
+              status: noveltyStatus,
+              noveltyDate: new Date().toISOString().split("T")[0],
+              evidence: finalEvidence,
+              noveltyObservation: noveltyObs,
+            }, false);
+          }
+        }
+        alert("EVIDENCIA REGISTRADA EXITOSAMENTE. LOS CAMBIOS SE HAN SINCROINZADO EN TIEMPO REAL.");
       } else {
         alert("No se pudo guardar la evidencia. Verifique la conexión.");
       }

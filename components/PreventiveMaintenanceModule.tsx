@@ -16,9 +16,10 @@ import { submitPreventiveUpdateToSheet } from '../services/sheetService';
 
 interface Props {
   data: Preventive[];
+  onUpdate?: (plate: string, date: string, evidence: string) => void;
 }
 
-const PreventiveMaintenanceModule: React.FC<Props> = ({ data }) => {
+const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate }) => {
   const [filterCd, setFilterCd] = useState<string>('TODOS');
   const [filterMonth, setFilterMonth] = useState<string>('TODOS');
   const [searchTerm, setSearchTerm] = useState('');
@@ -159,6 +160,9 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data }) => {
       });
 
       if (success) {
+        if (onUpdate) {
+          onUpdate(selectedItem.placa, new Date().toISOString().split('T')[0], finalImage);
+        }
         alert('Ejecución registrada exitosamente.');
         setSelectedItem(null);
         setCapturedImages([]);

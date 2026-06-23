@@ -343,6 +343,51 @@ const App: React.FC = () => {
     }
   };
 
+  const handleUpdateFleetStandardRecord = (updated: any, isCierre: boolean) => {
+    if (isCierre) {
+      setFleetCierreRecords(prev => prev.map(r => {
+        if (r.placa.toUpperCase().trim() === updated.plate.toUpperCase().trim() && 
+            r.item.toUpperCase().trim() === updated.item.toUpperCase().trim()) {
+          return {
+            ...r,
+            estado: updated.status,
+            evidencia: updated.evidence,
+            verificacion: updated.verification
+          };
+        }
+        return r;
+      }));
+    } else {
+      setAuditRecords(prev => prev.map(r => {
+        if (r.id === updated.id) {
+          return {
+            ...r,
+            status: updated.status,
+            noveltyDate: updated.noveltyDate,
+            evidence: updated.evidence,
+            observations: updated.noveltyObservation
+          };
+        }
+        return r;
+      }));
+    }
+  };
+
+  const handleUpdatePreventive = (plate: string, date: string, evidence: string) => {
+    setPreventives(prev => prev.map(p => {
+      if (p.placa.toUpperCase().trim() === plate.toUpperCase().trim()) {
+        return {
+          ...p,
+          fechaEjecucion: date,
+          evidenceUrl: evidence,
+          validaccionCumplimiento: 1,
+          status: 'ok' as const
+        };
+      }
+      return p;
+    }));
+  };
+
   const uniqueCds = useMemo(() => Array.from(new Set(vehicles.map(v => v.cd || 'GENERAL'))).sort(), [vehicles]);
   const uniqueContractors = useMemo(() => Array.from(new Set(vehicles.map(v => v.contractor || 'GENERAL'))).sort(), [vehicles]);
   const uniqueSources = useMemo(() => Array.from(new Set(reports.map(r => r.source).filter(Boolean))).sort(), [reports]);
@@ -1274,11 +1319,12 @@ const App: React.FC = () => {
               masterList={auditMasterVehicles}
               cierreRecords={fleetCierreRecords}
               fleetBase={fleetBase}
+              onUpdateRecord={handleUpdateFleetStandardRecord}
             />
           )}
 
           {activeView === 'torre_preventivos' && (
-            <PreventiveMaintenanceModule data={preventives} />
+            <PreventiveMaintenanceModule data={preventives} onUpdate={handleUpdatePreventive} />
           )}
 
           {activeView === 'auditoria_calidad_seguridad' && (
@@ -2505,13 +2551,142 @@ const App: React.FC = () => {
       )}
 
       {viewDoc && <DocumentViewer url={viewDoc.url} title={viewDoc.title} onClose={() => setViewDoc(null)} />}
-      {showFineForm && <FineForm vehicles={vehicles} drivers={drivers} onClose={() => setShowFineForm(false)} onSubmit={async (d) => { await submitFineToSheet(d); handleSyncData(); }} />}
-      {managingFineSupport && <FineSupportForm fine={managingFineSupport} onClose={() => setManagingFineSupport(null)} onSubmit={async (d) => { await submitFineToSheet(d); handleSyncData(); }} />}
-      {showDocUpdateForm && <DocumentUpdateForm vehicles={vehicles} onClose={() => setShowDocUpdateForm(false)} onSubmit={async (d) => { await submitDocumentUpdateToSheet(d); handleSyncData(); }} />}
-      {showReportForm && <ReportForm vehicles={vehicles} onClose={() => setShowReportForm(false)} onSubmit={async (d) => { await submitReportToSheet(d); handleSyncData(); }} />}
-      {showWashForm && <WashForm vehicles={vehicles} onClose={() => setShowWashForm(false)} onSubmit={async (d) => { await submitWashToSheet(d); handleSyncData(); }} />}
-      {showCleaningForm && <CleaningForm vehicles={vehicles} onClose={() => setShowCleaningForm(false)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
-      {closingCleaning && <CleaningForm vehicles={vehicles} preSelectedPlate={closingCleaning.plate} initialDate={closingCleaning.date} onClose={() => setClosingCleaning(null)} onSubmit={async (d) => { await submitCleaningToSheet(d); handleSyncData(); }} />}
+      {showFineForm && (
+        <FineForm 
+          vehicles={vehicles} 
+          drivers={drivers} 
+          onClose={() => setShowFineForm(false)} 
+          onSubmit={async (d) => { 
+            await submitFineToSheet(d); 
+            const formattedFine: Fine = {
+              id: d.id || String(Date.now()),
+              date: d.date || new Date().toISOString().split('T')[0],
+              plate: d.plate,
+              infractionCode: d.infractionCode || '',
+              description: d.description || '',
+              amount: Number(d.amount) || 0,
+              status: 'PENDIENTE',
+              evidenceUrl: d.evidenceUrl || ''
+            };
+            setFines(prev => [formattedFine, ...prev]);
+            handleSyncData(); 
+          }} 
+        />
+      )}
+      {managingFineSupport && (
+        <FineSupportForm 
+          fine={managingFineSupport} 
+          onClose={() => setManagingFineSupport(null)} 
+          onSubmit={async (d) => { 
+            await submitFineToSheet(d); 
+            setFines(prev => prev.map(f => f.id === d.id ? { ...f, ...d, status: d.status || f.status, evidenceUrl: d.evidenceUrl || f.evidenceUrl } : f));
+            handleSyncData(); 
+          }} 
+        />
+      )}
+      {showDocUpdateForm && (
+        <DocumentUpdateForm 
+          vehicles={vehicles} 
+          onClose={() => setShowDocUpdateForm(false)} 
+          onSubmit={async (d) => { 
+            await submitDocumentUpdateToSheet(d); 
+            setVehicles(prevVehicles => prevVehicles.map(v => {
+              if (v.plate.toUpperCase().trim() === d.plate.toUpperCase().trim()) {
+                const updatedDoc = {
+                  expiryDate: d.expiryDate,
+                  status: 'active' as const,
+                  url: d.url
+                };
+                if (d.docType.toLowerCase().includes('soat')) {
+                  return { ...v, soat: updatedDoc };
+                } else if (d.docType.toLowerCase().includes('rtm')) {
+                  return { ...v, rtm: updatedDoc };
+                } else if (d.docType.toLowerCase().includes('extintor')) {
+                  return { ...v, extinguisher: updatedDoc };
+                }
+              }
+              return v;
+            }));
+            handleSyncData(); 
+          }} 
+        />
+      )}
+      {showReportForm && (
+        <ReportForm 
+          vehicles={vehicles} 
+          onClose={() => setShowReportForm(false)} 
+          onSubmit={async (d) => { 
+            await submitReportToSheet(d); 
+            const newReport: Report = {
+              id: d.id || String(Date.now()),
+              date: d.date || new Date().toISOString().split('T')[0],
+              plate: d.plate,
+              source: d.source || 'CONDUCTOR',
+              novelty: d.novelty || '',
+              status: 'PENDIENTES',
+              initialEvidence: d.initialEvidence || ''
+            };
+            setReports(prev => [newReport, ...prev]);
+            handleSyncData(); 
+          }} 
+        />
+      )}
+      {showWashForm && (
+        <WashForm 
+          vehicles={vehicles} 
+          onClose={() => setShowWashForm(false)} 
+          onSubmit={async (d) => { 
+            await submitWashToSheet(d); 
+            const newWash: WashReport = {
+              id: d.id || String(Date.now()),
+              month: d.month || new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase(),
+              week: d.week || '1',
+              date: d.date || new Date().toISOString().split('T')[0],
+              plate: d.plate,
+              evidenceUrl: d.evidenceUrl || '',
+              workshop: d.workshop || '',
+              mapUrl: d.mapUrl || ''
+            };
+            setWashReports(prev => [newWash, ...prev]);
+            handleSyncData(); 
+          }} 
+        />
+      )}
+      {showCleaningForm && (
+        <CleaningForm 
+          vehicles={vehicles} 
+          onClose={() => setShowCleaningForm(false)} 
+          onSubmit={async (d) => { 
+            await submitCleaningToSheet(d); 
+            const newCleaning: WashReport = {
+              id: d.id || String(Date.now()),
+              month: d.month || new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase(),
+              week: d.week || '1',
+              date: d.date || new Date().toISOString().split('T')[0],
+              plate: d.plate,
+              evidenceUrl: d.evidenceUrl || '',
+              workshop: d.workshop || '',
+              mapUrl: d.mapUrl || '',
+              status: 'ABIERTO'
+            };
+            setCleaningReports(prev => [newCleaning, ...prev]);
+            handleSyncData(); 
+          }} 
+        />
+      )}
+      {closingCleaning && (
+        <CleaningForm 
+          vehicles={vehicles} 
+          preSelectedPlate={closingCleaning.plate} 
+          initialDate={closingCleaning.date} 
+          onClose={() => setClosingCleaning(null)} 
+          onSubmit={async (d) => { 
+            await submitCleaningToSheet(d); 
+            setCleaningReports(prev => prev.map(c => c.id === d.id ? { ...c, ...d, status: 'CERRADO' } : c));
+            handleSyncData(); 
+          }} 
+        />
+      )}
       {showCalibrationForm && (
         <CalibrationForm 
           vehicles={vehicles} 
@@ -2523,8 +2698,19 @@ const App: React.FC = () => {
           onSubmit={async (d: any) => { 
             if (d.isUpdate) {
               await submitCalibrationUpdateToSheet(d);
+              setCalibrations(prev => prev.map(c => c.id === d.id ? { ...c, ...d } : c));
             } else {
               await submitCalibrationToSheet(d);
+              const newCal: Calibration = {
+                id: d.id || String(Date.now()),
+                calibrationDate: d.date || new Date().toISOString().split('T')[0],
+                plate: d.plate,
+                equipment: d.type || 'ALCOHOLSENSOR',
+                status: 'active',
+                expiryDate: d.expiryDate || '',
+                certificateUrl: d.certificateUrl || ''
+              };
+              setCalibrations(prev => [newCal, ...prev]);
             }
             handleSyncData(); 
           }} 
@@ -2543,6 +2729,7 @@ const App: React.FC = () => {
               contractor: selectedVehicle?.contractor || closingReport.contractor || 'GENERAL'
             } as any;
             await submitReportToSheet(finalReport); 
+            setReports(prev => prev.map(r => r.id === closingReport.id ? { ...r, ...finalReport, status: 'COMPLETADOS' } : r));
             handleSyncData(); 
           }} 
         />
@@ -2560,18 +2747,26 @@ const App: React.FC = () => {
               contractor: selectedVehicle?.contractor || registeringEntry.contractor || 'GENERAL'
             } as any;
             await submitReportToSheet(finalReport); 
+            setReports(prev => prev.map(r => r.id === registeringEntry.id ? { ...r, ...finalReport } : r));
             handleSyncData(); 
           }} 
         />
       )}
-      {closingWorkshopVisit && <WorkshopVisitClosureForm visit={closingWorkshopVisit} onClose={() => setClosingWorkshopVisit(null)} onSubmit={async (d) => { 
-        const res = await submitWorkshopVisitUpdateToSheet(d); 
-        if (res.success) {
-          handleSyncData(); 
-        } else {
-          alert("Error al guardar evidencias: " + (res.message || "No se encontró el registro en la hoja"));
-        }
-      }} />}
+      {closingWorkshopVisit && (
+        <WorkshopVisitClosureForm 
+          visit={closingWorkshopVisit} 
+          onClose={() => setClosingWorkshopVisit(null)} 
+          onSubmit={async (d) => { 
+            const res = await submitWorkshopVisitUpdateToSheet(d); 
+            if (res.success) {
+              setWorkshopVisits(prev => prev.map(v => v.id === closingWorkshopVisit.id ? { ...v, status: 'COMPLETADOS', closureDate: d.closureDate, solutionEvidence: d.solutionEvidence } : v));
+              handleSyncData(); 
+            } else {
+              alert("Error al guardar evidencias: " + (res.message || "No se encontró el registro en la hoja"));
+            }
+          }} 
+        />
+      )}
     </div>
   );
 };

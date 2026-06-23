@@ -272,13 +272,24 @@ const ExecutiveAuditDashboard: React.FC = () => {
       });
 
       if (success) {
-        // Pequeña espera para asegurar que GAS procese
+        setData(prev => prev.map(a => {
+          if (a.id === selectedAudit.id) {
+            return {
+              ...a,
+              evidenciaAntes: finalAntes,
+              evidenciaDespues: finalDespues,
+              fechaCierre: evidenceData.fechaCierre,
+              estado: 'CERRADO'
+            };
+          }
+          return a;
+        }));
+        setShowEvidenceModal(false);
+        setIsUpdating(false);
+        alert('Evidencias registradas y novedad cerrada con éxito en Drive y Hoja.');
         setTimeout(async () => {
           await fetchData();
-          setShowEvidenceModal(false);
-          setIsUpdating(false);
-          alert('Evidencias registradas y novedad cerrada con éxito en Drive y Hoja.');
-        }, 3000);
+        }, 5000);
       } else {
         alert('Error al registrar evidencias en el servidor.');
         setIsUpdating(false);
@@ -335,12 +346,23 @@ const ExecutiveAuditDashboard: React.FC = () => {
       });
 
       if (success) {
+        setCierreRecords(prev => prev.map(c => {
+          if (c.placa === selectedCierre.placa && c.item === selectedCierre.item) {
+            return {
+              ...c,
+              estado: cierreEvidenceData.estado,
+              evidencia: finalEvidence,
+              verificacion: cierreEvidenceData.verificacion
+            };
+          }
+          return c;
+        }));
+        setShowCierreEvidenceModal(false);
+        setIsUpdating(false);
+        alert('Evidencia registrada y caso actualizado exitosamente en el servidor de Calidad y Seguridad.');
         setTimeout(async () => {
           await fetchData();
-          setShowCierreEvidenceModal(false);
-          setIsUpdating(false);
-          alert('Evidencia registrada y caso actualizado exitosamente en el servidor de Calidad y Seguridad.');
-        }, 3000);
+        }, 5000);
       } else {
         alert('Error al registrar evidencias en el servidor.');
         setIsUpdating(false);
