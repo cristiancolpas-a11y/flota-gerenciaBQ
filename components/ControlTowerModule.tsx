@@ -75,7 +75,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
   const [viewingRecord, setViewingRecord] = useState<ControlTowerRecord | null>(null);
   const [activeEvidenceTab, setActiveEvidenceTab] = useState<'before' | 'after'>('before');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'cierre'>('dashboard');
-  const [isDragging, setIsDragging] = useState(false);
+  const [draggedZone, setDraggedZone] = useState<'before' | 'after' | null>(null);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -211,19 +211,19 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     e.target.value = '';
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, zone: 'before' | 'after') => {
     e.preventDefault();
-    setIsDragging(true);
+    setDraggedZone(zone);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    setDraggedZone(null);
   };
 
   const handleDrop = (e: React.DragEvent, type: 'before' | 'after') => {
     e.preventDefault();
-    setIsDragging(false);
+    setDraggedZone(null);
     const files = Array.from(e.dataTransfer.files || []) as File[];
     const imageFiles = files.filter(f => f.type && f.type.startsWith('image/'));
     if (imageFiles.length > 0) {
@@ -1592,19 +1592,19 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
                       {beforeImages.length < 6 && (
                         <div 
-                          onDragOver={handleDragOver}
+                          onDragOver={(e) => handleDragOver(e, 'before')}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDrop(e, 'before')}
                           onClick={() => document.getElementById('before-input')?.click()}
                           className={`py-8 px-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 mt-2 ${
-                            isDragging 
+                            draggedZone === 'before' 
                               ? 'border-indigo-400 bg-indigo-500/10 text-indigo-300 scale-[1.01]' 
                               : 'border-slate-700 hover:border-slate-600 bg-slate-950/20 text-slate-400'
                           }`}
                         >
-                          <Camera className={`w-8 h-8 mb-2 transition-transform duration-200 ${isDragging ? 'rotate-6 scale-110 text-indigo-400' : 'opacity-40 text-slate-500'}`} />
+                          <Camera className={`w-8 h-8 mb-2 transition-transform duration-200 ${draggedZone === 'before' ? 'rotate-6 scale-110 text-indigo-400' : 'opacity-40 text-slate-500'}`} />
                           <span className="text-xs font-bold text-slate-200">
-                            {isDragging ? '¡Suelta las fotos aquí!' : 'Arrastra tus fotos aquí o haz clic para buscarlas'}
+                            {draggedZone === 'before' ? '¡Suelta las fotos aquí!' : 'Arrastra tus fotos aquí o haz clic para buscarlas'}
                           </span>
                           <span className="text-[10px] text-slate-500 mt-1">Soporta múltiples archivos PNG, JPG (Hasta 6 fotos)</span>
                         </div>
@@ -1665,19 +1665,19 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
                       {afterImages.length < 6 && (
                         <div 
-                          onDragOver={handleDragOver}
+                          onDragOver={(e) => handleDragOver(e, 'after')}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDrop(e, 'after')}
                           onClick={() => document.getElementById('after-input')?.click()}
                           className={`py-8 px-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 mt-2 ${
-                            isDragging 
+                            draggedZone === 'after' 
                               ? 'border-amber-400 bg-amber-500/10 text-amber-300 scale-[1.01]' 
                               : 'border-slate-700 hover:border-slate-600 bg-slate-950/20 text-slate-400'
                           }`}
                         >
-                          <Camera className={`w-8 h-8 mb-2 transition-transform duration-200 ${isDragging ? 'rotate-6 scale-110 text-amber-400' : 'opacity-40 text-slate-500'}`} />
+                          <Camera className={`w-8 h-8 mb-2 transition-transform duration-200 ${draggedZone === 'after' ? 'rotate-6 scale-110 text-amber-400' : 'opacity-40 text-slate-500'}`} />
                           <span className="text-xs font-bold text-slate-200">
-                            {isDragging ? '¡Suelta las fotos aquí!' : 'Arrastra tus fotos aquí o haz clic para buscarlas'}
+                            {draggedZone === 'after' ? '¡Suelta las fotos aquí!' : 'Arrastra tus fotos aquí o haz clic para buscarlas'}
                           </span>
                           <span className="text-[10px] text-slate-500 mt-1">Soporta múltiples archivos PNG, JPG (Hasta 6 fotos)</span>
                         </div>

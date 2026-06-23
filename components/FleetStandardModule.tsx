@@ -47,7 +47,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { submitAuditUpdateToSheet, submitFleetCierreUpdateToSheet } from "../services/sheetService";
-import { getDriveDirectLink, createMosaic } from "../utils";
+import { getDriveDirectLink, createMosaic, compressImage } from "../utils";
 
 interface FleetStandardModuleProps {
   data: AuditRecord[];
@@ -269,6 +269,8 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   // Gallery View State
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [filterNovelty, setFilterNovelty] = useState<string>("Todos");
+  const [isDragging, setIsDragging] = useState(false);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -277,11 +279,50 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
         .slice(0, 4 - noveltyEvidence.length)
         .forEach((file: File) => {
           const reader = new FileReader();
-          reader.onloadend = () => {
-            setNoveltyEvidence((prev) => [...prev, reader.result as string]);
+          reader.onloadend = async () => {
+            const rawBase64 = reader.result as string;
+            try {
+              const compressed = await compressImage(rawBase64, 1024);
+              setNoveltyEvidence((prev) => [...prev, compressed]);
+            } catch (err) {
+              setNoveltyEvidence((prev) => [...prev, rawBase64]);
+            }
           };
           reader.readAsDataURL(file);
         });
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files || []) as File[];
+    const imageFiles = files.filter(f => f.type && f.type.startsWith('image/'));
+    if (imageFiles.length > 0) {
+      const remainingSlots = 4 - noveltyEvidence.length;
+      imageFiles.slice(0, remainingSlots).forEach((file: File) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const rawBase64 = reader.result as string;
+          try {
+            const compressed = await compressImage(rawBase64, 1024);
+            setNoveltyEvidence((prev) => [...prev, compressed]);
+          } catch (err) {
+            setNoveltyEvidence((prev) => [...prev, rawBase64]);
+          }
+        };
+        reader.readAsDataURL(file);
+      });
     }
   };
 
@@ -884,6 +925,26 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     });
   }, [cierreRecords, data]);
 
+  const noveltyOptions = useMemo(() => {
+    const list = new Set<string>();
+    if (mappedCierreRecords.length > 0) {
+      mappedCierreRecords.forEach((r) => {
+        if (r.observations) {
+          const trimmed = r.observations.trim();
+          if (trimmed) list.add(trimmed);
+        }
+      });
+    } else {
+      data.forEach((r) => {
+        const obs = (r.observations || "").trim();
+        if (obs && obs.toLowerCase() !== "sin observación registrada") {
+          list.add(obs);
+        }
+      });
+    }
+    return Array.from(list).sort();
+  }, [mappedCierreRecords, data]);
+
   const filteredCierreRecords = useMemo(() => {
     if (mappedCierreRecords.length === 0) return [];
     return mappedCierreRecords.filter((r) => {
@@ -901,13 +962,15 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
 
       const matchPlate = filterPlate === "Todos" || r.plate.toUpperCase().trim() === filterPlate.toUpperCase().trim();
 
+      const matchNovelty = filterNovelty === "Todos" || r.observations === filterNovelty;
+
       const matchSearch =
         r.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (r.observations || "").toLowerCase().includes(searchTerm.toLowerCase());
 
-      return matchRegional && matchCD && matchMonth && matchYear && matchContractor && matchPlate && matchSearch;
+      return matchRegional && matchCD && matchMonth && matchYear && matchContractor && matchPlate && matchNovelty && matchSearch;
     });
-  }, [mappedCierreRecords, filterRegional, filterCD, filterMonth, filterYear, filterContractor, filterPlate, searchTerm, masterList]);
+  }, [mappedCierreRecords, filterRegional, filterCD, filterMonth, filterYear, filterContractor, filterPlate, filterNovelty, searchTerm, masterList]);
 
   const novedadesData = useMemo(() => {
     if (cierreRecords && cierreRecords.length > 0) {
@@ -915,10 +978,11 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     }
     const rawNovedades = filteredData.filter((r) => {
       const obs = (r.observations || "").trim().toLowerCase();
-      return obs !== "" && obs !== "sin observación registrada";
+      const matchNovelty = filterNovelty === "Todos" || r.observations === filterNovelty;
+      return obs !== "" && obs !== "sin observación registrada" && matchNovelty;
     });
     return rawNovedades;
-  }, [cierreRecords, filteredCierreRecords, filteredData]);
+  }, [cierreRecords, filteredCierreRecords, filteredData, filterNovelty]);
 
   const novedadesChartsData = useMemo(() => {
     const monthOrder = [
@@ -3771,7 +3835,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-10">
               <div>
                 <h2 className="text-4xl font-black text-white tracking-tighter uppercase leading-none underline decoration-indigo-500 underline-offset-8">
                   Cierre de Novedades
@@ -3780,18 +3844,44 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                   Seguimiento y cierre de hallazgos detectados en auditorías
                 </p>
               </div>
-              <div className="relative w-full md:w-96 shadow-2xl">
-                <Search
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-400"
-                  size={18}
-                />
-                <input
-                  type="text"
-                  placeholder="Buscar por placa o novedad..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-[#0f172a] border border-slate-700 rounded-2xl pl-12 pr-6 py-4 text-sm text-white focus:ring-2 ring-indigo-500 outline-none transition-all placeholder:text-slate-600 font-black uppercase"
-                />
+              <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+                {/* Select Filter */}
+                <div className="flex flex-col gap-1 w-full sm:w-72">
+                  <label className="text-[9px] font-black text-indigo-300 uppercase ml-2 px-1">
+                    Novedad / Observación
+                  </label>
+                  <select
+                    value={filterNovelty}
+                    onChange={(e) => setFilterNovelty(e.target.value)}
+                    className="w-full bg-[#0f172a] border border-slate-700 rounded-2xl px-4 py-3.5 text-xs text-white focus:ring-2 ring-indigo-500 outline-none transition-all font-black uppercase appearance-none cursor-pointer"
+                  >
+                    <option value="Todos">Todas las novedades</option>
+                    {noveltyOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {/* Search Bar */}
+                <div className="flex flex-col gap-1 w-full sm:w-72 relative shadow-2xl">
+                  <label className="text-[9px] font-black text-indigo-300 uppercase ml-2 px-1">
+                    Buscar por Placa / Texto
+                  </label>
+                  <div className="relative">
+                    <Search
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-400"
+                      size={18}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Buscar por placa o novedad..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-[#0f172a] border border-slate-700 rounded-2xl pl-12 pr-6 py-3.5 text-xs text-white focus:ring-2 ring-indigo-500 outline-none transition-all placeholder:text-slate-650 font-black uppercase"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -4190,47 +4280,64 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 px-1">
                     Cargar Fotos (Máx. 4)
                   </label>
-                  <div className="grid grid-cols-4 gap-4">
-                    {noveltyEvidence.map((img, idx) => (
-                      <div
-                        key={idx}
-                        className="aspect-square bg-[#0f172a] rounded-2xl border border-slate-800 relative group overflow-hidden"
-                      >
-                        <img
-                          src={getDriveDirectLink(img)}
-                          alt="Preview"
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                        <button
-                          onClick={() =>
-                            setNoveltyEvidence((prev) =>
-                              prev.filter((_, i) => i !== idx),
-                            )
-                          }
-                          className="absolute top-2 right-2 p-1 bg-rose-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`p-6 border-2 border-dashed rounded-3xl transition-all duration-200 ${
+                      isDragging 
+                        ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400 scale-[1.01]' 
+                        : 'border-slate-800 hover:border-slate-700 bg-slate-950/20 text-slate-400'
+                    }`}
+                  >
+                    <div className="grid grid-cols-4 gap-4">
+                      {noveltyEvidence.map((img, idx) => (
+                        <div
+                          key={idx}
+                          className="aspect-square bg-[#0f172a] rounded-2xl border border-slate-800 relative group overflow-hidden"
                         >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                    {noveltyEvidence.length < 4 && (
-                      <label className="aspect-square bg-[#0f172a] rounded-2xl border-2 border-dashed border-slate-800 hover:border-indigo-500 flex flex-col items-center justify-center cursor-pointer group transition-all">
-                        <Upload
-                          size={24}
-                          className="text-slate-600 group-hover:text-indigo-400 mb-2"
-                        />
-                        <span className="text-[8px] font-black text-slate-600 group-hover:text-indigo-400 uppercase tracking-widest">
-                          Añadir
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handlePhotoUpload}
-                          className="hidden"
-                        />
-                      </label>
+                          <img
+                            src={getDriveDirectLink(img)}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                            loading="lazy"
+                          />
+                          <button
+                            onClick={() =>
+                              setNoveltyEvidence((prev) =>
+                                prev.filter((_, i) => i !== idx),
+                              )
+                            }
+                            className="absolute top-2 right-2 p-1 bg-rose-500 text-white rounded-lg opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))}
+                      {noveltyEvidence.length < 4 && (
+                        <label className="aspect-square bg-[#0f172a]/60 rounded-2xl border-2 border-dashed border-slate-750 hover:border-indigo-500 flex flex-col items-center justify-center cursor-pointer group transition-all">
+                          <Upload
+                            size={24}
+                            className={`mb-1 transition-transform duration-200 ${isDragging ? 'scale-110 text-indigo-400' : 'text-slate-600 group-hover:text-indigo-400'}`}
+                          />
+                          <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 group-hover:text-indigo-400 text-center px-1">
+                            {isDragging ? '¡Sueltas!' : 'Añadir / Arrastrar'}
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handlePhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                    </div>
+                    {noveltyEvidence.length === 0 && (
+                      <p className="text-[10px] text-slate-600 text-center mt-3 font-bold uppercase tracking-wider">
+                        {isDragging ? '¡Suelta las imágenes aquí mismo!' : 'Arrastra tus fotos o haz clic en Añadir (Hasta 4 fotos, se guardarán como collage)'}
+                      </p>
                     )}
                   </div>
                 </div>
