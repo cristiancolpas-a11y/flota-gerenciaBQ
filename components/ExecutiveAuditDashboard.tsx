@@ -23,13 +23,13 @@ import {
 } from '../services/sheetService';
 
 const COLORS = {
-  primary: '#00D4FF',    // Electric Blue
-  success: '#00FF88',    // Neon Green
-  warning: '#FFB800',    // Amber
-  critical: '#FF4560',   // Neon Red
-  bg: '#0A0E1A',
-  card: 'rgba(255, 255, 255, 0.05)',
-  border: 'rgba(0, 212, 255, 0.2)'
+  primary: '#2563EB',    // Professional Blue
+  success: '#10B981',    // Emerald Green
+  warning: '#F59E0B',    // Soft Amber
+  critical: '#EF4444',   // Rose Red
+  bg: '#F8FAFC',         // Crisp Off-White background
+  card: '#FFFFFF',       // Clean white card
+  border: '#E2E8F0'      // Soft slate border
 };
 
 const getStatusColor = (value: number) => {
@@ -66,8 +66,14 @@ const ExecutiveAuditDashboard: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+  // Drag and drop active states
+  const [isDraggingAntes, setIsDraggingAntes] = useState(false);
+  const [isDraggingDespues, setIsDraggingDespues] = useState(false);
+  const [isDraggingCierre, setIsDraggingCierre] = useState(false);
+
   // States specifically for CIERRE1 (Calidad y Seguridad)
   const [cierreRecords, setCierreRecords] = useState<FleetCierreRecord[]>([]);
+  const [filterCierreItem, setFilterCierreItem] = useState('TODOS');
   const [selectedCierre, setSelectedCierre] = useState<FleetCierreRecord | null>(null);
   const [showCierreEvidenceModal, setShowCierreEvidenceModal] = useState(false);
   const [cierreEvidenceData, setCierreEvidenceData] = useState({
@@ -302,6 +308,16 @@ const ExecutiveAuditDashboard: React.FC = () => {
   };
 
   // Cierres de Novedades (CIERRE1) filtering and metrics
+  const uniqueCierreItems = useMemo(() => {
+    const itemsSet = new Set<string>();
+    cierreRecords.forEach(rec => {
+      if (rec.item) {
+        itemsSet.add(rec.item.trim().toUpperCase());
+      }
+    });
+    return Array.from(itemsSet).sort();
+  }, [cierreRecords]);
+
   const filteredCierreRecords = useMemo(() => {
     return cierreRecords.filter(item => {
       // CD filter compatibility (Galapa, Arenosa, etc)
@@ -309,12 +325,15 @@ const ExecutiveAuditDashboard: React.FC = () => {
         item.cd?.toUpperCase().includes(filterCentro.toUpperCase()) || 
         item.cd === filterCentro;
       
+      const matchItem = filterCierreItem === 'TODOS' ||
+        (item.item && item.item.toUpperCase().trim() === filterCierreItem.toUpperCase().trim());
+
       const matchSearch = !searchTerm || 
         item.placa.toUpperCase().includes(searchTerm.toUpperCase()) ||
         (item.item && item.item.toUpperCase().includes(searchTerm.toUpperCase()));
-      return matchCentro && matchSearch;
+      return matchCentro && matchItem && matchSearch;
     });
-  }, [cierreRecords, filterCentro, searchTerm]);
+  }, [cierreRecords, filterCentro, filterCierreItem, searchTerm]);
 
   const handleOpenCierreEvidence = (cierre: FleetCierreRecord) => {
     setSelectedCierre(cierre);
@@ -516,20 +535,20 @@ const ExecutiveAuditDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0E1A] text-white p-4 lg:p-8 font-sans selection:bg-[#00D4FF]/30 selection:text-[#00D4FF]">
+    <div className="min-h-screen bg-[#F0F4FF] text-slate-800 p-4 lg:p-8 font-sans selection:bg-blue-200 selection:text-blue-900">
       {/* Header & Filters */}
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-8 mb-12">
         <header>
           <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-[#00D4FF]/10 rounded-2xl border border-[#00D4FF]/20 shadow-[0_0_20px_rgba(0,212,255,0.1)]">
-              <Shield className="text-[#00D4FF]" size={32} />
+            <div className="p-3 bg-blue-50 rounded-2xl border border-blue-200 shadow-sm">
+              <Shield className="text-blue-600" size={32} />
             </div>
             <div>
-              <h1 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-white">
-                Estándar de Flota <span className="text-[#00D4FF]">Calidad y Seg.</span>
+              <h1 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-slate-900">
+                Estándar de Flota <span className="text-blue-600">Calidad y Seg.</span>
               </h1>
-              <p className="text-[#00D4FF]/60 text-xs font-bold uppercase tracking-[0.4em] mt-2 flex items-center gap-2">
-                <span className="w-2 h-2 bg-[#00FF88] rounded-full animate-ping" />
+              <p className="text-blue-600/60 text-xs font-bold uppercase tracking-[0.4em] mt-2 flex items-center gap-2">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
                 BARRANQUILLA
               </p>
             </div>
@@ -537,13 +556,13 @@ const ExecutiveAuditDashboard: React.FC = () => {
         </header>
 
         {/* Filters Panel */}
-        <div className="grid grid-cols-2 lg:flex gap-4 bg-white/5 backdrop-blur-xl p-4 rounded-[2rem] border border-white/10 shadow-2xl">
+        <div className="grid grid-cols-2 lg:flex gap-4 bg-white p-4 rounded-[2rem] border border-slate-200 shadow-sm">
           <div className="space-y-2 lg:w-48">
-            <label className="text-[9px] font-black text-[#00D4FF] uppercase tracking-widest ml-2">Centro</label>
+            <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Centro</label>
             <select 
               value={filterCentro}
               onChange={(e) => setFilterCentro(e.target.value)}
-              className="w-full bg-[#0F172A] border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-[#00D4FF]/50 outline-none transition-all appearance-none cursor-pointer"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="TODOS">TODOS LOS CENTROS</option>
               <option value="DC Galapa">DC GALAPA</option>
@@ -551,11 +570,11 @@ const ExecutiveAuditDashboard: React.FC = () => {
             </select>
           </div>
           <div className="space-y-2 lg:w-48">
-            <label className="text-[9px] font-black text-[#00D4FF] uppercase tracking-widest ml-2">Mes</label>
+            <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Mes</label>
             <select 
               value={filterMes}
               onChange={(e) => setFilterMes(e.target.value)}
-              className="w-full bg-[#0F172A] border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-[#00D4FF]/50 outline-none transition-all appearance-none cursor-pointer"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="TODOS">TODOS LOS MESES</option>
               {uniqueMonths.map(m => (
@@ -564,22 +583,22 @@ const ExecutiveAuditDashboard: React.FC = () => {
             </select>
           </div>
           <div className="space-y-2 lg:w-48">
-            <label className="text-[9px] font-black text-[#00D4FF] uppercase tracking-widest ml-2">Tipo</label>
+            <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Tipo</label>
             <select 
               value={filterTipo}
               onChange={(e) => setFilterTipo(e.target.value)}
-              className="w-full bg-[#0F172A] border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-[#00D4FF]/50 outline-none transition-all appearance-none cursor-pointer"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="TODOS">TODAS (EXCL. CRUZADA)</option>
               <option value="Mensual del estándar">MENSUAL ESTÁNDAR</option>
             </select>
           </div>
           <div className="space-y-2 lg:w-48">
-            <label className="text-[9px] font-black text-[#00D4FF] uppercase tracking-widest ml-2">Auditor</label>
+            <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Auditor</label>
             <select 
               value={filterAuditor}
               onChange={(e) => setFilterAuditor(e.target.value)}
-              className="w-full bg-[#0F172A] border border-white/10 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-[#00D4FF]/50 outline-none transition-all appearance-none cursor-pointer"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="TODOS">TODOS LOS AUDITORES</option>
               {uniqueAuditors.map(aud => (
@@ -594,13 +613,13 @@ const ExecutiveAuditDashboard: React.FC = () => {
       <div className="flex gap-4 mb-8">
         <button 
           onClick={() => setActiveTab('dashboard')}
-          className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'bg-[#00D4FF] text-black shadow-[0_0_20px_rgba(0,212,255,0.3)]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+          className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
         >
           Dashboard
         </button>
         <button 
           onClick={() => setActiveTab('cierre')}
-          className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'cierre' ? 'bg-[#00FF88] text-black shadow-[0_0_20px_rgba(0,255,136,0.3)]' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+          className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'cierre' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
         >
           Cierre de Novedades
         </button>
@@ -621,16 +640,16 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
               {/* Section 2: Mandatory Group */}
-              <div className="bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 p-8 shadow-2xl flex flex-col">
+              <div className="bg-white rounded-[2.5rem] border border-slate-200/80 p-8 shadow-sm flex flex-col">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xl font-black italic uppercase tracking-tighter">
+                  <h3 className="text-xl font-black italic uppercase tracking-tighter text-slate-800">
                     Sesión 2: <span className="text-rose-500">Mandatorio</span>
                   </h3>
-                  <div className="p-2 bg-rose-500/10 rounded-full border border-rose-500/20">
+                  <div className="p-2 bg-rose-50 rounded-full border border-rose-100">
                     <AlertCircle className="text-rose-500" size={16} />
                   </div>
                 </div>
-                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-10">Nivel Crítico de Operación (Seguridad & Calidad Mandat.)</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-10">Nivel Crítico de Operación (Seguridad & Calidad Mandat.)</p>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 flex-1 items-center">
                   <div className="lg:col-span-2 relative flex flex-col items-center">
@@ -653,19 +672,19 @@ const ExecutiveAuditDashboard: React.FC = () => {
                               stroke="none"
                             >
                               <Cell fill={getStatusColor(metrics.avgMandatory)} />
-                              <Cell fill="rgba(255,255,255,0.05)" />
+                              <Cell fill="rgba(0,0,0,0.05)" />
                             </Pie>
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="absolute inset-0 flex flex-col items-center justify-end pb-4">
-                          <span className="text-4xl font-black tracking-tighter text-white">{metrics.avgMandatory.toFixed(0)}%</span>
+                           <span className="text-4xl font-black tracking-tighter text-slate-800">{metrics.avgMandatory.toFixed(0)}%</span>
                         </div>
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white mt-4">Mandatorio Total</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 mt-4">Mandatorio Total</span>
                   </div>
 
-                  <div className="lg:col-span-3 bg-black/20 rounded-3xl p-6 border border-white/5 h-full flex flex-col justify-center">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-8 block text-center">Promedio por Categoría</span>
+                  <div className="lg:col-span-3 bg-slate-50 rounded-3xl p-6 border border-slate-200 h-full flex flex-col justify-center">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-8 block text-center">Promedio por Categoría</span>
                     <div className="flex justify-around items-end h-40 gap-4">
                       <CategoryBar label="Seguridad" value={metrics.avgSegMand} color={getStatusColor(metrics.avgSegMand)} />
                       <CategoryBar label="Calidad" value={metrics.avgCalMand} color={getStatusColor(metrics.avgCalMand)} />
@@ -675,16 +694,16 @@ const ExecutiveAuditDashboard: React.FC = () => {
               </div>
 
               {/* Section 2.5: No Mandatory Group */}
-              <div className="bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 p-8 shadow-2xl flex flex-col">
+              <div className="bg-white rounded-[2.5rem] border border-slate-200/80 p-8 shadow-sm flex flex-col">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xl font-black italic uppercase tracking-tighter">
-                    Sesión 3: <span className="text-[#00D4FF]">No Mandatorio</span>
+                  <h3 className="text-xl font-black italic uppercase tracking-tighter text-slate-800">
+                    Sesión 3: <span className="text-blue-600">No Mandatorio</span>
                   </h3>
-                  <div className="p-2 bg-[#00D4FF]/10 rounded-full border border-[#00D4FF]/20">
-                    <Target className="text-[#00D4FF]" size={16} />
+                  <div className="p-2 bg-blue-50 rounded-full border border-blue-100">
+                    <Target className="text-blue-600" size={16} />
                   </div>
                 </div>
-                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-10">Criterios de Excelencia (No Mandatorios)</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-10">Criterios de Excelencia (No Mandatorios)</p>
                 
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 flex-1 items-center">
                   <div className="lg:col-span-2 relative flex flex-col items-center">
@@ -707,19 +726,19 @@ const ExecutiveAuditDashboard: React.FC = () => {
                               stroke="none"
                             >
                               <Cell fill={getStatusColor(metrics.avgNoMandatory)} />
-                              <Cell fill="rgba(255,255,255,0.05)" />
+                              <Cell fill="rgba(0,0,0,0.05)" />
                             </Pie>
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="absolute inset-0 flex flex-col items-center justify-end pb-4">
-                          <span className="text-4xl font-black tracking-tighter text-white">{metrics.avgNoMandatory.toFixed(0)}%</span>
+                           <span className="text-4xl font-black tracking-tighter text-slate-800">{metrics.avgNoMandatory.toFixed(0)}%</span>
                         </div>
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white mt-4">Promedio Total</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 mt-4">Promedio Total</span>
                   </div>
 
-                  <div className="lg:col-span-3 bg-black/20 rounded-3xl p-6 border border-white/5 h-full flex flex-col justify-center">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-8 block text-center">Promedio por Categoría</span>
+                  <div className="lg:col-span-3 bg-slate-50 rounded-3xl p-6 border border-slate-200 h-full flex flex-col justify-center">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-8 block text-center">Promedio por Categoría</span>
                     <div className="flex justify-around items-end h-40 gap-4">
                       <CategoryBar label="Seguridad" value={filteredData.reduce((acc, d) => acc + d.scoreSegNoMand, 0) / metrics.count} color={COLORS.primary} />
                       <CategoryBar label="Calidad" value={filteredData.reduce((acc, d) => acc + d.scoreCalNoMand, 0) / metrics.count} color={COLORS.primary} />
@@ -731,37 +750,37 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
             <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
               {/* Section 3: Evolution - Stacked Bars */}
-              <div className="xl:col-span-3 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 p-8 shadow-2xl flex flex-col">
-                <h3 className="text-xl font-black italic uppercase tracking-tighter mb-8">
-                  Estándar <span className="text-[#00D4FF]">Mensual</span>
+              <div className="xl:col-span-3 bg-white rounded-[2.5rem] border border-slate-200/80 p-8 shadow-sm flex flex-col">
+                <h3 className="text-xl font-black italic uppercase tracking-tighter text-slate-800 mb-8">
+                  Estándar <span className="text-blue-600">Mensual</span>
                 </h3>
                 <div className="min-h-[350px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={metrics.monthlyData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                       <XAxis 
                         dataKey="name" 
                         axisLine={false} 
                         tickLine={false} 
-                        tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 900 }}
+                        tick={{ fill: '#64748B', fontSize: 10, fontWeight: 900 }}
                       />
                       <YAxis 
                         axisLine={false} 
                         tickLine={false} 
-                        tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 900 }}
+                        tick={{ fill: '#64748B', fontSize: 10, fontWeight: 900 }}
                         domain={[0, 100]}
                       />
                       <Tooltip 
-                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                        contentStyle={{ backgroundColor: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '1rem' }}
-                        itemStyle={{ fontSize: '10px', fontWeight: 900 }}
+                        cursor={{ fill: 'rgba(0,0,0,0.02)' }}
+                        contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '1rem' }}
+                        itemStyle={{ fontSize: '10px', fontWeight: 900, color: '#1E293B' }}
                       />
                       <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '10px', fontWeight: 900 }} />
                       <Bar name="Mandatario" dataKey="mand" fill={COLORS.critical} radius={[10, 10, 0, 0]}>
-                        <LabelList dataKey="mand" position="top" formatter={(v: any) => `${v.toFixed(0)}%`} style={{ fill: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: 900 }} />
+                        <LabelList dataKey="mand" position="top" formatter={(v: any) => `${v.toFixed(0)}%`} style={{ fill: '#475569', fontSize: 10, fontWeight: 900 }} />
                       </Bar>
                       <Bar name="No Mandatario" dataKey="noMand" fill={COLORS.primary} radius={[10, 10, 0, 0]}>
-                        <LabelList dataKey="noMand" position="top" formatter={(v: any) => `${v.toFixed(0)}%`} style={{ fill: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: 900 }} />
+                        <LabelList dataKey="noMand" position="top" formatter={(v: any) => `${v.toFixed(0)}%`} style={{ fill: '#475569', fontSize: 10, fontWeight: 900 }} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -769,33 +788,33 @@ const ExecutiveAuditDashboard: React.FC = () => {
               </div>
 
               {/* Section: Time Execution Frequency */}
-              <div className="xl:col-span-2 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 p-8 shadow-2xl flex flex-col">
-                <h3 className="text-xl font-black italic uppercase tracking-tighter mb-8">
-                  Tiempos de <span className="text-[#00FF88]">Ejecución</span>
+              <div className="xl:col-span-2 bg-white rounded-[2.5rem] border border-slate-200/80 p-8 shadow-sm flex flex-col">
+                <h3 className="text-xl font-black italic uppercase tracking-tighter text-slate-800 mb-8">
+                  Tiempos de <span className="text-emerald-600">Ejecución</span>
                 </h3>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">Auditorías por Minutos de Duración</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-6">Auditorías por Minutos de Duración</p>
                 <div className="flex-1 min-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={metrics.timeData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                       <XAxis 
                         dataKey="mins" 
                         axisLine={false} 
                         tickLine={false} 
-                        tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 900 }}
+                        tick={{ fill: '#64748B', fontSize: 10, fontWeight: 900 }}
                       />
                       <YAxis 
                         axisLine={false} 
                         tickLine={false} 
-                        tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: 900 }}
+                        tick={{ fill: '#64748B', fontSize: 10, fontWeight: 900 }}
                       />
                       <Tooltip 
-                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-                        contentStyle={{ backgroundColor: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '1rem' }}
-                        itemStyle={{ fontSize: '10px', fontWeight: 900 }}
+                        cursor={{ fill: 'rgba(0,0,0,0.02)' }}
+                        contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '1rem' }}
+                        itemStyle={{ fontSize: '10px', fontWeight: 900, color: '#1E293B' }}
                       />
                       <Bar name="Registros" dataKey="count" fill={COLORS.success} radius={[10, 10, 0, 0]}>
-                        <LabelList dataKey="count" position="top" style={{ fill: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: 900 }} />
+                        <LabelList dataKey="count" position="top" style={{ fill: '#475569', fontSize: 10, fontWeight: 900 }} />
                         {metrics.timeData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fillOpacity={0.4 + (entry.count / Math.max(...metrics.timeData.map(d=>d.count))) * 0.6} />
                         ))}
@@ -807,16 +826,16 @@ const ExecutiveAuditDashboard: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-              <div className="bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 p-8 shadow-2xl">
-                <h3 className="text-lg font-black italic uppercase tracking-tight mb-8">
-                  Compliance por <span className="text-[#00D4FF]">Centro</span>
+              <div className="bg-white rounded-[2.5rem] border border-slate-200/80 p-8 shadow-sm">
+                <h3 className="text-lg font-black italic uppercase tracking-tight text-slate-800 mb-8">
+                  Compliance por <span className="text-blue-600">Centro</span>
                 </h3>
                 <div className="space-y-10">
                   {metrics.centerData.map(cd => (
                     <div key={cd.name} className="space-y-6">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-black uppercase tracking-widest text-[#00D4FF]">{cd.name}</span>
-                        <span className="px-3 py-1 bg-white/5 rounded-lg text-[10px] font-black text-white">{cd.mand.toFixed(1)}% Mand.</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-blue-600">{cd.name}</span>
+                        <span className="px-3 py-1 bg-slate-100 rounded-lg text-[10px] font-black text-slate-700">{cd.mand.toFixed(1)}% Mand.</span>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <MetricProgress label="Mandatorio Total" value={cd.mand} color={getStatusColor(cd.mand)} />
@@ -829,14 +848,14 @@ const ExecutiveAuditDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 p-8 shadow-2xl flex flex-col overflow-hidden">
-                <h3 className="text-lg font-black italic uppercase tracking-tight mb-8">
-                  Top Auditores <span className="text-[#00D4FF]">— Reportes</span>
+              <div className="bg-white rounded-[2.5rem] border border-slate-200/80 p-8 shadow-sm flex flex-col overflow-hidden">
+                <h3 className="text-lg font-black italic uppercase tracking-tight text-slate-800 mb-8">
+                  Top Auditores <span className="text-blue-600">— Reportes</span>
                 </h3>
                 <div className="overflow-x-auto flex-1">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="border-b border-white/5">
+                      <tr className="border-b border-slate-100">
                         <th className="pb-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Rank</th>
                         <th className="pb-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Auditor</th>
                         <th className="pb-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center">Auds.</th>
@@ -846,18 +865,18 @@ const ExecutiveAuditDashboard: React.FC = () => {
                     </thead>
                     <tbody>
                       {metrics.auditorRanking.map((aud, idx) => (
-                        <tr key={aud.name} className={`group border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors ${idx === 0 ? 'bg-[#FFB800]/5' : ''}`}>
+                        <tr key={aud.name} className={`group border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors ${idx === 0 ? 'bg-amber-50' : ''}`}>
                           <td className="py-4">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${idx < 3 ? 'bg-[#FFB800] text-black shadow-[0_0_15px_rgba(255,184,0,0.4)]' : 'bg-white/5 text-slate-500'}`}>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${idx < 3 ? 'bg-amber-400 text-slate-900 shadow-sm' : 'bg-slate-100 text-slate-500'}`}>
                               {idx + 1}
                             </div>
                           </td>
                           <td className="py-4">
-                            <span className={`text-[11px] font-black uppercase tracking-widest ${idx === 0 ? 'text-[#FFB800]' : 'text-white'}`}>
+                            <span className={`text-[11px] font-black uppercase tracking-widest ${idx === 0 ? 'text-amber-600' : 'text-slate-800'}`}>
                               {aud.name}
                             </span>
                           </td>
-                          <td className="py-4 text-center font-mono text-[11px] font-bold text-slate-400">{aud.count}</td>
+                          <td className="py-4 text-center font-mono text-[11px] font-bold text-slate-500">{aud.count}</td>
                           <td className="py-4 text-right">
                             <span className="text-[11px] font-black" style={{ color: getStatusColor(aud.mandAvg) }}>
                               {aud.mandAvg.toFixed(1)}%
@@ -877,24 +896,43 @@ const ExecutiveAuditDashboard: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="text-center p-20 bg-white/5 rounded-[3rem]">
-            <Search size={48} className="mx-auto text-slate-600 mb-6" />
+          <div className="text-center p-20 bg-white rounded-[3rem] border border-slate-200 shadow-sm">
+            <Search size={48} className="mx-auto text-slate-400 mb-6" />
             <h3 className="text-xl font-black uppercase tracking-widest text-slate-500">No hay datos para los filtros seleccionados</h3>
           </div>
         )
       ) : (
         /* CIERRE DE NOVEDADES TAB */
         <div className="space-y-8">
-          {/* Search Bar for Table */}
-          <div className="bg-white/5 backdrop-blur-xl p-4 rounded-3xl border border-white/10 flex items-center gap-4 max-w-xl">
-            <Search className="text-[#00D4FF]" size={20} />
-            <input 
-              type="text" 
-              placeholder="BUSCAR POR PLACA O OBSERVACIÓN..." 
-              className="bg-transparent border-none outline-none text-xs font-black uppercase tracking-widest text-white placeholder:text-slate-500 w-full"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          {/* Search Bar and Item Filter for Table */}
+          <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center">
+            <div className="bg-white p-4 rounded-3xl border border-slate-200 flex items-center gap-4 flex-grow max-w-xl shadow-sm">
+              <Search className="text-blue-600" size={20} />
+              <input 
+                type="text" 
+                placeholder="BUSCAR POR PLACA O OBSERVACIÓN..." 
+                className="bg-transparent border-none outline-none text-xs font-black uppercase tracking-widest text-slate-800 placeholder:text-slate-400 w-full"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <div className="bg-white p-3 px-4 rounded-3xl border border-slate-200 flex items-center gap-3 shadow-sm min-w-[280px]">
+              <Filter className="text-blue-600" size={16} />
+              <div className="flex-grow">
+                <span className="block text-[8px] font-black text-blue-600 uppercase tracking-widest mb-0.5">Filtrar por Item (Columna D)</span>
+                <select
+                  value={filterCierreItem}
+                  onChange={(e) => setFilterCierreItem(e.target.value)}
+                  className="w-full bg-transparent text-slate-700 text-xs font-bold outline-none cursor-pointer appearance-none uppercase"
+                >
+                  <option value="TODOS">TODOS LOS ITEMS</option>
+                  {uniqueCierreItems.map(item => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {closureMetrics && (
@@ -907,11 +945,11 @@ const ExecutiveAuditDashboard: React.FC = () => {
             </div>
           )}
 
-          <div className="bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="bg-white/5 border-b border-white/10">
+                  <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest animate-pulse">Fecha</th>
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">CD</th>
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Placa</th>
@@ -921,24 +959,24 @@ const ExecutiveAuditDashboard: React.FC = () => {
                     <th className="p-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">Verificación</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-slate-100">
                   {filteredCierreRecords.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-white/[0.02] transition-colors group">
-                      <td className="p-6 text-[11px] font-bold text-slate-400 whitespace-nowrap">{item.fecha || 'N/A'}</td>
-                      <td className="p-6 text-[11px] font-black text-[#00D4FF] uppercase">{item.cd}</td>
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                      <td className="p-6 text-[11px] font-bold text-slate-500 whitespace-nowrap">{item.fecha || 'N/A'}</td>
+                      <td className="p-6 text-[11px] font-black text-blue-600 uppercase">{item.cd}</td>
                       <td className="p-6">
-                        <span className="px-3 py-1 bg-white/10 rounded-lg text-[11px] font-mono font-black text-white border border-white/10 group-hover:border-[#00D4FF]/30 transition-colors">
+                        <span className="px-3 py-1 bg-slate-100 rounded-lg text-[11px] font-mono font-black text-slate-800 border border-slate-200 group-hover:border-blue-500/30 transition-colors">
                           {item.placa}
                         </span>
                       </td>
-                      <td className="p-6 text-[11px] text-slate-300 font-medium max-w-xs truncate" title={item.item}>
+                      <td className="p-6 text-[11px] text-slate-700 font-medium max-w-xs truncate" title={item.item}>
                         {item.item || '-'}
                       </td>
                       <td className="p-6 text-center">
                         <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
                           item.estado?.toUpperCase().includes('CERRADO') || item.estado?.toUpperCase().includes('REALIZADO')
-                            ? 'bg-[#00FF88]/10 text-[#00FF88] border border-[#00FF88]/20' 
-                            : 'bg-[#FF4560]/10 text-[#FF4560] border border-[#FF4560]/20'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}>
                           {item.estado || 'PENDIENTE'}
                         </span>
@@ -948,7 +986,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
                           {!item.evidencia ? (
                             <button 
                               onClick={() => handleOpenCierreEvidence(item)}
-                              className="p-2 bg-[#00D4FF10] hover:bg-[#00D4FF20] text-[#00D4FF] rounded-lg transition-all border border-[#00D4FF20]"
+                              className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-all border border-blue-100"
                               title="Registrar Evidencias de Cierre"
                             >
                               <Camera size={14} />
@@ -957,7 +995,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
                             <div className="flex gap-2 items-center justify-center">
                               <button 
                                 onClick={() => handleOpenCierreEvidence(item)}
-                                className="p-2 bg-[#00FF8810] hover:bg-[#00FF8820] text-[#00FF88] rounded-lg transition-all border border-[#00FF8820]"
+                                className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg transition-all border border-emerald-100"
                                 title="Ver/Editar Evidencias"
                               >
                                 <Image size={14} />
@@ -969,10 +1007,10 @@ const ExecutiveAuditDashboard: React.FC = () => {
                                   <button 
                                     key={uidx}
                                     onClick={() => setSelectedImage(getEmbedUrl(cleanUrl))}
-                                    className="text-slate-400 hover:text-[#00FF88] transition-colors"
+                                    className="text-slate-500 hover:text-emerald-600 transition-colors"
                                     title={`Ver Foto ${uidx + 1}`}
                                   >
-                                    <span className="text-[9px] font-mono font-black border-r border-white/15 pr-1.5 last:border-0 mr-1.5">F{uidx + 1}</span>
+                                    <span className="text-[9px] font-mono font-black border-r border-slate-200 pr-1.5 last:border-0 mr-1.5">F{uidx + 1}</span>
                                   </button>
                                 );
                               })}
@@ -980,13 +1018,13 @@ const ExecutiveAuditDashboard: React.FC = () => {
                           )}
                         </div>
                       </td>
-                      <td className="p-6 text-[11px] font-bold text-slate-400">{item.verificacion || '-'}</td>
+                      <td className="p-6 text-[11px] font-bold text-slate-500">{item.verificacion || '-'}</td>
                     </tr>
                   ))}
                   {filteredCierreRecords.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="p-20 text-center text-slate-600 font-black uppercase tracking-widest text-xs">
-                        No se han encontrado registros en CIERRE1
+                      <td colSpan={7} className="p-20 text-center text-slate-400 font-black uppercase tracking-widest text-xs">
+                        No se han encontrado registros en CIERRE
                       </td>
                     </tr>
                   )}
@@ -1034,21 +1072,46 @@ const ExecutiveAuditDashboard: React.FC = () => {
                   </label>
                   
                   {!evidenceData.antes && (
-                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                      {antesFiles.map((file, i) => (
-                        <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
-                          <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
-                          <button 
-                            onClick={() => setAntesFiles(antesFiles.filter((_, idx) => idx !== i))}
-                            className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X size={10} />
-                          </button>
+                    <div className="space-y-4">
+                      {antesFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pb-2">
+                          {antesFiles.map((file, i) => (
+                            <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-white/10 group">
+                              <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                              <button 
+                                type="button"
+                                onClick={() => setAntesFiles(antesFiles.filter((_, idx) => idx !== i))}
+                                className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg hover:bg-rose-600 transition-colors"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                       {antesFiles.length < 6 && (
-                        <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00D4FF]/40 cursor-pointer flex items-center justify-center transition-all">
-                          <Upload size={16} className="text-[#00D4FF]/40" />
+                        <label 
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDraggingAntes(true);
+                          }}
+                          onDragLeave={() => setIsDraggingAntes(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDraggingAntes(false);
+                            const files = (Array.from(e.dataTransfer.files || []) as File[]).filter(f => f.type.startsWith('image/'));
+                            setAntesFiles(prev => [...prev, ...files].slice(0, 6));
+                          }}
+                          className={`w-full h-24 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 cursor-pointer ${
+                            isDraggingAntes 
+                              ? 'bg-[#00D4FF]/15 border-[#00D4FF] text-[#00D4FF] scale-[1.01]' 
+                              : 'bg-white/5 border-white/10 hover:border-[#00D4FF]/40 text-slate-400 hover:text-slate-300'
+                          }`}
+                        >
+                          <Upload size={20} className={isDraggingAntes ? 'text-[#00D4FF] animate-bounce' : 'text-slate-400/60'} />
+                          <span className="text-[10px] font-black mt-2 uppercase tracking-widest text-center">
+                            {isDraggingAntes ? '¡Suelta las fotos!' : 'Arrastra fotos aquí o haz clic para subir'}
+                          </span>
                           <input 
                             type="file" 
                             className="hidden" 
@@ -1092,21 +1155,46 @@ const ExecutiveAuditDashboard: React.FC = () => {
                   </label>
 
                   {!evidenceData.despues && (
-                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                      {despuesFiles.map((file, i) => (
-                        <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
-                          <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
-                          <button 
-                            onClick={() => setDespuesFiles(despuesFiles.filter((_, idx) => idx !== i))}
-                            className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X size={10} />
-                          </button>
+                    <div className="space-y-4">
+                      {despuesFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pb-2">
+                          {despuesFiles.map((file, i) => (
+                            <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-white/10 group">
+                              <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                              <button 
+                                type="button"
+                                onClick={() => setDespuesFiles(despuesFiles.filter((_, idx) => idx !== i))}
+                                className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg hover:bg-rose-600 transition-colors"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                       {despuesFiles.length < 6 && (
-                        <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00FF88]/40 cursor-pointer flex items-center justify-center transition-all">
-                          <Upload size={16} className="text-[#00FF88]/40" />
+                        <label 
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDraggingDespues(true);
+                          }}
+                          onDragLeave={() => setIsDraggingDespues(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDraggingDespues(false);
+                            const files = (Array.from(e.dataTransfer.files || []) as File[]).filter(f => f.type.startsWith('image/'));
+                            setDespuesFiles(prev => [...prev, ...files].slice(0, 6));
+                          }}
+                          className={`w-full h-24 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 cursor-pointer ${
+                            isDraggingDespues 
+                              ? 'bg-[#00FF88]/15 border-[#00FF88] text-[#00FF88] scale-[1.01]' 
+                              : 'bg-white/5 border-white/10 hover:border-[#00FF88]/40 text-slate-400 hover:text-slate-300'
+                          }`}
+                        >
+                          <Upload size={20} className={isDraggingDespues ? 'text-[#00FF88] animate-bounce' : 'text-slate-400/60'} />
+                          <span className="text-[10px] font-black mt-2 uppercase tracking-widest text-center">
+                            {isDraggingDespues ? '¡Suelta las fotos!' : 'Arrastra fotos aquí o haz clic para subir'}
+                          </span>
                           <input 
                             type="file" 
                             className="hidden" 
@@ -1232,22 +1320,47 @@ const ExecutiveAuditDashboard: React.FC = () => {
                   </label>
                   
                   {!cierreEvidenceData.evidencia && (
-                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                      {cierreFiles.map((file, i) => (
-                        <div key={i} className="relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
-                          <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
-                          <button 
-                            type="button"
-                            onClick={() => setCierreFiles(cierreFiles.filter((_, idx) => idx !== i))}
-                            className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X size={10} />
-                          </button>
+                    <div className="space-y-4">
+                      {cierreFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pb-2">
+                          {cierreFiles.map((file, i) => (
+                            <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-white/10 group">
+                              <img src={URL.createObjectURL(file)} alt="Preview" className="w-full h-full object-cover" />
+                              <button 
+                                type="button"
+                                onClick={() => setCierreFiles(cierreFiles.filter((_, idx) => idx !== i))}
+                                className="absolute top-0 right-0 p-1 bg-black/60 text-white rounded-bl-lg hover:bg-rose-600 transition-colors"
+                              >
+                                <X size={10} />
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                       {cierreFiles.length < 6 && (
-                        <label className="flex-shrink-0 w-16 h-16 rounded-lg bg-white/5 border-2 border-dashed border-white/10 hover:border-[#00FF88]/40 cursor-pointer flex items-center justify-center transition-all">
-                          <Upload size={16} className="text-[#00FF88]/40" />
+                        <label 
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            setIsDraggingCierre(true);
+                          }}
+                          onDragLeave={() => setIsDraggingCierre(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDraggingCierre(false);
+                            const files = (Array.from(e.dataTransfer.files || []) as File[]).filter(f => f.type.startsWith('image/'));
+                            setCierreFiles(prev => [...prev, ...files].slice(0, 6));
+                          }}
+                          className={`w-full h-28 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all duration-300 cursor-pointer ${
+                            isDraggingCierre 
+                              ? 'bg-[#00FF88]/15 border-[#00FF88] text-[#00FF88] scale-[1.01]' 
+                              : 'bg-white/5 border-white/10 hover:border-[#00FF88]/40 text-slate-400 hover:text-slate-300'
+                          }`}
+                        >
+                          <Upload size={24} className={isDraggingCierre ? 'text-[#00FF88] animate-bounce' : 'text-slate-400/60'} />
+                          <span className="text-[11px] font-black mt-3 uppercase tracking-widest text-center px-4">
+                            {isDraggingCierre ? '¡Suelta las fotos!' : 'Arrastra fotos aquí o haz clic para subir'}
+                          </span>
+                          <span className="text-[9px] text-slate-500 font-bold mt-1">SOPORTA SELECCIÓN MÚLTIPLE (MÁX 6)</span>
                           <input 
                             type="file" 
                             className="hidden" 
@@ -1360,15 +1473,15 @@ const ExecutiveAuditDashboard: React.FC = () => {
 const KPICard = ({ title, value, icon, color, isPercent = false }: any) => (
   <motion.div 
     whileHover={{ y: -5, scale: 1.02 }}
-    className="bg-white/5 backdrop-blur-md p-6 rounded-[2rem] border border-white/10 flex flex-col items-center justify-center text-center group shadow-xl"
+    className="bg-white p-6 rounded-[2rem] border border-slate-200/80 flex flex-col items-center justify-center text-center group shadow-sm hover:shadow-md transition-all duration-300"
   >
-    <div className="p-3 mb-4 rounded-2xl transition-all duration-500 group-hover:rotate-12" style={{ backgroundColor: `${color}15`, border: `1px solid ${color}30` }}>
+    <div className="p-3 mb-4 rounded-2xl transition-all duration-500 group-hover:rotate-12" style={{ backgroundColor: `${color}10`, border: `1px solid ${color}20` }}>
       {React.cloneElement(icon, { style: { color } })}
     </div>
-    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">{title}</span>
+    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{title}</span>
     <span className="text-3xl font-black tracking-tighter" style={{ color: color }}>{value}</span>
     {isPercent && (
-       <div className="w-12 h-1 bg-white/10 rounded-full mt-4 overflow-hidden">
+       <div className="w-12 h-1 bg-slate-100 rounded-full mt-4 overflow-hidden">
           <div className="h-full rounded-full" style={{ width: value, backgroundColor: color }} />
        </div>
     )}
@@ -1377,11 +1490,11 @@ const KPICard = ({ title, value, icon, color, isPercent = false }: any) => (
 
 const MetricProgress = ({ label, value, color }: any) => (
   <div className="space-y-3">
-    <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+    <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
       <span>{label}</span>
       <span style={{ color }}>{value.toFixed(0)}%</span>
     </div>
-    <div className="h-3 w-full bg-white/5 rounded-full p-1 border border-white/5">
+    <div className="h-3 w-full bg-slate-100 rounded-full p-1 border border-slate-200">
       <motion.div 
         initial={{ width: 0 }}
         whileInView={{ width: `${value}%` }}
@@ -1389,8 +1502,7 @@ const MetricProgress = ({ label, value, color }: any) => (
         className="h-full rounded-full"
         style={{ 
           backgroundColor: color,
-          boxShadow: `0 0 15px ${color}40`,
-          backgroundImage: `linear-gradient(90deg, transparent, rgba(255,255,255,0.2))`
+          backgroundImage: `linear-gradient(90deg, transparent, rgba(255,255,255,0.15))`
         }}
       />
     </div>
@@ -1399,18 +1511,18 @@ const MetricProgress = ({ label, value, color }: any) => (
 
 const CategoryBar = ({ label, value, color }: { label: string, value: number, color: string }) => (
   <div className="flex flex-col items-center flex-1 h-full justify-end group">
-    <span className="text-[11px] font-black mb-2">{value.toFixed(0)}%</span>
+    <span className="text-[11px] font-black mb-2 text-slate-700">{value.toFixed(0)}%</span>
     <motion.div 
       initial={{ height: 0 }}
       whileInView={{ height: `${value}%` }}
       viewport={{ once: true }}
       className="w-12 rounded-t-xl relative overflow-hidden"
-      style={{ backgroundColor: color, boxShadow: `0 0 20px ${color}30` }}
+      style={{ backgroundColor: color }}
     >
-      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-      <div className="absolute top-0 left-0 right-0 h-1 bg-white/30" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-1 bg-white/20" />
     </motion.div>
-    <span className="text-[9px] font-black text-slate-500 uppercase tracking-tighter mt-4 group-hover:text-white transition-colors">{label}</span>
+    <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter mt-4 group-hover:text-slate-700 transition-colors">{label}</span>
   </div>
 );
 

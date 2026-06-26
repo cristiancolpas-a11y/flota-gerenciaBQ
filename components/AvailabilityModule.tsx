@@ -420,22 +420,22 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
   const COLORS = ['#3B82F6', '#F97316', '#10B981', '#A855F7', '#F43F5E', '#EC4899', '#6366F1'];
 
   return (
-    <div className="min-h-screen bg-[#0F172A] text-[#F1F5F9] p-4 md:p-8 font-sans animate-in fade-in duration-700">
+    <div className="min-h-screen bg-[#F0F4FF] text-slate-800 p-4 md:p-8 font-sans animate-in fade-in duration-700">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
         <div className="space-y-2">
           <div className="flex items-center gap-4">
-            <div className="p-4 bg-indigo-600 rounded-[1.5rem] shadow-2xl shadow-indigo-600/30">
+            <div className="p-4 bg-indigo-600 rounded-[1.5rem] shadow-lg shadow-indigo-600/20">
               <Activity size={32} className="text-white" />
             </div>
             <div>
-              <h1 className="text-4xl font-black uppercase tracking-tighter">Dashboard Disponibilidad</h1>
+              <h1 className="text-4xl font-black uppercase tracking-tighter text-slate-950">Dashboard Disponibilidad</h1>
               <div className="flex flex-wrap items-center gap-3 mt-2">
-                <p className="text-indigo-400 font-bold text-xs uppercase tracking-widest">
+                <p className="text-indigo-600 font-bold text-xs uppercase tracking-widest">
                   Periodo: {processedData.dateRange.min} → {processedData.dateRange.max}
                 </p>
                 {(selectedDate || selectedWeek || selectedMonth) && (
-                  <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[9px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
+                  <span className="bg-amber-500/10 text-amber-700 border border-amber-500/30 text-[9px] font-black uppercase px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
                     ⚡ FILTRO ACTIVO: {selectedDate || (selectedWeek ? `SEMANA ${selectedWeek.split('-W')[1]}` : selectedMonth)}
                     <button 
                       onClick={() => {
@@ -456,81 +456,81 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
         </div>
 
         <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
-           <div className="bg-[#1E293B] p-2 rounded-2xl border border-slate-700/50 flex items-center gap-4 shadow-xl">
-              <div className="flex items-center gap-2 pl-4 pr-3 border-r border-slate-700/50">
-                <Calendar size={16} className="text-indigo-400" />
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">INICIO</span>
+           <div className="bg-white p-2 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm">
+              <div className="flex items-center gap-2 pl-4 pr-3 border-r border-slate-200">
+                <Calendar size={16} className="text-indigo-500" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">INICIO</span>
               </div>
               <input 
                 type="date"
-                className="bg-transparent text-sm font-black uppercase outline-none cursor-pointer"
+                className="bg-transparent text-sm font-black uppercase outline-none cursor-pointer text-slate-700"
                 value={dateRange.start}
                 onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
               />
            </div>
 
-           <div className="bg-[#1E293B] p-2 rounded-2xl border border-slate-700/50 flex items-center gap-4 shadow-xl">
-              <div className="flex items-center gap-2 pl-4 pr-3 border-r border-slate-700/50">
-                <Calendar size={16} className="text-indigo-400" />
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">FIN</span>
+           <div className="bg-white p-2 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm">
+              <div className="flex items-center gap-2 pl-4 pr-3 border-r border-slate-200">
+                <Calendar size={16} className="text-indigo-500" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">FIN</span>
               </div>
               <input 
                 type="date"
-                className="bg-transparent text-sm font-black uppercase outline-none cursor-pointer"
+                className="bg-transparent text-sm font-black uppercase outline-none cursor-pointer text-slate-700"
                 value={dateRange.end}
                 onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
               />
            </div>
 
-           <div className="bg-[#1E293B] p-2 rounded-2xl border border-slate-700/50 flex items-center gap-4 shadow-xl">
-              <div className="flex items-center gap-2 pl-4 pr-3 border-r border-slate-700/50">
-                <Filter size={16} className="text-indigo-400" />
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">CD</span>
+           <div className="bg-white p-2 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm">
+              <div className="flex items-center gap-2 pl-4 pr-3 border-r border-slate-200">
+                <Filter size={16} className="text-indigo-500" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CD</span>
               </div>
               <select 
-                className="bg-transparent text-sm font-black uppercase outline-none pr-6 cursor-pointer"
+                className="bg-transparent text-slate-700 text-sm font-black uppercase outline-none pr-6 cursor-pointer"
                 value={filterCd}
                 onChange={e => setFilterCd(e.target.value)}
               >
-                <option value="all" className="bg-[#1E293B]">AMBOS CD</option>
-                <option value="GALAPA" className="bg-[#1E293B]">GALAPA</option>
-                <option value="ARENOSA" className="bg-[#1E293B]">LA ARENOSA</option>
+                <option value="all">AMBOS CD</option>
+                <option value="GALAPA">GALAPA</option>
+                <option value="ARENOSA">LA ARENOSA</option>
               </select>
            </div>
 
-           <div className="bg-[#1E293B] p-2 rounded-2xl border border-slate-700/50 flex items-center gap-4 shadow-xl">
-              <div className="flex items-center gap-2 pl-4 pr-3 border-r border-slate-700/50">
-                <Truck size={16} className="text-indigo-400" />
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">CONTRATISTA</span>
+           <div className="bg-white p-2 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm">
+              <div className="flex items-center gap-2 pl-4 pr-3 border-r border-slate-200">
+                <Truck size={16} className="text-indigo-500" />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">CONTRATISTA</span>
               </div>
               <select 
-                className="bg-transparent text-sm font-black uppercase outline-none pr-6 cursor-pointer max-w-[200px]"
+                className="bg-transparent text-slate-700 text-sm font-black uppercase outline-none pr-6 cursor-pointer max-w-[200px]"
                 value={filterContractor}
                 onChange={e => setFilterContractor(e.target.value)}
               >
-                <option value="all" className="bg-[#1E293B]">TODOS</option>
+                <option value="all">TODOS</option>
                 {contractors.map(c => (
-                  <option key={c} value={c} className="bg-[#1E293B]">{c.toUpperCase()}</option>
+                  <option key={c} value={c}>{c.toUpperCase()}</option>
                 ))}
               </select>
            </div>
            
-           <div className="bg-[#1E293B] px-8 py-4 rounded-2xl border border-slate-700/50 shadow-2xl">
-             <div className="flex flex-col items-end">
-               <span className="text-[9px] font-black text-indigo-400 uppercase mb-1">GENERADO EL</span>
-               <span className="text-sm font-black">{new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase()}</span>
-             </div>
+           <div className="bg-white px-8 py-4 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex flex-col items-end">
+                <span className="text-[9px] font-black text-indigo-500 uppercase mb-1">GENERADO EL</span>
+                <span className="text-sm font-black text-slate-700">{new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase()}</span>
+              </div>
            </div>
         </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-        <div className="bg-gradient-to-br from-[#1E293B] to-[#1E1B4B] p-8 rounded-[2.5rem] border border-indigo-500/30 shadow-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-indigo-500/10 rounded-full blur-xl group-hover:bg-indigo-500/20 transition-all duration-500"></div>
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-indigo-500/5 rounded-full blur-xl group-hover:bg-indigo-500/10 transition-all duration-500"></div>
           <div className="relative z-10 space-y-4">
-            <div className="text-[11px] font-black text-indigo-300 uppercase tracking-widest flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div> 
+            <div className="text-[11px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div> 
               {selectedDate || selectedWeek || selectedMonth ? 'PROMEDIO FILTRADO' : 'PROMEDIO COMPLETO'}
             </div>
             <h2 className={`text-5xl font-black ${getEfficiencyColor(processedData.kpis.unifiedAverageDispo)}`}>
@@ -542,13 +542,13 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
           </div>
         </div>
 
-        <div className="bg-[#1E293B] p-8 rounded-[2.5rem] border border-slate-700/50 shadow-2xl relative group">
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative group">
           <div className="relative z-10 space-y-4">
-            <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <div className="text-[11px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div> 
               {selectedDate || selectedWeek || selectedMonth ? 'SISTEMA CRÍTICO (FILTRO)' : 'SISTEMA CRÍTICO'}
             </div>
-            <h2 className="text-2xl font-black text-amber-500 uppercase break-words leading-tight">
+            <h2 className="text-2xl font-black text-amber-600 uppercase break-words leading-tight">
               {selectedDate || selectedWeek || selectedMonth ? processedData.kpis.topSystemFilter : processedData.kpis.topSystemMonth}
             </h2>
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
@@ -560,13 +560,13 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
 
       {/* Daily Tendency */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12">
-        <div className="xl:col-span-2 bg-[#1E293B] p-8 rounded-[3rem] border border-slate-700/50 shadow-2xl">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-10 gap-4 border-b border-slate-700/50 pb-6">
+        <div className="xl:col-span-2 bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-10 gap-4 border-b border-slate-100 pb-6">
             <div>
-              <h3 className="text-lg font-black uppercase flex items-center gap-3">
-                <TrendingUp size={20} className="text-indigo-400" /> Tendencia Diaria
+              <h3 className="text-lg font-black uppercase flex items-center gap-3 text-slate-900">
+                <TrendingUp size={20} className="text-indigo-500" /> Tendencia Diaria
               </h3>
-              <p className="text-[11px] text-slate-500 font-bold uppercase mt-1">META 85%</p>
+              <p className="text-[11px] text-slate-400 font-bold uppercase mt-1">META 85%</p>
             </div>
             <div className="flex items-center gap-6">
                {(filterCd === 'all' || filterCd === 'GALAPA') && (
@@ -591,10 +591,10 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                 }}
                 style={{ cursor: 'pointer' }}
               >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 900 }} tickFormatter={(v) => v ? v.split('-').slice(1).join('/') : ''}/>
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 105]} />
-                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px', fontSize: '10px', fontWeight: 900 }} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 10, fontWeight: 900 }} tickFormatter={(v) => v ? v.split('-').slice(1).join('/') : ''}/>
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 10 }} domain={[0, 105]} />
+                <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', fontSize: '10px', fontWeight: 900 }} />
                 <ReferenceLine y={85} stroke="#EF4444" strokeDasharray="10 10" />
                 {(filterCd === 'all' || filterCd === 'GALAPA') && (
                   <Line type="monotone" dataKey="galapa" stroke="#3B82F6" strokeWidth={5} dot={false} />
@@ -608,26 +608,26 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
         </div>
 
         {/* Top Failures */}
-        <div className="bg-[#1E293B] p-8 rounded-[3rem] border border-slate-700/50 shadow-2xl">
-          <div className="flex items-center justify-between mb-10 border-b border-slate-700/50 pb-6">
-            <h3 className="text-lg font-black uppercase flex items-center gap-3">
-              <AlertTriangle size={20} className="text-amber-400" /> Top 8 Fallas
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between mb-10 border-b border-slate-100 pb-6">
+            <h3 className="text-lg font-black uppercase flex items-center gap-3 text-slate-900">
+              <AlertTriangle size={20} className="text-amber-500" /> Top 8 Fallas
             </h3>
-            <div className="flex gap-1 bg-[#0F172A] p-1 rounded-xl">
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
               {(['all', 'GALAPA', 'ARENOSA'] as const).map(v => (
-                <button key={v} onClick={() => setSystemView(v)} className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase transition-all ${systemView === v ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>{v === 'all' ? 'MIX' : v}</button>
+                <button key={v} onClick={() => setSystemView(v)} className={`px-2 py-1 rounded-lg text-[8px] font-black uppercase transition-all ${systemView === v ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>{v === 'all' ? 'MIX' : v}</button>
               ))}
             </div>
           </div>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={processedData.topFailures} margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#F1F5F9', fontSize: 9, fontWeight: 900 }} width={90}/>
+                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 9, fontWeight: 900 }} width={90}/>
                 <XAxis type="number" hide />
-                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
+                <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px' }} />
                 <Bar dataKey="count" fill="#F97316" radius={[0, 6, 6, 0]} barSize={15}>
                   {processedData.topFailures.map((_, i) => <Cell key={`c-${i}`} fill={COLORS[i % COLORS.length]} />)}
-                  <LabelList dataKey="count" position="right" fill="#F1F5F9" fontSize={9} fontWeight={900} />
+                  <LabelList dataKey="count" position="right" fill="#475569" fontSize={9} fontWeight={900} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -637,9 +637,9 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
 
       {/* Weekly & Monthly Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-        <div className="bg-[#1E293B] p-8 rounded-[3rem] border border-slate-700/50 shadow-2xl">
-          <h3 className="text-lg font-black uppercase flex items-center gap-3 mb-8 pb-4 border-b border-slate-700/50">
-            <BarChart3 size={20} className="text-indigo-400" /> Disponibilidad Semanal
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm">
+          <h3 className="text-lg font-black uppercase flex items-center gap-3 mb-8 pb-4 border-b border-slate-100 text-slate-900">
+            <BarChart3 size={20} className="text-indigo-500" /> Disponibilidad Semanal
           </h3>
           <div className="h-[300px]">
              <ResponsiveContainer width="100%" height="100%">
@@ -658,27 +658,27 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                   }}
                   style={{ cursor: 'pointer' }}
                 >
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 8, fontWeight: 900 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 100]} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 8, fontWeight: 900 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 10 }} domain={[0, 100]} />
+                  <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px' }} />
                   <ReferenceLine y={85} stroke="#EF4444" strokeDasharray="5 5" />
                   {(filterCd === 'all' || filterCd === 'GALAPA') && (
                     <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={filterCd === 'GALAPA' ? 35 : 20}>
-                      <LabelList dataKey="galapa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                      <LabelList dataKey="galapa" position="top" fill="#475569" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
                     </Bar>
                   )}
                   {(filterCd === 'all' || filterCd === 'ARENOSA') && (
                     <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={filterCd === 'ARENOSA' ? 35 : 20}>
-                      <LabelList dataKey="arenosa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                      <LabelList dataKey="arenosa" position="top" fill="#475569" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
                     </Bar>
                   )}
                 </BarChart>
              </ResponsiveContainer>
           </div>
         </div>
-        <div className="bg-[#1E293B] p-8 rounded-[3rem] border border-slate-700/50 shadow-2xl">
-          <h3 className="text-lg font-black uppercase flex items-center gap-3 mb-8 pb-4 border-b border-slate-700/50">
-            <Calendar size={20} className="text-purple-400" /> Disponibilidad Mensual
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm">
+          <h3 className="text-lg font-black uppercase flex items-center gap-3 mb-8 pb-4 border-b border-slate-100 text-slate-900">
+            <Calendar size={20} className="text-purple-500" /> Disponibilidad Mensual
           </h3>
           <div className="h-[300px]">
              <ResponsiveContainer width="100%" height="100%">
@@ -694,18 +694,18 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                   }}
                   style={{ cursor: 'pointer' }}
                 >
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 9, fontWeight: 900 }} tickFormatter={v => v ? v.split(' ')[0] : ''} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} domain={[0, 100]} />
-                  <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 9, fontWeight: 900 }} tickFormatter={v => v ? v.split(' ')[0] : ''} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 10 }} domain={[0, 100]} />
+                  <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px' }} />
                   <ReferenceLine y={85} stroke="#EF4444" strokeDasharray="5 5" />
                   {(filterCd === 'all' || filterCd === 'GALAPA') && (
                     <Bar dataKey="galapa" fill="#3B82F6" radius={[4, 4, 0, 0]} barSize={filterCd === 'GALAPA' ? 55 : 35}>
-                      <LabelList dataKey="galapa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                      <LabelList dataKey="galapa" position="top" fill="#475569" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
                     </Bar>
                   )}
                   {(filterCd === 'all' || filterCd === 'ARENOSA') && (
                     <Bar dataKey="arenosa" fill="#F97316" radius={[4, 4, 0, 0]} barSize={filterCd === 'ARENOSA' ? 55 : 35}>
-                      <LabelList dataKey="arenosa" position="top" fill="#F1F5F9" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
+                      <LabelList dataKey="arenosa" position="top" fill="#475569" fontSize={8} fontWeight={900} formatter={(v: any) => `${v}%`} />
                     </Bar>
                   )}
                 </BarChart>
@@ -716,11 +716,11 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
 
       {/* Tables Section */}
       <div className="grid grid-cols-1 gap-8">
-        <div className="bg-[#1E293B] p-8 rounded-[3rem] border border-slate-700/50 shadow-2xl overflow-x-auto">
-          <h3 className="text-lg font-black uppercase flex items-center gap-3 mb-8 pb-4 border-b border-slate-700/50">Top 10 Críticos</h3>
+        <div className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-sm overflow-x-auto">
+          <h3 className="text-lg font-black uppercase flex items-center gap-3 mb-8 pb-4 border-b border-slate-100 text-slate-900">Top 10 Críticos</h3>
           <table className="w-full text-left text-[9px] uppercase">
              <thead>
-               <tr className="border-b border-slate-700">
+               <tr className="border-b border-slate-200 text-slate-500">
                  <th className="pb-4 pr-4">PLACA</th>
                  <th className="pb-4 px-4">CD</th>
                  <th className="pb-4 px-4">DISTRIBUIDOR</th>
@@ -728,14 +728,14 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                  <th className="pb-4 pl-4 text-right">SISTEMA TOP</th>
                </tr>
              </thead>
-             <tbody className="divide-y divide-slate-800">
+             <tbody className="divide-y divide-slate-100 text-slate-700">
                 {processedData.criticalVehicles.map((v, i) => (
-                  <tr key={i} className="hover:bg-slate-800/50 transition-all">
-                    <td className="py-4 pr-4 font-black font-mono">{v.plate}</td>
-                    <td className="py-4 px-4 font-black text-slate-500">{v.cd}</td>
-                    <td className="py-4 px-4 font-black text-slate-400">{v.dist}</td>
-                    <td className="py-4 px-4 font-black text-rose-500">{v.dias} d</td>
-                    <td className="py-4 pl-4 font-black text-indigo-400 text-right italic">{v.topSystem}</td>
+                  <tr key={i} className="hover:bg-slate-50 transition-all">
+                     <td className="py-4 pr-4 font-black font-mono text-slate-900">{v.plate}</td>
+                     <td className="py-4 px-4 font-black text-slate-500">{v.cd}</td>
+                     <td className="py-4 px-4 font-black text-slate-500">{v.dist}</td>
+                     <td className="py-4 px-4 font-black text-rose-600">{v.dias} d</td>
+                     <td className="py-4 pl-4 font-black text-indigo-600 text-right italic">{v.topSystem}</td>
                   </tr>
                 ))}
              </tbody>
@@ -744,7 +744,7 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
       </div>
 
       <div className="mt-12 text-center pb-20">
-         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-600">Fuente: DISPONIBILIDAD.xlsx | Sistema v4.0</p>
+         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">Fuente: DISPONIBILIDAD.xlsx | Sistema v4.0</p>
       </div>
     </div>
   );

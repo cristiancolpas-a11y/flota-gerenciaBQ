@@ -1,1 +1,58 @@
-/* Stylesheet */
+@import "tailwindcss";
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #F0F4FF;
+    margin: 0;
+    padding: 0;
+}
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+/* Animación de vibración de motor para el montacargas */
+@keyframes forkliftVibrate {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-1px) rotate(0.5deg); }
+    75% { transform: translateY(1px) rotate(-0.5deg); }
+}
+/* Animación de las horquillas subiendo y bajando */
+@keyframes forkliftLift {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+}
+
+.animate-spin-slow {
+    animation: spin 3s linear infinite;
+}
+.animate-forklift-vibrate {
+    animation: forkliftVibrate 0.15s linear infinite;
+}
+.animate-forklift-lift {
+    animation: forkliftLift 2s ease-in-out infinite;
+}
+.animate-shake {
+    animation: shake 0.2s ease-in-out 0s 2;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
