@@ -4,9 +4,16 @@ import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../u
 
 const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
 const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
-const GOOGLE_SCRIPT_WORKSHOP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
 const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbwrEkalsgNrHXPqEx_MeihznsIM4uIG7WZH42ze_HOyB5EZTgeDZMPi0SaIo4JZMlAppQ/exec';
+
+export const getWorkshopScriptUrl = (): string => {
+  return localStorage.getItem('GOOGLE_SCRIPT_WORKSHOP_URL') || 'https://script.google.com/macros/s/AKfycbycAGgzaJLOtoBkN2VsZQdWzJhUxLJwrOOJq8smV3mijtEmrlrNKTX1YFQkO-9tPhsV/exec';
+};
+
+export const setWorkshopScriptUrl = (url: string): void => {
+  localStorage.setItem('GOOGLE_SCRIPT_WORKSHOP_URL', url.trim());
+};
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
 const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
@@ -1165,7 +1172,7 @@ const processIndicatorRows = (rows: any[][]): OperationalIndicator[] => {
 export const fetchWorkshopRecordsFromSheet = async (): Promise<WorkshopRecord[]> => {
   const docId = '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo';
   try {
-    const rows = await fetchDataFromGAS(docId, 'TALLERES');
+    const rows = await fetchDataFromGAS(docId, 'TALLERES', getWorkshopScriptUrl());
     if (!rows || rows.length < 2) {
       return fetchWorkshopRecordsFromSheetCSV();
     }
@@ -1680,7 +1687,15 @@ export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<
     return { success: false, message: "Error de conexión" };
   }
 };
-export const submitWorkshopRecordToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_WORKSHOP_RECORD', data }, GOOGLE_SCRIPT_WORKSHOP_URL); };
+export const submitWorkshopRecordToSheet = async (data: any): Promise<void> => { 
+  await sendToGAS({ 
+    method: 'POST_WORKSHOP_RECORD', 
+    data: {
+      ...data,
+      docId: '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo'
+    } 
+  }, getWorkshopScriptUrl()); 
+};
 
 /**
  * DRIVE UPLOAD

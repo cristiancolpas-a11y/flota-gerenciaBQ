@@ -13,10 +13,11 @@ import {
   RefreshCw,
   Image as ImageIcon,
   Cpu,
-  ShieldAlert
+  ShieldAlert,
+  X
 } from 'lucide-react';
 import { WorkshopRecord, Vehicle } from '../types';
-import { fetchWorkshopRecordsFromSheet } from '../services/sheetService';
+import { fetchWorkshopRecordsFromSheet, getWorkshopScriptUrl, setWorkshopScriptUrl } from '../services/sheetService';
 import { WorkshopForm } from './WorkshopForm';
 
 interface WorkshopModuleProps {
@@ -38,6 +39,8 @@ const WorkshopModule: React.FC<WorkshopModuleProps> = ({ onBack, vehicles }) => 
   const [records, setRecords] = useState<WorkshopRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [scriptUrlInput, setScriptUrlInput] = useState(getWorkshopScriptUrl());
   const [searchTerm, setSearchTerm] = useState('');
 
   const loadRecords = async () => {
@@ -276,6 +279,13 @@ const WorkshopModule: React.FC<WorkshopModuleProps> = ({ onBack, vehicles }) => 
                 <Plus size={18} /> Nueva Novedad
               </button>
               <button 
+                onClick={() => setIsSettingsOpen(true)}
+                className="px-4 py-3 bg-white/5 text-slate-300 rounded-xl hover:bg-white/10 hover:text-white transition-all border border-white/10 flex items-center justify-center"
+                title="Configurar URL del Script de Talleres"
+              >
+                <Settings size={18} />
+              </button>
+              <button 
                 onClick={onBack}
                 className="px-6 py-3 bg-white/5 text-white rounded-xl font-black uppercase tracking-widest hover:bg-white/10 transition-all flex items-center gap-2 border border-white/10"
               >
@@ -297,6 +307,58 @@ const WorkshopModule: React.FC<WorkshopModuleProps> = ({ onBack, vehicles }) => 
         defaultWorkshop={activeWorkshop || undefined}
         vehicles={vehicles}
       />
+
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg bg-[#0f172a] border border-white/10 rounded-2xl p-6 shadow-2xl relative">
+            <button 
+              onClick={() => setIsSettingsOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">Configurar Script de Talleres</h3>
+            <p className="text-slate-400 text-xs mb-6 leading-relaxed">
+              Si has desplegado un Google Apps Script independiente para Talleres, ingresa aquí la URL de la aplicación web de ese script independiente para que los envíos y cargas se realicen correctamente.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">
+                  URL de la Aplicación Web del Script (TALLERES)
+                </label>
+                <input 
+                  type="text"
+                  value={scriptUrlInput}
+                  onChange={(e) => setScriptUrlInput(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button 
+                  onClick={() => {
+                    setScriptUrlInput(getWorkshopScriptUrl());
+                    setIsSettingsOpen(false);
+                  }}
+                  className="px-4 py-2 bg-white/5 text-slate-300 rounded-lg hover:bg-white/10 text-xs font-bold transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={() => {
+                    setWorkshopScriptUrl(scriptUrlInput);
+                    setIsSettingsOpen(false);
+                    loadRecords();
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-bold transition-all"
+                >
+                  Guardar Configuración
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

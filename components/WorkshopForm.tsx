@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Upload, CheckCircle, AlertCircle, Loader2, Truck, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Upload, CheckCircle, AlertCircle, Loader2, Truck, Image as ImageIcon, Search, Check } from 'lucide-react';
 import { submitWorkshopRecordToSheet } from '../services/sheetService';
 import { getWeekNumber, createMosaic } from '../utils';
 import { Vehicle } from '../types';
@@ -31,6 +31,10 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
   const [isDraggingEv1, setIsDraggingEv1] = useState(false);
   const [isDraggingEv2, setIsDraggingEv2] = useState(false);
 
+  const [plateSearch, setPlateSearch] = useState('');
+  const [isPlateDropdownOpen, setIsPlateDropdownOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const [formData, setFormData] = useState({
     month: '',
     week: '',
@@ -51,14 +55,31 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
         ...prev,
         month: monthName,
         week: weekNum.toString(),
+        plate: '',
         workshopName: defaultWorkshop || prev.workshopName
       }));
+      setPlateSearch('');
+      setIsPlateDropdownOpen(false);
       setSubmitStatus('idle');
       setErrorMessage('');
       setEvidence1Files([]);
       setEvidence2Files([]);
     }
   }, [isOpen, formData.date, defaultWorkshop]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsPlateDropdownOpen(false);
+        // Sync display input with actual selected plate if we click outside
+        setPlateSearch(formData.plate);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [formData.plate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -215,22 +236,77 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Placa
+                    Placa <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative">
-                    <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <select
-                      name="plate"
+                  <div className="relative" ref={containerRef}>
+                    <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Buscar placa..."
                       required
-                      value={formData.plate}
-                      onChange={handleChange}
-                      className="w-full pl-10 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase appearance-none"
-                    >
-                      <option value="">Seleccione una placa</option>
-                      {vehicles.map(v => (
-                        <option key={v.id} value={v.plate}>{v.plate}</option>
-                      ))}
-                    </select>
+                      value={plateSearch}
+                      onFocus={() => setIsPlateDropdownOpen(true)}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setPlateSearch(val);
+                        setIsPlateDropdownOpen(true);
+                        // Search for matching vehicle or just set the typed plate
+                        setFormData(prev => ({ ...prev, plate: val }));
+                      }}
+                      className="w-full pl-10 pr-10 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase font-medium text-slate-800 placeholder-slate-400 relative"
+                      autoComplete="off"
+                    />
+                    {plateSearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlateSearch('');
+                          setFormData(prev => ({ ...prev, plate: '' }));
+                          setIsPlateDropdownOpen(true);
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 z-10"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+
+                    {isPlateDropdownOpen && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                        {vehicles.filter(v => v.plate.toUpperCase().includes(plateSearch.toUpperCase())).length > 0 ? (
+                          vehicles
+                            .filter(v => v.plate.toUpperCase().includes(plateSearch.toUpperCase()))
+                            .map((v) => {
+                              const isSelected = formData.plate === v.plate;
+                              return (
+                                <button
+                                  key={v.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(prev => ({ ...prev, plate: v.plate }));
+                                    setPlateSearch(v.plate);
+                                    setIsPlateDropdownOpen(false);
+                                  }}
+                                  className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors hover:bg-slate-50 border-b border-slate-100 last:border-none ${
+                                    isSelected ? 'bg-blue-50 font-bold text-blue-700' : 'text-slate-700'
+                                  }`}
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-mono font-bold tracking-wider">{v.plate}</span>
+                                    {v.contractor && (
+                                      <span className="text-[10px] text-slate-400">{v.contractor} - {v.cd || 'Sin CD'}</span>
+                                    )}
+                                  </div>
+                                  {isSelected && <Check className="w-4 h-4 text-blue-600" />}
+                                </button>
+                              );
+                            })
+                        ) : (
+                          <div className="px-4 py-3 text-xs text-slate-500 italic text-center">
+                            Ninguna placa coincide. Se usará "{plateSearch}"
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -304,20 +380,29 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
                     <label
                       htmlFor="evidence1"
                       onDragOver={(e) => { e.preventDefault(); setIsDraggingEv1(true); }}
+                      onDragEnter={(e) => { e.preventDefault(); setIsDraggingEv1(true); }}
                       onDragLeave={(e) => { e.preventDefault(); setIsDraggingEv1(false); }}
                       onDrop={(e) => handleDrop(e, setEvidence1Files)}
-                      className={`flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer transition-all ${isDraggingEv1 ? 'bg-blue-50 border-blue-500 scale-105' : 'border-slate-300 hover:bg-slate-50'}`}
+                      className={`flex flex-col items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer transition-all ${isDraggingEv1 ? 'bg-blue-50 border-blue-500 scale-105' : 'border-slate-300 hover:bg-slate-50'}`}
                     >
                       {evidence1Files.length > 0 ? (
-                        <div className="flex flex-col items-center">
-                          <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
-                          <span className="text-sm font-medium text-slate-700">{evidence1Files.length} foto(s) seleccionada(s)</span>
-                          <span className="text-xs text-slate-500 mt-1">Click para cambiar</span>
+                        <div className="flex flex-col items-center w-full">
+                          <div className="grid grid-cols-4 gap-2 mb-3 w-full max-w-xs">
+                            {evidence1Files.map((base64, idx) => (
+                              <div key={idx} className="relative aspect-square w-full rounded border border-slate-200 overflow-hidden bg-slate-50 group">
+                                <img src={base64} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              </div>
+                            ))}
+                          </div>
+                          <span className="text-sm font-bold text-emerald-600 flex items-center gap-1">
+                            <CheckCircle className="w-4 h-4" /> {evidence1Files.length} foto(s) seleccionada(s)
+                          </span>
+                          <span className="text-xs text-slate-500 mt-1">Haz clic para cambiar o arrastra más</span>
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center">
+                        <div className="flex flex-col items-center text-center p-2">
                           <Upload className="w-8 h-8 text-slate-400 mb-2" />
-                          <span className="text-sm font-medium text-slate-700">Tomar o subir fotos</span>
+                          <span className="text-sm font-medium text-slate-700">Arrastra aquí tus fotos o haz clic para seleccionar</span>
                           <span className="text-xs text-slate-500 mt-1">Máximo 4 imágenes</span>
                         </div>
                       )}
@@ -342,20 +427,29 @@ export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onS
                     <label
                       htmlFor="evidence2"
                       onDragOver={(e) => { e.preventDefault(); setIsDraggingEv2(true); }}
+                      onDragEnter={(e) => { e.preventDefault(); setIsDraggingEv2(true); }}
                       onDragLeave={(e) => { e.preventDefault(); setIsDraggingEv2(false); }}
                       onDrop={(e) => handleDrop(e, setEvidence2Files)}
-                      className={`flex items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer transition-all ${isDraggingEv2 ? 'bg-blue-50 border-blue-500 scale-105' : 'border-slate-300 hover:bg-slate-50'}`}
+                      className={`flex flex-col items-center justify-center w-full p-4 border-2 border-dashed rounded-lg cursor-pointer transition-all ${isDraggingEv2 ? 'bg-blue-50 border-blue-500 scale-105' : 'border-slate-300 hover:bg-slate-50'}`}
                     >
                       {evidence2Files.length > 0 ? (
-                        <div className="flex flex-col items-center">
-                          <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
-                          <span className="text-sm font-medium text-slate-700">{evidence2Files.length} foto(s) seleccionada(s)</span>
-                          <span className="text-xs text-slate-500 mt-1">Click para cambiar</span>
+                        <div className="flex flex-col items-center w-full">
+                          <div className="grid grid-cols-4 gap-2 mb-3 w-full max-w-xs">
+                            {evidence2Files.map((base64, idx) => (
+                              <div key={idx} className="relative aspect-square w-full rounded border border-slate-200 overflow-hidden bg-slate-50 group">
+                                <img src={base64} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              </div>
+                            ))}
+                          </div>
+                          <span className="text-sm font-bold text-emerald-600 flex items-center gap-1">
+                            <CheckCircle className="w-4 h-4" /> {evidence2Files.length} foto(s) seleccionada(s)
+                          </span>
+                          <span className="text-xs text-slate-500 mt-1">Haz clic para cambiar o arrastra más</span>
                         </div>
                       ) : (
-                        <div className="flex flex-col items-center">
+                        <div className="flex flex-col items-center text-center p-2">
                           <Upload className="w-8 h-8 text-slate-400 mb-2" />
-                          <span className="text-sm font-medium text-slate-700">Tomar o subir fotos</span>
+                          <span className="text-sm font-medium text-slate-700">Arrastra aquí tus fotos o haz clic para seleccionar</span>
                           <span className="text-xs text-slate-500 mt-1">Máximo 4 imágenes</span>
                         </div>
                       )}
