@@ -251,6 +251,61 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     });
   }, [dataWithVehicles, filters]);
 
+  const handleExport = () => {
+    if (filteredData.length === 0) {
+      alert("No hay datos para exportar");
+      return;
+    }
+
+    const exportData = filteredData.map(item => ({
+      "CONTRATISTA": item.contractor ? item.contractor.toUpperCase() : "",
+      "CENTRO DE DISTRIBUCIÓN": item.cd ? item.cd.toUpperCase() : "",
+      "FECHA REPORTE": item.reportDate || "",
+      "SEMANA": item.week || "",
+      "MES": item.month ? item.month.toUpperCase() : "",
+      "PLACA": item.plate ? item.plate.toUpperCase() : "",
+      "MARCA": item.brand ? item.brand.toUpperCase() : "",
+      "FUENTE": item.source ? item.source.toUpperCase() : "",
+      "NOVEDAD REPORTE": item.novelty || "",
+      "SISTEMA": item.system ? item.system.toUpperCase() : "",
+      "ESTADO": item.status ? item.status.toUpperCase() : "",
+      "CRITICIDAD": item.criticality || "",
+      "FECHA SOLUCIÓN": item.solutionDate || "",
+      "DÍAS DE CIERRE": item.closureDays !== undefined ? item.closureDays : "",
+      "DÍAS PARA CIERRE": item.daysToClose !== undefined ? item.daysToClose : "",
+      "CUMPLIMIENTO MTTO COR": item.maintenanceCompliance ? item.maintenanceCompliance.toUpperCase() : "",
+      "OBSERVACIONES": item.observations || "",
+      "EVIDENCIA ANTES": item.evidenceBefore || "",
+      "EVIDENCIA DESPUES": item.evidenceAfter || ""
+    }));
+
+    const headers = Object.keys(exportData[0]);
+    const csvRows = [
+      headers.join(";"),
+      ...exportData.map(row => 
+        headers.map(fieldName => {
+          const value = row[fieldName as keyof typeof row] !== undefined && row[fieldName as keyof typeof row] !== null 
+            ? row[fieldName as keyof typeof row] 
+            : "";
+          const escaped = String(value).replace(/"/g, '""');
+          return `"${escaped}"`;
+        }).join(";")
+      )
+    ];
+
+    const csvContent = "\uFEFF" + csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Cierre_Novedades_Checklist_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Sub-filtered helper datasets for each chart to respect multi-filters crossingly
   const trendFilteredData = useMemo(() => {
     return dataWithVehicles.filter(item => {
@@ -560,7 +615,10 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
               onChange={(e) => setFilters(f => ({ ...f, search: e.target.value }))}
             />
           </div>
-          <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20">
+          <button 
+            onClick={handleExport}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20"
+          >
             <Download className="w-4 h-4" />
             Exportar
           </button>

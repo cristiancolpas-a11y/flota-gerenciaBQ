@@ -335,6 +335,47 @@ const ExecutiveAuditDashboard: React.FC = () => {
     });
   }, [cierreRecords, filterCentro, filterCierreItem, searchTerm]);
 
+  const handleExportCierreExcel = () => {
+    if (filteredCierreRecords.length === 0) {
+      alert("No hay datos para exportar");
+      return;
+    }
+
+    const exportData = filteredCierreRecords.map((item) => ({
+      "FECHA": item.fecha || "",
+      "CD": item.cd ? item.cd.toUpperCase() : "",
+      "PLACA": item.placa ? item.placa.toUpperCase() : "",
+      "OBSERVACIÓN / ITEM": item.item || "",
+      "VERIFICACIÓN": item.verificacion || "N/A",
+      "ESTADO": item.estado || "PENDIENTE",
+      "EVIDENCIA (URL)": item.evidencia || ""
+    }));
+
+    const headers = Object.keys(exportData[0]);
+    const csvRows = [
+      headers.join(";"),
+      ...exportData.map(row => 
+        headers.map(fieldName => {
+          const value = row[fieldName as keyof typeof row] || "";
+          const escaped = String(value).replace(/"/g, '""');
+          return `"${escaped}"`;
+        }).join(";")
+      )
+    ];
+
+    const csvContent = "\uFEFF" + csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Cierre_Novedades_Calidad_Seguridad_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleOpenCierreEvidence = (cierre: FleetCierreRecord) => {
     setSelectedCierre(cierre);
     setCierreEvidenceData({
@@ -933,6 +974,16 @@ const ExecutiveAuditDashboard: React.FC = () => {
                 </select>
               </div>
             </div>
+
+            {/* Exportar Excel Button */}
+            <button
+              onClick={handleExportCierreExcel}
+              className="flex items-center justify-center gap-2 px-6 py-[14px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-900/10 transition-all active:scale-95 group shrink-0"
+              title="Exportar cierre de novedades a archivo Excel/CSV"
+            >
+              <Download size={16} className="group-hover:rotate-12 transition-transform" />
+              Exportar Excel
+            </button>
           </div>
 
           {closureMetrics && (

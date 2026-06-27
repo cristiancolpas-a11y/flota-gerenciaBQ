@@ -44,6 +44,7 @@ import {
   Loader2,
   Trash2,
   Clock,
+  FileSpreadsheet,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { submitAuditUpdateToSheet, submitFleetCierreUpdateToSheet } from "../services/sheetService";
@@ -1002,6 +1003,51 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     });
     return rawNovedades;
   }, [cierreRecords, filteredCierreRecords, filteredData, filterNovelty]);
+
+  const handleExportNovedades = () => {
+    if (novedadesData.length === 0) {
+      alert("No hay datos para exportar");
+      return;
+    }
+
+    const exportData = novedadesData.map((item) => ({
+      "FECHA REGISTRO / CIERRE": item.noveltyDate || item.date || "",
+      "MES": item.month ? item.month.toUpperCase() : "",
+      "AÑO": item.year || "",
+      "REGIONAL": item.regional ? item.regional.toUpperCase() : "",
+      "CENTRO DE DISTRIBUCIÓN": item.cd ? item.cd.toUpperCase() : "",
+      "CONTRATISTA / OPERACIÓN": item.contractorName ? item.contractorName.toUpperCase() : "",
+      "VEHÍCULO / PLACA": item.plate ? item.plate.toUpperCase() : "",
+      "NOVEDAD / OBSERVACIÓN": item.observations || "Sin observación registrada",
+      "VERIFICACIÓN (COL F)": item.verification || "N/A",
+      "ESTADO": item.status || "PENDIENTE",
+      "EVIDENCIA (URL)": item.evidence || ""
+    }));
+
+    const headers = Object.keys(exportData[0]);
+    const csvRows = [
+      headers.join(";"),
+      ...exportData.map(row => 
+        headers.map(fieldName => {
+          const value = row[fieldName as keyof typeof row] || "";
+          const escaped = String(value).replace(/"/g, '""');
+          return `"${escaped}"`;
+        }).join(";")
+      )
+    ];
+
+    const csvContent = "\uFEFF" + csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Cierre_Novedades_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const novedadesChartsData = useMemo(() => {
     const monthOrder = [
@@ -3864,6 +3910,18 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto">
+                {/* Export to Excel Button */}
+                <div className="flex flex-col gap-1 w-full sm:w-auto justify-end">
+                  <span className="text-[9px] font-black text-indigo-300 uppercase ml-2 px-1 block h-4"></span>
+                  <button
+                    onClick={handleExportNovedades}
+                    className="flex items-center justify-center gap-2 px-6 py-[14px] bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg shadow-emerald-900/20 transition-all active:scale-95 group shrink-0"
+                    title="Exportar novedades a archivo Excel/CSV"
+                  >
+                    <FileSpreadsheet size={16} className="group-hover:rotate-12 transition-transform" />
+                    Exportar Excel
+                  </button>
+                </div>
                 {/* Select Filter */}
                 <div className="flex flex-col gap-1 w-full sm:w-72">
                   <label className="text-[9px] font-black text-indigo-300 uppercase ml-2 px-1">
