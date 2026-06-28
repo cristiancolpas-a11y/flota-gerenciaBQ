@@ -74,6 +74,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
   // States specifically for CIERRE1 (Calidad y Seguridad)
   const [cierreRecords, setCierreRecords] = useState<FleetCierreRecord[]>([]);
   const [filterCierreItem, setFilterCierreItem] = useState('TODOS');
+  const [filterCierreEstado, setFilterCierreEstado] = useState<'TODOS' | 'PENDIENTE' | 'REALIZADO'>('TODOS');
   const [selectedCierre, setSelectedCierre] = useState<FleetCierreRecord | null>(null);
   const [showCierreEvidenceModal, setShowCierreEvidenceModal] = useState(false);
   const [cierreEvidenceData, setCierreEvidenceData] = useState({
@@ -196,23 +197,16 @@ const ExecutiveAuditDashboard: React.FC = () => {
       const x = padding + c * cellW;
       const y = headerHeight + padding + r * cellH;
 
-      const imgRatio = img.width / img.height;
-      const cellRatio = cellW / cellH;
-      let sw, sh, sx, sy;
+      const targetW = cellW - 4;
+      const targetH = cellH - 4;
+
+      const scale = Math.min(targetW / img.width, targetH / img.height);
+      const w = img.width * scale;
+      const h = img.height * scale;
+      const offsetX = x + 2 + (targetW - w) / 2;
+      const offsetY = y + 2 + (targetH - h) / 2;
       
-      if (imgRatio > cellRatio) {
-        sh = img.height;
-        sw = img.height * cellRatio;
-        sx = (img.width - sw) / 2;
-        sy = 0;
-      } else {
-        sw = img.width;
-        sh = img.width / cellRatio;
-        sx = 0;
-        sy = (img.height - sh) / 2;
-      }
-      
-      ctx.drawImage(img, sx, sy, sw, sh, x + 2, y + 2, cellW - 4, cellH - 4);
+      ctx.drawImage(img, 0, 0, img.width, img.height, offsetX, offsetY, w, h);
       ctx.strokeStyle = '#00D4FF';
       ctx.lineWidth = 2;
       ctx.strokeRect(x + 2, y + 2, cellW - 4, cellH - 4);
@@ -331,9 +325,15 @@ const ExecutiveAuditDashboard: React.FC = () => {
       const matchSearch = !searchTerm || 
         item.placa.toUpperCase().includes(searchTerm.toUpperCase()) ||
         (item.item && item.item.toUpperCase().includes(searchTerm.toUpperCase()));
-      return matchCentro && matchItem && matchSearch;
+
+      const isRealizado = !!(item.estado?.toUpperCase().includes('CERRADO') || item.estado?.toUpperCase().includes('REALIZADO'));
+      const matchEstado = filterCierreEstado === 'TODOS' ||
+        (filterCierreEstado === 'REALIZADO' && isRealizado) ||
+        (filterCierreEstado === 'PENDIENTE' && !isRealizado);
+
+      return matchCentro && matchItem && matchSearch && matchEstado;
     });
-  }, [cierreRecords, filterCentro, filterCierreItem, searchTerm]);
+  }, [cierreRecords, filterCentro, filterCierreItem, searchTerm, filterCierreEstado]);
 
   const handleExportCierreExcel = () => {
     if (filteredCierreRecords.length === 0) {
@@ -988,13 +988,100 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
           {closureMetrics && (
             <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
-              <KPICard title="Total Reportes" value={closureMetrics.total} icon={<Activity size={20} />} color={COLORS.primary} />
-              <KPICard title="Abiertos" value={closureMetrics.open} icon={<AlertCircle size={20} />} color={COLORS.critical} />
-              <KPICard title="Cerrados" value={closureMetrics.closed} icon={<CheckCircle2 size={20} />} color={COLORS.success} />
+              <KPICard 
+                title="Total Reportes" 
+                value={closureMetrics.total} 
+                icon={<Activity size={20} />} 
+                color={COLORS.primary} 
+                onClick={() => setFilterCierreEstado('TODOS')}
+                active={filterCierreEstado === 'TODOS'}
+              />
+              <KPICard 
+                title="Abiertos" 
+                value={closureMetrics.open} 
+                icon={<AlertCircle size={20} />} 
+                color={COLORS.critical} 
+                onClick={() => setFilterCierreEstado('PENDIENTE')}
+                active={filterCierreEstado === 'PENDIENTE'}
+              />
+              <KPICard 
+                title="Cerrados" 
+                value={closureMetrics.closed} 
+                icon={<CheckCircle2 size={20} />} 
+                color={COLORS.success} 
+                onClick={() => setFilterCierreEstado('REALIZADO')}
+                active={filterCierreEstado === 'REALIZADO'}
+              />
               <KPICard title="Placas Únicas" value={closureMetrics.uniquePlates} icon={<Truck size={20} />} color={COLORS.primary} />
               <KPICard title="% Cumplimiento" value={closureMetrics.compliance.toFixed(0) + '%'} icon={<Target size={20} />} color={getStatusColor(closureMetrics.compliance)} isPercent />
             </div>
           )}
+
+          {/* Burbujas de Filtro de Estado Rápido */}
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-200 shadow-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-1">Filtrar por Estado:</span>
+              
+              <button
+                onClick={() => setFilterCierreEstado('TODOS')}
+                className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 active:scale-95 ${
+                  filterCierreEstado === 'TODOS'
+                    ? 'bg-slate-800 text-white border-slate-800 shadow-md shadow-slate-950/10'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <span>Mostrar Todos</span>
+                <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-bold ${
+                  filterCierreEstado === 'TODOS' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {closureMetrics?.total || 0}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setFilterCierreEstado('PENDIENTE')}
+                className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 active:scale-95 ${
+                  filterCierreEstado === 'PENDIENTE'
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-md shadow-rose-900/10'
+                    : 'bg-white text-rose-600 border-rose-200 hover:bg-rose-50'
+                }`}
+              >
+                <span className="flex h-2 w-2 rounded-full bg-current animate-pulse" />
+                <span>Pendientes / Abiertos</span>
+                <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-bold ${
+                  filterCierreEstado === 'PENDIENTE' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-700'
+                }`}>
+                  {closureMetrics?.open || 0}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setFilterCierreEstado('REALIZADO')}
+                className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 active:scale-95 ${
+                  filterCierreEstado === 'REALIZADO'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-900/10'
+                    : 'bg-white text-emerald-600 border-emerald-200 hover:bg-slate-100'
+                }`}
+              >
+                <span className="flex h-2 w-2 rounded-full bg-current" />
+                <span>Realizados / Cerrados</span>
+                <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-bold ${
+                  filterCierreEstado === 'REALIZADO' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  {closureMetrics?.closed || 0}
+                </span>
+              </button>
+            </div>
+
+            {filterCierreEstado !== 'TODOS' && (
+              <button 
+                onClick={() => setFilterCierreEstado('TODOS')}
+                className="text-[10px] font-black uppercase text-blue-600 hover:text-blue-700 underline tracking-widest"
+              >
+                Limpiar Filtro
+              </button>
+            )}
+          </div>
 
           <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
@@ -1024,13 +1111,20 @@ const ExecutiveAuditDashboard: React.FC = () => {
                         {item.item || '-'}
                       </td>
                       <td className="p-6 text-center">
-                        <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                          item.estado?.toUpperCase().includes('CERRADO') || item.estado?.toUpperCase().includes('REALIZADO')
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}>
+                        <button 
+                          onClick={() => {
+                            const isRealizado = !!(item.estado?.toUpperCase().includes('CERRADO') || item.estado?.toUpperCase().includes('REALIZADO'));
+                            setFilterCierreEstado(isRealizado ? 'REALIZADO' : 'PENDIENTE');
+                          }}
+                          className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest cursor-pointer transition-all hover:scale-105 active:scale-95 ${
+                            item.estado?.toUpperCase().includes('CERRADO') || item.estado?.toUpperCase().includes('REALIZADO')
+                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 hover:border-emerald-300' 
+                              : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 hover:border-rose-300'
+                          }`}
+                          title={`Filtrar por ${item.estado?.toUpperCase().includes('CERRADO') || item.estado?.toUpperCase().includes('REALIZADO') ? 'REALIZADOS' : 'PENDIENTES'}`}
+                        >
                           {item.estado || 'PENDIENTE'}
-                        </span>
+                        </button>
                       </td>
                       <td className="p-6 text-center">
                         <div className="flex items-center justify-center gap-3">
@@ -1521,10 +1615,16 @@ const ExecutiveAuditDashboard: React.FC = () => {
   );
 };
 
-const KPICard = ({ title, value, icon, color, isPercent = false }: any) => (
+const KPICard = ({ title, value, icon, color, isPercent = false, onClick, active = false }: any) => (
   <motion.div 
-    whileHover={{ y: -5, scale: 1.02 }}
-    className="bg-white p-6 rounded-[2rem] border border-slate-200/80 flex flex-col items-center justify-center text-center group shadow-sm hover:shadow-md transition-all duration-300"
+    whileHover={{ y: onClick ? -8 : -5, scale: onClick ? 1.04 : 1.02 }}
+    onClick={onClick}
+    className={`bg-white p-6 rounded-[2rem] border flex flex-col items-center justify-center text-center group shadow-sm hover:shadow-md transition-all duration-300 ${onClick ? 'cursor-pointer select-none' : ''}`}
+    style={{ 
+      borderColor: active ? color : 'rgb(226, 232, 240)',
+      boxShadow: active ? `0 10px 25px -5px ${color}20, 0 8px 10px -6px ${color}20` : undefined,
+      borderWidth: active ? '2px' : '1px'
+    }}
   >
     <div className="p-3 mb-4 rounded-2xl transition-all duration-500 group-hover:rotate-12" style={{ backgroundColor: `${color}10`, border: `1px solid ${color}20` }}>
       {React.cloneElement(icon, { style: { color } })}
@@ -1535,6 +1635,11 @@ const KPICard = ({ title, value, icon, color, isPercent = false }: any) => (
        <div className="w-12 h-1 bg-slate-100 rounded-full mt-4 overflow-hidden">
           <div className="h-full rounded-full" style={{ width: value, backgroundColor: color }} />
        </div>
+    )}
+    {onClick && (
+      <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        {active ? '✓ FILTRO ACTIVO' : 'HAGA CLIC PARA FILTRAR'}
+      </span>
     )}
   </motion.div>
 );

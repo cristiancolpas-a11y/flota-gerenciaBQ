@@ -273,6 +273,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [filterNovelty, setFilterNovelty] = useState<string>("Todos");
+  const [filterCierreEstado, setFilterCierreEstado] = useState<"TODOS" | "PENDIENTE" | "REALIZADO">("TODOS");
   const [isDragging, setIsDragging] = useState(false);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1004,13 +1005,26 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     return rawNovedades;
   }, [cierreRecords, filteredCierreRecords, filteredData, filterNovelty]);
 
+  const displayedNovedadesData = useMemo(() => {
+    return novedadesData.filter((r) => {
+      const isRealizado = r.status?.toUpperCase() === "REALIZADO";
+      if (filterCierreEstado === "PENDIENTE") {
+        return !isRealizado;
+      }
+      if (filterCierreEstado === "REALIZADO") {
+        return isRealizado;
+      }
+      return true;
+    });
+  }, [novedadesData, filterCierreEstado]);
+
   const handleExportNovedades = () => {
-    if (novedadesData.length === 0) {
+    if (displayedNovedadesData.length === 0) {
       alert("No hay datos para exportar");
       return;
     }
 
-    const exportData = novedadesData.map((item) => ({
+    const exportData = displayedNovedadesData.map((item) => ({
       "FECHA REGISTRO / CIERRE": item.noveltyDate || item.date || "",
       "MES": item.month ? item.month.toUpperCase() : "",
       "AÑO": item.year || "",
@@ -3504,8 +3518,15 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
           <div className="bg-[#1a1a2e] rounded-[3.5rem] p-10 shadow-2xl border border-slate-800 overflow-hidden animate-in fade-in duration-500">
             {/* NOVELTY METRICS */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-              <div className="bg-[#0f172a] p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl flex flex-col items-center">
-                <div className="p-3 bg-slate-800 text-slate-400 rounded-xl mb-4">
+              <div 
+                onClick={() => setFilterCierreEstado("TODOS")}
+                className={`p-8 rounded-[2.5rem] border flex flex-col items-center cursor-pointer select-none transition-all duration-300 hover:scale-[1.04] hover:shadow-indigo-500/10 active:scale-95 shadow-2xl ${
+                  filterCierreEstado === "TODOS" 
+                    ? "bg-[#16203d] border-indigo-500/80 shadow-indigo-900/10 ring-2 ring-indigo-500/10" 
+                    : "bg-[#0f172a] border-slate-800 hover:border-slate-700"
+                }`}
+              >
+                <div className="p-3 bg-slate-800 text-slate-400 rounded-xl mb-4 transition-colors">
                   <List size={24} />
                 </div>
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">
@@ -3514,8 +3535,18 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                 <h3 className="text-4xl font-black text-white">
                   {novedadesData.length}
                 </h3>
+                <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-wider mt-2">
+                  {filterCierreEstado === "TODOS" ? "✓ Filtro Activo" : "Haga clic para ver todo"}
+                </span>
               </div>
-              <div className="bg-[#0f172a] p-8 rounded-[2.5rem] border border-rose-500/20 shadow-2xl flex flex-col items-center">
+              <div 
+                onClick={() => setFilterCierreEstado("PENDIENTE")}
+                className={`p-8 rounded-[2.5rem] border flex flex-col items-center cursor-pointer select-none transition-all duration-300 hover:scale-[1.04] hover:shadow-rose-500/10 active:scale-95 shadow-2xl ${
+                  filterCierreEstado === "PENDIENTE" 
+                    ? "bg-[#2d121c] border-rose-500/80 shadow-rose-950/10 ring-2 ring-rose-500/10" 
+                    : "bg-[#0f172a] border-rose-500/20 hover:border-rose-500/40"
+                }`}
+              >
                 <div className="p-3 bg-rose-500/10 text-rose-500 rounded-xl mb-4">
                   <AlertTriangle size={24} />
                 </div>
@@ -3525,8 +3556,18 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                 <h3 className="text-4xl font-black text-white">
                   {novedadesStats.pending}
                 </h3>
+                <span className="text-[8px] font-bold text-rose-400 uppercase tracking-wider mt-2">
+                  {filterCierreEstado === "PENDIENTE" ? "✓ Filtro Activo" : "Haga clic para filtrar"}
+                </span>
               </div>
-              <div className="bg-[#0f172a] p-8 rounded-[2.5rem] border border-emerald-500/20 shadow-2xl flex flex-col items-center">
+              <div 
+                onClick={() => setFilterCierreEstado("REALIZADO")}
+                className={`p-8 rounded-[2.5rem] border flex flex-col items-center cursor-pointer select-none transition-all duration-300 hover:scale-[1.04] hover:shadow-emerald-500/10 active:scale-95 shadow-2xl ${
+                  filterCierreEstado === "REALIZADO" 
+                    ? "bg-[#0d2821] border-emerald-500/80 shadow-emerald-950/10 ring-2 ring-emerald-500/10" 
+                    : "bg-[#0f172a] border-emerald-500/20 hover:border-emerald-500/40"
+                }`}
+              >
                 <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-xl mb-4">
                   <CheckCircle size={24} />
                 </div>
@@ -3536,6 +3577,9 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                 <h3 className="text-4xl font-black text-white">
                   {novedadesStats.completed}
                 </h3>
+                <span className="text-[8px] font-bold text-emerald-400 uppercase tracking-wider mt-2">
+                  {filterCierreEstado === "REALIZADO" ? "✓ Filtro Activo" : "Haga clic para filtrar"}
+                </span>
               </div>
               <div className="bg-[#0f172a] p-8 rounded-[2.5rem] border border-indigo-500/20 shadow-2xl flex flex-col items-center justify-center">
                 <NovedadesDonut compliance={novedadesStats.compliance} />
@@ -3991,7 +4035,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-800">
                   <AnimatePresence>
-                    {novedadesData.length === 0 ? (
+                    {displayedNovedadesData.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-6 py-12 text-center text-slate-500 font-bold uppercase tracking-wider">
                           <AlertTriangle className="text-amber-500 mx-auto mb-3" size={32} />
@@ -3999,7 +4043,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                         </td>
                       </tr>
                     ) : (
-                      novedadesData.map((r, i) => (
+                      displayedNovedadesData.map((r, i) => (
                        <motion.tr
                         key={`novelty-${r.id}`}
                         initial={{ opacity: 0, y: 10 }}
