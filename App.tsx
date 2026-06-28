@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord } from './types';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
@@ -197,6 +197,10 @@ const App: React.FC = () => {
   const [fleetCierreRecords, setFleetCierreRecords] = useState<FleetCierreRecord[]>([]);
   const [auditMasterVehicles, setAuditMasterVehicles] = useState<AuditMasterVehicle[]>([]);
 
+  // Session tracking of local updates to prevent stale Google Sheets cache from reverting changes
+  const localCierreUpdatesRef = useRef<Record<string, { estado: string; evidencia: string; verificacion: string }>>({});
+  const localAuditUpdatesRef = useRef<Record<string, { status: string; noveltyDate: string; evidence: string; observations: string }>>({});
+
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
   const [fineStatusFilter, setFineStatusFilter] = useState<'all' | 'PENDIENTE' | 'PAGADO'>('all');
@@ -322,6 +326,33 @@ const App: React.FC = () => {
         import('./services/sheetService').then(m => m.fetchForkliftFinesFromSheet())
       ]);
       
+      // Merge with local updates to prevent stale Google Sheets cache from reverting changes
+      const mergedAud = aud.map(r => {
+        if (localAuditUpdatesRef.current[r.id]) {
+          return {
+            ...r,
+            status: localAuditUpdatesRef.current[r.id].status,
+            noveltyDate: localAuditUpdatesRef.current[r.id].noveltyDate,
+            evidence: localAuditUpdatesRef.current[r.id].evidence,
+            observations: localAuditUpdatesRef.current[r.id].observations
+          };
+        }
+        return r;
+      });
+
+      const mergedFcr = fcr.map(r => {
+        const key = `${r.placa.toUpperCase().trim()}_${r.item.toUpperCase().trim()}`;
+        if (localCierreUpdatesRef.current[key]) {
+          return {
+            ...r,
+            estado: localCierreUpdatesRef.current[key].estado,
+            evidencia: localCierreUpdatesRef.current[key].evidencia,
+            verificacion: localCierreUpdatesRef.current[key].verificacion
+          };
+        }
+        return r;
+      });
+
       setCheckLists(ch);
       setFuelPerformanceData(fp);
       setPlateAdherenceData(pa);
@@ -329,9 +360,9 @@ const App: React.FC = () => {
       setUnavailabilityRecords(unav);
       setOperators(ops);
       setControlTowerRecords(ct);
-      setAuditRecords(aud);
+      setAuditRecords(mergedAud);
       setFleetStandardAuditRecords(fsa);
-      setFleetCierreRecords(fcr);
+      setFleetCierreRecords(mergedFcr);
       setAuditMasterVehicles(amv);
       setFleetBase(fb);
       setForkliftFines(fFines);
@@ -345,6 +376,13 @@ const App: React.FC = () => {
 
   const handleUpdateFleetStandardRecord = (updated: any, isCierre: boolean) => {
     if (isCierre) {
+      const key = `${updated.plate.toUpperCase().trim()}_${updated.item.toUpperCase().trim()}`;
+      localCierreUpdatesRef.current[key] = {
+        estado: updated.status,
+        evidencia: updated.evidence,
+        verificacion: updated.verification || 'SI'
+      };
+
       setFleetCierreRecords(prev => prev.map(r => {
         if (r.placa.toUpperCase().trim() === updated.plate.toUpperCase().trim() && 
             r.item.toUpperCase().trim() === updated.item.toUpperCase().trim()) {
@@ -358,6 +396,13 @@ const App: React.FC = () => {
         return r;
       }));
     } else {
+      localAuditUpdatesRef.current[updated.id] = {
+        status: updated.status,
+        noveltyDate: updated.noveltyDate,
+        evidence: updated.evidence,
+        observations: updated.noveltyObservation
+      };
+
       setAuditRecords(prev => prev.map(r => {
         if (r.id === updated.id) {
           return {

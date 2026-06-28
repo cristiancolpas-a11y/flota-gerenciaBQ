@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   LineChart, Line, AreaChart, Area, Cell, PieChart, Pie, LabelList
@@ -84,6 +84,8 @@ const ExecutiveAuditDashboard: React.FC = () => {
   });
   const [cierreFiles, setCierreFiles] = useState<File[]>([]);
 
+  const localUpdatesRef = useRef<Record<string, { estado: string; evidencia: string; verificacion: string }>>({});
+
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
     if (url.includes('drive.google.com')) {
@@ -93,19 +95,34 @@ const ExecutiveAuditDashboard: React.FC = () => {
     return url;
   };
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [audits, cierres] = await Promise.all([
         fetchFleetStandardAuditFromSheet(),
         fetchCalidadCierreFromSheet()
       ]);
+
+      // Merge with local updates to prevent Google Sheets stale API cache from reverting user changes
+      const mergedCierres = cierres.map(c => {
+        const key = `${c.placa.toUpperCase().trim()}_${c.item.toUpperCase().trim()}`;
+        if (localUpdatesRef.current[key]) {
+          return {
+            ...c,
+            estado: localUpdatesRef.current[key].estado,
+            evidencia: localUpdatesRef.current[key].evidencia,
+            verificacion: localUpdatesRef.current[key].verificacion
+          };
+        }
+        return c;
+      });
+
       setData(audits);
-      setCierreRecords(cierres);
+      setCierreRecords(mergedCierres);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
@@ -406,6 +423,14 @@ const ExecutiveAuditDashboard: React.FC = () => {
       });
 
       if (success) {
+        // Track locally to avoid Google Sheet stale cache reversion
+        const updateKey = `${selectedCierre.placa.toUpperCase().trim()}_${selectedCierre.item.toUpperCase().trim()}`;
+        localUpdatesRef.current[updateKey] = {
+          estado: cierreEvidenceData.estado,
+          evidencia: finalEvidence,
+          verificacion: cierreEvidenceData.verificacion || 'SI'
+        };
+
         setCierreRecords(prev => prev.map(c => {
           if (c.placa === selectedCierre.placa && c.item === selectedCierre.item) {
             return {
@@ -421,8 +446,8 @@ const ExecutiveAuditDashboard: React.FC = () => {
         setIsUpdating(false);
         alert('Evidencia registrada y caso actualizado exitosamente en el servidor de Calidad y Seguridad.');
         setTimeout(async () => {
-          await fetchData();
-        }, 5000);
+          await fetchData(true); // Silent background fetch to not block user
+        }, 2000);
       } else {
         alert('Error al registrar evidencias en el servidor.');
         setIsUpdating(false);
