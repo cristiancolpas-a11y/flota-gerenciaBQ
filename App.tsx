@@ -204,6 +204,7 @@ const App: React.FC = () => {
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
   const [fineStatusFilter, setFineStatusFilter] = useState<'all' | 'PENDIENTE' | 'PAGADO'>('all');
+  const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'PENDIENTES' | 'COMPLETADOS'>('all');
   const [showFineForm, setShowFineForm] = useState(false);
   const [managingFineSupport, setManagingFineSupport] = useState<Fine | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
@@ -553,10 +554,11 @@ const App: React.FC = () => {
       const matchSource = filterSource === 'all' || r.source === filterSource;
       const matchSearch = normalizePlate(r.plate).includes(normalizePlate(searchTerm)) || 
                           (r.source && r.source.toUpperCase().includes(searchTerm.toUpperCase()));
+      const matchStatus = reportStatusFilter === 'all' || r.status === reportStatusFilter;
       
-      return matchMonth && matchYear && matchCd && matchContractor && matchSearch && matchSource;
+      return matchMonth && matchYear && matchCd && matchContractor && matchSearch && matchSource && matchStatus;
     });
-  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, filterSource, searchTerm, selectedYear]);
+  }, [reports, vehicles, selectedMonth, filterCd, filterContractor, filterSource, searchTerm, selectedYear, reportStatusFilter]);
 
   const statsReports = useMemo(() => {
     const baseFiltered = reports.filter(r => {
@@ -1914,6 +1916,8 @@ const App: React.FC = () => {
                  pending={statsReports.pending}
                  searchCount={statsReports.searchCount}
                  month={selectedMonth}
+                 activeFilter={reportStatusFilter}
+                 onFilterChange={setReportStatusFilter}
                />
 
                {reportViewMode === 'table' ? (

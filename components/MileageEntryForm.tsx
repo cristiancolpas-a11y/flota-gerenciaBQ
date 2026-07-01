@@ -89,6 +89,17 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
     if (entryDateOverride) setEntryDate(entryDateOverride);
   }, [entryDateOverride]);
 
+  const getLogMonth = (dateStr: string): number => {
+    if (!dateStr) return -1;
+    // dateStr format is usually YYYY-MM-DD
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return parseInt(parts[1], 10) - 1;
+    }
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? -1 : d.getMonth();
+  };
+
   const getLastMileage = (plate: string) => {
     const vPlate = normalizePlate(plate);
     const logs = (mileageLogs || [])
@@ -114,9 +125,8 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
   const isVehicleDoneInMonth = (vehicle: Vehicle, monthIndex: number) => {
     const vPlate = normalizePlate(vehicle.plate);
     return (mileageLogs || []).some(log => {
-      const logDate = new Date(log.date);
       const logPlate = normalizePlate(log.plate);
-      return logPlate === vPlate && logDate.getMonth() === monthIndex;
+      return logPlate === vPlate && getLogMonth(log.date) === monthIndex;
     });
   };
 
@@ -162,10 +172,9 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
 
   const historyLogs = useMemo(() => {
     return (mileageLogs || []).filter(log => {
-      const logDate = new Date(log.date);
       const matchTime = viewMode === 'semanal' 
         ? extractNumber(log.week) === selectedWeek 
-        : logDate.getMonth() === selectedMonth;
+        : getLogMonth(log.date) === selectedMonth;
       const matchCd = externalCd === 'all' || normalizeStr(log.cd || "") === normalizeStr(externalCd);
       const matchContractor = externalContractor === 'all' || normalizeStr(log.contractor || "") === normalizeStr(externalContractor);
       const matchSearch = searchTerm === '' || normalizePlate(log.plate).includes(normalizePlate(searchTerm));
@@ -260,7 +269,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                      onChange={(e) => onWeekChange(parseInt(e.target.value))}
                    >
                      {Array.from({length: 52}, (_, i) => i + 1).map(w => (
-                       <option key={w} value={w}>{w} - 2025</option>
+                       <option key={w} value={w}>{w} - {new Date().getFullYear()}</option>
                      ))}
                    </select>
                  ) : (

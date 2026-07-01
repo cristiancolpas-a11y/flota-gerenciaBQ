@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { ClipboardList, CheckCircle2, Wrench, Search } from 'lucide-react';
 
@@ -8,9 +7,19 @@ interface ReportStatsProps {
   pending: number;
   searchCount: number;
   month: string;
+  activeFilter: 'all' | 'PENDIENTES' | 'COMPLETADOS';
+  onFilterChange: (filter: 'all' | 'PENDIENTES' | 'COMPLETADOS') => void;
 }
 
-const ReportStats: React.FC<ReportStatsProps> = ({ total, completed, pending, searchCount, month }) => {
+const ReportStats: React.FC<ReportStatsProps> = ({ 
+  total, 
+  completed, 
+  pending, 
+  searchCount, 
+  month,
+  activeFilter,
+  onFilterChange
+}) => {
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   return (
@@ -36,37 +45,65 @@ const ReportStats: React.FC<ReportStatsProps> = ({ total, completed, pending, se
 
       {/* Stats Cards */}
       <div className="flex flex-wrap justify-center lg:justify-start gap-4 flex-grow">
-        <div className="bg-indigo-600 rounded-2xl p-4 flex items-center gap-3 min-w-[160px] shadow-xl shadow-indigo-600/20">
-          <div className="p-2.5 bg-white/20 rounded-xl text-white">
+        {/* Card 1: TOTAL */}
+        <div 
+          id="btn-filter-total"
+          onClick={() => onFilterChange('all')}
+          className={`rounded-2xl p-4 flex items-center gap-3 min-w-[160px] transition-all duration-300 cursor-pointer ${
+            activeFilter === 'all' 
+              ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30 scale-105 ring-2 ring-indigo-400 ring-offset-2 ring-offset-[#0f172a]' 
+              : 'bg-white/5 opacity-50 border border-white/5 text-slate-300 hover:opacity-100 hover:scale-102'
+          }`}
+        >
+          <div className={`p-2.5 rounded-xl ${activeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-indigo-500/20 text-indigo-400'}`}>
             <ClipboardList size={20} />
           </div>
           <div>
-            <p className="text-white/60 text-[8px] font-black uppercase tracking-widest">TOTAL MES</p>
-            <p className="text-white text-2xl font-black tracking-tighter">{total}</p>
+            <p className={`text-[8px] font-black uppercase tracking-widest ${activeFilter === 'all' ? 'text-white/60' : 'text-slate-400'}`}>TOTAL NOVEDADES</p>
+            <p className="text-2xl font-black tracking-tighter">{total}</p>
           </div>
         </div>
 
-        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[160px] border border-white/5">
-          <div className="p-2.5 bg-emerald-500/20 rounded-xl text-emerald-400">
+        {/* Card 2: COMPLETADOS */}
+        <div 
+          id="btn-filter-completed"
+          onClick={() => onFilterChange('COMPLETADOS')}
+          className={`rounded-2xl p-4 flex items-center gap-3 min-w-[160px] transition-all duration-300 cursor-pointer ${
+            activeFilter === 'COMPLETADOS' 
+              ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/30 scale-105 ring-2 ring-emerald-400 ring-offset-2 ring-offset-[#0f172a]' 
+              : 'bg-white/5 opacity-50 border border-white/5 text-slate-300 hover:opacity-100 hover:scale-102'
+          }`}
+        >
+          <div className={`p-2.5 rounded-xl ${activeFilter === 'COMPLETADOS' ? 'bg-white/20 text-white' : 'bg-emerald-500/20 text-emerald-400'}`}>
             <CheckCircle2 size={20} />
           </div>
           <div>
-            <p className="text-white/40 text-[8px] font-black uppercase tracking-widest">COMPLETADOS</p>
-            <p className="text-white text-2xl font-black tracking-tighter">{completed}</p>
+            <p className={`text-[8px] font-black uppercase tracking-widest ${activeFilter === 'COMPLETADOS' ? 'text-white/60' : 'text-slate-400'}`}>REALIZADOS</p>
+            <p className="text-2xl font-black tracking-tighter">{completed}</p>
           </div>
         </div>
 
-        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[160px] border border-white/5">
-          <div className="p-2.5 bg-rose-500/20 rounded-xl text-rose-400">
+        {/* Card 3: PENDIENTES */}
+        <div 
+          id="btn-filter-pending"
+          onClick={() => onFilterChange('PENDIENTES')}
+          className={`rounded-2xl p-4 flex items-center gap-3 min-w-[160px] transition-all duration-300 cursor-pointer ${
+            activeFilter === 'PENDIENTES' 
+              ? 'bg-rose-600 text-white shadow-xl shadow-rose-600/30 scale-105 ring-2 ring-rose-400 ring-offset-2 ring-offset-[#0f172a]' 
+              : 'bg-white/5 opacity-50 border border-white/5 text-slate-300 hover:opacity-100 hover:scale-102'
+          }`}
+        >
+          <div className={`p-2.5 rounded-xl ${activeFilter === 'PENDIENTES' ? 'bg-white/20 text-white' : 'bg-rose-500/20 text-rose-400'}`}>
             <Wrench size={20} />
           </div>
           <div>
-            <p className="text-white/40 text-[8px] font-black uppercase tracking-widest">PENDIENTES</p>
-            <p className="text-white text-2xl font-black tracking-tighter">{pending}</p>
+            <p className={`text-[8px] font-black uppercase tracking-widest ${activeFilter === 'PENDIENTES' ? 'text-white/60' : 'text-slate-400'}`}>PENDIENTES</p>
+            <p className="text-2xl font-black tracking-tighter">{pending}</p>
           </div>
         </div>
 
-        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[160px] border border-white/5">
+        {/* Card 4: BUSQUEDA */}
+        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[160px] border border-white/5 opacity-80">
           <div className="p-2.5 bg-slate-500/20 rounded-xl text-slate-300">
             <Search size={20} />
           </div>

@@ -111,27 +111,14 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate }) => {
               const x = r * slotW + (r + 1) * padding;
               const y = c * slotH + (c + 1) * padding;
 
-              // Cover logic to avoid black spaces
-              const imgAspect = image.width / image.height;
-              const slotAspect = slotW / slotH;
-              
-              let drawW, drawH, sx, sy, sW, sH;
+              // Fit logic instead of Cover (DO NOT CROP!)
+              const scale = Math.min(slotW / image.width, slotH / image.height);
+              const w = image.width * scale;
+              const h = image.height * scale;
+              const offsetX = x + (slotW - w) / 2;
+              const offsetY = y + (slotH - h) / 2;
 
-              if (imgAspect > slotAspect) {
-                // Image is wider than slot - crop sides
-                sH = image.height;
-                sW = image.height * slotAspect;
-                sx = (image.width - sW) / 2;
-                sy = 0;
-              } else {
-                // Image is taller than slot - crop top/bottom
-                sW = image.width;
-                sH = image.width / slotAspect;
-                sx = 0;
-                sy = (image.height - sH) / 2;
-              }
-
-              ctx.drawImage(image, sx, sy, sW, sH, x, y, slotW, slotH);
+              ctx.drawImage(image, offsetX, offsetY, w, h);
             });
 
             resolve(canvas.toDataURL('image/jpeg', 0.85));

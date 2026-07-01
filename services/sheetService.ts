@@ -363,7 +363,7 @@ export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
 
 const fetchMileageLogsFromSheetCSV = async (): Promise<MileageLog[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${MILEAGE_GID}${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${MILEAGE_GID}${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -388,7 +388,7 @@ const processMileageRows = (rows: any[][]): MileageLog[] => {
     week: cleanSheetValue(row[2]),        
     date: parseFlexibleDate(row[3]),      
     plate: normalizePlate(cleanSheetValue(row[4])), 
-    mileage: parseInt(cleanSheetValue(row[5])) || 0 
+    mileage: parseInt(cleanSheetValue(row[5]).replace(/[^0-9]/g, '')) || 0 
   }));
 };
 
