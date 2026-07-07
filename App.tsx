@@ -52,6 +52,7 @@ import { MttrModule } from './components/MttrModule';
 import CalibrationVisuals from './components/CalibrationVisuals';
 import { VclModule } from './components/VclModule';
 import SustainabilityModule from './components/SustainabilityModule';
+import RutinasModule from './components/RutinasModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -97,11 +98,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame
 } from 'lucide-react';
 
-type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres';
-type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad';
+type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas';
 
 const CATEGORY_CHUNKS = {
   doc: {
@@ -221,6 +222,10 @@ const App: React.FC = () => {
   const [calibrationViewMode, setCalibrationViewMode] = useState<'list' | 'calendar' | 'visual'>('calendar');
   const [washViewMode, setWashViewMode] = useState<'list' | 'calendar'>('calendar');
   const [cleaningViewMode, setCleaningViewMode] = useState<'list' | 'calendar'>('calendar');
+
+  // Routine Sub Mode
+  const [routineSubMode, setRoutineSubMode] = useState<'menu' | 'select_rutina' | 'dashboard'>('menu');
+  const [selectedRoutineTemplate, setSelectedRoutineTemplate] = useState<string>('rutina_1');
 
   // Mileage Filters
   const [mileageStatusFilter, setMileageStatusFilter] = useState<'all' | 'completed' | 'pending'>('all');
@@ -372,6 +377,45 @@ const App: React.FC = () => {
       console.error("Critical Sync Error:", err);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleReportRoutineNovelty = async (noveltyData: {
+    plate: string;
+    date: string;
+    novelty: string;
+    source: string;
+    cd?: string;
+    contractor?: string;
+  }) => {
+    try {
+      const payload = {
+        id: 'NOV-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+        date: noveltyData.date,
+        plate: noveltyData.plate,
+        source: noveltyData.source,
+        novelty: noveltyData.novelty,
+        status: 'PENDIENTES',
+        cd: noveltyData.cd || 'GENERAL',
+        contractor: noveltyData.contractor || 'GENERAL'
+      } as any;
+      
+      await submitReportToSheet(payload);
+      
+      const newReport: Report = {
+        id: payload.id,
+        date: payload.date,
+        plate: payload.plate,
+        source: payload.source,
+        novelty: payload.novelty,
+        status: 'PENDIENTES',
+        cd: payload.cd,
+        contractor: payload.contractor
+      };
+      
+      setReports(prev => [newReport, ...prev]);
+    } catch (error) {
+      console.error("Error submitting routine novelty: ", error);
     }
   };
 
@@ -857,7 +901,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Root Menu Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl relative z-10">
             <button 
               onClick={handleFlotaAccess}
               className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-10 rounded-[3rem] transition-all duration-500 flex items-center gap-8 shadow-2xl hover:-translate-y-2"
@@ -881,6 +925,19 @@ const App: React.FC = () => {
               <div className="text-left">
                 <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">TALLERES</h3>
                 <p className="text-amber-400/60 text-[10px] font-bold uppercase tracking-widest">Control de mantenimiento y servicios</p>
+              </div>
+            </button>
+
+            <button 
+              onClick={() => { setAppMode('rutinas'); setRoutineSubMode('menu'); }}
+              className="group bg-white/5 hover:bg-emerald-600/20 border border-white/10 hover:border-emerald-500/50 p-10 rounded-[3rem] transition-all duration-500 flex items-center gap-8 shadow-2xl hover:-translate-y-2"
+            >
+              <div className="w-20 h-20 bg-emerald-600/20 rounded-[1.5rem] flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-600/10 group-hover:scale-110 transition-transform border border-emerald-500/30">
+                <ClipboardCheck size={36} />
+              </div>
+              <div className="text-left">
+                <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">RUTINAS</h3>
+                <p className="text-emerald-400/60 text-[10px] font-bold uppercase tracking-widest">Ejecución y control de inspecciones</p>
               </div>
             </button>
           </div>
@@ -947,6 +1004,188 @@ const App: React.FC = () => {
         </div>
       ) : appMode === 'talleres' ? (
         <WorkshopModule onBack={() => setAppMode('root_menu')} vehicles={vehicles} />
+      ) : appMode === 'rutinas' ? (
+        <div className="flex-grow bg-[#f8fafc] p-8 overflow-y-auto h-screen">
+          {routineSubMode === 'menu' ? (
+            <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in duration-300">
+              {/* Back button */}
+              <button
+                type="button"
+                onClick={() => setAppMode('root_menu')}
+                className="p-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+              >
+                <ChevronLeft size={14} /> Menú Principal
+              </button>
+
+              {/* Title Header */}
+              <div className="space-y-1">
+                <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
+                  <ClipboardCheck size={40} className="text-emerald-600" /> Control de Rutinas
+                </h2>
+                <p className="text-slate-500 font-medium text-xs uppercase tracking-widest">
+                  Seleccione el tipo de control o módulo que desea inspeccionar
+                </p>
+              </div>
+
+              {/* Grid of Routine Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pt-4">
+                <button
+                  onClick={() => setRoutineSubMode('select_rutina')}
+                  className="group bg-white hover:bg-emerald-50/20 border border-slate-200/80 hover:border-emerald-500/50 p-8 rounded-[2rem] transition-all duration-300 flex flex-col items-start text-left shadow-lg hover:shadow-xl hover:-translate-y-1 relative overflow-hidden"
+                >
+                  {/* Decorative big background icon */}
+                  <div className="absolute -right-6 -bottom-6 text-slate-100 group-hover:text-emerald-100/40 transition-colors pointer-events-none">
+                    <Wrench size={140} />
+                  </div>
+
+                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform mb-6 border border-emerald-200">
+                    <Wrench size={30} />
+                  </div>
+
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight mb-2 group-hover:text-emerald-700 transition-colors">
+                    Mtto Preventivo
+                  </h3>
+
+                  <p className="text-slate-500 text-xs leading-relaxed mb-6 relative z-10">
+                    Inspecciones de niveles de fluidos, lubricación, frenos, dirección, suspensión, llantas y diagnóstico electrónico OBD-II divididos en 4 rutinas.
+                  </p>
+
+                  <div className="mt-auto flex items-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-wider relative z-10">
+                    Ver rutinas disponibles <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </button>
+              </div>
+            </div>
+          ) : routineSubMode === 'select_rutina' ? (
+            <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in duration-300">
+              {/* Back button */}
+              <button
+                type="button"
+                onClick={() => setRoutineSubMode('menu')}
+                className="p-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+              >
+                <ChevronLeft size={14} /> Regresar a Módulos
+              </button>
+
+              {/* Title Header */}
+              <div className="space-y-1">
+                <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
+                  <Wrench size={40} className="text-emerald-600" /> Mantenimiento Preventivo
+                </h2>
+                <p className="text-slate-500 font-medium text-xs uppercase tracking-widest">
+                  Seleccione una de las 4 rutinas preventivas para iniciar el control
+                </p>
+              </div>
+
+              {/* Grid of the 4 Routines */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                {/* RUTINA 1 */}
+                <button
+                  onClick={() => { setSelectedRoutineTemplate('rutina_1'); setRoutineSubMode('dashboard'); }}
+                  className="group bg-white hover:bg-emerald-50/10 border border-slate-200/80 hover:border-emerald-500/50 p-8 rounded-[2rem] transition-all duration-300 flex items-start gap-6 text-left shadow-lg hover:shadow-xl hover:-translate-y-1 relative overflow-hidden"
+                >
+                  <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform border border-emerald-100 shrink-0">
+                    <Droplets size={28} />
+                  </div>
+                  <div className="space-y-2 relative z-10">
+                    <span className="inline-block px-3 py-1 bg-emerald-100/50 text-emerald-800 text-[9px] font-black uppercase tracking-widest rounded-full">
+                      Fase 1
+                    </span>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight group-hover:text-emerald-700 transition-colors">
+                      RUTINA 1: Lubricación, Filtros y Refrigeración
+                    </h3>
+                    <p className="text-slate-500 text-xs leading-relaxed">
+                      Nivel y estado del aceite de motor, filtros de aire y combustible, líquido refrigerante, correas y fajas de accesorios.
+                    </p>
+                    <div className="pt-2 flex items-center gap-1.5 text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                      Iniciar Inspección <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+
+                {/* RUTINA 2 */}
+                <button
+                  onClick={() => { setSelectedRoutineTemplate('rutina_2'); setRoutineSubMode('dashboard'); }}
+                  className="group bg-white hover:bg-emerald-50/10 border border-slate-200/80 hover:border-emerald-500/50 p-8 rounded-[2rem] transition-all duration-300 flex items-start gap-6 text-left shadow-lg hover:shadow-xl hover:-translate-y-1 relative overflow-hidden"
+                >
+                  <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform border border-emerald-100 shrink-0">
+                    <Disc size={28} />
+                  </div>
+                  <div className="space-y-2 relative z-10">
+                    <span className="inline-block px-3 py-1 bg-emerald-100/50 text-emerald-800 text-[9px] font-black uppercase tracking-widest rounded-full">
+                      Fase 2
+                    </span>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight group-hover:text-emerald-700 transition-colors">
+                      RUTINA 2: Frenos, Dirección y Chasis
+                    </h3>
+                    <p className="text-slate-500 text-xs leading-relaxed">
+                      Pastillas y bandas de frenos, líquido de frenos, holgura de pedal, juego libre del volante de dirección y engrase de chasis.
+                    </p>
+                    <div className="pt-2 flex items-center gap-1.5 text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                      Iniciar Inspección <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+
+                {/* RUTINA 3 */}
+                <button
+                  onClick={() => { setSelectedRoutineTemplate('rutina_3'); setRoutineSubMode('dashboard'); }}
+                  className="group bg-white hover:bg-emerald-50/10 border border-slate-200/80 hover:border-emerald-500/50 p-8 rounded-[2rem] transition-all duration-300 flex items-start gap-6 text-left shadow-lg hover:shadow-xl hover:-translate-y-1 relative overflow-hidden"
+                >
+                  <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform border border-emerald-100 shrink-0">
+                    <Truck size={28} />
+                  </div>
+                  <div className="space-y-2 relative z-10">
+                    <span className="inline-block px-3 py-1 bg-emerald-100/50 text-emerald-800 text-[9px] font-black uppercase tracking-widest rounded-full">
+                      Fase 3
+                    </span>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight group-hover:text-emerald-700 transition-colors">
+                      RUTINA 3: Suspensión, Llantas y Rines
+                    </h3>
+                    <p className="text-slate-500 text-xs leading-relaxed">
+                      Amortiguadores, espirales, bujes, alineación, rotación, presión y estado de las llantas, rines y ballestas traseras.
+                    </p>
+                    <div className="pt-2 flex items-center gap-1.5 text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                      Iniciar Inspección <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+
+                {/* RUTINA 4 */}
+                <button
+                  onClick={() => { setSelectedRoutineTemplate('rutina_4'); setRoutineSubMode('dashboard'); }}
+                  className="group bg-white hover:bg-emerald-50/10 border border-slate-200/80 hover:border-emerald-500/50 p-8 rounded-[2rem] transition-all duration-300 flex items-start gap-6 text-left shadow-lg hover:shadow-xl hover:-translate-y-1 relative overflow-hidden"
+                >
+                  <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shadow-md group-hover:scale-110 transition-transform border border-emerald-100 shrink-0">
+                    <Activity size={28} />
+                  </div>
+                  <div className="space-y-2 relative z-10">
+                    <span className="inline-block px-3 py-1 bg-emerald-100/50 text-emerald-800 text-[9px] font-black uppercase tracking-widest rounded-full">
+                      Fase 4
+                    </span>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight group-hover:text-emerald-700 transition-colors">
+                      RUTINA 4: Sistema Eléctrico y Diagnóstico
+                    </h3>
+                    <p className="text-slate-500 text-xs leading-relaxed">
+                      Inspección de batería, bornes, alternador, motor de arranque, luces principales/direccionales y escaneo electrónico OBD-II.
+                    </p>
+                    <div className="pt-2 flex items-center gap-1.5 text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                      Iniciar Inspección <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <RutinasModule 
+              vehicles={vehicles} 
+              drivers={drivers} 
+              onReportNovelty={handleReportRoutineNovelty} 
+              defaultTemplateId={selectedRoutineTemplate}
+              onBack={() => setRoutineSubMode('select_rutina')}
+            />
+          )}
+        </div>
       ) : (
         <>
           {/* SIDEBAR PREMIUM */}

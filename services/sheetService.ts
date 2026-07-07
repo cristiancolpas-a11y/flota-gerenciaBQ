@@ -2,9 +2,9 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
-const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbze5D1_p138mAQha71p-Dbgc_gC1OZyxOMpKsjAoXyq8eGBEBpo3qAIvZV0tXy1HioV/exec';
+const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec'; 
+const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
+const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
 const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbwrEkalsgNrHXPqEx_MeihznsIM4uIG7WZH42ze_HOyB5EZTgeDZMPi0SaIo4JZMlAppQ/exec';
 
 export const getWorkshopScriptUrl = (): string => {
@@ -20,7 +20,7 @@ const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/export?format=csv`;
 
 // HOJA OPERATIVA / BACKEND
-const BACKEND_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+const BACKEND_DOC_ID = '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE';
 const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv`;
 
 const CORRECTIVES_DOC_ID = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
@@ -2246,6 +2246,80 @@ export const submitPreventiveUpdateToSheet = async (data: {
     method: 'POST_PREVENTIVE_UPDATE', 
     data 
   });
+  return result === true;
+};
+
+export const cleanSpreadsheetId = (idOrUrl: string): string => {
+  if (!idOrUrl) return '';
+  let id = idOrUrl.trim();
+  
+  // 1. If it has /spreadsheets/d/ID
+  const dMatch = id.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (dMatch && dMatch[1]) {
+    return dMatch[1];
+  }
+  
+  // 2. If it is ID/edit...
+  const editMatch = id.match(/^([a-zA-Z0-9-_]+)\/edit/);
+  if (editMatch && editMatch[1]) {
+    return editMatch[1];
+  }
+  
+  // 3. Just clean up any query params, hash fragments, or trailing slashes
+  id = id.split('?')[0].split('#')[0];
+  if (id.endsWith('/')) {
+    id = id.slice(0, -1);
+  }
+  
+  // 4. If it still contains a slash, try to get the longest alphanumeric part or the last part
+  if (id.includes('/')) {
+    const parts = id.split('/');
+    const longPart = parts.find(p => p.length >= 25 && /^[a-zA-Z0-9-_]+$/.test(p));
+    if (longPart) {
+      return longPart;
+    }
+    return parts[parts.length - 1];
+  }
+  
+  return id;
+};
+
+export const getRoutinesDocId = (): string => {
+  const stored = localStorage.getItem('GOOGLE_SPREADSHEET_ROUTINES_ID');
+  if (stored === '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU') {
+    localStorage.removeItem('GOOGLE_SPREADSHEET_ROUTINES_ID');
+    return '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE';
+  }
+  return cleanSpreadsheetId(stored || '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE');
+};
+
+export const setRoutinesDocId = (docId: string): void => {
+  localStorage.setItem('GOOGLE_SPREADSHEET_ROUTINES_ID', cleanSpreadsheetId(docId));
+};
+
+export const submitRoutineToSheet = async (execution: any): Promise<boolean> => {
+  const rawDocId = getRoutinesDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  if (!docId) {
+    console.warn("No Google Spreadsheet ID configured for Routines. Storing only locally.");
+    return false;
+  }
+  const result = await sendToGAS({
+    method: 'POST_ROUTINE',
+    data: {
+      ...execution,
+      docId
+    }
+  }, GOOGLE_SCRIPT_WEB_APP_URL, true);
+
+  if (result && typeof result === 'object') {
+    if ((result as any).status === 'success') {
+      return true;
+    } else {
+      console.error("GAS error:", (result as any).message);
+      throw new Error((result as any).message || "Error desconocido en Google Apps Script.");
+    }
+  }
   return result === true;
 };
 
