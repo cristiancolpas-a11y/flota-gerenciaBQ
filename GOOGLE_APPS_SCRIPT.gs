@@ -2,7 +2,7 @@
 // SISTEMA GESTIÓN FLOTA BQA - BACKEND UNIFICADO
 
 // ⚠️ ASEGÚRATE DE QUE ESTE ID SEA EL DE TU HOJA DE CÁLCULO ACTUAL
-var ID_HOJA = '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE';
+var ID_HOJA = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 var ID_MAESTRO = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 var MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
 
@@ -76,10 +76,21 @@ function doPost(e) {
     if (!e.postData.contents) return output("error", "No hay datos en el postBody");
     
     var req = JSON.parse(e.postData.contents);
-    var d = req.data;
+    var d = req.data || {};
     var m = req.method;
     
     log("Method: " + m + " - Data: " + JSON.stringify(d).substring(0, 500));
+
+    // Initialize function-scoped ss and docId so they are available to all methods
+    var docId = cleanId(d.docId || ID_HOJA);
+    var ss = null;
+    try {
+      if (docId) {
+        ss = SpreadsheetApp.openById(docId);
+      }
+    } catch (err) {
+      log("Error opening spreadsheet in doPost: " + err.toString());
+    }
 
     if (m === 'GET_DATA') {
       var docId = cleanId(d.docId || ID_HOJA);
@@ -145,7 +156,8 @@ function doPost(e) {
       }
     }
     else {
-      var ss = SpreadsheetApp.openById(ID_HOJA);
+      var docId = d && d.docId ? cleanId(d.docId) : ID_HOJA;
+      var ss = SpreadsheetApp.openById(docId);
       
       if (m === 'POST_REPORT') {
         var s = getSheetByGid(ss, "1789987673") || getS(ss, "NOVEDADES");
@@ -957,6 +969,35 @@ function doPost(e) {
         }
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "No se encontró auditoria " + idSearch);
+      }
+      else if (m === 'POST_CAMPAIGN') {
+        var docId = cleanId(d.docId || '1HZXNev6Wbek7YPX_47sx7KXfi6H4S15f1rc6rmQ18MY');
+        var ssCampaign = SpreadsheetApp.openById(docId);
+        var s = ssCampaign.getSheetByName(d.sheetName);
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "Hoja de campaña '" + d.sheetName + "' no encontrada.");
+        }
+        
+        var img1 = sImg(d.evidence1, "CAMP_EVI1_" + d.plate);
+        var img2 = sImg(d.evidence2, "CAMP_EVI2_" + d.plate);
+        var img3 = sImg(d.evidence3, "CAMP_EVI3_" + d.plate);
+        
+        var rowData = [
+          d.semana || "",
+          d.mes || "",
+          d.fecha || "",
+          (d.plate || "").toUpperCase(),
+          d.taller || "",
+          d.observacion || "",
+          img1 || "",
+          img2 || "",
+          img3 || ""
+        ];
+        
+        s.appendRow(rowData);
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Campaña guardada con éxito en la hoja " + d.sheetName);
       }
       else if (m === 'UPLOAD_IMAGE') {
         var url = sImg(d.base64, d.name);

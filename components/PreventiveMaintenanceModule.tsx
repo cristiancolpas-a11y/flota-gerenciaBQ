@@ -9,10 +9,10 @@ import {
   Search, Download, ArrowUpRight, 
   ArrowDownRight, Truck, Activity, Shield, Cpu,
   Globe, Server, BarChart3, Radio, Camera, ImagePlus, Loader2, Image as ImageIcon,
-  ChevronLeft, ChevronRight, X
+  ChevronLeft, ChevronRight, X, Settings, AlertTriangle, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { submitPreventiveUpdateToSheet } from '../services/sheetService';
+import { submitPreventiveUpdateToSheet, getPreventivesDocId, setPreventivesDocId } from '../services/sheetService';
 
 interface Props {
   data: Preventive[];
@@ -27,6 +27,9 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate }) => {
   const [viewingEvidence, setViewingEvidence] = useState<Preventive | null>(null);
   const [uploading, setUploading] = useState(false);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [sheetIdInput, setSheetIdInput] = useState(() => getPreventivesDocId());
+  const [saveFeedback, setSaveFeedback] = useState('');
   
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
@@ -350,9 +353,60 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate }) => {
                 {months.map(m => <option key={m} value={m} className="bg-[#1E293B] text-white">{m === 'TODOS' ? 'CRONOGRAMA: TODOS' : m}</option>)}
               </select>
             </div>
+
+            <button 
+              onClick={() => setShowSettings(!showSettings)}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                showSettings 
+                  ? 'bg-amber-600 border border-amber-500 text-white hover:bg-amber-700' 
+                  : 'bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              <Settings size={14} className={showSettings ? 'animate-spin' : ''} />
+              Configurar Hoja
+            </button>
           </div>
         </div>
       </header>
+
+      {showSettings && (
+        <div className="bg-amber-950/40 border border-amber-500/20 backdrop-blur-xl rounded-[2rem] p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={24} />
+            <div>
+              <h3 className="font-black text-xs uppercase tracking-wider text-amber-200">ID de Google Spreadsheet para MANTENIMIENTO PREVENTIVO</h3>
+              <p className="text-[11px] text-amber-300 leading-normal uppercase font-bold">
+                Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Mantenimiento Preventivo, pega su ID aquí abajo. El sistema buscará la pestaña llamada "PREVENTIVO" en este nuevo archivo.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              value={sheetIdInput}
+              onChange={(e) => setSheetIdInput(e.target.value)}
+              placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
+              className="flex-1 p-3 border border-white/10 bg-white/5 rounded-xl text-xs font-bold outline-none text-white font-mono placeholder:text-slate-600"
+            />
+            <button
+              onClick={() => {
+                setPreventivesDocId(sheetIdInput);
+                setSaveFeedback('¡ID de hoja de Preventivos guardado correctamente!');
+                setTimeout(() => setSaveFeedback(''), 4000);
+                window.location.reload();
+              }}
+              className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+            >
+              Guardar Configuración
+            </button>
+          </div>
+          {saveFeedback && (
+            <p className="text-[10px] font-bold text-emerald-400 flex items-center gap-1 uppercase tracking-wider">
+              <Check size={12} /> {saveFeedback}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Tarjetas KPI */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

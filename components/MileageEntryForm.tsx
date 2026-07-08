@@ -31,9 +31,13 @@ import {
   ChevronRight,
   HelpCircle,
   Database,
-  ChevronDown
+  ChevronDown,
+  Settings,
+  AlertTriangle,
+  Check
 } from 'lucide-react';
 import ExportButton from './ExportButton';
+import { getMileageDocId, setMileageDocId } from '../services/sheetService';
 
 interface MileageEntryFormProps {
   vehicles: Vehicle[];
@@ -75,6 +79,9 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
   const [newMileage, setNewMileage] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [sheetIdInput, setSheetIdInput] = useState(() => getMileageDocId());
+  const [saveFeedback, setSaveFeedback] = useState('');
   
   // Nuevo: Control de vista Mensual vs Semanal
   const [viewMode, setViewMode] = useState<'semanal' | 'mensual'>('semanal');
@@ -287,8 +294,58 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
             </div>
             <ChevronDown size={14} className="text-slate-400 ml-1" />
           </div>
+
+          <button 
+            onClick={() => setShowSettings(!showSettings)}
+            className={`flex items-center gap-2 px-6 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              showSettings 
+                ? 'bg-amber-600 border border-amber-500 text-white hover:bg-amber-700' 
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <Settings size={16} className={showSettings ? 'animate-spin' : ''} />
+            Configurar Hoja
+          </button>
         </div>
       </div>
+
+      {showSettings && (
+        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={24} />
+            <div>
+              <h3 className="font-black text-xs uppercase tracking-wider text-amber-950">ID de Google Spreadsheet para KILOMETRAJES</h3>
+              <p className="text-[11px] text-amber-800 leading-normal uppercase font-bold">
+                Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Kilometraje, pega su ID aquí abajo. El sistema buscará la pestaña llamada "KILOMETRAJE" en este nuevo archivo.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              value={sheetIdInput}
+              onChange={(e) => setSheetIdInput(e.target.value)}
+              placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
+              className="flex-1 p-3 border border-amber-200 bg-white rounded-xl text-xs font-bold outline-none text-slate-800 font-mono"
+            />
+            <button
+              onClick={() => {
+                setMileageDocId(sheetIdInput);
+                setSaveFeedback('¡ID de hoja de Kilometraje guardado correctamente!');
+                setTimeout(() => setSaveFeedback(''), 4000);
+              }}
+              className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+            >
+              Guardar Configuración
+            </button>
+          </div>
+          {saveFeedback && (
+            <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
+              <Check size={12} /> {saveFeedback}
+            </p>
+          )}
+        </div>
+      )}
 
       {activeTab === 'registro' ? (
         <div className="space-y-8">

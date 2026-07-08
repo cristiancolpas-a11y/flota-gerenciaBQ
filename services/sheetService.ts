@@ -20,7 +20,7 @@ const REAL_MASTER_ID = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/export?format=csv`;
 
 // HOJA OPERATIVA / BACKEND
-const BACKEND_DOC_ID = '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE';
+const BACKEND_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv`;
 
 const CORRECTIVES_DOC_ID = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
@@ -282,7 +282,8 @@ const processVehicleRows = (rows: any[][]): Vehicle[] => {
 export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
   try {
     // Intentar primero con GAS
-    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'VISITAS A TALLER');
+    const docId = getRoutinesDocId();
+    const rows = await fetchDataFromGAS(docId, 'VISITAS A TALLER');
     if (rows && rows.length >= 2) {
       return processWorkshopVisitRows(rows);
     }
@@ -294,7 +295,8 @@ export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
 
 const fetchWorkshopVisitsFromSheetCSV = async (): Promise<Report[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${VISITAS_GID}${getCacheBuster()}`;
+    const docId = getRoutinesDocId();
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${VISITAS_GID}${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -351,7 +353,8 @@ const processWorkshopVisitRows = (rows: any[][]): Report[] => {
  */
 export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
   try {
-    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'KILOMETRAJE');
+    const docId = getMileageDocId();
+    const rows = await fetchDataFromGAS(docId, 'KILOMETRAJE');
     if (!rows || rows.length < 2) {
       return fetchMileageLogsFromSheetCSV();
     }
@@ -363,7 +366,8 @@ export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
 
 const fetchMileageLogsFromSheetCSV = async (): Promise<MileageLog[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=${MILEAGE_GID}${getCacheBuster()}`;
+    const docId = getMileageDocId();
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=KILOMETRAJE${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -398,7 +402,8 @@ const processMileageRows = (rows: any[][]): MileageLog[] => {
 export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
   try {
     const vehicles = await fetchVehiclesFromSheet();
-    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'CALIBRACIONES');
+    const docId = getCalibrationsDocId();
+    const rows = await fetchDataFromGAS(docId, 'CALIBRACIONES');
     if (!rows || rows.length < 2) {
       return fetchCalibrationsFromSheetCSV(vehicles);
     }
@@ -410,7 +415,8 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
 
 const fetchCalibrationsFromSheetCSV = async (vehicles: Vehicle[] = []): Promise<Calibration[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${CALIBRATIONS_GID}${getCacheBuster()}`;
+    const docId = getCalibrationsDocId();
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=CALIBRACIONES${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -480,7 +486,8 @@ const processCalibrationRows = (rows: any[][], vehicles: Vehicle[] = []): Calibr
  */
 export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
   try {
-    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'LAVADOS');
+    const docId = getWashDocId();
+    const rows = await fetchDataFromGAS(docId, 'LAVADOS');
     if (!rows || rows.length < 2) {
       return fetchWashReportsFromSheetCSV();
     }
@@ -492,7 +499,8 @@ export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
 
 const fetchWashReportsFromSheetCSV = async (): Promise<WashReport[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&sheet=LAVADOS${getCacheBuster()}`;
+    const docId = getWashDocId();
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=LAVADOS${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -562,7 +570,8 @@ const processWashRows = (rows: any[][]): WashReport[] => {
  */
 export const fetchCleaningReportsFromSheet = async (): Promise<WashReport[]> => {
   try {
-    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'CRONOGRAMA 5S');
+    const docId = getCleaningDocId();
+    const rows = await fetchDataFromGAS(docId, 'CRONOGRAMA 5S');
     if (!rows || rows.length < 2) {
       return fetchCleaningReportsFromSheetCSV();
     }
@@ -574,7 +583,8 @@ export const fetchCleaningReportsFromSheet = async (): Promise<WashReport[]> => 
 
 const fetchCleaningReportsFromSheetCSV = async (): Promise<WashReport[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${CLEANING_GID}${getCacheBuster()}`;
+    const docId = getCleaningDocId();
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=CRONOGRAMA%205S${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -724,7 +734,8 @@ const processDriverRows = (rows: any[][]): Driver[] => {
  */
 export const fetchReportsFromSheet = async (): Promise<Report[]> => {
   try {
-    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'NOVEDADES');
+    const docId = getRoutinesDocId();
+    const rows = await fetchDataFromGAS(docId, 'NOVEDADES');
     if (!rows || rows.length === 0) {
       return fetchReportsFromSheetCSV();
     }
@@ -736,7 +747,8 @@ export const fetchReportsFromSheet = async (): Promise<Report[]> => {
 
 const fetchReportsFromSheetCSV = async (): Promise<Report[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv&gid=${NOVEDADES_GID}${getCacheBuster()}`;
+    const docId = getRoutinesDocId();
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${NOVEDADES_GID}${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -1665,19 +1677,47 @@ const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL, 
   }
 };
 
-export const submitDocumentUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_DOC_UPDATE', data }); };
-export const submitReportToSheet = async (report: Report): Promise<void> => { await sendToGAS({ method: 'POST_REPORT', data: report }); };
+export const submitDocumentUpdateToSheet = async (data: any): Promise<void> => { 
+  const rawDocId = getRoutinesDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  await sendToGAS({ method: 'POST_DOC_UPDATE', data: { ...data, docId } }); 
+};
+export const submitReportToSheet = async (report: Report): Promise<void> => { 
+  const rawDocId = getRoutinesDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  await sendToGAS({ method: 'POST_REPORT', data: { ...report, docId } }); 
+};
 export const submitMileageToSheet = async (mileageData: any): Promise<void> => { 
-  const success = await sendToGAS({ method: 'POST_MILEAGE', data: mileageData }); 
+  const rawDocId = getMileageDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  const success = await sendToGAS({ method: 'POST_MILEAGE', data: { ...mileageData, docId } }); 
   if (!success) throw new Error("Error al guardar en el servidor");
 };
-export const submitCalibrationToSheet = async (calibrationDate: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION', data: calibrationDate }); };
-export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> => { await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data }); };
-export const submitWashToSheet = async (washData: any): Promise<void> => { await sendToGAS({ method: 'POST_WASH', data: washData }); };
-export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { await sendToGAS({ method: 'POST_CLEANING', data: cleaningData }); };
+export const submitCalibrationToSheet = async (calibrationDate: any): Promise<void> => { 
+  const rawDocId = getCalibrationsDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }); 
+};
+export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> => { 
+  const rawDocId = getCalibrationsDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }); 
+};
+export const submitWashToSheet = async (washData: any): Promise<void> => { 
+  const rawDocId = getWashDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  await sendToGAS({ method: 'POST_WASH', data: { ...washData, docId } }); 
+};
+export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { 
+  const rawDocId = getCleaningDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }); 
+};
 export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<{success: boolean, message?: string}> => { 
   try {
-    const result = await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: visitData }); 
+    const rawDocId = getRoutinesDocId();
+    const docId = cleanSpreadsheetId(rawDocId);
+    const result = await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: { ...visitData, docId } }); 
     return {
       success: !!result,
       message: typeof result === 'string' ? result : undefined
@@ -1735,7 +1775,8 @@ export const uploadImageToDrive = async (base64Data: string, fileName: string): 
  */
 export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
   try {
-    const rows = await fetchDataFromGAS(BACKEND_DOC_ID, 'PREVENTIVO');
+    const docId = getPreventivesDocId();
+    const rows = await fetchDataFromGAS(docId, 'PREVENTIVO');
     if (!rows || rows.length < 2) {
       return fetchPreventivesFromSheetCSV();
     }
@@ -1747,7 +1788,8 @@ export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
 
 const fetchPreventivesFromSheetCSV = async (): Promise<Preventive[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/gviz/tq?tqx=out:csv&gid=2086109634${getCacheBuster()}`;
+    const docId = getPreventivesDocId();
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=PREVENTIVO${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -2242,9 +2284,11 @@ export const submitPreventiveUpdateToSheet = async (data: {
   currentKm?: number;
   evidence: string | string[];
 }): Promise<boolean> => {
+  const rawDocId = getPreventivesDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
   const result = await sendToGAS({ 
     method: 'POST_PREVENTIVE_UPDATE', 
-    data 
+    data: { ...data, docId } 
   });
   return result === true;
 };
@@ -2256,29 +2300,50 @@ export const cleanSpreadsheetId = (idOrUrl: string): string => {
   // 1. If it has /spreadsheets/d/ID
   const dMatch = id.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   if (dMatch && dMatch[1]) {
-    return dMatch[1];
-  }
-  
-  // 2. If it is ID/edit...
-  const editMatch = id.match(/^([a-zA-Z0-9-_]+)\/edit/);
-  if (editMatch && editMatch[1]) {
-    return editMatch[1];
-  }
-  
-  // 3. Just clean up any query params, hash fragments, or trailing slashes
-  id = id.split('?')[0].split('#')[0];
-  if (id.endsWith('/')) {
-    id = id.slice(0, -1);
-  }
-  
-  // 4. If it still contains a slash, try to get the longest alphanumeric part or the last part
-  if (id.includes('/')) {
-    const parts = id.split('/');
-    const longPart = parts.find(p => p.length >= 25 && /^[a-zA-Z0-9-_]+$/.test(p));
-    if (longPart) {
-      return longPart;
+    id = dMatch[1];
+  } else {
+    // 2. If it is ID/edit...
+    const editMatch = id.match(/^([a-zA-Z0-9-_]+)\/edit/);
+    if (editMatch && editMatch[1]) {
+      id = editMatch[1];
+    } else {
+      // 3. Just clean up any query params, hash fragments, or trailing slashes
+      id = id.split('?')[0].split('#')[0];
+      if (id.endsWith('/')) {
+        id = id.slice(0, -1);
+      }
+      
+      // 4. If it still contains a slash, try to get the longest alphanumeric part or the last part
+      if (id.includes('/')) {
+        const parts = id.split('/');
+        const longPart = parts.find(p => p.length >= 25 && /^[a-zA-Z0-9-_]+$/.test(p));
+        if (longPart) {
+          id = longPart;
+        } else {
+          id = parts[parts.length - 1];
+        }
+      }
     }
-    return parts[parts.length - 1];
+  }
+  
+  if (id === '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE') {
+    const keys = [
+      'GOOGLE_SPREADSHEET_ROUTINES_ID',
+      'GOOGLE_SPREADSHEET_WASH_ID',
+      'GOOGLE_SPREADSHEET_CALIBRATIONS_ID',
+      'GOOGLE_SPREADSHEET_CLEANING_ID',
+      'GOOGLE_SPREADSHEET_MILEAGE_ID',
+      'GOOGLE_SPREADSHEET_PREVENTIVES_ID'
+    ];
+    keys.forEach(k => {
+      try {
+        const storedVal = localStorage.getItem(k);
+        if (storedVal) {
+          localStorage.setItem(k, '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
+        }
+      } catch (e) {}
+    });
+    return '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
   }
   
   return id;
@@ -2286,15 +2351,110 @@ export const cleanSpreadsheetId = (idOrUrl: string): string => {
 
 export const getRoutinesDocId = (): string => {
   const stored = localStorage.getItem('GOOGLE_SPREADSHEET_ROUTINES_ID');
-  if (stored === '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU') {
-    localStorage.removeItem('GOOGLE_SPREADSHEET_ROUTINES_ID');
-    return '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE';
-  }
-  return cleanSpreadsheetId(stored || '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE');
+  return cleanSpreadsheetId(stored || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
 };
 
 export const setRoutinesDocId = (docId: string): void => {
   localStorage.setItem('GOOGLE_SPREADSHEET_ROUTINES_ID', cleanSpreadsheetId(docId));
+};
+
+export const getWashDocId = (): string => {
+  const stored = localStorage.getItem('GOOGLE_SPREADSHEET_WASH_ID');
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const setWashDocId = (docId: string): void => {
+  localStorage.setItem('GOOGLE_SPREADSHEET_WASH_ID', cleanSpreadsheetId(docId));
+};
+
+export const getCalibrationsDocId = (): string => {
+  const stored = localStorage.getItem('GOOGLE_SPREADSHEET_CALIBRATIONS_ID');
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const setCalibrationsDocId = (docId: string): void => {
+  localStorage.setItem('GOOGLE_SPREADSHEET_CALIBRATIONS_ID', cleanSpreadsheetId(docId));
+};
+
+export const getCleaningDocId = (): string => {
+  const stored = localStorage.getItem('GOOGLE_SPREADSHEET_CLEANING_ID');
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const setCleaningDocId = (docId: string): void => {
+  localStorage.setItem('GOOGLE_SPREADSHEET_CLEANING_ID', cleanSpreadsheetId(docId));
+};
+
+export const getMileageDocId = (): string => {
+  const stored = localStorage.getItem('GOOGLE_SPREADSHEET_MILEAGE_ID');
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const setMileageDocId = (docId: string): void => {
+  localStorage.setItem('GOOGLE_SPREADSHEET_MILEAGE_ID', cleanSpreadsheetId(docId));
+};
+
+export const getPreventivesDocId = (): string => {
+  const stored = localStorage.getItem('GOOGLE_SPREADSHEET_PREVENTIVES_ID');
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const setPreventivesDocId = (docId: string): void => {
+  localStorage.setItem('GOOGLE_SPREADSHEET_PREVENTIVES_ID', cleanSpreadsheetId(docId));
+};
+
+export const getCampaignsDocId = (): string => {
+  const stored = localStorage.getItem('GOOGLE_SPREADSHEET_CAMPAIGNS_ID');
+  return cleanSpreadsheetId(stored || '1HZXNev6Wbek7YPX_47sx7KXfi6H4S15f1rc6rmQ18MY');
+};
+
+export const setCampaignsDocId = (docId: string): void => {
+  localStorage.setItem('GOOGLE_SPREADSHEET_CAMPAIGNS_ID', cleanSpreadsheetId(docId));
+};
+
+export const getCampaignsScriptUrl = (): string => {
+  return localStorage.getItem('GOOGLE_SCRIPT_CAMPAIGNS_URL') || 'https://script.google.com/macros/s/AKfycbwTew4EWzQXWQ2PRkk20-sRkDQBKnrDf-KEHbto7nj5cUHAppvP8k14dx7C9fM_6Sz-/exec';
+};
+
+export const setCampaignsScriptUrl = (url: string): void => {
+  localStorage.setItem('GOOGLE_SCRIPT_CAMPAIGNS_URL', url.trim());
+};
+
+export const submitCampaignToSheet = async (campaignData: {
+  sheetName: string;
+  semana: string;
+  mes: string;
+  fecha: string;
+  plate: string;
+  taller: string;
+  observacion: string;
+  evidence1?: string;
+  evidence2?: string;
+  evidence3?: string;
+}): Promise<boolean> => {
+  const rawDocId = getCampaignsDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  if (!docId) {
+    console.warn("No Google Spreadsheet ID configured for Campaigns.");
+    return false;
+  }
+  const result = await sendToGAS({
+    method: 'POST_CAMPAIGN',
+    data: {
+      ...campaignData,
+      docId
+    }
+  }, getCampaignsScriptUrl(), true);
+
+  if (result && typeof result === 'object') {
+    if ((result as any).status === 'success') {
+      return true;
+    } else {
+      console.error("GAS error:", (result as any).message);
+      throw new Error((result as any).message || "Error al guardar en Google Sheets.");
+    }
+  }
+  return result === true;
 };
 
 export const submitRoutineToSheet = async (execution: any): Promise<boolean> => {

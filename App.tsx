@@ -53,6 +53,7 @@ import CalibrationVisuals from './components/CalibrationVisuals';
 import { VclModule } from './components/VclModule';
 import SustainabilityModule from './components/SustainabilityModule';
 import RutinasModule from './components/RutinasModule';
+import { CampaignsModule } from './components/CampaignsModule';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -90,7 +91,13 @@ import {
   fetchAuditRecordsFromSheet,
   fetchAvailabilitySummaryFromSheet,
   fetchFleetStandardAuditFromSheet,
-  fetchFleetCierreFromSheet
+  fetchFleetCierreFromSheet,
+  getWashDocId,
+  setWashDocId,
+  getCleaningDocId,
+  setCleaningDocId,
+  getCalibrationsDocId,
+  setCalibrationsDocId
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -98,10 +105,10 @@ import {
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, Check, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame
 } from 'lucide-react';
 
-type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas';
+type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas' | 'campanas';
 type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas';
 
 const CATEGORY_CHUNKS = {
@@ -210,6 +217,15 @@ const App: React.FC = () => {
   const [managingFineSupport, setManagingFineSupport] = useState<Fine | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
   const [showWashForm, setShowWashForm] = useState(false);
+  const [showWashSettings, setShowWashSettings] = useState(false);
+  const [washSheetIdInput, setWashSheetIdInput] = useState(() => getWashDocId());
+  const [washSaveFeedback, setWashSaveFeedback] = useState('');
+  const [showCleaningSettings, setShowCleaningSettings] = useState(false);
+  const [cleaningSheetIdInput, setCleaningSheetIdInput] = useState(() => getCleaningDocId());
+  const [cleaningSaveFeedback, setCleaningSaveFeedback] = useState('');
+  const [showCalibrationsSettings, setShowCalibrationsSettings] = useState(false);
+  const [calibrationsSheetIdInput, setCalibrationsSheetIdInput] = useState(() => getCalibrationsDocId());
+  const [calibrationsSaveFeedback, setCalibrationsSaveFeedback] = useState('');
   const [showCleaningForm, setShowCleaningForm] = useState(false);
   const [showCalibrationForm, setShowCalibrationForm] = useState(false);
   const [updatingCalibration, setUpdatingCalibration] = useState<Calibration | null>(null);
@@ -901,7 +917,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Root Menu Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-6xl relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 w-full max-w-7xl relative z-10">
             <button 
               onClick={handleFlotaAccess}
               className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-10 rounded-[3rem] transition-all duration-500 flex items-center gap-8 shadow-2xl hover:-translate-y-2"
@@ -938,6 +954,19 @@ const App: React.FC = () => {
               <div className="text-left">
                 <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">RUTINAS</h3>
                 <p className="text-emerald-400/60 text-[10px] font-bold uppercase tracking-widest">Ejecución y control de inspecciones</p>
+              </div>
+            </button>
+
+            <button 
+              onClick={() => setAppMode('campanas')}
+              className="group bg-white/5 hover:bg-violet-600/20 border border-white/10 hover:border-violet-500/50 p-10 rounded-[3rem] transition-all duration-500 flex items-center gap-8 shadow-2xl hover:-translate-y-2"
+            >
+              <div className="w-20 h-20 bg-violet-600/20 rounded-[1.5rem] flex items-center justify-center text-violet-400 shadow-xl shadow-violet-600/10 group-hover:scale-110 transition-transform border border-violet-500/30">
+                <Sparkles size={36} />
+              </div>
+              <div className="text-left">
+                <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">CAMPAÑAS</h3>
+                <p className="text-violet-400/60 text-[10px] font-bold uppercase tracking-widest">Auditoría de activos críticos</p>
               </div>
             </button>
           </div>
@@ -1186,6 +1215,12 @@ const App: React.FC = () => {
             />
           )}
         </div>
+      ) : appMode === 'campanas' ? (
+        <CampaignsModule 
+          onBack={() => setAppMode('root_menu')} 
+          vehicles={vehicles} 
+          drivers={drivers} 
+        />
       ) : (
         <>
           {/* SIDEBAR PREMIUM */}
@@ -2312,6 +2347,18 @@ const App: React.FC = () => {
                     </div>
 
                     <button 
+                      onClick={() => setShowWashSettings(!showWashSettings)}
+                      className={`flex items-center gap-2 px-6 py-4 border rounded-3xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                        showWashSettings 
+                          ? 'bg-amber-600 border-amber-500 text-white hover:bg-amber-700' 
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Settings size={18} className={showWashSettings ? 'animate-spin' : ''} />
+                      Configurar Hoja
+                    </button>
+
+                    <button 
                       onClick={() => setShowWashForm(true)}
                       className="flex items-center gap-3 px-8 py-4 bg-cyan-600 text-white rounded-3xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-cyan-600/20 hover:bg-cyan-700 transition-all"
                     >
@@ -2319,6 +2366,46 @@ const App: React.FC = () => {
                     </button>
                   </div>
                </div>
+
+               {showWashSettings && (
+                 <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
+                   <div className="flex items-start gap-3">
+                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={24} />
+                     <div>
+                       <h3 className="font-black text-xs uppercase tracking-wider text-amber-950">ID de Google Spreadsheet para LAVADOS</h3>
+                       <p className="text-[11px] text-amber-800 leading-normal uppercase font-bold">
+                         Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Lavados, pega su ID aquí abajo. El sistema buscará la pestaña llamada "LAVADOS" en este nuevo archivo.
+                       </p>
+                     </div>
+                   </div>
+                   <div className="flex flex-col sm:flex-row gap-3">
+                     <input
+                       type="text"
+                       value={washSheetIdInput}
+                       onChange={(e) => setWashSheetIdInput(e.target.value)}
+                       placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
+                       className="flex-1 p-3 border border-amber-200 bg-white rounded-xl text-xs font-bold outline-none text-slate-800 font-mono"
+                     />
+                     <button
+                       onClick={() => {
+                         setWashDocId(washSheetIdInput);
+                         setWashSaveFeedback('¡ID de hoja de Lavados guardado correctamente!');
+                         setTimeout(() => setWashSaveFeedback(''), 4000);
+                         // Actualizar datos
+                         handleSyncData();
+                       }}
+                       className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                     >
+                       Guardar Configuración
+                     </button>
+                   </div>
+                   {washSaveFeedback && (
+                     <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
+                       <Check size={12} /> {washSaveFeedback}
+                     </p>
+                   )}
+                 </div>
+               )}
 
                <WashStats 
                  totalFlota={filteredVehiclesForWash.length}
@@ -2444,6 +2531,17 @@ const App: React.FC = () => {
                     </div>
 
                     <button 
+                      onClick={() => setShowCleaningSettings(!showCleaningSettings)}
+                      className={`flex items-center gap-3 px-8 py-4 rounded-3xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                        showCleaningSettings 
+                          ? 'bg-amber-600 text-white hover:bg-amber-700' 
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Settings size={20} className={showCleaningSettings ? 'animate-spin' : ''}/> Configurar Hoja
+                    </button>
+
+                    <button 
                       onClick={() => setShowCleaningForm(true)}
                       className="flex items-center gap-3 px-8 py-4 bg-cyan-600 text-white rounded-3xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-cyan-600/20 hover:bg-cyan-700 transition-all"
                     >
@@ -2451,6 +2549,45 @@ const App: React.FC = () => {
                     </button>
                   </div>
                </div>
+
+               {showCleaningSettings && (
+                 <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
+                   <div className="flex items-start gap-3">
+                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={24} />
+                     <div>
+                       <h3 className="font-black text-xs uppercase tracking-wider text-amber-950">ID de Google Spreadsheet para LIMPIEZA 5S</h3>
+                       <p className="text-[11px] text-amber-800 leading-normal uppercase font-bold">
+                         Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Limpieza/5S, pega su ID aquí abajo. El sistema buscará la pestaña llamada "CRONOGRAMA 5S" en este nuevo archivo.
+                       </p>
+                     </div>
+                   </div>
+                   <div className="flex flex-col sm:flex-row gap-3">
+                     <input
+                       type="text"
+                       value={cleaningSheetIdInput}
+                       onChange={(e) => setCleaningSheetIdInput(e.target.value)}
+                       placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
+                       className="flex-1 p-3 border border-amber-200 bg-white rounded-xl text-xs font-bold outline-none text-slate-800 font-mono"
+                     />
+                     <button
+                       onClick={() => {
+                         setCleaningDocId(cleaningSheetIdInput);
+                         setCleaningSaveFeedback('¡ID de hoja de Limpieza guardado correctamente!');
+                         setTimeout(() => setCleaningSaveFeedback(''), 4000);
+                         handleSyncData().catch(e => console.error("Error syncing after config:", e));
+                       }}
+                       className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                     >
+                       Guardar Configuración
+                     </button>
+                   </div>
+                   {cleaningSaveFeedback && (
+                     <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
+                       <Check size={12} /> {cleaningSaveFeedback}
+                     </p>
+                   )}
+                 </div>
+               )}
 
                <WashStats 
                  totalFlota={cleaningStats.total}
@@ -2552,8 +2689,58 @@ const App: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    <button 
+                      onClick={() => setShowCalibrationsSettings(!showCalibrationsSettings)}
+                      className={`flex items-center gap-3 px-8 py-4 rounded-3xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                        showCalibrationsSettings 
+                          ? 'bg-amber-600 text-white hover:bg-amber-700' 
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Settings size={20} className={showCalibrationsSettings ? 'animate-spin' : ''}/> Configurar Hoja
+                    </button>
                   </div>
                </div>
+
+               {showCalibrationsSettings && (
+                 <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
+                   <div className="flex items-start gap-3">
+                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={24} />
+                     <div>
+                       <h3 className="font-black text-xs uppercase tracking-wider text-amber-950">ID de Google Spreadsheet para CALIBRACIONES</h3>
+                       <p className="text-[11px] text-amber-800 leading-normal uppercase font-bold">
+                         Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Calibraciones, pega su ID aquí abajo. El sistema buscará la pestaña llamada "CALIBRACIONES" en este nuevo archivo.
+                       </p>
+                     </div>
+                   </div>
+                   <div className="flex flex-col sm:flex-row gap-3">
+                     <input
+                       type="text"
+                       value={calibrationsSheetIdInput}
+                       onChange={(e) => setCalibrationsSheetIdInput(e.target.value)}
+                       placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
+                       className="flex-1 p-3 border border-amber-200 bg-white rounded-xl text-xs font-bold outline-none text-slate-800 font-mono"
+                     />
+                     <button
+                       onClick={() => {
+                         setCalibrationsDocId(calibrationsSheetIdInput);
+                         setCalibrationsSaveFeedback('¡ID de hoja de Calibraciones guardado correctamente!');
+                         setTimeout(() => setCalibrationsSaveFeedback(''), 4000);
+                         handleSyncData().catch(e => console.error("Error syncing after config:", e));
+                       }}
+                       className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                     >
+                       Guardar Configuración
+                     </button>
+                   </div>
+                   {calibrationsSaveFeedback && (
+                     <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
+                       <Check size={12} /> {calibrationsSaveFeedback}
+                     </p>
+                   )}
+                 </div>
+               )}
 
                {/* Filtros CD y Contratista */}
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
