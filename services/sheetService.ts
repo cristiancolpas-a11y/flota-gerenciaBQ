@@ -2,17 +2,160 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-const GOOGLE_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec'; 
-const GOOGLE_SCRIPT_FINES_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
-const GOOGLE_SCRIPT_DAILY_PROGRAM_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
-const GOOGLE_SCRIPT_AUDIT_URL = 'https://script.google.com/macros/s/AKfycbwrEkalsgNrHXPqEx_MeihznsIM4uIG7WZH42ze_HOyB5EZTgeDZMPi0SaIo4JZMlAppQ/exec';
+export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzNPZsqxqWaLtZhdB2Rg9ozbZ54A0VGVwLVzXnQK572vVv2g9k0klKoGffhzNhYDqbk/exec';
+
+export const sanitizeScriptUrl = (url: string): string => {
+  if (!url) return '';
+  let cleaned = url.trim();
+  // Convierte URLs de dominio interno /a/macros/domain/s/ al formato estándar de acceso público /macros/s/
+  cleaned = cleaned.replace(/\/a\/macros\/[^\/]+\//, '/macros/');
+  if (cleaned.includes('script.google.com/s/')) {
+    cleaned = cleaned.replace('script.google.com/s/', 'script.google.com/macros/s/');
+  }
+  return cleaned;
+};
+
+export const getGoogleScriptUrl = (): string => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const stored = localStorage.getItem('GOOGLE_SCRIPT_WEB_APP_URL');
+    if (stored) {
+      const sanitized = sanitizeScriptUrl(stored);
+      if (sanitized && sanitized !== 'undefined' && sanitized !== 'null' && sanitized.startsWith('http')) {
+        // Si la URL guardada es una anterior desactualizada o con error, migramos automáticamente
+        if (!sanitized.includes('AKfycbzNPZsqxqWaLtZhdB2Rg9ozbZ54A0VGVwLVzXnQK572vVv2g9k0klKoGffhzNhYDqbk')) {
+          localStorage.setItem('GOOGLE_SCRIPT_WEB_APP_URL', DEFAULT_WORKING_SCRIPT_URL);
+          return DEFAULT_WORKING_SCRIPT_URL;
+        }
+        return sanitized;
+      }
+    }
+  }
+  return DEFAULT_WORKING_SCRIPT_URL;
+};
+
+export const setGoogleScriptUrl = (url: string): void => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const sanitized = sanitizeScriptUrl(url.trim());
+    localStorage.setItem('GOOGLE_SCRIPT_WEB_APP_URL', sanitized || DEFAULT_WORKING_SCRIPT_URL);
+  }
+};
+
+const getFinesScriptUrl = (): string => getGoogleScriptUrl();
+const getDailyProgramScriptUrl = (): string => getGoogleScriptUrl();
 
 export const getWorkshopScriptUrl = (): string => {
-  return localStorage.getItem('GOOGLE_SCRIPT_WORKSHOP_URL') || 'https://script.google.com/macros/s/AKfycbycAGgzaJLOtoBkN2VsZQdWzJhUxLJwrOOJq8smV3mijtEmrlrNKTX1YFQkO-9tPhsV/exec';
+  return localStorage.getItem('GOOGLE_SCRIPT_WORKSHOP_URL') || getGoogleScriptUrl();
 };
 
 export const setWorkshopScriptUrl = (url: string): void => {
   localStorage.setItem('GOOGLE_SCRIPT_WORKSHOP_URL', url.trim());
+};
+
+export const cleanSpreadsheetId = (idOrUrl: string): string => {
+  if (!idOrUrl) return '';
+  let id = idOrUrl.trim();
+  
+  // 1. If it has /spreadsheets/d/ID
+  const dMatch = id.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (dMatch && dMatch[1]) {
+    id = dMatch[1];
+  } else {
+    // 2. If it is ID/edit...
+    const editMatch = id.match(/^([a-zA-Z0-9-_]+)\/edit/);
+    if (editMatch && editMatch[1]) {
+      id = editMatch[1];
+    } else {
+      // 3. Just clean up any query params, hash fragments, or trailing slashes
+      id = id.split('?')[0].split('#')[0];
+      if (id.endsWith('/')) {
+        id = id.slice(0, -1);
+      }
+      
+      // 4. If it still contains a slash, try to get the longest alphanumeric part or the last part
+      if (id.includes('/')) {
+        const parts = id.split('/');
+        const longPart = parts.find(p => p.length >= 25 && /^[a-zA-Z0-9-_]+$/.test(p));
+        if (longPart) {
+          id = longPart;
+        } else {
+          id = parts[parts.length - 1];
+        }
+      }
+    }
+  }
+  
+  const legacyIds = [
+    '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE',
+    '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U',
+    '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo',
+    '1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M',
+    '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0'
+  ];
+
+  if (legacyIds.includes(id)) {
+    const keys = [
+      'GOOGLE_SPREADSHEET_ROUTINES_ID',
+      'GOOGLE_SPREADSHEET_WASH_ID',
+      'GOOGLE_SPREADSHEET_CALIBRATIONS_ID',
+      'GOOGLE_SPREADSHEET_CLEANING_ID',
+      'GOOGLE_SPREADSHEET_MILEAGE_ID',
+      'GOOGLE_SPREADSHEET_PREVENTIVES_ID',
+      'GOOGLE_SPREADSHEET_MASTER_ID',
+      'GOOGLE_SPREADSHEET_CORRECTIVES_ID',
+      'GOOGLE_SPREADSHEET_FINES_ID',
+      'GOOGLE_SPREADSHEET_CONTROL_TOWER_ID',
+      'GOOGLE_SPREADSHEET_AUDIT_ID',
+      'GOOGLE_SPREADSHEET_AUDIT_QS_ID'
+    ];
+    keys.forEach(k => {
+      try {
+        localStorage.setItem(k, '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
+      } catch (e) {}
+    });
+    return '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+  }
+  
+  return id;
+};
+
+export const getRoutinesDocId = (): string => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_ROUTINES_ID') : null;
+  return cleanSpreadsheetId(stored || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
+};
+
+export const getMasterDocId = (): string => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_MASTER_ID') : null;
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const getCorrectivesDocId = (): string => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_CORRECTIVES_ID') : null;
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const getFinesSheetId = (): string => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_FINES_ID') : null;
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const getControlTowerDocId = (): string => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_CONTROL_TOWER_ID') : null;
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const getAuditDocId = (): string => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_AUDIT_ID') : null;
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const getAuditQsDocId = (): string => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_AUDIT_QS_ID') : null;
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const getCampaignsDocId = (): string => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_CAMPAIGNS_ID') : null;
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
 };
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)
@@ -23,11 +166,11 @@ const BASE_URL_MASTER = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID
 const BACKEND_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const BASE_URL_BACKEND = `https://docs.google.com/spreadsheets/d/${BACKEND_DOC_ID}/export?format=csv`;
 
-const CORRECTIVES_DOC_ID = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
+const CORRECTIVES_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const BASE_URL_CORRECTIVES = `https://docs.google.com/spreadsheets/d/${CORRECTIVES_DOC_ID}/export?format=csv`;
 
 // ID de la hoja de Comparendos
-const FINES_SHEET_ID = '1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M';
+const FINES_SHEET_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 const BASE_URL_FINES = `https://docs.google.com/spreadsheets/d/${FINES_SHEET_ID}/export?format=csv`;
 
 const OPERATORS_DOC_ID = '1qLEXUCt1RAr28lwOX2sCJhjoEoG4vKVOrv2d45iZ6kU';
@@ -56,49 +199,46 @@ const AUDIT_QS_DOC_ID = '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM';
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
-const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: string = GOOGLE_SCRIPT_WEB_APP_URL): Promise<any[][] | null> => {
-  try {
-    let url = `${scriptUrl}?method=GET_DATA&docId=${docId}`;
-    if (sheetName) url += `&sheetName=${encodeURIComponent(sheetName)}`;
-    
-    // Usamos un timeout para el fetch para evitar esperas infinitas
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); 
-
-    const response = await fetch(url, { 
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'omit',
-      redirect: 'follow',
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      console.warn(`GAS Fetch failed for ${sheetName}: ${response.status} ${response.statusText}`);
-      return null;
-    }
-
-    const text = await response.text();
+const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: string = getGoogleScriptUrl()): Promise<any[][] | null> => {
+  const tryFetch = async (targetUrl: string) => {
     try {
+      const sanitizedUrl = sanitizeScriptUrl(targetUrl);
+      let url = `${sanitizedUrl}?method=GET_DATA&docId=${docId}`;
+      if (sheetName) url += `&sheetName=${encodeURIComponent(sheetName)}`;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); 
+
+      const response = await fetch(url, { 
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        redirect: 'follow',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      if (!response.ok) return null;
+
+      const text = await response.text();
+      if (text.includes("<!DOCTYPE html") || text.includes("Page Not Found") || text.includes("unable to open")) {
+        return null;
+      }
+
       const json = JSON.parse(text);
       if (json.status === 'success' && json.message) return json.message as any[][];
-      if (json.status === 'error') console.warn(`GAS Error for ${sheetName}:`, json.message);
       return null;
-    } catch (parseError) {
-      console.warn(`Error parsing GAS response for ${sheetName}`);
+    } catch {
       return null;
     }
-  } catch (e) {
-    if (e instanceof Error && e.name === 'AbortError') {
-      console.warn(`GAS fetch timeout for ${sheetName}`);
-    } else {
-      // Usamos warn en vez de error para no alarmar si hay fallback CSV
-      console.warn(`GAS lookup bypassed for ${sheetName} (Network/CORS redirect). Falling back to CSV/Direct.`);
-    }
-    return null;
+  };
+
+  let res = await tryFetch(scriptUrl);
+  if (!res && sanitizeScriptUrl(scriptUrl) !== DEFAULT_WORKING_SCRIPT_URL) {
+    console.warn(`GAS fetch falló con URL personalizada para ${sheetName}. Reintentando con URL principal activa...`);
+    res = await tryFetch(DEFAULT_WORKING_SCRIPT_URL);
   }
+  return res;
 };
 
 const cleanSheetValue = (val: any): string => {
@@ -180,20 +320,53 @@ const getWeekNumber = (d: Date): number => {
  */
 export const fetchVehiclesFromSheet = async (): Promise<Vehicle[]> => {
   try {
-    const rows = await fetchDataFromGAS(REAL_MASTER_ID, 'ALERTA_CAMIONES');
-    if (!rows || rows.length === 0) {
-      console.warn("GAS fetch vehicles failed, attempting CSV fallback");
-      return fetchVehiclesFromSheetCSV();
+    const docId = getMasterDocId();
+    let rows = await fetchDataFromGAS(docId, 'ALERTA_CAMIONES');
+    
+    let isIncorrectSheet = false;
+    if (rows && rows.length > 0) {
+      const firstRowStr = rows[0].map((c: any) => String(c).toUpperCase()).join(',');
+      if (firstRowStr.includes('KILOMETRAJE') || firstRowStr.includes('SEMANA')) {
+        isIncorrectSheet = true;
+      }
     }
+
+    if (!rows || rows.length === 0 || isIncorrectSheet) {
+      if (isIncorrectSheet && docId !== REAL_MASTER_ID) {
+        console.warn("GAS fetch vehicles got incorrect sheet (kilometrajes) from configured doc, falling back to REAL_MASTER_ID");
+        rows = await fetchDataFromGAS(REAL_MASTER_ID, 'ALERTA_CAMIONES');
+      } else {
+        console.warn("GAS fetch vehicles failed, attempting CSV fallback");
+        const csvRes = await fetchVehiclesFromSheetCSV(docId);
+        if ((csvRes.length === 0 || csvRes.length > 500) && docId !== REAL_MASTER_ID) {
+          console.warn("CSV fetch vehicles failed or was incorrect, falling back to REAL_MASTER_ID CSV");
+          return fetchVehiclesFromSheetCSV(REAL_MASTER_ID);
+        }
+        return csvRes;
+      }
+    }
+    
+    if (rows && rows.length > 0) {
+      const firstRowStr = rows[0].map((c: any) => String(c).toUpperCase()).join(',');
+      if (firstRowStr.includes('KILOMETRAJE') || firstRowStr.includes('SEMANA')) {
+        console.warn("GAS fetch vehicles got incorrect sheet again. Trying REAL_MASTER_ID CSV fallback.");
+        return fetchVehiclesFromSheetCSV(REAL_MASTER_ID);
+      }
+    }
+
+    if (!rows || rows.length === 0) {
+      return fetchVehiclesFromSheetCSV(REAL_MASTER_ID);
+    }
+
     return processVehicleRows(rows);
   } catch (e) { 
-    return fetchVehiclesFromSheetCSV(); 
+    return fetchVehiclesFromSheetCSV(REAL_MASTER_ID); 
   }
 };
 
-const fetchVehiclesFromSheetCSV = async (): Promise<Vehicle[]> => {
+const fetchVehiclesFromSheetCSV = async (docId: string = getMasterDocId()): Promise<Vehicle[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/gviz/tq?tqx=out:csv&gid=${VEHICLES_GID}${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${VEHICLES_GID}${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -203,6 +376,14 @@ const fetchVehiclesFromSheetCSV = async (): Promise<Vehicle[]> => {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
+          if (rows && rows.length > 0) {
+            const firstRowStr = rows[0].map((c: any) => String(c).toUpperCase()).join(',');
+            if (firstRowStr.includes('KILOMETRAJE') || firstRowStr.includes('SEMANA')) {
+              console.warn("fetchVehiclesFromSheetCSV: detected incorrect sheet. Rejecting.");
+              resolve([]);
+              return;
+            }
+          }
           resolve(processVehicleRows(rows));
         },
         error: () => resolve([])
@@ -354,7 +535,10 @@ const processWorkshopVisitRows = (rows: any[][]): Report[] => {
 export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
   try {
     const docId = getMileageDocId();
-    const rows = await fetchDataFromGAS(docId, 'KILOMETRAJE');
+    let rows = await fetchDataFromGAS(docId, 'KILOMETRAJE');
+    if (!rows || rows.length < 2) {
+      rows = await fetchDataFromGAS(docId, 'KILOMETRAJES');
+    }
     if (!rows || rows.length < 2) {
       return fetchMileageLogsFromSheetCSV();
     }
@@ -367,9 +551,14 @@ export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
 const fetchMileageLogsFromSheetCSV = async (): Promise<MileageLog[]> => {
   try {
     const docId = getMileageDocId();
-    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=KILOMETRAJE${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
-    const csvText = await response.text();
+    let url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=KILOMETRAJE${getCacheBuster()}`;
+    let response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    let csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html") || csvText.includes("RESOURCE_NOT_FOUND") || csvText.includes("#REF!") || csvText.includes("error")) {
+      url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=KILOMETRAJES${getCacheBuster()}`;
+      response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+      csvText = await response.text();
+    }
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
     
     return new Promise((resolve) => {
@@ -386,13 +575,29 @@ const fetchMileageLogsFromSheetCSV = async (): Promise<MileageLog[]> => {
 };
 
 const processMileageRows = (rows: any[][]): MileageLog[] => {
-  return rows.slice(1).filter(row => row && row[4]).map((row): MileageLog => ({
-    cd: cleanSheetValue(row[0]),          
-    contractor: cleanSheetValue(row[1]),  
-    week: cleanSheetValue(row[2]),        
-    date: parseFlexibleDate(row[3]),      
-    plate: normalizePlate(cleanSheetValue(row[4])), 
-    mileage: parseInt(cleanSheetValue(row[5]).replace(/[^0-9]/g, '')) || 0 
+  if (!rows || rows.length < 2) return [];
+  const headers = (rows[0] || []).map(h => (h || '').toString().toUpperCase().trim());
+  let cdIdx = headers.findIndex(h => h === 'CD' || h.includes('CENTRO'));
+  let contractorIdx = headers.findIndex(h => h.includes('CONTRATISTA'));
+  let weekIdx = headers.findIndex(h => h.includes('SEMANA'));
+  let dateIdx = headers.findIndex(h => h.includes('FECHA'));
+  let plateIdx = headers.findIndex(h => h.includes('PLACA') || h.includes('VEHICULO'));
+  let mileageIdx = headers.findIndex(h => h.includes('KILOMETRAJE') || h === 'KM');
+
+  if (cdIdx === -1) cdIdx = 0;
+  if (contractorIdx === -1) contractorIdx = 1;
+  if (weekIdx === -1) weekIdx = 2;
+  if (dateIdx === -1) dateIdx = 3;
+  if (plateIdx === -1) plateIdx = 4;
+  if (mileageIdx === -1) mileageIdx = 5;
+
+  return rows.slice(1).filter(row => row && row[plateIdx]).map((row): MileageLog => ({
+    cd: cleanSheetValue(row[cdIdx]),          
+    contractor: cleanSheetValue(row[contractorIdx]),  
+    week: cleanSheetValue(row[weekIdx]),        
+    date: parseFlexibleDate(row[dateIdx]),      
+    plate: normalizePlate(cleanSheetValue(row[plateIdx])), 
+    mileage: parseInt(cleanSheetValue(row[mileageIdx]).replace(/[^0-9]/g, '')) || 0 
   }));
 };
 
@@ -646,20 +851,52 @@ const processCleaningRows = (rows: any[][]): WashReport[] => {
  */
 export const fetchDriversFromSheet = async (): Promise<Driver[]> => {
   try {
-    const rows = await fetchDataFromGAS(REAL_MASTER_ID, 'ALERTA_CONDUCTORES');
-    if (!rows || rows.length < 2) {
-      console.warn("GAS fetch drivers failed, attempting CSV fallback");
-      return fetchDriversFromSheetCSV();
+    const docId = getMasterDocId();
+    let rows = await fetchDataFromGAS(docId, 'ALERTA_CONDUCTORES');
+    
+    let isIncorrectSheet = false;
+    if (rows && rows.length > 0) {
+      const firstRowStr = rows[0].map((c: any) => String(c).toUpperCase()).join(',');
+      if (firstRowStr.includes('KILOMETRAJE') || firstRowStr.includes('SEMANA')) {
+        isIncorrectSheet = true;
+      }
     }
+
+    if (!rows || rows.length < 2 || isIncorrectSheet) {
+      if (isIncorrectSheet && docId !== REAL_MASTER_ID) {
+        console.warn("GAS fetch drivers got incorrect sheet (kilometrajes) from configured doc, falling back to REAL_MASTER_ID");
+        rows = await fetchDataFromGAS(REAL_MASTER_ID, 'ALERTA_CONDUCTORES');
+      } else {
+        console.warn("GAS fetch drivers failed, attempting CSV fallback");
+        const csvRes = await fetchDriversFromSheetCSV(docId);
+        if ((csvRes.length === 0 || csvRes.length > 500) && docId !== REAL_MASTER_ID) {
+          console.warn("CSV fetch drivers failed or was incorrect, falling back to REAL_MASTER_ID CSV");
+          return fetchDriversFromSheetCSV(REAL_MASTER_ID);
+        }
+        return csvRes;
+      }
+    }
+    
+    if (rows && rows.length > 0) {
+      const firstRowStr = rows[0].map((c: any) => String(c).toUpperCase()).join(',');
+      if (firstRowStr.includes('KILOMETRAJE') || firstRowStr.includes('SEMANA')) {
+        return fetchDriversFromSheetCSV(REAL_MASTER_ID);
+      }
+    }
+
+    if (!rows || rows.length < 2) {
+      return fetchDriversFromSheetCSV(REAL_MASTER_ID);
+    }
+
     return processDriverRows(rows);
   } catch (e) { 
-    return fetchDriversFromSheetCSV();
+    return fetchDriversFromSheetCSV(REAL_MASTER_ID);
   }
 };
 
-const fetchDriversFromSheetCSV = async (): Promise<Driver[]> => {
+const fetchDriversFromSheetCSV = async (docId: string = getMasterDocId()): Promise<Driver[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${REAL_MASTER_ID}/export?format=csv&gid=${DRIVERS_GID}${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${DRIVERS_GID}${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -669,6 +906,14 @@ const fetchDriversFromSheetCSV = async (): Promise<Driver[]> => {
         header: false, skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
+          if (rows && rows.length > 0) {
+            const firstRowStr = rows[0].map((c: any) => String(c).toUpperCase()).join(',');
+            if (firstRowStr.includes('KILOMETRAJE') || firstRowStr.includes('SEMANA')) {
+              console.warn("fetchDriversFromSheetCSV: detected incorrect sheet. Rejecting.");
+              resolve([]);
+              return;
+            }
+          }
           resolve(processDriverRows(rows));
         },
         error: () => resolve([])
@@ -833,7 +1078,7 @@ const processReportRows = (rows: any[][]): Report[] => {
  */
 export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
   try {
-    const rows = await fetchDataFromGAS(FINES_SHEET_ID, 'COMPARENDOS');
+    const rows = await fetchDataFromGAS(getFinesSheetId(), 'COMPARENDOS');
     if (!rows || rows.length === 0) {
       return fetchFinesFromSheetCSV();
     }
@@ -845,7 +1090,7 @@ export const fetchFinesFromSheet = async (): Promise<Fine[]> => {
 
 const fetchFinesFromSheetCSV = async (): Promise<Fine[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${FINES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=0${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${getFinesSheetId()}/gviz/tq?tqx=out:csv&gid=0${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -1324,7 +1569,7 @@ export const fetchCheckListFromSheet = async (): Promise<CheckList[]> => {
 
 export const fetchUnavailabilityFromSheet = async (): Promise<UnavailabilityRecord[]> => {
   try {
-    const docId = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
+    const docId = getCorrectivesDocId();
     const rows = await fetchDataFromGAS(docId, 'INDISPONIBILIDAD');
     
     if (!rows || rows.length < 2) {
@@ -1376,7 +1621,7 @@ export const fetchUnavailabilityFromSheet = async (): Promise<UnavailabilityReco
 
 const fetchUnavailabilityFromSheetCSV = async (): Promise<UnavailabilityRecord[]> => {
   try {
-    const docId = '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0';
+    const docId = getCorrectivesDocId();
     const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=INDISPONIBILIDAD${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
@@ -1557,7 +1802,7 @@ export const fetchPlateAdherenceFromSheet = async (): Promise<PlateAdherence[]> 
 
 export const fetchCorrectivesFromSheet = async (): Promise<Corrective[]> => {
   try {
-    const rows = await fetchDataFromGAS(CORRECTIVES_DOC_ID, 'PROGRAMACION');
+    const rows = await fetchDataFromGAS(getCorrectivesDocId(), 'PROGRAMACION');
     
     if (!rows || rows.length < 1) {
       console.warn("GAS fetch correctives failed, attempting CSV fallback");
@@ -1574,7 +1819,7 @@ export const fetchCorrectivesFromSheet = async (): Promise<Corrective[]> => {
 
 const fetchCorrectivesFromSheetCSV = async (): Promise<Corrective[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${CORRECTIVES_DOC_ID}/gviz/tq?tqx=out:csv&sheet=PROGRAMACION${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${getCorrectivesDocId()}/gviz/tq?tqx=out:csv&sheet=PROGRAMACION${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -1642,76 +1887,309 @@ const processCorrectiveRows = (rows: any[][], headers: string[]): Corrective[] =
     });
 };
 
-const sendToGAS = async (payload: any, url: string = GOOGLE_SCRIPT_WEB_APP_URL, useCors: boolean = false) => {
-  console.log(`🚀 Enviando a GAS (${payload.method}):`, payload);
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+const sendToGAS = async (payload: any, url: string = getGoogleScriptUrl(), useCors: boolean = true) => {
+  console.log(`🚀 Enviando a GAS (${payload.method}) [useCors=${useCors}]:`, payload);
+  const targetUrl = sanitizeScriptUrl(url) || DEFAULT_WORKING_SCRIPT_URL;
 
-    const options: RequestInit = { 
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain',
-      },
-      body: JSON.stringify(payload) 
-    };
+  if (useCors) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    if (useCors) {
-      options.mode = 'cors';
-    } else {
-      options.mode = 'no-cors';
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify(payload),
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const text = await response.text();
+      if (!text || text.includes("<!DOCTYPE html") || text.includes("Page Not Found")) {
+        throw new Error("Respuesta no válida de Apps Script");
+      }
+      try {
+        const result = JSON.parse(text);
+        console.log(`✅ Respuesta GAS (${payload.method}):`, result);
+        return result;
+      } catch {
+        return text || true;
+      }
+    } catch (err) {
+      console.warn(`GAS - Error en el envío CORS (${payload.method}), intentando fallback no-cors:`, err);
+      try {
+        await fetch(targetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+          body: JSON.stringify(payload),
+        });
+        console.log(`✅ Envío no-cors (fallback) exitoso para ${payload.method}`);
+        return true;
+      } catch (fallbackErr) {
+        console.error(`GAS - Error en envío no-cors fallback (${payload.method}):`, fallbackErr);
+        return false;
+      }
     }
+  } else {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    const response = await fetch(url, options);
-    clearTimeout(timeoutId);
+      await fetch(targetUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: JSON.stringify(payload),
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
 
-    if (useCors) {
-      const result = await response.json();
-      return result; // Devuelve {status, message}
+      console.log(`✅ Envío no-cors exitoso para ${payload.method}`);
+      return true;
+    } catch (err) {
+      console.error(`GAS - Error en envío no-cors (${payload.method}):`, err);
+      return false;
     }
-    
-    return true; 
-  } catch (err) { 
-    console.warn("GAS - Error en el envío:", err);
-    return false; 
   }
 };
 
 export const submitDocumentUpdateToSheet = async (data: any): Promise<void> => { 
   const rawDocId = getRoutinesDocId();
   const docId = cleanSpreadsheetId(rawDocId);
-  await sendToGAS({ method: 'POST_DOC_UPDATE', data: { ...data, docId } }); 
+  try {
+    const result = await sendToGAS({ method: 'POST_DOC_UPDATE', data: { ...data, docId } }, getGoogleScriptUrl(), true); 
+    if (result && typeof result === 'object') {
+      if ((result as any).status === 'success') {
+        return;
+      } else {
+        console.error("GAS error:", (result as any).message);
+        throw new Error((result as any).message || "Error al actualizar documento en el servidor");
+      }
+    }
+    if (result === true) {
+      return;
+    }
+  } catch (err) {
+    console.warn("GAS - Envío de actualización de documento con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  // Fallback seguro usando modo no-cors (fire-and-forget)
+  const success = await sendToGAS({ method: 'POST_DOC_UPDATE', data: { ...data, docId } }, getGoogleScriptUrl(), false);
+  if (!success) {
+    throw new Error("Error al actualizar documento en el servidor");
+  }
 };
+
 export const submitReportToSheet = async (report: Report): Promise<void> => { 
   const rawDocId = getRoutinesDocId();
   const docId = cleanSpreadsheetId(rawDocId);
-  await sendToGAS({ method: 'POST_REPORT', data: { ...report, docId } }); 
+
+  const sanitizedReport = {
+    ...report,
+    id: report.id || `OT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    plate: normalizePlate(report.plate || ''),
+    date: report.date || new Date().toISOString().split('T')[0],
+    source: report.source || 'CONDUCTOR',
+    novelty: report.novelty || '',
+    status: report.status || 'PENDIENTES',
+    docId
+  };
+
+  try {
+    const result = await sendToGAS({ method: 'POST_REPORT', data: sanitizedReport }, getGoogleScriptUrl(), true); 
+    if (result && typeof result === 'object') {
+      if ((result as any).status === 'success') {
+        return;
+      } else {
+        console.error("GAS error:", (result as any).message);
+        throw new Error((result as any).message || "Error al registrar novedad en el servidor");
+      }
+    }
+    if (result === true) {
+      return;
+    }
+  } catch (err) {
+    console.warn("GAS - Envío de novedad con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  // Fallback seguro usando modo no-cors (fire-and-forget)
+  const success = await sendToGAS({ method: 'POST_REPORT', data: sanitizedReport }, getGoogleScriptUrl(), false);
+  if (!success) {
+    throw new Error("Error al registrar novedad en el servidor");
+  }
 };
 export const submitMileageToSheet = async (mileageData: any): Promise<void> => { 
   const rawDocId = getMileageDocId();
   const docId = cleanSpreadsheetId(rawDocId);
-  const success = await sendToGAS({ method: 'POST_MILEAGE', data: { ...mileageData, docId } }); 
-  if (!success) throw new Error("Error al guardar en el servidor");
+  const normalizedPlate = normalizePlate(mileageData.plate || mileageData.PLACA || mileageData.placa || '');
+  const weekVal = mileageData.week !== undefined && mileageData.week !== null && mileageData.week !== ''
+    ? mileageData.week.toString()
+    : `SEMANA ${getWeekNumber(new Date(mileageData.date || Date.now()))}`;
+
+  const payloadData = { 
+    ...mileageData, 
+    plate: normalizedPlate,
+    mileage: Number(mileageData.mileage || mileageData.KILOMETRAJE || mileageData.kilometraje || 0),
+    cd: mileageData.cd || 'GENERAL',
+    contractor: mileageData.contractor || 'GENERAL',
+    date: mileageData.date || new Date().toISOString().split('T')[0],
+    week: weekVal,
+    sheetName: 'KILOMETRAJE', 
+    docId 
+  };
+
+  try {
+    // Intentar primero con CORS activado para poder validar la respuesta
+    const result = await sendToGAS({ method: 'POST_MILEAGE', data: payloadData }, getGoogleScriptUrl(), true); 
+    if (result && typeof result === 'object') {
+      if ((result as any).status === 'success') {
+        return;
+      } else {
+        console.error("GAS error:", (result as any).message);
+        throw new Error((result as any).message || "Error al guardar en el servidor");
+      }
+    }
+    if (result === true) {
+      return;
+    }
+  } catch (err) {
+    console.warn("GAS - Envío con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  // Fallback seguro usando modo no-cors (fire-and-forget)
+  const success = await sendToGAS({ method: 'POST_MILEAGE', data: payloadData }, getGoogleScriptUrl(), false);
+  if (!success) {
+    throw new Error("Error al guardar en el servidor");
+  }
 };
 export const submitCalibrationToSheet = async (calibrationDate: any): Promise<void> => { 
   const rawDocId = getCalibrationsDocId();
   const docId = cleanSpreadsheetId(rawDocId);
-  await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }); 
+  try {
+    const result = await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }, getGoogleScriptUrl(), true); 
+    if (result && typeof result === 'object') {
+      if ((result as any).status === 'success') {
+        return;
+      } else {
+        console.error("GAS error:", (result as any).message);
+        throw new Error((result as any).message || "Error al guardar en el servidor");
+      }
+    }
+    if (result === true) {
+      return;
+    }
+  } catch (err) {
+    console.warn("GAS - Envío de calibración con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  const success = await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }, getGoogleScriptUrl(), false);
+  if (!success) {
+    throw new Error("Error al guardar la calibración en el servidor");
+  }
 };
+
 export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> => { 
   const rawDocId = getCalibrationsDocId();
   const docId = cleanSpreadsheetId(rawDocId);
-  await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }); 
+  try {
+    const result = await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }, getGoogleScriptUrl(), true); 
+    if (result && typeof result === 'object') {
+      if ((result as any).status === 'success') {
+        return;
+      } else {
+        console.error("GAS error:", (result as any).message);
+        throw new Error((result as any).message || "Error al guardar en el servidor");
+      }
+    }
+    if (result === true) {
+      return;
+    }
+  } catch (err) {
+    console.warn("GAS - Envío de actualización de calibración con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  const success = await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }, getGoogleScriptUrl(), false);
+  if (!success) {
+    throw new Error("Error al actualizar la calibración en el servidor");
+  }
 };
+
 export const submitWashToSheet = async (washData: any): Promise<void> => { 
   const rawDocId = getWashDocId();
   const docId = cleanSpreadsheetId(rawDocId);
-  await sendToGAS({ method: 'POST_WASH', data: { ...washData, docId } }); 
+  const normalizedPlate = normalizePlate(washData.plate || washData.PLACA || washData.placa || '');
+  const dateVal = washData.date || new Date().toISOString().split('T')[0];
+  const weekVal = washData.week !== undefined && washData.week !== null && washData.week !== ''
+    ? washData.week.toString()
+    : `SEMANA ${getWeekNumber(new Date(dateVal))}`;
+  const monthVal = washData.month || new Date(dateVal + 'T12:00:00').toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+
+  const payloadData = { 
+    ...washData, 
+    plate: normalizedPlate,
+    date: dateVal,
+    week: weekVal,
+    month: monthVal,
+    sheetName: 'LAVADOS', 
+    docId 
+  };
+
+  try {
+    const result = await sendToGAS({ method: 'POST_WASH', data: payloadData }, getGoogleScriptUrl(), true); 
+    if (result && typeof result === 'object') {
+      if ((result as any).status === 'success') {
+        return;
+      } else {
+        console.error("GAS error:", (result as any).message);
+        throw new Error((result as any).message || "Error al guardar el lavado en el servidor");
+      }
+    }
+    if (result === true) {
+      return;
+    }
+  } catch (err) {
+    console.warn("GAS - Envío de lavado con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  const success = await sendToGAS({ method: 'POST_WASH', data: payloadData }, getGoogleScriptUrl(), false);
+  if (!success) {
+    throw new Error("Error al guardar el lavado en el servidor");
+  }
 };
+
 export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { 
   const rawDocId = getCleaningDocId();
   const docId = cleanSpreadsheetId(rawDocId);
-  await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }); 
+  try {
+    const result = await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }, getGoogleScriptUrl(), true); 
+    if (result && typeof result === 'object') {
+      if ((result as any).status === 'success') {
+        return;
+      } else {
+        console.error("GAS error:", (result as any).message);
+        throw new Error((result as any).message || "Error al guardar en el servidor");
+      }
+    }
+    if (result === true) {
+      return;
+    }
+  } catch (err) {
+    console.warn("GAS - Envío de limpieza con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  const success = await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }, getGoogleScriptUrl(), false);
+  if (!success) {
+    throw new Error("Error al guardar la limpieza en el servidor");
+  }
 };
 export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<{success: boolean, message?: string}> => { 
   try {
@@ -1750,7 +2228,7 @@ export const uploadImageToDrive = async (base64Data: string, fileName: string): 
       }
     };
     
-    const response = await fetch(GOOGLE_SCRIPT_AUDIT_URL, {
+    const response = await fetch(getGoogleScriptUrl(), {
       method: 'POST',
       mode: 'cors',
       headers: {
@@ -1848,7 +2326,7 @@ const processPreventiveRows = (rows: any[][]): Preventive[] => {
 
 export const submitCorrectiveUpdateToSheet = async (data: any): Promise<{success: boolean, message?: string}> => { 
   try {
-    const result = await sendToGAS({ method: 'POST_CORRECTIVE_UPDATE', data }, GOOGLE_SCRIPT_DAILY_PROGRAM_URL); 
+    const result = await sendToGAS({ method: 'POST_CORRECTIVE_UPDATE', data }, getDailyProgramScriptUrl()); 
     // sendToGAS actualmente devuelve boolean, vamos a ajustarlo
     return {
       success: !!result,
@@ -1861,7 +2339,7 @@ export const submitCorrectiveUpdateToSheet = async (data: any): Promise<{success
 };
 export const submitFineToSheet = async (data: any): Promise<boolean> => {
   const method = data.updateMode ? 'POST_FINE_UPDATE' : 'POST_FINE';
-  return await sendToGAS({ method, data }, GOOGLE_SCRIPT_FINES_URL);
+  return await sendToGAS({ method, data }, getFinesScriptUrl());
 };
 
 export const getMockOperators = (): OperatorRecord[] => {
@@ -1994,7 +2472,7 @@ export const fetchOperatorsFromSheet = async (): Promise<OperatorRecord[]> => {
 
 export const fetchAuditMasterListFromSheet = async (): Promise<AuditMasterVehicle[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/export?format=csv&gid=244265623${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${getAuditDocId()}/export?format=csv&gid=244265623${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -2094,7 +2572,7 @@ const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
 };
 
 export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolean> => {
-  return await sendToGAS({ method: 'POST_CONTROL_TOWER_UPDATE', data: { ...data, docId: CONTROL_TOWER_DOC_ID } }, GOOGLE_SCRIPT_AUDIT_URL, true);
+  return await sendToGAS({ method: 'POST_CONTROL_TOWER_UPDATE', data: { ...data, docId: getControlTowerDocId() } }, getGoogleScriptUrl(), true);
 };
 
 export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
@@ -2163,7 +2641,7 @@ export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
 
 export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(CONTROL_TOWER_DOC_ID, 'CIERRE DE NOVEDADES', GOOGLE_SCRIPT_AUDIT_URL);
+    const rows = await fetchDataFromGAS(getControlTowerDocId(), 'CIERRE DE NOVEDADES', getGoogleScriptUrl());
     
     if (!rows || rows.length < 2) {
       console.warn("GAS fetch control tower failed, attempting CSV fallback");
@@ -2211,7 +2689,7 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
 
 const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${CONTROL_TOWER_DOC_ID}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${getControlTowerDocId()}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) {
@@ -2275,7 +2753,7 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
 };
 
 export const submitAuditUpdateToSheet = async (data: any): Promise<boolean> => {
-  return await sendToGAS({ method: 'POST_AUDIT_UPDATE', data }, GOOGLE_SCRIPT_AUDIT_URL);
+  return await sendToGAS({ method: 'POST_AUDIT_UPDATE', data }, getGoogleScriptUrl());
 };
 
 export const submitPreventiveUpdateToSheet = async (data: {
@@ -2293,66 +2771,47 @@ export const submitPreventiveUpdateToSheet = async (data: {
   return result === true;
 };
 
-export const cleanSpreadsheetId = (idOrUrl: string): string => {
-  if (!idOrUrl) return '';
-  let id = idOrUrl.trim();
-  
-  // 1. If it has /spreadsheets/d/ID
-  const dMatch = id.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (dMatch && dMatch[1]) {
-    id = dMatch[1];
-  } else {
-    // 2. If it is ID/edit...
-    const editMatch = id.match(/^([a-zA-Z0-9-_]+)\/edit/);
-    if (editMatch && editMatch[1]) {
-      id = editMatch[1];
-    } else {
-      // 3. Just clean up any query params, hash fragments, or trailing slashes
-      id = id.split('?')[0].split('#')[0];
-      if (id.endsWith('/')) {
-        id = id.slice(0, -1);
-      }
-      
-      // 4. If it still contains a slash, try to get the longest alphanumeric part or the last part
-      if (id.includes('/')) {
-        const parts = id.split('/');
-        const longPart = parts.find(p => p.length >= 25 && /^[a-zA-Z0-9-_]+$/.test(p));
-        if (longPart) {
-          id = longPart;
-        } else {
-          id = parts[parts.length - 1];
-        }
-      }
+// Inicialización segura de valores por defecto únicamente si están vacíos
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    const defaultId = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+    const defaultUrl = DEFAULT_WORKING_SCRIPT_URL;
+    
+    const currentUrl = localStorage.getItem('GOOGLE_SCRIPT_WEB_APP_URL');
+    if (!currentUrl || !currentUrl.includes('AKfycbzNPZsqxqWaLtZhdB2Rg9ozbZ54A0VGVwLVzXnQK572vVv2g9k0klKoGffhzNhYDqbk')) {
+      localStorage.setItem('GOOGLE_SCRIPT_WEB_APP_URL', defaultUrl);
     }
-  }
-  
-  if (id === '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE') {
+    
     const keys = [
       'GOOGLE_SPREADSHEET_ROUTINES_ID',
       'GOOGLE_SPREADSHEET_WASH_ID',
       'GOOGLE_SPREADSHEET_CALIBRATIONS_ID',
       'GOOGLE_SPREADSHEET_CLEANING_ID',
       'GOOGLE_SPREADSHEET_MILEAGE_ID',
-      'GOOGLE_SPREADSHEET_PREVENTIVES_ID'
+      'GOOGLE_SPREADSHEET_PREVENTIVES_ID',
+      'GOOGLE_SPREADSHEET_CORRECTIVES_ID',
+      'GOOGLE_SPREADSHEET_FINES_ID',
+      'GOOGLE_SPREADSHEET_CONTROL_TOWER_ID',
+      'GOOGLE_SPREADSHEET_AUDIT_ID',
+      'GOOGLE_SPREADSHEET_AUDIT_QS_ID'
+    ];
+    const legacyList = [
+      '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE',
+      '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U',
+      '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo',
+      '1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M',
+      '1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0'
     ];
     keys.forEach(k => {
-      try {
-        const storedVal = localStorage.getItem(k);
-        if (storedVal) {
-          localStorage.setItem(k, '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
-        }
-      } catch (e) {}
+      const val = localStorage.getItem(k);
+      if (!val || legacyList.includes(val.trim())) {
+        localStorage.setItem(k, defaultId);
+      }
     });
-    return '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+  } catch (e) {
+    console.warn('Error running spreadsheet default initialization:', e);
   }
-  
-  return id;
-};
-
-export const getRoutinesDocId = (): string => {
-  const stored = localStorage.getItem('GOOGLE_SPREADSHEET_ROUTINES_ID');
-  return cleanSpreadsheetId(stored || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
-};
+}
 
 export const setRoutinesDocId = (docId: string): void => {
   localStorage.setItem('GOOGLE_SPREADSHEET_ROUTINES_ID', cleanSpreadsheetId(docId));
@@ -2360,7 +2819,7 @@ export const setRoutinesDocId = (docId: string): void => {
 
 export const getWashDocId = (): string => {
   const stored = localStorage.getItem('GOOGLE_SPREADSHEET_WASH_ID');
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  return cleanSpreadsheetId(stored || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
 };
 
 export const setWashDocId = (docId: string): void => {
@@ -2369,7 +2828,7 @@ export const setWashDocId = (docId: string): void => {
 
 export const getCalibrationsDocId = (): string => {
   const stored = localStorage.getItem('GOOGLE_SPREADSHEET_CALIBRATIONS_ID');
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  return cleanSpreadsheetId(stored || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
 };
 
 export const setCalibrationsDocId = (docId: string): void => {
@@ -2378,7 +2837,7 @@ export const setCalibrationsDocId = (docId: string): void => {
 
 export const getCleaningDocId = (): string => {
   const stored = localStorage.getItem('GOOGLE_SPREADSHEET_CLEANING_ID');
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  return cleanSpreadsheetId(stored || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
 };
 
 export const setCleaningDocId = (docId: string): void => {
@@ -2387,7 +2846,7 @@ export const setCleaningDocId = (docId: string): void => {
 
 export const getMileageDocId = (): string => {
   const stored = localStorage.getItem('GOOGLE_SPREADSHEET_MILEAGE_ID');
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  return cleanSpreadsheetId(stored || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
 };
 
 export const setMileageDocId = (docId: string): void => {
@@ -2396,16 +2855,11 @@ export const setMileageDocId = (docId: string): void => {
 
 export const getPreventivesDocId = (): string => {
   const stored = localStorage.getItem('GOOGLE_SPREADSHEET_PREVENTIVES_ID');
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  return cleanSpreadsheetId(stored || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
 };
 
 export const setPreventivesDocId = (docId: string): void => {
   localStorage.setItem('GOOGLE_SPREADSHEET_PREVENTIVES_ID', cleanSpreadsheetId(docId));
-};
-
-export const getCampaignsDocId = (): string => {
-  const stored = localStorage.getItem('GOOGLE_SPREADSHEET_CAMPAIGNS_ID');
-  return cleanSpreadsheetId(stored || '1HZXNev6Wbek7YPX_47sx7KXfi6H4S15f1rc6rmQ18MY');
 };
 
 export const setCampaignsDocId = (docId: string): void => {
@@ -2418,6 +2872,53 @@ export const getCampaignsScriptUrl = (): string => {
 
 export const setCampaignsScriptUrl = (url: string): void => {
   localStorage.setItem('GOOGLE_SCRIPT_CAMPAIGNS_URL', url.trim());
+};
+
+export const getCampaignSheetRows = async (sheetName: string): Promise<any[][] | null> => {
+  const rawDocId = getCampaignsDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  if (!docId) {
+    console.warn("No Google Spreadsheet ID configured for Campaigns.");
+    return null;
+  }
+  // Intenta primero con el script unificado de la app
+  let rows = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
+  if (!rows) {
+    // Si falla, intenta con el script de campañas específico
+    rows = await fetchDataFromGAS(docId, sheetName, getCampaignsScriptUrl());
+  }
+  if (!rows) {
+    // Si ambos fallan, intenta con el fallback CSV directo
+    console.warn(`GAS fetch campaigns failed for ${sheetName}, trying CSV fallback...`);
+    rows = await fetchCampaignSheetRowsCSV(docId, sheetName);
+  }
+  return rows;
+};
+
+const fetchCampaignSheetRowsCSV = async (docId: string, sheetName: string): Promise<any[][] | null> => {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+    const csvText = await response.text();
+    if (!csvText || csvText.includes("<!DOCTYPE html")) {
+      console.warn(`CSV Fallback for campaign ${sheetName} returned HTML/empty content. Check spreadsheet permissions.`);
+      return null;
+    }
+    
+    return new Promise((resolve) => {
+      Papa.parse(csvText, {
+        header: false,
+        skipEmptyLines: 'greedy',
+        complete: (results) => {
+          resolve(results.data as any[][]);
+        },
+        error: () => resolve(null)
+      });
+    });
+  } catch (e) {
+    console.error(`Error fetching campaigns via CSV fallback for ${sheetName}:`, e);
+    return null;
+  }
 };
 
 export const submitCampaignToSheet = async (campaignData: {
@@ -2438,23 +2939,38 @@ export const submitCampaignToSheet = async (campaignData: {
     console.warn("No Google Spreadsheet ID configured for Campaigns.");
     return false;
   }
-  const result = await sendToGAS({
+  try {
+    const result = await sendToGAS({
+      method: 'POST_CAMPAIGN',
+      data: {
+        ...campaignData,
+        docId
+      }
+    }, getCampaignsScriptUrl(), true);
+
+    if (result && typeof result === 'object') {
+      if ((result as any).status === 'success') {
+        return true;
+      } else {
+        console.error("GAS error:", (result as any).message);
+        throw new Error((result as any).message || "Error al guardar en Google Sheets.");
+      }
+    }
+    if (result === true) return true;
+  } catch (err) {
+    console.warn("GAS - Envío de campaña con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  // Fallback seguro no-cors
+  const success = await sendToGAS({
     method: 'POST_CAMPAIGN',
     data: {
       ...campaignData,
       docId
     }
-  }, getCampaignsScriptUrl(), true);
+  }, getCampaignsScriptUrl(), false);
 
-  if (result && typeof result === 'object') {
-    if ((result as any).status === 'success') {
-      return true;
-    } else {
-      console.error("GAS error:", (result as any).message);
-      throw new Error((result as any).message || "Error al guardar en Google Sheets.");
-    }
-  }
-  return result === true;
+  return success;
 };
 
 export const submitRoutineToSheet = async (execution: any): Promise<boolean> => {
@@ -2464,28 +2980,43 @@ export const submitRoutineToSheet = async (execution: any): Promise<boolean> => 
     console.warn("No Google Spreadsheet ID configured for Routines. Storing only locally.");
     return false;
   }
-  const result = await sendToGAS({
+  try {
+    const result = await sendToGAS({
+      method: 'POST_ROUTINE',
+      data: {
+        ...execution,
+        docId
+      }
+    }, getGoogleScriptUrl(), true);
+
+    if (result && typeof result === 'object') {
+      if ((result as any).status === 'success') {
+        return true;
+      } else {
+        console.error("GAS error:", (result as any).message);
+        throw new Error((result as any).message || "Error desconocido en Google Apps Script.");
+      }
+    }
+    if (result === true) return true;
+  } catch (err) {
+    console.warn("GAS - Envío de rutina con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  // Fallback seguro no-cors
+  const success = await sendToGAS({
     method: 'POST_ROUTINE',
     data: {
       ...execution,
       docId
     }
-  }, GOOGLE_SCRIPT_WEB_APP_URL, true);
+  }, getGoogleScriptUrl(), false);
 
-  if (result && typeof result === 'object') {
-    if ((result as any).status === 'success') {
-      return true;
-    } else {
-      console.error("GAS error:", (result as any).message);
-      throw new Error((result as any).message || "Error desconocido en Google Apps Script.");
-    }
-  }
-  return result === true;
+  return success;
 };
 
 export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(AUDIT_DOC_ID, 'ESTANDAR', GOOGLE_SCRIPT_AUDIT_URL);
+    const rows = await fetchDataFromGAS(getAuditDocId(), 'ESTANDAR', getGoogleScriptUrl());
     
     if (!rows || rows.length < 2) {
       return fetchAuditRecordsFromSheetCSV();
@@ -2500,7 +3031,7 @@ export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
 
 const fetchAuditRecordsFromSheetCSV = async (): Promise<AuditRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${getAuditDocId()}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -2537,9 +3068,9 @@ export const FLEET_STANDARD_QUALITY_ITEMS = [
 export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardAudit[]> => {
   try {
     // Try ESTRANDAR first on QS doc, then ESTANDAR
-    let rows = await fetchDataFromGAS(AUDIT_QS_DOC_ID, 'ESTRANDAR', GOOGLE_SCRIPT_AUDIT_URL);
+    let rows = await fetchDataFromGAS(getAuditQsDocId(), 'ESTRANDAR', getGoogleScriptUrl());
     if (!rows || rows.length < 2) {
-      rows = await fetchDataFromGAS(AUDIT_QS_DOC_ID, 'ESTANDAR', GOOGLE_SCRIPT_AUDIT_URL);
+      rows = await fetchDataFromGAS(getAuditQsDocId(), 'ESTANDAR', getGoogleScriptUrl());
     }
     
     if (rows && rows.length >= 2) {
@@ -2555,12 +3086,12 @@ export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardA
 const fetchFleetStandardAuditFromSheetCSV = async (): Promise<FleetStandardAudit[]> => {
   try {
     // Try both sheet names for CSV fallback
-    let url = `https://docs.google.com/spreadsheets/d/${AUDIT_QS_DOC_ID}/gviz/tq?tqx=out:csv&sheet=ESTRANDAR${getCacheBuster()}`;
+    let url = `https://docs.google.com/spreadsheets/d/${getAuditQsDocId()}/gviz/tq?tqx=out:csv&sheet=ESTRANDAR${getCacheBuster()}`;
     let response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     let csvText = await response.text();
     
     if (!csvText || csvText.includes("<!DOCTYPE html") || csvText.length < 100) {
-      url = `https://docs.google.com/spreadsheets/d/${AUDIT_QS_DOC_ID}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
+      url = `https://docs.google.com/spreadsheets/d/${getAuditQsDocId()}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
       response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
       csvText = await response.text();
     }
@@ -2637,8 +3168,16 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
 };
 
 export const submitFleetStandardAuditUpdateToSheet = async (data: any): Promise<boolean> => {
-  const result = await sendToGAS({ method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: AUDIT_QS_DOC_ID } }, GOOGLE_SCRIPT_AUDIT_URL, true);
-  return result && (result as any).status === 'success';
+  try {
+    const result = await sendToGAS({ method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: getAuditQsDocId() } }, getGoogleScriptUrl(), true);
+    if (result && (result as any).status === 'success') {
+      return true;
+    }
+  } catch (e) {
+    console.warn("GAS - CORS failed for standard audit update, attempting fallback no-cors:", e);
+  }
+  const success = await sendToGAS({ method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: getAuditQsDocId() } }, getGoogleScriptUrl(), false);
+  return success;
 };
 
 export const submitFleetCierreUpdateToSheet = async (data: {
@@ -2648,16 +3187,27 @@ export const submitFleetCierreUpdateToSheet = async (data: {
   evidence: string | string[];
   verification?: string;
 }): Promise<boolean> => {
-  const result = await sendToGAS({
+  try {
+    const result = await sendToGAS({
+      method: 'POST_FLEET_CIERRE_UPDATE',
+      data: { ...data, docId: getAuditDocId() }
+    }, getGoogleScriptUrl(), true);
+    if (result && (result as any).status === 'success') {
+      return true;
+    }
+  } catch (e) {
+    console.warn("GAS - CORS failed for fleet closure update, attempting fallback no-cors:", e);
+  }
+  const success = await sendToGAS({
     method: 'POST_FLEET_CIERRE_UPDATE',
-    data: { ...data, docId: AUDIT_DOC_ID }
-  }, GOOGLE_SCRIPT_AUDIT_URL, true);
-  return result && (result as any).status === 'success';
+    data: { ...data, docId: getAuditDocId() }
+  }, getGoogleScriptUrl(), false);
+  return success;
 };
 
 export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(AUDIT_DOC_ID, 'CIERRE', GOOGLE_SCRIPT_AUDIT_URL);
+    const rows = await fetchDataFromGAS(getAuditDocId(), 'CIERRE', getGoogleScriptUrl());
     if (!rows || rows.length < 2) {
       return fetchFleetCierreFromSheetCSV();
     }
@@ -2670,7 +3220,7 @@ export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> 
 
 const fetchFleetCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_DOC_ID}/gviz/tq?tqx=out:csv&sheet=CIERRE${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${getAuditDocId()}/gviz/tq?tqx=out:csv&sheet=CIERRE${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -2717,16 +3267,27 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
   evidence: string | string[];
   verification?: string;
 }): Promise<boolean> => {
-  const result = await sendToGAS({
+  try {
+    const result = await sendToGAS({
+      method: 'POST_CALIDAD_CIERRE_UPDATE',
+      data: { ...data, docId: getAuditQsDocId() }
+    }, getGoogleScriptUrl(), true);
+    if (result && (result as any).status === 'success') {
+      return true;
+    }
+  } catch (e) {
+    console.warn("GAS - CORS failed for calidad closure update, attempting fallback no-cors:", e);
+  }
+  const success = await sendToGAS({
     method: 'POST_CALIDAD_CIERRE_UPDATE',
-    data: { ...data, docId: AUDIT_QS_DOC_ID }
-  }, GOOGLE_SCRIPT_AUDIT_URL, true);
-  return result && (result as any).status === 'success';
+    data: { ...data, docId: getAuditQsDocId() }
+  }, getGoogleScriptUrl(), false);
+  return success;
 };
 
 export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(AUDIT_QS_DOC_ID, 'CIERRE1', GOOGLE_SCRIPT_AUDIT_URL);
+    const rows = await fetchDataFromGAS(getAuditQsDocId(), 'CIERRE1', getGoogleScriptUrl());
     if (!rows || rows.length < 2) {
       return fetchCalidadCierreFromSheetCSV();
     }
@@ -2739,7 +3300,7 @@ export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]
 
 const fetchCalidadCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${AUDIT_QS_DOC_ID}/gviz/tq?tqx=out:csv&sheet=CIERRE1${getCacheBuster()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${getAuditQsDocId()}/gviz/tq?tqx=out:csv&sheet=CIERRE1${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];

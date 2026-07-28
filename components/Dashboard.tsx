@@ -50,8 +50,8 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   // 3. Reports Status
   const reportsStatus = useMemo(() => {
-    const open = reports.filter(r => r.status === 'ABIERTO').length;
-    const closed = reports.filter(r => r.status === 'CERRADO').length;
+    const open = reports.filter(r => (r.status as any) === 'ABIERTO' || (r.status as any) === 'PENDIENTES').length;
+    const closed = reports.filter(r => (r.status as any) === 'CERRADO' || (r.status as any) === 'COMPLETADOS').length;
     return [
       { name: 'Abiertos', value: open },
       { name: 'Cerrados', value: closed }
@@ -86,7 +86,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     { label: 'Total Vehículos', value: vehicles.length, icon: <Truck className="text-indigo-600" />, color: 'bg-indigo-50', view: 'vehiculos' },
     { label: 'Conductores Activos', value: drivers.length, icon: <Users className="text-emerald-600" />, color: 'bg-emerald-50', view: 'conductores' },
     { label: 'Comparendos Pendientes', value: fines.filter(f => f.status === 'PENDIENTE').length, icon: <Gavel className="text-rose-600" />, color: 'bg-rose-50', view: 'comparendos' },
-    { label: 'Novedades Abiertas', value: reports.filter(r => r.status === 'ABIERTO').length, icon: <ClipboardList className="text-amber-600" />, color: 'bg-amber-50', view: 'novedades' },
+    { label: 'Novedades Abiertas', value: reports.filter(r => (r.status as any) === 'ABIERTO' || (r.status as any) === 'PENDIENTES').length, icon: <ClipboardList className="text-amber-600" />, color: 'bg-amber-50', view: 'novedades' },
   ];
 
   return (
@@ -111,7 +111,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           >
             <div className="flex flex-col md:flex-row items-center md:items-center gap-1.5 md:gap-4 text-center md:text-left">
               <div className={`p-2.5 md:p-4 ${stat.color} rounded-lg md:rounded-2xl group-hover:scale-110 transition-transform`}>
-                {React.cloneElement(stat.icon as React.ReactElement, { size: 18, className: 'md:size-6' })}
+                {React.cloneElement(stat.icon as React.ReactElement<any>, { size: 18, className: 'md:size-6' })}
               </div>
               <div>
                 <p className="text-[7px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>

@@ -37,7 +37,7 @@ import {
   Check
 } from 'lucide-react';
 import ExportButton from './ExportButton';
-import { getMileageDocId, setMileageDocId } from '../services/sheetService';
+import { getMileageDocId, setMileageDocId, getGoogleScriptUrl, setGoogleScriptUrl } from '../services/sheetService';
 
 interface MileageEntryFormProps {
   vehicles: Vehicle[];
@@ -81,7 +81,9 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sheetIdInput, setSheetIdInput] = useState(() => getMileageDocId());
+  const [scriptUrlInput, setScriptUrlInput] = useState(() => getGoogleScriptUrl());
   const [saveFeedback, setSaveFeedback] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
   
   // Nuevo: Control de vista Mensual vs Semanal
   const [viewMode, setViewMode] = useState<'semanal' | 'mensual'>('semanal');
@@ -198,13 +200,20 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
       return;
     }
 
-    const currentKm = parseInt(newMileage);
-    if (isNaN(currentKm)) {
-      console.error("Invalid mileage value:", newMileage);
+    const currentKm = parseInt(newMileage.replace(/[^0-9]/g, ''), 10);
+    if (isNaN(currentKm) || currentKm <= 0) {
+      setSubmitError("Por favor ingresa un valor de kilometraje válido y mayor a cero.");
+      return;
+    }
+
+    const lastKm = getLastMileage(activeVehicle.plate);
+    if (lastKm > 0 && currentKm <= lastKm) {
+      setSubmitError(`El kilometraje ingresado (${currentKm.toLocaleString()} KM) debe ser estrictamente mayor al último registrado (${lastKm.toLocaleString()} KM) para la placa ${activeVehicle.plate}.`);
       return;
     }
 
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
       console.log("Calling onSubmit for mileage...");
       await onSubmit({
@@ -221,6 +230,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
       setActiveVehicle(null);
     } catch (err) {
       console.error("❌ Error submitting mileage form:", err);
+      setSubmitError(err instanceof Error ? err.message : "Error desconocido al guardar en el servidor");
     } finally {
       setIsSubmitting(false);
     }
@@ -292,60 +302,9 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                  )}
               </div>
             </div>
-            <ChevronDown size={14} className="text-slate-400 ml-1" />
           </div>
-
-          <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className={`flex items-center gap-2 px-6 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest transition-all ${
-              showSettings 
-                ? 'bg-amber-600 border border-amber-500 text-white hover:bg-amber-700' 
-                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Settings size={16} className={showSettings ? 'animate-spin' : ''} />
-            Configurar Hoja
-          </button>
         </div>
       </div>
-
-      {showSettings && (
-        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={24} />
-            <div>
-              <h3 className="font-black text-xs uppercase tracking-wider text-amber-950">ID de Google Spreadsheet para KILOMETRAJES</h3>
-              <p className="text-[11px] text-amber-800 leading-normal uppercase font-bold">
-                Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Kilometraje, pega su ID aquí abajo. El sistema buscará la pestaña llamada "KILOMETRAJE" en este nuevo archivo.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="text"
-              value={sheetIdInput}
-              onChange={(e) => setSheetIdInput(e.target.value)}
-              placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
-              className="flex-1 p-3 border border-amber-200 bg-white rounded-xl text-xs font-bold outline-none text-slate-800 font-mono"
-            />
-            <button
-              onClick={() => {
-                setMileageDocId(sheetIdInput);
-                setSaveFeedback('¡ID de hoja de Kilometraje guardado correctamente!');
-                setTimeout(() => setSaveFeedback(''), 4000);
-              }}
-              className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-            >
-              Guardar Configuración
-            </button>
-          </div>
-          {saveFeedback && (
-            <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
-              <Check size={12} /> {saveFeedback}
-            </p>
-          )}
-        </div>
-      )}
 
       {activeTab === 'registro' ? (
         <div className="space-y-8">
@@ -476,7 +435,7 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                   return (
                     <button 
                       key={v.id} 
-                      onClick={() => { setActiveVehicle(v); setNewMileage(''); }} 
+                      onClick={() => { setActiveVehicle(v); setNewMileage(''); setSubmitError(null); }} 
                       className={`group flex flex-col items-center p-10 rounded-[4rem] border-2 transition-all relative bg-white ${isDone ? 'border-emerald-100 bg-emerald-50/10 grayscale opacity-80' : 'border-slate-100 hover:border-indigo-500 hover:shadow-2xl hover:-translate-y-2'}`}
                     >
                       <div className={`absolute -top-4 right-10 px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl border-2 z-20 flex items-center gap-2 ${isDone ? 'bg-emerald-600 text-white border-emerald-400' : 'bg-rose-600 text-white border-rose-400 animate-pulse'}`}>
@@ -552,26 +511,58 @@ const MileageEntryForm: React.FC<MileageEntryFormProps> = ({
                   </div>
 
                   <form onSubmit={handleFormSubmit} className="space-y-14">
-                    <div className="space-y-10">
-                      <div className="flex items-center gap-4 justify-center lg:justify-start">
-                         <Gauge size={24} className="text-indigo-600" />
-                         <label className="text-2xl font-black text-slate-800 uppercase tracking-[0.4em] block">Kilometraje Actual</label>
-                      </div>
-                      <div className="relative group">
-                         <input 
-                           autoFocus 
-                           required 
-                           type="number" 
-                           placeholder="000,000" 
-                           value={newMileage} 
-                           onChange={(e) => setNewMileage(e.target.value)} 
-                           className="w-full p-14 bg-white border-4 border-indigo-50 rounded-[4rem] text-center lg:text-left text-8xl font-black text-[#0f172a] outline-none focus:border-indigo-600 focus:shadow-2xl transition-all shadow-inner placeholder:text-slate-100" 
-                         />
-                         <div className="absolute right-14 top-1/2 -translate-y-1/2 hidden md:block">
-                            <span className="text-4xl font-black text-indigo-100 group-focus-within:text-indigo-200 transition-colors">KM</span>
+                    {(() => {
+                      const prevKm = activeVehicle ? getLastMileage(activeVehicle.plate) : 0;
+                      const numVal = parseInt(newMileage.replace(/[^0-9]/g, ''), 10);
+                      const isInvalidKm = !isNaN(numVal) && prevKm > 0 && numVal <= prevKm;
+
+                      return (
+                        <div className="space-y-10">
+                          <div className="flex items-center gap-4 justify-center lg:justify-start">
+                             <Gauge size={24} className="text-indigo-600" />
+                             <label className="text-2xl font-black text-slate-800 uppercase tracking-[0.4em] block">Kilometraje Actual</label>
+                          </div>
+                          <div className="relative group">
+                             <input 
+                               autoFocus 
+                               required 
+                               type="number" 
+                               placeholder="000,000" 
+                               value={newMileage} 
+                               onChange={(e) => { setNewMileage(e.target.value); setSubmitError(null); }} 
+                               className={`w-full p-14 bg-white border-4 rounded-[4rem] text-center lg:text-left text-8xl font-black outline-none transition-all shadow-inner placeholder:text-slate-100 ${
+                                 isInvalidKm 
+                                   ? 'border-rose-500 text-rose-900 focus:border-rose-600 shadow-rose-100' 
+                                   : 'border-indigo-50 text-[#0f172a] focus:border-indigo-600 focus:shadow-2xl'
+                               }`} 
+                             />
+                             <div className="absolute right-14 top-1/2 -translate-y-1/2 hidden md:block">
+                                <span className="text-4xl font-black text-indigo-100 group-focus-within:text-indigo-200 transition-colors">KM</span>
+                             </div>
+                          </div>
+
+                          {isInvalidKm && (
+                            <div className="p-4 bg-rose-50 border-2 border-rose-200 rounded-2xl flex items-center gap-3 text-rose-700 font-bold text-xs uppercase tracking-wide">
+                               <AlertCircle size={18} className="shrink-0 text-rose-600" />
+                               <span>El kilometraje debe ser mayor al último registrado ({prevKm.toLocaleString()} KM).</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    
+                    {submitError && (
+                      <div className="p-8 bg-rose-50 border-4 border-rose-100 rounded-[3rem] text-rose-800 flex items-start gap-5 shadow-inner">
+                         <AlertCircle className="text-rose-600 shrink-0 mt-1" size={32} />
+                         <div className="space-y-1 text-left">
+                            <p className="text-sm font-black uppercase tracking-wider text-rose-950">Error al guardar el kilometraje</p>
+                            <p className="text-xs font-bold leading-relaxed">{submitError}</p>
+                            <p className="text-[10px] font-semibold text-rose-600 uppercase tracking-widest pt-1">
+                              Asegúrate de que el Apps Script de Google esté implementado correctamente para "Cualquiera" (Anyone).
+                            </p>
                          </div>
                       </div>
-                    </div>
+                    )}
                     
                     <button type="submit" disabled={isSubmitting || !newMileage} className="w-full py-14 bg-indigo-600 text-white rounded-[4rem] font-black text-3xl uppercase shadow-2xl hover:bg-[#0f172a] transition-all flex items-center justify-center gap-8 group active:scale-95">
                       {isSubmitting ? <Loader2 className="animate-spin" size={40} /> : <Save size={40} className="group-hover:rotate-12 transition-transform" />}

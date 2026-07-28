@@ -1,34 +1,33 @@
-
 // SISTEMA GESTIÓN FLOTA BQA - BACKEND UNIFICADO
 
 // ⚠️ ASEGÚRATE DE QUE ESTE ID SEA EL DE TU HOJA DE CÁLCULO ACTUAL
-var ID_HOJA = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+var DEFAULT_FALLBACK_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+var ID_HOJA = (function() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    return ss ? ss.getId() : DEFAULT_FALLBACK_ID;
+  } catch(e) {
+    return DEFAULT_FALLBACK_ID;
+  }
+})();
 var ID_MAESTRO = '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U';
 var MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
 
 function cleanId(id) {
   if (!id) return '';
   id = id.toString().trim();
-  
-  // 1. If it has /spreadsheets/d/ID
+
   var dMatch = id.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (dMatch && dMatch[1]) {
-    return dMatch[1];
-  }
-  
-  // 2. If it is ID/edit...
+  if (dMatch && dMatch[1]) return dMatch[1];
+
   var editMatch = id.match(/^([a-zA-Z0-9-_]+)\/edit/);
-  if (editMatch && editMatch[1]) {
-    return editMatch[1];
-  }
-  
-  // 3. Just clean up any query params, hash fragments, or trailing slashes
+  if (editMatch && editMatch[1]) return editMatch[1];
+
   id = id.split('?')[0].split('#')[0];
   if (id.charAt(id.length - 1) === '/') {
     id = id.substring(0, id.length - 1);
   }
-  
-  // 4. If it still contains a slash, try to get the longest alphanumeric part or the last part
+
   if (id.indexOf('/') !== -1) {
     var parts = id.split('/');
     for (var i = 0; i < parts.length; i++) {
@@ -38,15 +37,27 @@ function cleanId(id) {
     }
     return parts[parts.length - 1];
   }
-  
+
   return id;
 }
 
-function log(msg) {
+// Helper global: devuelve el primer valor no vacío
+function pickVal() {
+  for (var i = 0; i < arguments.length; i++) {
+    var v = arguments[i];
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return "";
+}
+
+function log(msg, customDocId) {
   try {
-    var ss = SpreadsheetApp.openById(cleanId(ID_HOJA));
+    var targetId = cleanId(customDocId || ID_HOJA);
+    if (!targetId) return;
+    var ss = SpreadsheetApp.openById(targetId);
+    if (!ss) return;
     var s = getS(ss, "LOGS");
-    s.appendRow([new Date(), msg]);
+    if (s) s.appendRow([new Date(), msg]);
   } catch(e) {}
 }
 
@@ -54,11 +65,11 @@ function doGet(e) {
   var m = e.parameter.method;
   var sheetName = e.parameter.sheetName;
   var docId = cleanId(e.parameter.docId || ID_HOJA);
-  
+
   if (m === 'GET_DATA') {
     try {
       var ss = SpreadsheetApp.openById(docId);
-      var s = sheetName ? ss.getSheetByName(sheetName) : ss.getSheets()[0];
+      var s = sheetName ? (findSheetCaseInsensitive(ss, sheetName) || ss.getSheetByName(sheetName)) : ss.getSheets()[0];
       if (!s) return output("error", "Hoja no encontrada");
       var values = s.getDataRange().getDisplayValues();
       return output("success", values);
@@ -72,30 +83,32 @@ function doGet(e) {
 function doPost(e) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(20000); // Aumentado a 20 segundos
+    lock.waitLock(20000);
     if (!e.postData.contents) return output("error", "No hay datos en el postBody");
-    
+
     var req = JSON.parse(e.postData.contents);
     var d = req.data || {};
     var m = req.method;
-    
-    log("Method: " + m + " - Data: " + JSON.stringify(d).substring(0, 500));
 
-    // Initialize function-scoped ss and docId so they are available to all methods
-    var docId = cleanId(d.docId || ID_HOJA);
+    var docId = cleanId((d && d.docId) || ID_HOJA);
+
+    log("Method: " + m + " - Data: " + JSON.stringify(d).substring(0, 500), docId);
+
     var ss = null;
     try {
       if (docId) {
         ss = SpreadsheetApp.openById(docId);
       }
     } catch (err) {
-      log("Error opening spreadsheet in doPost: " + err.toString());
+      log("Error opening spreadsheet in doPost: " + err.toString(), docId);
     }
 
     if (m === 'GET_DATA') {
-      var docId = cleanId(d.docId || ID_HOJA);
-      var ss = SpreadsheetApp.openById(docId);
-      var s = d.sheetName ? ss.getSheetByName(d.sheetName) : ss.getSheets()[0];
+      if (!ss) {
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "No se pudo abrir el documento (ID: " + docId + ").");
+      }
+      var s = d.sheetName ? (findSheetCaseInsensitive(ss, d.sheetName) || ss.getSheetByName(d.sheetName)) : ss.getSheets()[0];
       if (!s) {
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "Hoja no encontrada");
@@ -106,11 +119,12 @@ function doPost(e) {
     }
 
     if (m === 'POST_FINE') {
-      var ssC = SpreadsheetApp.openById("1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M"); 
-      var s = ssC.getSheets()[0];
+      var targetDocId = cleanId(d.docId || ID_HOJA);
+      var ssC = SpreadsheetApp.openById(targetDocId);
+      var s = findSheetCaseInsensitive(ssC, "MULTAS") || ssC.getSheetByName("MULTAS") || ssC.getSheets()[0];
       var placa = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
       var img = sImg(d.evidenceUrl, "SOPORTE_" + placa);
-      
+
       if (d.updateMode === true) {
         var rows = s.getDataRange().getValues();
         var nComp = (d.infractionCode || "").toString();
@@ -123,7 +137,7 @@ function doPost(e) {
         }
         if (foundIdx !== -1) {
           s.getRange(foundIdx, 8).setValue(img);
-          lock.releaseLock();
+          if (lock.hasLock()) lock.releaseLock();
           return output("success", "Soporte vinculado.");
         }
       }
@@ -132,10 +146,11 @@ function doPost(e) {
       var mes = MESES[dInf.getMonth()] || "GENERAL";
       s.appendRow([mes, today(), d.cd || "G", d.contractor || "G", d.driverName || "", d.driverId || "", d.driverPosition || "CONDUCTOR", img, d.status === 'PENDIENTE' ? 'SI' : 'NO', d.paymentAgreement || "NO", d.amount, d.infractionCode, d.date, d.description, placa]);
     }
-    
+
     else if (m === 'POST_DOC_UPDATE') {
-      var ssM = SpreadsheetApp.openById(ID_MAESTRO);
-      var s = getSheetByGid(ssM, "1506825194") || ssM.getSheets()[0]; 
+      var targetDocId = cleanId(d.docId || ID_HOJA);
+      var ssM = SpreadsheetApp.openById(targetDocId);
+      var s = getSheetByGid(ssM, "1506825194") || findSheetCaseInsensitive(ssM, "CONTROL DE DOCUMENTOS") || ssM.getSheetByName("CONTROL DE DOCUMENTOS") || ssM.getSheets()[0];
       var rows = s.getDataRange().getValues();
       var placaBusqueda = (d.plate || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
       var foundIdx = -1;
@@ -156,29 +171,36 @@ function doPost(e) {
       }
     }
     else {
-      var docId = d && d.docId ? cleanId(d.docId) : ID_HOJA;
-      var ss = SpreadsheetApp.openById(docId);
-      
+      if (!ss) {
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "No se pudo abrir el documento de Google Sheets. Verifica el ID y los permisos (ID intentado: " + docId + ").");
+      }
+
       if (m === 'POST_REPORT') {
-        var s = getSheetByGid(ss, "1789987673") || getS(ss, "NOVEDADES");
+        var s = findSheetCaseInsensitive(ss, "NOVEDADES") || getSheetByGid(ss, "1789987673") || getS(ss, "NOVEDADES");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var existingRow = null;
-        for (var i = 1; i < rows.length; i++) {
-          if (rows[i][0] && rows[i][0].toString().trim() === d.id.toString().trim()) {
-            foundIdx = i + 1;
-            existingRow = rows[i];
-            break;
+
+        var targetId = (d && d.id !== undefined && d.id !== null) ? d.id.toString().trim() : "";
+
+        if (targetId) {
+          for (var i = 1; i < rows.length; i++) {
+            if (rows[i][0] && rows[i][0].toString().trim() === targetId) {
+              foundIdx = i + 1;
+              existingRow = rows[i];
+              break;
+            }
           }
         }
 
-        var imgIni = sImg(d.initialEvidence, "NOV_INI_" + d.plate);
-        var imgWork = sImg(d.workshopEvidence, "NOV_TALLER_" + d.plate);
-        var imgSol = sImg(d.solutionEvidence, "NOV_SOL_" + d.plate);
-        var imgMapEntry = sImg(d.entryMap, "MAPA_ENTRADA_" + d.plate);
-        var imgMapExit = sImg(d.exitMap, "MAPA_SALIDA_" + d.plate);
+        var plateName = (d && d.plate) ? d.plate.toString().trim() : "PLACA";
+        var imgIni = sImg(d.initialEvidence, "NOV_INI_" + plateName);
+        var imgWork = sImg(d.workshopEvidence, "NOV_TALLER_" + plateName);
+        var imgSol = sImg(d.solutionEvidence, "NOV_SOL_" + plateName);
+        var imgMapEntry = sImg(d.entryMap, "MAPA_ENTRADA_" + plateName);
+        var imgMapExit = sImg(d.exitMap, "MAPA_SALIDA_" + plateName);
 
-        // Si ya existe la fila, preservamos los links si los nuevos vienen vacíos
         if (existingRow) {
           if (!imgIni && existingRow[7]) imgIni = existingRow[7];
           if (!imgMapEntry && existingRow[10]) imgMapEntry = existingRow[10];
@@ -187,38 +209,47 @@ function doPost(e) {
           if (!imgMapExit && existingRow[15]) imgMapExit = existingRow[15];
         }
 
+        var safeStr = function(v) {
+          if (v === undefined || v === null) return "";
+          return v.toString();
+        };
+
         var rowData = [
-          d.id, 
-          d.date, 
-          d.cd || "GENERAL",
-          d.contractor || "GENERAL",
-          d.plate, 
-          d.source, 
-          d.workshopDate || "",
-          imgIni || "",
-          d.novelty,
-          d.daysToAttend || 0,
-          imgMapEntry || "",
-          d.status,
-          imgWork || "",
-          d.closureDate || "",
-          imgSol || "",
-          imgMapExit || "",
-          d.daysInShop || 0,
-          d.closureComments || "",
-          d.workshop || ""
+          safeStr(d.id),
+          safeStr(d.date),
+          safeStr(d.cd) || "GENERAL",
+          safeStr(d.contractor) || "GENERAL",
+          safeStr(d.plate).toUpperCase(),
+          safeStr(d.source),
+          safeStr(d.workshopDate),
+          safeStr(imgIni),
+          safeStr(d.novelty),
+          Number(d.daysToAttend) || 0,
+          safeStr(imgMapEntry),
+          safeStr(d.status) || "PENDIENTES",
+          safeStr(imgWork),
+          safeStr(d.closureDate),
+          safeStr(imgSol),
+          safeStr(imgMapExit),
+          Number(d.daysInShop) || 0,
+          safeStr(d.closureComments),
+          safeStr(d.workshop)
         ];
 
-        if (foundIdx !== -1) s.getRange(foundIdx, 1, 1, rowData.length).setValues([rowData]);
-        else s.appendRow(rowData);
+        if (foundIdx !== -1) {
+          s.getRange(foundIdx, 1, 1, rowData.length).setValues([rowData]);
+        } else {
+          s.appendRow(rowData);
+        }
+
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Novedad registrada exitosamente.");
       }
       else if (m === 'POST_WORKSHOP_RECORD') {
-        var docId = cleanId(d.docId || '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo');
-        var ssW = SpreadsheetApp.openById(docId);
-        var s = getS(ssW, "TALLERES");
+        var s = getS(ss, "TALLERES");
         var ev1Url = sImg(d.evidence1Url, "EV1_" + d.plate);
         var ev2Url = sImg(d.evidence2Url, "EV2_" + d.plate);
-        
+
         s.appendRow([
           d.month,
           d.week,
@@ -236,7 +267,7 @@ function doPost(e) {
         var s = getSheetByGid(ss, "239875479") || getS(ss, "VISITAS A TALLER");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
-        
+
         var searchId = (d.id || "").toString().trim();
         var searchPlate = (d.plate || "").toString().toUpperCase().trim();
         var searchProgDate = (d.progDate || "").toString().trim();
@@ -246,20 +277,18 @@ function doPost(e) {
           var rowPlate = (rows[i][2] || "").toString().toUpperCase().trim();
           var rowDateRaw = rows[i][1];
           var rowDateStr = "";
-          
+
           if (rowDateRaw instanceof Date) {
             rowDateStr = Utilities.formatDate(rowDateRaw, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
           } else if (rowDateRaw) {
             rowDateStr = rowDateRaw.toString();
           }
 
-          // Intento 1: Por Hash ID (si no es un ID generado vprog-)
-          if (searchId && !searchId.startsWith("vprog-") && rowHash === searchId) {
+          if (searchId && searchId.indexOf("vprog-") !== 0 && rowHash === searchId) {
             foundIdx = i + 1;
             break;
           }
-          
-          // Intento 2: Por Placa y Fecha Programada (Fallback)
+
           if (rowPlate === searchPlate && rowDateStr.indexOf(searchProgDate) !== -1) {
             foundIdx = i + 1;
             break;
@@ -271,11 +300,11 @@ function doPost(e) {
           s.getRange(foundIdx, 5).setValue(d.visitDate);
           s.getRange(foundIdx, 6).setValue(sImg(d.evidence, "VISITA_" + d.plate));
           s.getRange(foundIdx, 7).setValue(d.status);
-          
-          lock.releaseLock();
+
+          if (lock.hasLock()) lock.releaseLock();
           return output("success", "Visita actualizada en fila " + foundIdx);
         } else {
-          lock.releaseLock();
+          if (lock.hasLock()) lock.releaseLock();
           return output("error", "No se encontró el registro para " + searchPlate + " en " + searchProgDate);
         }
       }
@@ -284,7 +313,7 @@ function doPost(e) {
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var plateSearch = (d.plate || "").toString().toUpperCase().trim();
-        
+
         for (var i = 1; i < rows.length; i++) {
           var rowPlate = (rows[i][5] || "").toString().toUpperCase().trim();
           if (rowPlate === plateSearch) {
@@ -292,7 +321,7 @@ function doPost(e) {
             break;
           }
         }
-        
+
         if (foundIdx !== -1) {
           var imgUrls = [];
           if (Array.isArray(d.evidence)) {
@@ -305,17 +334,18 @@ function doPost(e) {
             if (singleUrl) imgUrls.push(singleUrl);
           }
           var img = imgUrls.join(", ");
-          
+
           s.getRange(foundIdx, 19).setValue(img); // EVIDENCIA (Columna S)
         }
       }
       else if (m === 'POST_CORRECTIVE_UPDATE') {
-        var ssProg = SpreadsheetApp.openById("1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0");
-        var s = ssProg.getSheetByName("PROGRAMACIÓN") || ssProg.getSheetByName("PROGRAMCION") || ssProg.getSheets()[0];
+        var targetDocId = cleanId(d.docId || ID_HOJA);
+        var ssProg = SpreadsheetApp.openById(targetDocId);
+        var s = findSheetCaseInsensitive(ssProg, "PROGRAMACIÓN") || ssProg.getSheetByName("PROGRAMACIÓN") || ssProg.getSheetByName("PROGRAMCION") || ssProg.getSheets()[0];
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var plateSearch = (d.plate || "").toString().toUpperCase().trim();
-        var dateSearch = (d.date || "").toString().trim(); // YYYY-MM-DD
+        var dateSearch = (d.date || "").toString().trim();
 
         for (var i = 1; i < rows.length; i++) {
           var rowPlate = (rows[i][3] || "").toString().toUpperCase().trim();
@@ -323,12 +353,11 @@ function doPost(e) {
 
           var rowDateRaw = rows[i][0];
           var rowDateStr = "";
-          
+
           if (rowDateRaw instanceof Date) {
             rowDateStr = Utilities.formatDate(rowDateRaw, ssProg.getSpreadsheetTimeZone(), "yyyy-MM-dd");
           } else if (rowDateRaw) {
             rowDateStr = rowDateRaw.toString();
-            // Normalizar formatos comunes DD/MM/YYYY a YYYY-MM-DD
             if (rowDateStr.indexOf('/') !== -1) {
               var p = rowDateStr.split('/');
               if (p.length === 3) {
@@ -337,7 +366,7 @@ function doPost(e) {
               }
             }
           }
-          
+
           if (rowDateStr.indexOf(dateSearch) !== -1) {
             foundIdx = i + 1;
             break;
@@ -348,42 +377,40 @@ function doPost(e) {
           var img1 = sImg(d.evidence1, "CORR_EV1_" + plateSearch);
           var img2 = sImg(d.evidence2, "CORR_EV2_" + plateSearch);
           var img3 = sImg(d.evidence3, "CORR_EV3_" + plateSearch);
-          
-          if (img1) s.getRange(foundIdx, 10).setValue(img1); // EVIDDENCIA 1 (Indice 9 -> Columna 10)
-          if (img2) s.getRange(foundIdx, 11).setValue(img2); // EVIDENCIA 2 (Indice 10 -> Columna 11)
-          if (img3) s.getRange(foundIdx, 12).setValue(img3); // ENVIDENCIA (Indice 11 -> Columna 12)
+
+          if (img1) s.getRange(foundIdx, 10).setValue(img1);
+          if (img2) s.getRange(foundIdx, 11).setValue(img2);
+          if (img3) s.getRange(foundIdx, 12).setValue(img3);
           if (d.evidence4) {
             var img4 = sImg(d.evidence4, "CORR_EV4_" + plateSearch);
-            if (img4) s.getRange(foundIdx, 13).setValue(img4); // EVIDENCIA 4 (Indice 12 -> Columna 13)
+            if (img4) s.getRange(foundIdx, 13).setValue(img4);
           }
-          
-          lock.releaseLock();
+
+          if (lock.hasLock()) lock.releaseLock();
           return output("success", "Evidencias registradas en fila " + foundIdx);
         } else {
-          lock.releaseLock();
+          if (lock.hasLock()) lock.releaseLock();
           return output("error", "No se encontró la programación para " + plateSearch + " en " + dateSearch);
         }
       }
       else if (m === 'POST_ROUTINE') {
-        var docId = cleanId(d.docId || ID_HOJA);
-        var ss = SpreadsheetApp.openById(docId);
         var sheetName = "";
         var rowData = [];
-        
+
         var imgEvidence = sImg(d.evidenceUrl, "ROUTINE_EV_" + d.plate);
         var imgSignature = sImg(d.signatureUrl, "ROUTINE_SIG_" + d.plate);
-        
+
         var responsesMap = {};
         if (d.responses && Array.isArray(d.responses)) {
           for (var i = 0; i < d.responses.length; i++) {
             var resp = d.responses[i];
-            responsesMap[resp.itemId] = resp.status; // OK, FAIL, NA
+            responsesMap[resp.itemId] = resp.status;
           }
         }
-        
+
         if (d.templateId === 'rutina_4') {
           sheetName = "RUTINA 4";
-          
+
           var detailFailures = "";
           if (d.responses && Array.isArray(d.responses)) {
             var fails = [];
@@ -395,200 +422,196 @@ function doPost(e) {
             }
             detailFailures = fails.join(", ");
           }
-          
+
           rowData = [
-            d.id,                                              // 0: ID Registro
-            d.date,                                            // 1: Fecha
-            d.cd || "",                                        // 2: Centro de Distribución
-            d.plate,                                           // 3: Placa
-            d.templateName || "Rutina 4",                       // 4: Tipo de Rutina
-            d.frequency || "5.000 km",                         // 5: Frecuencia
-            d.taller || d.driverName || "",                    // 6: TALLER
-            d.mileage || "",                                   // 7: Kilometraje Actual
-            (d.score !== undefined ? d.score + "%" : "0%"),     // 8: Puntaje %
-            (d.hasFailures ? "SI" : "NO"),                     // 9: ¿Tiene Fallas?
-            detailFailures,                                    // 10: Detalle de Fallas
-            imgEvidence || "",                                 // 11: Evidencia Fotográfica
-            imgSignature || "",                                // 12: Firma Digital
-            d.notes || "",                                     // 13: Observaciones Generales
-            
-            // Checklist Items starting at index 14
-            responsesMap['r4_c_aceite_motor'] || "NA",         // 14: Cambio: Aceite Motor
-            responsesMap['r4_c_filtro_aceite'] || "NA",        // 15: Cambio: Filtro de aceite
-            responsesMap['r4_c_filtro_aire_secundario'] || "NA", // 16: Cambio: Filtro Aire Secundario
-            responsesMap['r4_c_filtro_aceite_hidraulico'] || "NA", // 17: Cambio: Filtro aceite hidráulico
-            responsesMap['r4_c_filtro_transmision'] || "NA",   // 18: Cambio: Filtro de transmisión
-            responsesMap['r4_c_aceite_direccion'] || "NA",     // 19: Cambio: Aceite dirección
-            responsesMap['r4_c_correas_motor'] || "NA",        // 20: Cambio: Correas Motor
-            responsesMap['r4_c_liquido_refrigerante'] || "NA",  // 21: Cambio: Líquido Refrigerante
-            responsesMap['r4_c_filtro_aire_primario'] || "NA",  // 22: Cambio: Filtro de aire primario
-            responsesMap['r4_c_filtro_combustible_primario'] || "NA", // 23: Cambio: Filtro combustible primario
-            responsesMap['r4_c_filtro_combustible_secundario'] || "NA", // 24: Cambio: Filtro de combustible secundario o trampa de agua
-            responsesMap['r4_c_aceite_diferencial'] || "NA",   // 25: Cambio: Aceite diferencial
-            responsesMap['r4_c_aceite_caja_velocidades'] || "NA", // 26: Cambio: Aceite caja de velocidades
-            responsesMap['r4_c_filtro_aire_compresor'] || "NA", // 27: Cambio: Filtro aire compresor
-            responsesMap['r4_e_general_suspension'] || "NA",   // 28: Engrase: General Suspensión
-            responsesMap['r4_e_articulaciones'] || "NA",       // 29: Engrase: Articulaciones, Crucetas, Cardanes, Bujes y
-            responsesMap['r4_e_rodamientos_delanteros'] || "NA", // 30: Engrase: Rodamientos ruedas delanteras
-            responsesMap['r4_a_direccion'] || "NA",            // 31: Alineación: Dirección
-            responsesMap['r4_l_agua_bateria'] || "NA",         // 32: Líquidos: Agua Batería
-            responsesMap['r4_l_refrigerante_limpiaparabrisas'] || "NA", // 33: Líquidos: Liquido Refrigerante y LimpiaParabrisas
-            responsesMap['r4_l_aceites'] || "NA",              // 34: Líquidos: Aceites de dirección, Caja y Diferencial
-            responsesMap['r4_t_frenos'] || "NA",               // 35: Tensión: Frenos
-            responsesMap['r4_t_correas_motor'] || "NA",        // 36: Tensión: Correas Motor
-            responsesMap['r4_t_embrague'] || "NA",             // 37: Tensión: Embrague y/o calibrar varillaje
-            responsesMap['r4_i_luces'] || "NA",                // 38: Inspección: Luces Delanteras, Traseras
-            responsesMap['r4_i_luces_tablero'] || "NA",        // 39: Inspección: Luces e Indicadores de Tablero
-            responsesMap['r4_i_tuberias_mangueras_refrigeracion'] || "NA", // 40: Inspección: Tuberías y Mangueras Refrigeración
-            responsesMap['r4_i_tuberias_mangueras_aceite'] || "NA", // 41: Inspección: Tuberías y Mangueras Aceite
-            responsesMap['r4_i_sistema_admision_escape'] || "NA", // 42: Inspección: Sistema Admisión y Escape
-            responsesMap['r4_i_terminales_rotulas'] || "NA",    // 43: Inspección: Terminales y Rótulas
-            responsesMap['r4_i_fugas'] || "NA",                // 44: Inspección: Fugas de aire y aceites
-            responsesMap['r4_i_suspension'] || "NA",           // 45: Inspección: Suspensión en General
-            responsesMap['r4_i_marcha_minima'] || "NA",        // 46: Inspección: Marcha Mínima motor
-            responsesMap['r4_i_presion_llantas'] || "NA",      // 47: Inspección: Presión y labrado llantas
-            responsesMap['r4_i_rotar_llantas'] || "NA",        // 48: Inspección: Rotar llantas
-            responsesMap['r4_i_freno_motor'] || "NA",          // 49: Inspección: Freno de motor
-            responsesMap['r4_i_varillaje_direccion'] || "NA"   // 50: Inspección: Varillaje dirección
+            d.id,
+            d.date,
+            d.cd || "",
+            d.plate,
+            d.templateName || "Rutina 4",
+            d.frequency || "5.000 km",
+            d.taller || d.driverName || "",
+            d.mileage || "",
+            (d.score !== undefined ? d.score + "%" : "0%"),
+            (d.hasFailures ? "SI" : "NO"),
+            detailFailures,
+            imgEvidence || "",
+            imgSignature || "",
+            d.notes || "",
+
+            responsesMap['r4_c_aceite_motor'] || "NA",
+            responsesMap['r4_c_filtro_aceite'] || "NA",
+            responsesMap['r4_c_filtro_aire_secundario'] || "NA",
+            responsesMap['r4_c_filtro_aceite_hidraulico'] || "NA",
+            responsesMap['r4_c_filtro_transmision'] || "NA",
+            responsesMap['r4_c_aceite_direccion'] || "NA",
+            responsesMap['r4_c_correas_motor'] || "NA",
+            responsesMap['r4_c_liquido_refrigerante'] || "NA",
+            responsesMap['r4_c_filtro_aire_primario'] || "NA",
+            responsesMap['r4_c_filtro_combustible_primario'] || "NA",
+            responsesMap['r4_c_filtro_combustible_secundario'] || "NA",
+            responsesMap['r4_c_aceite_diferencial'] || "NA",
+            responsesMap['r4_c_aceite_caja_velocidades'] || "NA",
+            responsesMap['r4_c_filtro_aire_compresor'] || "NA",
+            responsesMap['r4_e_general_suspension'] || "NA",
+            responsesMap['r4_e_articulaciones'] || "NA",
+            responsesMap['r4_e_rodamientos_delanteros'] || "NA",
+            responsesMap['r4_a_direccion'] || "NA",
+            responsesMap['r4_l_agua_bateria'] || "NA",
+            responsesMap['r4_l_refrigerante_limpiaparabrisas'] || "NA",
+            responsesMap['r4_l_aceites'] || "NA",
+            responsesMap['r4_t_frenos'] || "NA",
+            responsesMap['r4_t_correas_motor'] || "NA",
+            responsesMap['r4_t_embrague'] || "NA",
+            responsesMap['r4_i_luces'] || "NA",
+            responsesMap['r4_i_luces_tablero'] || "NA",
+            responsesMap['r4_i_tuberias_mangueras_refrigeracion'] || "NA",
+            responsesMap['r4_i_tuberias_mangueras_aceite'] || "NA",
+            responsesMap['r4_i_sistema_admision_escape'] || "NA",
+            responsesMap['r4_i_terminales_rotulas'] || "NA",
+            responsesMap['r4_i_fugas'] || "NA",
+            responsesMap['r4_i_suspension'] || "NA",
+            responsesMap['r4_i_marcha_minima'] || "NA",
+            responsesMap['r4_i_presion_llantas'] || "NA",
+            responsesMap['r4_i_rotar_llantas'] || "NA",
+            responsesMap['r4_i_freno_motor'] || "NA",
+            responsesMap['r4_i_varillaje_direccion'] || "NA"
           ];
         }
         else if (d.templateId === 'rutina_3') {
           sheetName = "RUTINA 3";
-          
+
           rowData = [
-            d.id,                                              // 0: ID_EJECUCION
-            d.date,                                            // 1: FECHA
-            d.plate,                                           // 2: PLACA
-            d.taller || d.driverName || "",                    // 3: TALLER
-            d.cd || "",                                        // 4: CENTRO_DISTRIBUCION
-            d.contractor || "",                                // 5: CONTRATISTA
-            d.frequency || "5.000 km",                         // 6: FRECUENCIA
-            d.mileage || "",                                   // 7: KILOMETRAJE_ACTUAL
-            (d.score !== undefined ? d.score + "%" : "0%"),     // 8: CALIFICACION_CUMPLIMIENTO
-            (d.hasFailures ? "SI" : "NO"),                     // 9: TIENE_FALLAS
-            d.notes || "",                                     // 10: OBSERVACIONES_GENERALES
-            imgSignature || "",                                // 11: FIRMA_DIGITAL
-            imgEvidence || "",                                 // 12: EVIDENCIA_VISUAL
-            
-            // Checklist Items
-            responsesMap['r3_c_aceite_motor'] || "NA",         // 13: Aceite Motor
-            responsesMap['r3_c_filtro_aceite'] || "NA",        // 14: Filtro de aceite
-            responsesMap['r3_c_filtro_primario'] || "NA",      // 15: Filtro combustible primario
-            responsesMap['r3_c_filtro_secundario'] || "NA",    // 16: Filtro combustible secundario o trampa de agua
-            responsesMap['r3_i_filtro_aire'] || "NA",          // 17: Filtro de aire primario
-            responsesMap['r3_e_suspension'] || "NA",           // 18: General Suspensión y rodamientos ruedas delanteras
-            responsesMap['r3_e_articulaciones'] || "NA",       // 19: Articulaciones, Crucetas, Cardanes, Bujes y Pasadores
-            responsesMap['r3_l_agua_bateria'] || "NA",         // 20: Agua Batería
-            responsesMap['r3_l_refrigerante'] || "NA",         // 21: Liquido Refrigerante y LimpiaParabrisas
-            responsesMap['r3_l_aceites_direccion'] || "NA",    // 22: Aceites de dirección, Caja y Diferencial
-            responsesMap['r3_t_frenos'] || "NA",               // 23: Frenos
-            responsesMap['r3_t_correas'] || "NA",              // 24: Correas Motor
-            responsesMap['r3_t_embrague'] || "NA",             // 25: Embrague y/o calibrar varillaje
-            responsesMap['r3_i_luces'] || "NA",                // 26: Luces Delanteras, Traseras y furgón
-            responsesMap['r3_i_luces_tablero'] || "NA",        // 27: Luces e Indicadores de Tablero
-            responsesMap['r3_i_mangueras_ref'] || "NA",        // 28: Tuberías y Mangueras Refrigeración y la Concentración de refrigerante
-            responsesMap['r3_i_mangueras_aceite'] || "NA",     // 29: Tuberías y Mangueras Aceite
-            responsesMap['r3_i_terminales_rotulas'] || "NA",   // 30: Terminales y Rotulas
-            responsesMap['r3_i_suspension'] || "NA",           // 31: Suspensión en General
-            responsesMap['r3_i_admision_escape'] || "NA",      // 32: Sistema Admisión y Escape (Conductos y Turbo)
-            responsesMap['r3_i_fugas'] || "NA",                // 33: Fugas de aire y aceites
-            responsesMap['r3_i_marcha_minima'] || "NA",        // 34: Marcha Mínima motor
-            responsesMap['r3_i_direccion'] || "NA",            // 35: Dirección
-            responsesMap['r3_i_freno_motor'] || "NA",          // 36: Funcionamiento Freno de Motor
-            responsesMap['r3_i_varillaje_direccion'] || "NA",  // 37: Varillaje Dirección
-            responsesMap['r3_i_sistema_combustible'] || "NA"   // 38: Sistema Combustible (Abrazaderas y Mangueras)
+            d.id,
+            d.date,
+            d.plate,
+            d.taller || d.driverName || "",
+            d.cd || "",
+            d.contractor || "",
+            d.frequency || "5.000 km",
+            d.mileage || "",
+            (d.score !== undefined ? d.score + "%" : "0%"),
+            (d.hasFailures ? "SI" : "NO"),
+            d.notes || "",
+            imgSignature || "",
+            imgEvidence || "",
+
+            responsesMap['r3_c_aceite_motor'] || "NA",
+            responsesMap['r3_c_filtro_aceite'] || "NA",
+            responsesMap['r3_c_filtro_primario'] || "NA",
+            responsesMap['r3_c_filtro_secundario'] || "NA",
+            responsesMap['r3_i_filtro_aire'] || "NA",
+            responsesMap['r3_e_suspension'] || "NA",
+            responsesMap['r3_e_articulaciones'] || "NA",
+            responsesMap['r3_l_agua_bateria'] || "NA",
+            responsesMap['r3_l_refrigerante'] || "NA",
+            responsesMap['r3_l_aceites_direccion'] || "NA",
+            responsesMap['r3_t_frenos'] || "NA",
+            responsesMap['r3_t_correas'] || "NA",
+            responsesMap['r3_t_embrague'] || "NA",
+            responsesMap['r3_i_luces'] || "NA",
+            responsesMap['r3_i_luces_tablero'] || "NA",
+            responsesMap['r3_i_mangueras_ref'] || "NA",
+            responsesMap['r3_i_mangueras_aceite'] || "NA",
+            responsesMap['r3_i_terminales_rotulas'] || "NA",
+            responsesMap['r3_i_suspension'] || "NA",
+            responsesMap['r3_i_admision_escape'] || "NA",
+            responsesMap['r3_i_fugas'] || "NA",
+            responsesMap['r3_i_marcha_minima'] || "NA",
+            responsesMap['r3_i_direccion'] || "NA",
+            responsesMap['r3_i_freno_motor'] || "NA",
+            responsesMap['r3_i_varillaje_direccion'] || "NA",
+            responsesMap['r3_i_sistema_combustible'] || "NA"
           ];
         }
         else if (d.templateId === 'rutina_2') {
           sheetName = "RUTINA 2";
-          
+
           rowData = [
-            d.id,                                              // 0: ID_EJECUCION
-            d.date,                                            // 1: Fecha de Registro
-            d.cd || "",                                        // 2: Centro de Distribución (CD)
-            d.plate,                                           // 3: Placa
-            d.templateName || "Rutina 2",                       // 4: Tipo de Rutina
-            d.frequency || "5.000 km",                         // 5: Frecuencia
-            d.mileage || "",                                   // 6: Kilometraje Actual
-            d.taller || d.driverName || "",                    // 7: TALLER
-            d.contractor || "",                                // 8: Contratista / Empresa
-            
-            // Checklist Items
-            responsesMap['r2_c_aceite_motor'] || "NA",         // 9: Cambio: Aceite Motor
-            responsesMap['r2_c_filtro_aceite'] || "NA",        // 10: Cambio: Filtro de aceite
-            responsesMap['r2_c_filtro_primario'] || "NA",      // 11: Cambio: Filtro combustible primario
-            responsesMap['r2_c_filtro_secundario'] || "NA",    // 12: Cambio: Filtro combustible secundario o trampa de agua
-            responsesMap['r2_c_filtro_aire_primario'] || "NA", // 13: Cambio: Filtro de aire primario
-            responsesMap['r2_e_suspension_rodamientos'] || "NA", // 14: Engrase: General Suspensión y rodamientos ruedas delanteras
-            responsesMap['r2_e_articulaciones'] || "NA",       // 15: Engrase: Articulaciones, Crucetas, Cardanes, Bujes y Pasadores
-            responsesMap['r2_l_agua_bateria'] || "NA",         // 16: Líquidos: Agua Batería
-            responsesMap['r2_l_refrigerante'] || "NA",         // 17: Líquidos: Liquido Refrigerante y LimpiaParabrisas
-            responsesMap['r2_l_aceites_direccion'] || "NA",    // 18: Líquidos: Aceites de dirección, Caja y Diferencial
-            responsesMap['r2_t_frenos'] || "NA",               // 19: Tensión: Frenos
-            responsesMap['r2_t_correas'] || "NA",              // 20: Tensión: Correas Motor
-            responsesMap['r2_t_embrague'] || "NA",             // 21: Tensión: Embrague y/o calibrar varillaje (según parámetros)
-            responsesMap['r2_i_luces'] || "NA",                // 22: Inspección: Luces Delanteras, Traseras y furgon
-            responsesMap['r2_i_luces_tablero'] || "NA",        // 23: Inspección: Luces e Indicadores de Tablero
-            responsesMap['r2_i_mangueras_ref'] || "NA",        // 24: Inspección: Tuberías y Mangueras Refrigeración y la Concentración
-            responsesMap['r2_i_mangueras_aceite'] || "NA",     // 25: Inspección: Tuberías y Mangueras Aceite
-            responsesMap['r2_i_terminales_rotulas'] || "NA",   // 26: Inspección: Terminales y Rotulas
-            responsesMap['r2_i_suspension'] || "NA",           // 27: Inspección: Suspensión en General
-            responsesMap['r2_i_admision_escape'] || "NA",      // 28: Inspección: Sistema Admisión y Escape (Conductos y Turbo)
-            responsesMap['r2_i_fugas'] || "NA",                // 29: Inspección: Fugas de aire y aceites
-            responsesMap['r2_i_marcha_minima'] || "NA",        // 30: Inspección: Marcha Mínima motor
-            responsesMap['r2_i_direccion'] || "NA",            // 31: Inspección: Dirección
-            responsesMap['r2_i_freno_motor'] || "NA",          // 32: Inspección: Funcionamiento Freno de Motor
-            responsesMap['r2_i_varillaje_direccion'] || "NA",  // 33: Inspección: Varillaje Dirección
-            responsesMap['r2_i_sistema_combustible'] || "NA",  // 34: Inspección: Sistema Combustible (Abrazaderas y Mangueras)
-            imgEvidence || "",                                 // 35: Evidencia Fotográfica
-            imgSignature || ""                                 // 36: Firma Digital
+            d.id,
+            d.date,
+            d.cd || "",
+            d.plate,
+            d.templateName || "Rutina 2",
+            d.frequency || "5.000 km",
+            d.mileage || "",
+            d.taller || d.driverName || "",
+            d.contractor || "",
+
+            responsesMap['r2_c_aceite_motor'] || "NA",
+            responsesMap['r2_c_filtro_aceite'] || "NA",
+            responsesMap['r2_c_filtro_primario'] || "NA",
+            responsesMap['r2_c_filtro_secundario'] || "NA",
+            responsesMap['r2_c_filtro_aire_primario'] || "NA",
+            responsesMap['r2_e_suspension_rodamientos'] || "NA",
+            responsesMap['r2_e_articulaciones'] || "NA",
+            responsesMap['r2_l_agua_bateria'] || "NA",
+            responsesMap['r2_l_refrigerante'] || "NA",
+            responsesMap['r2_l_aceites_direccion'] || "NA",
+            responsesMap['r2_t_frenos'] || "NA",
+            responsesMap['r2_t_correas'] || "NA",
+            responsesMap['r2_t_embrague'] || "NA",
+            responsesMap['r2_i_luces'] || "NA",
+            responsesMap['r2_i_luces_tablero'] || "NA",
+            responsesMap['r2_i_mangueras_ref'] || "NA",
+            responsesMap['r2_i_mangueras_aceite'] || "NA",
+            responsesMap['r2_i_terminales_rotulas'] || "NA",
+            responsesMap['r2_i_suspension'] || "NA",
+            responsesMap['r2_i_admision_escape'] || "NA",
+            responsesMap['r2_i_fugas'] || "NA",
+            responsesMap['r2_i_marcha_minima'] || "NA",
+            responsesMap['r2_i_direccion'] || "NA",
+            responsesMap['r2_i_freno_motor'] || "NA",
+            responsesMap['r2_i_varillaje_direccion'] || "NA",
+            responsesMap['r2_i_sistema_combustible'] || "NA",
+            imgEvidence || "",
+            imgSignature || ""
           ];
         }
         else if (d.templateId === 'rutina_1') {
           sheetName = "RUTINA 1";
-          
+
           rowData = [
-            d.id,                                              // 0: ID_EJECUCION
-            d.date,                                            // 1: FECHA
-            d.plate,                                           // 2: PLACA
-            d.taller || d.driverName || "",                    // 3: TALLER
-            d.mileage || "",                                   // 4: KILOMETRAJE
-            d.frequency || "5.000 km",                         // 5: FRECUENCIA
-            d.cd || "",                                        // 6: CENTRO_DISTRIBUCION
-            d.contractor || "",                                // 7: CONTRATISTA
-            (d.score !== undefined ? d.score + "%" : "0%"),     // 8: CUMPLIMIENTO
-            (d.hasFailures ? "SI" : "NO"),                     // 9: TIENE_FALLAS
-            d.notes || "",                                     // 10: OBSERVACIONES_GENERALES
-            
-            // Checklist Items
-            responsesMap['r1_c_aceite_motor'] || "NA",         // 11: CAMBIO_ACEITE_MOTOR
-            responsesMap['r1_c_filtro_aceite'] || "NA",        // 12: CAMBIO_FILTRO_ACEITE
-            responsesMap['r1_c_filtro_primario'] || "NA",      // 13: CAMBIO_FILTRO_PRIMARIO
-            responsesMap['r1_c_filtro_secundario'] || "NA",    // 14: CAMBIO_FILTRO_SECUNDARIO
-            responsesMap['r1_e_suspension'] || "NA",           // 15: ENGRASE_SUSPENSION
-            responsesMap['r1_e_articulaciones'] || "NA",       // 16: ENGRASE_ARTICULACIONES
-            responsesMap['r1_l_agua_bateria'] || "NA",         // 17: LIQUIDOS_AGUA_BATERIA
-            responsesMap['r1_l_refrigerante'] || "NA",         // 18: LIQUIDOS_REFRIGERANTE
-            responsesMap['r1_l_aceites_direccion'] || "NA",    // 19: LIQUIDOS_ACEITE_DIRECCION
-            responsesMap['r1_t_frenos'] || "NA",               // 20: TENSION_FRENOS
-            responsesMap['r1_t_correas'] || "NA",              // 21: TENSION_CORREAS_MOTOR
-            responsesMap['r1_t_embrague'] || "NA",             // 22: TENSION_EMBRAGUE
-            responsesMap['r1_i_filtro_aire'] || "NA",          // 23: INSPEC_FILTRO_AIRE
-            responsesMap['r1_i_luces'] || "NA",                // 24: INSPEC_LUCES
-            responsesMap['r1_i_luces_tablero'] || "NA",        // 25: INSPEC_LUCES_TABLERO
-            responsesMap['r1_i_mangueras_ref'] || "NA",        // 26: INSPEC_MANGUERAS_REFRIGERACION
-            responsesMap['r1_i_mangueras_aceite'] || "NA",     // 27: INSPEC_MANGUERAS_ACEITE
-            responsesMap['r1_i_admision_escape'] || "NA",      // 28: INSPEC_ADMISION_ESCAPE
-            responsesMap['r1_i_terminales_rotulas'] || "NA",   // 29: INSPEC_TERMINALES_ROTULAS
-            responsesMap['r1_i_fugas'] || "NA",                // 30: INSPEC_FUGAS
-            responsesMap['r1_i_suspension'] || "NA",           // 31: INSPEC_SUSPENSION_GRAL
-            responsesMap['r1_i_marcha_minima'] || "NA",        // 32: INSPEC_MARCHA_MINIMA
-            responsesMap['r1_i_presion_llantas'] || "NA",      // 33: INSPEC_PRESION_LLANTAS
-            imgEvidence || "",                                 // 34: EVIDENCIA_FOTO
-            imgSignature || ""                                 // 35: FIRMA_DIGITAL
+            d.id,
+            d.date,
+            d.plate,
+            d.taller || d.driverName || "",
+            d.mileage || "",
+            d.frequency || "5.000 km",
+            d.cd || "",
+            d.contractor || "",
+            (d.score !== undefined ? d.score + "%" : "0%"),
+            (d.hasFailures ? "SI" : "NO"),
+            d.notes || "",
+
+            responsesMap['r1_c_aceite_motor'] || "NA",
+            responsesMap['r1_c_filtro_aceite'] || "NA",
+            responsesMap['r1_c_filtro_primario'] || "NA",
+            responsesMap['r1_c_filtro_secundario'] || "NA",
+            responsesMap['r1_e_suspension'] || "NA",
+            responsesMap['r1_e_articulaciones'] || "NA",
+            responsesMap['r1_l_agua_bateria'] || "NA",
+            responsesMap['r1_l_refrigerante'] || "NA",
+            responsesMap['r1_l_aceites_direccion'] || "NA",
+            responsesMap['r1_t_frenos'] || "NA",
+            responsesMap['r1_t_correas'] || "NA",
+            responsesMap['r1_t_embrague'] || "NA",
+            responsesMap['r1_i_filtro_aire'] || "NA",
+            responsesMap['r1_i_luces'] || "NA",
+            responsesMap['r1_i_luces_tablero'] || "NA",
+            responsesMap['r1_i_mangueras_ref'] || "NA",
+            responsesMap['r1_i_mangueras_aceite'] || "NA",
+            responsesMap['r1_i_admision_escape'] || "NA",
+            responsesMap['r1_i_terminales_rotulas'] || "NA",
+            responsesMap['r1_i_fugas'] || "NA",
+            responsesMap['r1_i_suspension'] || "NA",
+            responsesMap['r1_i_marcha_minima'] || "NA",
+            responsesMap['r1_i_presion_llantas'] || "NA",
+            imgEvidence || "",
+            imgSignature || ""
           ];
         }
-        
+
         if (sheetName) {
           var s = getS(ss, sheetName);
           s.appendRow(rowData);
@@ -599,137 +622,308 @@ function doPost(e) {
           return output("error", "Nombre de plantilla desconocido: " + d.templateId);
         }
       }
+
+      // ============================================================
+      // POST_MILEAGE — BLOQUE MEJORADO Y DINÁMICO
+      // ============================================================
       else if (m === 'POST_MILEAGE') {
-        var s = getSheetByGid(ss, "1929496440") || getS(ss, "KILOMETRAJE");
-        s.appendRow([d.cd, d.contractor, d.week, d.date, d.plate, d.mileage]);
+        var s = findSheetCaseInsensitive(ss, d.sheetName || "KILOMETRAJE")
+             || findSheetCaseInsensitive(ss, "KILOMETRAJE")
+             || findSheetCaseInsensitive(ss, "KILOMETRAJES")
+             || getSheetByGid(ss, "1929496440")
+             || getS(ss, "KILOMETRAJE");
+
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró ni se pudo crear la pestaña KILOMETRAJE.");
+        }
+
+        if (s.getLastRow() === 0) {
+          s.appendRow(["CD", "CONTRATISTA", "SEMANA", "FECHA", "PLACA", "KILOMETRAJE"]);
+        }
+
+        var kmRows = s.getDataRange().getValues();
+        var headers = kmRows.length > 0 ? kmRows[0].map(function(h) { return (h || "").toString().toUpperCase().trim(); }) : [];
+
+        var cdIdx = -1, contractorIdx = -1, weekIdx = -1, dateIdx = -1, plateIdx = -1, mileageIdx = -1;
+
+        for (var h = 0; h < headers.length; h++) {
+          var hText = headers[h];
+          if (hText === "CD" || hText.indexOf("CENTRO") !== -1) cdIdx = h;
+          else if (hText.indexOf("CONTRATISTA") !== -1) contractorIdx = h;
+          else if (hText.indexOf("SEMANA") !== -1) weekIdx = h;
+          else if (hText.indexOf("FECHA") !== -1) dateIdx = h;
+          else if (hText.indexOf("PLACA") !== -1 || hText.indexOf("VEHICULO") !== -1) plateIdx = h;
+          else if (hText.indexOf("KILOMETRAJE") !== -1 || hText === "KM") mileageIdx = h;
+        }
+
+        if (cdIdx === -1) cdIdx = 0;
+        if (contractorIdx === -1) contractorIdx = 1;
+        if (weekIdx === -1) weekIdx = 2;
+        if (dateIdx === -1) dateIdx = 3;
+        if (plateIdx === -1) plateIdx = 4;
+        if (mileageIdx === -1) mileageIdx = 5;
+
+        var rowPlate = pickVal(d.plate, d.PLACA, d.placa).toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (!rowPlate) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "Placa requerida: no puede estar vacía.");
+        }
+
+        var rawKm = pickVal(d.mileage, d.KILOMETRAJE, d.kilometraje, d.km, 0);
+        var rowMileage = Number(String(rawKm).replace(/[.,\s]/g, ""));
+        if (isNaN(rowMileage) || rowMileage < 0) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "Kilometraje inválido: " + rawKm);
+        }
+
+        var rowCd         = pickVal(d.cd, d.CD, d.centroDistribucion, "GENERAL");
+        var rowContractor = pickVal(d.contractor, d.CONTRATISTA, d.contratista, "GENERAL");
+        var rowWeek       = pickVal(d.week, d.SEMANA, d.semana);
+        if (!rowWeek) {
+          rowWeek = "SEMANA " + getIsoWeek(d.date || today());
+        }
+        var rowDate       = pickVal(d.date, d.FECHA, d.fecha, today()).toString();
+
+        // Anti-duplicado: misma placa + misma fecha (o misma semana)
+        var dupIdx = -1;
+        var lastRecordedKm = 0;
+        for (var i = 1; i < kmRows.length; i++) {
+          var rp = (kmRows[i][plateIdx] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (rp !== rowPlate) continue;
+
+          var kmVal = Number(String(kmRows[i][mileageIdx] || 0).replace(/[.,\s]/g, ""));
+          if (!isNaN(kmVal) && kmVal > lastRecordedKm) {
+            lastRecordedKm = kmVal;
+          }
+
+          var rd = kmRows[i][dateIdx];
+          var rdStr = (rd instanceof Date)
+            ? Utilities.formatDate(rd, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd")
+            : (rd || "").toString();
+          
+          var rw = (kmRows[i][weekIdx] || "").toString().trim();
+
+          if ((rowDate && rdStr.indexOf(rowDate) !== -1) || (rowWeek && rw === rowWeek.toString().trim())) {
+            dupIdx = i + 1;
+          }
+        }
+
+        // Validación: El kilometraje debe ser estrictamente mayor al último registrado (salvo que se esté actualizando el mismo registro)
+        if (dupIdx === -1 && lastRecordedKm > 0 && rowMileage <= lastRecordedKm) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "El kilometraje ingresado (" + rowMileage.toLocaleString() + " KM) debe ser estrictamente mayor al último registrado (" + lastRecordedKm.toLocaleString() + " KM) para la placa " + rowPlate + ".");
+        }
+
+        var maxCol = Math.max(cdIdx, contractorIdx, weekIdx, dateIdx, plateIdx, mileageIdx) + 1;
+        var rowData = new Array(maxCol);
+        for (var c = 0; c < maxCol; c++) rowData[c] = "";
+
+        rowData[cdIdx] = rowCd;
+        rowData[contractorIdx] = rowContractor;
+        rowData[weekIdx] = rowWeek;
+        rowData[dateIdx] = rowDate;
+        rowData[plateIdx] = rowPlate;
+        rowData[mileageIdx] = rowMileage;
+
+        if (dupIdx !== -1) {
+          s.getRange(dupIdx, 1, 1, rowData.length).setValues([rowData]);
+          if (lock.hasLock()) lock.releaseLock();
+          return output("success", "Kilometraje actualizado (fila " + dupIdx + ") en la hoja " + s.getName() + ".");
+        }
+
+        // Escribir en la siguiente fila en blanco entre las columnas leídas
+        var nextBlankRow = kmRows.length + 1;
+        s.getRange(nextBlankRow, 1, 1, rowData.length).setValues([rowData]);
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Kilometraje registrado exitosamente (fila " + nextBlankRow + ") en la hoja " + s.getName() + ".");
       }
+
       else if (m === 'POST_CLEANING') {
         var s = getSheetByGid(ss, "1853969081") || getS(ss, "CRONOGRAMA 5S");
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró ni se pudo crear la pestaña CRONOGRAMA 5S.");
+        }
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var plateSearch = (d.plate || "").toString().toUpperCase().trim();
-        
-        // d.date viene como YYYY-MM-DD
-        var dateParts = d.date.split("-");
+
+        var dateParts = (d.date || today()).split("-");
         var searchYear = parseInt(dateParts[0]);
         var searchMonth = parseInt(dateParts[1]);
         var searchDay = parseInt(dateParts[2]);
-        
-        log("Buscando limpieza: " + plateSearch + " para fecha " + d.date);
-        
+
+        log("Buscando limpieza: " + plateSearch + " para fecha " + d.date, docId);
+
         for (var i = 1; i < rows.length; i++) {
           var rowPlate = (rows[i][3] || "").toString().toUpperCase().trim();
           if (rowPlate !== plateSearch) continue;
 
           var rowDateRaw = rows[i][0];
           var matchDate = false;
-          
+
           if (rowDateRaw instanceof Date) {
-            // Comparación por componentes para evitar errores de zona horaria
-            if (rowDateRaw.getFullYear() === searchYear && 
-                (rowDateRaw.getMonth() + 1) === searchMonth && 
+            if (rowDateRaw.getFullYear() === searchYear &&
+                (rowDateRaw.getMonth() + 1) === searchMonth &&
                 rowDateRaw.getDate() === searchDay) {
               matchDate = true;
             }
-          } else {
+          } else if (rowDateRaw) {
             var rowDateStr = rowDateRaw.toString();
             if (rowDateStr.indexOf(d.date) !== -1) {
               matchDate = true;
             }
           }
-          
+
           if (matchDate) {
             foundIdx = i + 1;
             break;
           }
         }
-        
+
         var imgIni = sImg(d.initialEvidence, "LIMPIEZA_INI_" + d.plate);
         var imgFin = sImg(d.finalEvidence, "LIMPIEZA_FIN_" + d.plate);
-        var finalStatus = (imgIni && imgFin && imgIni.startsWith("http") && imgFin.startsWith("http")) ? "COMPLETADO" : "PENDIENTE";
-        
+        var finalStatus = (imgIni && imgFin && imgIni.indexOf("http") === 0 && imgFin.indexOf("http") === 0) ? "COMPLETADO" : "PENDIENTE";
+
         if (foundIdx !== -1) {
-          s.getRange(foundIdx, 5).setValue(finalStatus); 
-          s.getRange(foundIdx, 6).setValue(imgIni);      
-          s.getRange(foundIdx, 7).setValue(imgFin);      
-          log("Fila encontrada y actualizada: " + foundIdx);
+          s.getRange(foundIdx, 5).setValue(finalStatus);
+          s.getRange(foundIdx, 6).setValue(imgIni);
+          s.getRange(foundIdx, 7).setValue(imgFin);
+          log("Fila encontrada y actualizada: " + foundIdx, docId);
         } else {
-          var rowData = [d.date, d.month || "", d.week, d.plate, finalStatus, imgIni, imgFin];
-          s.appendRow(rowData);
-          log("No se encontró fila pre-existente. Se creó una nueva al final.");
+          var rowDataC = [d.date, d.month || "", d.week, d.plate, finalStatus, imgIni, imgFin];
+          s.appendRow(rowDataC);
+          log("No se encontró fila pre-existente. Se creó una nueva al final.", docId);
         }
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Limpieza registrada correctamente.");
       }
       else if (m === 'POST_WASH') {
-        var s = getS(ss, "LAVADOS");
-        s.appendRow([d.id, d.month, d.week, d.date, d.plate, sImg(d.evidenceUrl, "LAVADO_" + d.plate), sImg(d.mapUrl, "MAPA_LAVADO_" + d.plate), d.workshop]);
+        var s = findSheetCaseInsensitive(ss, d.sheetName || "LAVADOS")
+             || findSheetCaseInsensitive(ss, "LAVADOS")
+             || findSheetCaseInsensitive(ss, "LAVADO")
+             || findSheetCaseInsensitive(ss, "REGISTRO DE LAVADOS")
+             || getS(ss, "LAVADOS");
+
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró ni se pudo crear la pestaña LAVADOS.");
+        }
+
+        if (s.getLastRow() === 0) {
+          s.appendRow(["ID", "MES", "SEMANA", "FECHA", "PLACA", "EVIDENCIA", "MAPA", "TALLER"]);
+        }
+
+        var rowPlate = (d.plate || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        var rowDate = (d.date || today()).toString();
+        var rowWeek = d.week ? d.week.toString() : ("SEMANA " + getIsoWeek(rowDate));
+        var rowMonth = d.month ? d.month.toString() : "";
+
+        var imgEvidence = sImg(d.evidenceUrl, "LAVADO_" + rowPlate);
+        var imgMap = sImg(d.mapUrl, "MAPA_LAVADO_" + rowPlate);
+
+        var rowData = [
+          d.id || ("LAV-" + Date.now()),
+          rowMonth,
+          rowWeek,
+          rowDate,
+          rowPlate,
+          imgEvidence,
+          imgMap,
+          d.workshop || ""
+        ];
+
+        var washRows = s.getDataRange().getValues();
+        var nextBlankRow = washRows.length + 1;
+        s.getRange(nextBlankRow, 1, 1, rowData.length).setValues([rowData]);
+
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Lavado registrado correctamente (fila " + nextBlankRow + ") en " + s.getName());
       }
       else if (m === 'POST_CALIBRATION_UPDATE') {
         var s = getSheetByGid(ss, "505557891") || getS(ss, "CALIBRACIONES");
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró ni se pudo crear la pestaña CALIBRACIONES.");
+        }
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var plateSearch = (d.originalPlate || d.plate || "").toString().toUpperCase().trim();
         var dateSearch = (d.originalDate || d.calibrationDate || "").toString().trim();
-        
+
         for (var i = 1; i < rows.length; i++) {
           var rowPlate = (rows[i][3] || "").toString().toUpperCase().trim();
           if (rowPlate !== plateSearch) continue;
 
           var rowDateRaw = rows[i][1];
           var matchDate = false;
-          
+
           if (rowDateRaw instanceof Date) {
             var searchParts = dateSearch.split("-");
-            if (rowDateRaw.getFullYear() === parseInt(searchParts[0]) && 
-                (rowDateRaw.getMonth() + 1) === parseInt(searchParts[1]) && 
+            if (rowDateRaw.getFullYear() === parseInt(searchParts[0]) &&
+                (rowDateRaw.getMonth() + 1) === parseInt(searchParts[1]) &&
                 rowDateRaw.getDate() === parseInt(searchParts[2])) {
               matchDate = true;
             }
-          } else {
+          } else if (rowDateRaw) {
             if (rowDateRaw.toString().indexOf(dateSearch) !== -1) matchDate = true;
           }
-          
+
           if (matchDate) {
             foundIdx = i + 1;
             break;
           }
         }
-        
+
         var img = sImg(d.certificateUrl, "CALIB_" + d.plate);
         if (foundIdx !== -1) {
-          s.getRange(foundIdx, 5).setValue(d.taller); // TALLER INDICE 4 (Columna 5)
-          s.getRange(foundIdx, 6).setValue(img);      // FOTO INDICE 5 (Columna 6)
-          s.getRange(foundIdx, 7).setValue("COMPLETADO"); // ESTADO INDICE 6 (Columna 7)
-          
-          // Actualizar metadatos si cambiaron
+          s.getRange(foundIdx, 5).setValue(d.taller);
+          s.getRange(foundIdx, 6).setValue(img);
+          s.getRange(foundIdx, 7).setValue("COMPLETADO");
+
           s.getRange(foundIdx, 1).setValue(d.month);
           s.getRange(foundIdx, 2).setValue(d.calibrationDate);
           s.getRange(foundIdx, 3).setValue(d.week);
           s.getRange(foundIdx, 4).setValue(d.plate);
+          s.getRange(foundIdx, 8).setValue(d.cd || "");
+          s.getRange(foundIdx, 9).setValue(d.contractor || "");
         } else {
-          s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller, img, "COMPLETADO"]);
+          s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller, img, "COMPLETADO", d.cd || "", d.contractor || ""]);
         }
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Calibración actualizada correctamente.");
       }
       else if (m === 'POST_CALIBRATION') {
         var s = getSheetByGid(ss, "505557891") || getS(ss, "CALIBRACIONES");
-        s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, sImg(d.certificateUrl, "CALIB_" + d.plate), "COMPLETADO"]);
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró ni se pudo crear la pestaña CALIBRACIONES.");
+        }
+        s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, sImg(d.certificateUrl, "CALIB_" + d.plate), "COMPLETADO", d.cd || "", d.contractor || ""]);
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Calibración registrada correctamente.");
       }
       else if (m === 'POST_UNAVAILABILITY_BATCH') {
-        var ssUnav = SpreadsheetApp.openById("1mE8aBo0DG5Lk3GUHAGegwuBnk4vEhjOA_xj2lvvtcV0");
-        var s = ssUnav.getSheetByName("INDISPONIBILIDAD");
+        var targetDocId = cleanId((req.docId) || (d && d.docId) || ID_HOJA);
+        var ssUnav = SpreadsheetApp.openById(targetDocId);
+        var s = findSheetCaseInsensitive(ssUnav, "INDISPONIBILIDAD") || ssUnav.getSheetByName("INDISPONIBILIDAD");
         if (!s) {
           if (lock.hasLock()) lock.releaseLock();
           return output("error", "Hoja INDISPONIBILIDAD no encontrada");
         }
-        if (d && d.length > 0) {
-          s.getRange(s.getLastRow() + 1, 1, d.length, d[0].length).setValues(d);
+        // El payload puede venir como array directo en data, o como data.rows
+        var batch = Array.isArray(d) ? d : (Array.isArray(d.rows) ? d.rows : null);
+        if (!batch || batch.length === 0) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "POST_UNAVAILABILITY_BATCH requiere un array de filas en 'data' o 'data.rows'.");
         }
+        s.getRange(s.getLastRow() + 1, 1, batch.length, batch[0].length).setValues(batch);
         if (lock.hasLock()) lock.releaseLock();
-        return output("success", "Lote de indisponibilidad procesado.");
+        return output("success", "Lote de indisponibilidad procesado: " + batch.length + " filas.");
       }
       else if (m === 'POST_AUDIT_UPDATE') {
-        var docId = cleanId(d.docId || '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs');
-        var auditSS = SpreadsheetApp.openById(docId);
-        var s = getS(auditSS, "ESTANDAR");
+        var s = getS(ss, "ESTANDAR");
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var idSearch = (d.id || "").toString().trim();
@@ -742,21 +936,16 @@ function doPost(e) {
         }
 
         if (foundIdx !== -1) {
-          // Columnas Novedad Auditoría:
-          // Col 73 (BU): Fecha Novedad
-          // Col 74 (BV): Estado (REALIZADO/PENDIENTE)
-          // Col 75 (BW): Evidencia (Link)
-          // Col 76 (BX): Observación Novedad
-
-          if (d.status) s.getRange(foundIdx, 74).setValue(d.status); 
+          // Col 73 (BU): Fecha Novedad | 74 (BV): Estado | 75 (BW): Evidencia | 76 (BX): Observación
+          if (d.status) s.getRange(foundIdx, 74).setValue(d.status);
           if (d.noveltyObservation) s.getRange(foundIdx, 76).setValue(d.noveltyObservation);
           if (d.noveltyDate) s.getRange(foundIdx, 73).setValue(d.noveltyDate);
-          
+
           if (d.evidence) {
             var evidenceUrl = "";
             if (Array.isArray(d.evidence)) {
               var links = [];
-              for(var j=0; j<d.evidence.length; j++) {
+              for (var j = 0; j < d.evidence.length; j++) {
                 if (d.evidence[j] && (d.evidence[j].indexOf("data:image") === 0 || d.evidence[j].indexOf("http") !== 0)) {
                   links.push(sImg(d.evidence[j], "EVI_" + idSearch + "_" + j));
                 } else if (d.evidence[j]) {
@@ -769,19 +958,19 @@ function doPost(e) {
             } else {
               evidenceUrl = d.evidence;
             }
-            s.getRange(foundIdx, 75).setValue(evidenceUrl); // SIEMPRE EN BW (75)
+            s.getRange(foundIdx, 75).setValue(evidenceUrl);
           }
-          
+
           if (lock.hasLock()) lock.releaseLock();
-          return output("success", "Audit record updated in column BW for row " + foundIdx);
+          return output("success", "Auditoría actualizada en columna BW, fila " + foundIdx);
         }
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "Auditoria no encontrada con ID: " + idSearch);
       }
       else if (m === 'POST_CONTROL_TOWER_UPDATE') {
-        var targetDocId = cleanId(d.docId || '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60');
+        var targetDocId = cleanId(d.docId || ID_HOJA);
         var ssCT = SpreadsheetApp.openById(targetDocId);
-        var s = ssCT.getSheetByName("CIERRE DE NOVEDADES") || ssCT.getSheets()[0];
+        var s = findSheetCaseInsensitive(ssCT, "CIERRE DE NOVEDADES") || ssCT.getSheetByName("CIERRE DE NOVEDADES") || ssCT.getSheets()[0];
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var plateSearch = (d.plate || "").toString().toUpperCase().trim();
@@ -793,7 +982,7 @@ function doPost(e) {
           var rowNovelty = (rows[i][7] || "").toString().trim();
           var rowDateRaw = rows[i][2];
           var rowDateStr = "";
-          
+
           if (rowDateRaw instanceof Date) {
             rowDateStr = Utilities.formatDate(rowDateRaw, ssCT.getSpreadsheetTimeZone(), "yyyy-MM-dd");
           } else if (rowDateRaw) {
@@ -809,11 +998,11 @@ function doPost(e) {
         if (foundIdx !== -1) {
           if (d.evidenceBefore) {
             var imgBefore = sImg(d.evidenceBefore, "CT_BEFORE_" + plateSearch);
-            s.getRange(foundIdx, 20).setValue(imgBefore); // Col T (20)
+            s.getRange(foundIdx, 20).setValue(imgBefore);
           }
           if (d.evidenceAfter) {
             var imgAfter = sImg(d.evidenceAfter, "CT_AFTER_" + plateSearch);
-            s.getRange(foundIdx, 21).setValue(imgAfter); // Col U (21)
+            s.getRange(foundIdx, 21).setValue(imgAfter);
           }
           if (lock.hasLock()) lock.releaseLock();
           return output("success", "Evidencias actualizadas en fila " + foundIdx);
@@ -823,9 +1012,7 @@ function doPost(e) {
         }
       }
       else if (m === 'POST_FLEET_CIERRE_UPDATE') {
-        var docId = cleanId(d.docId || '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs');
-        var ssA = SpreadsheetApp.openById(docId);
-        var s = ssA.getSheetByName("CIERRE");
+        var s = findSheetCaseInsensitive(ss, "CIERRE") || ss.getSheetByName("CIERRE");
         if (!s) {
           if (lock.hasLock()) lock.releaseLock();
           return output("error", "Hoja CIERRE no encontrada");
@@ -842,9 +1029,7 @@ function doPost(e) {
 
           if (rowPlate === plateSearch && rowItem === itemSearch) {
             foundIdx = i + 1;
-            if (rowStatus === "PENDIENTE") {
-              break;
-            }
+            if (rowStatus === "PENDIENTE") break;
           }
         }
 
@@ -853,7 +1038,7 @@ function doPost(e) {
             var evidenceUrl = "";
             if (Array.isArray(d.evidence)) {
               var links = [];
-              for(var j=0; j<d.evidence.length; j++) {
+              for (var j = 0; j < d.evidence.length; j++) {
                 if (d.evidence[j] && (d.evidence[j].indexOf("data:image") === 0 || d.evidence[j].indexOf("http") !== 0)) {
                   links.push(sImg(d.evidence[j], "CIERRE_" + plateSearch + "_" + j));
                 } else if (d.evidence[j]) {
@@ -866,19 +1051,17 @@ function doPost(e) {
             } else {
               evidenceUrl = d.evidence;
             }
-            s.getRange(foundIdx, 7).setValue(evidenceUrl); // Col G (Index 7)
+            s.getRange(foundIdx, 7).setValue(evidenceUrl);
           }
-          
+
           if (lock.hasLock()) lock.releaseLock();
-          return output("success", "Audit closure updated in sheet CIERRE for row " + foundIdx);
+          return output("success", "Cierre de auditoría actualizado en hoja CIERRE, fila " + foundIdx);
         }
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "No se encontró registro en CIERRE para: Placa " + plateSearch + ", Item " + itemSearch);
       }
       else if (m === 'POST_CALIDAD_CIERRE_UPDATE') {
-        var docId = cleanId(d.docId || '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM');
-        var ssA = SpreadsheetApp.openById(docId);
-        var s = ssA.getSheetByName("CIERRE1");
+        var s = findSheetCaseInsensitive(ss, "CIERRE1") || ss.getSheetByName("CIERRE1");
         if (!s) {
           if (lock.hasLock()) lock.releaseLock();
           return output("error", "Hoja CIERRE1 no encontrada");
@@ -895,9 +1078,7 @@ function doPost(e) {
 
           if (rowPlate === plateSearch && rowItem === itemSearch) {
             foundIdx = i + 1;
-            if (rowStatus === "PENDIENTE") {
-              break;
-            }
+            if (rowStatus === "PENDIENTE") break;
           }
         }
 
@@ -906,7 +1087,7 @@ function doPost(e) {
             var evidenceUrl = "";
             if (Array.isArray(d.evidence)) {
               var links = [];
-              for(var j=0; j<d.evidence.length; j++) {
+              for (var j = 0; j < d.evidence.length; j++) {
                 if (d.evidence[j] && (d.evidence[j].indexOf("data:image") === 0 || d.evidence[j].indexOf("http") !== 0)) {
                   links.push(sImg(d.evidence[j], "CIERRE_CALIDAD_" + plateSearch + "_" + j));
                 } else if (d.evidence[j]) {
@@ -919,42 +1100,36 @@ function doPost(e) {
             } else {
               evidenceUrl = d.evidence;
             }
-            s.getRange(foundIdx, 6).setValue(evidenceUrl); // Col F (Index 6)
+            s.getRange(foundIdx, 6).setValue(evidenceUrl);
           }
-          
+
           if (lock.hasLock()) lock.releaseLock();
-          return output("success", "Audit closure updated in sheet CIERRE1 for row " + foundIdx);
+          return output("success", "Cierre de calidad actualizado en hoja CIERRE1, fila " + foundIdx);
         }
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "No se encontró registro en CIERRE1 para: Placa " + plateSearch + ", Item " + itemSearch);
       }
       else if (m === 'POST_FLEET_STANDARD_AUDIT_UPDATE') {
-        var docId = cleanId(d.docId || '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs');
-        var ssA = SpreadsheetApp.openById(docId);
-        // Prioritize "ESTRANDAR" as the user explicitly mentioned it, then fallback to "ESTANDAR" or first sheet.
-        var s = ssA.getSheetByName("ESTRANDAR") || ssA.getSheetByName("ESTANDAR") || ssA.getSheets()[0];
+        var s = findSheetCaseInsensitive(ss, "ESTRANDAR") || ss.getSheetByName("ESTRANDAR") || ss.getSheetByName("ESTANDAR") || ss.getSheets()[0];
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
         var idVal = (d.id || "").toString().trim().toUpperCase();
-        var plateVal = (d.placa || "").toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        var plateVal = (d.placa || d.plate || "").toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 
         for (var i = 1; i < rows.length; i++) {
           var rowId = (rows[i][0] || "").toString().trim().toUpperCase();
           var rowPlate = (rows[i][8] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, ""); // Col I
-          
-          if (idVal && !idVal.startsWith("STD-AUDIT-") && rowId === idVal) {
+
+          if (idVal && idVal.indexOf("STD-AUDIT-") !== 0 && rowId === idVal) {
             foundIdx = i + 1;
             break;
           }
           if (plateVal && rowPlate === plateVal) {
-             foundIdx = i + 1;
-             // Check status (Col CK - index 88)
-             var rowStatus = (rows[i][88] || "").toString().trim().toUpperCase();
-             if (rowStatus === "PENDIENTE" || rowStatus === "ABIERTO" || rowStatus === "") {
-               // If it's pending, this is definitely the one we want to close
-               break; 
-             }
-             // If not pending, keep searching for a pending one, but remember this index as fallback
+            foundIdx = i + 1;
+            var rowStatus = (rows[i][88] || "").toString().trim().toUpperCase(); // Col CK
+            if (rowStatus === "PENDIENTE" || rowStatus === "ABIERTO" || rowStatus === "") {
+              break;
+            }
           }
         }
 
@@ -963,27 +1138,25 @@ function doPost(e) {
           if (d.fechaCierre) s.getRange(foundIdx, 87).setValue(d.fechaCierre);
           if (d.estado) s.getRange(foundIdx, 89).setValue(d.estado);
           if (d.evidenciaDespues) s.getRange(foundIdx, 90).setValue(d.evidenciaDespues);
-          
+
           if (lock.hasLock()) lock.releaseLock();
           return output("success", "Auditoria actualizada en fila " + foundIdx);
         }
         if (lock.hasLock()) lock.releaseLock();
-        return output("error", "No se encontró auditoria " + idSearch);
+        return output("error", "No se encontró auditoria. ID: " + (idVal || "(vacío)") + " | Placa: " + (plateVal || "(vacía)"));
       }
       else if (m === 'POST_CAMPAIGN') {
-        var docId = cleanId(d.docId || '1HZXNev6Wbek7YPX_47sx7KXfi6H4S15f1rc6rmQ18MY');
-        var ssCampaign = SpreadsheetApp.openById(docId);
-        var s = ssCampaign.getSheetByName(d.sheetName);
+        var s = findSheetCaseInsensitive(ss, d.sheetName) || ss.getSheetByName(d.sheetName);
         if (!s) {
           if (lock.hasLock()) lock.releaseLock();
           return output("error", "Hoja de campaña '" + d.sheetName + "' no encontrada.");
         }
-        
+
         var img1 = sImg(d.evidence1, "CAMP_EVI1_" + d.plate);
         var img2 = sImg(d.evidence2, "CAMP_EVI2_" + d.plate);
         var img3 = sImg(d.evidence3, "CAMP_EVI3_" + d.plate);
-        
-        var rowData = [
+
+        var rowDataCamp = [
           d.semana || "",
           d.mes || "",
           d.fecha || "",
@@ -994,8 +1167,8 @@ function doPost(e) {
           img2 || "",
           img3 || ""
         ];
-        
-        s.appendRow(rowData);
+
+        s.appendRow(rowDataCamp);
         if (lock.hasLock()) lock.releaseLock();
         return output("success", "Campaña guardada con éxito en la hoja " + d.sheetName);
       }
@@ -1004,9 +1177,13 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("success", url);
       }
+      else {
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "Método no soportado: " + m);
+      }
     }
 
-    lock.releaseLock();
+    if (lock.hasLock()) lock.releaseLock();
     return output("success", "Datos procesados.");
   } catch (e) {
     if (lock.hasLock()) lock.releaseLock();
@@ -1015,37 +1192,110 @@ function doPost(e) {
 }
 
 function getSheetByGid(ss, gid) {
-  var sheets = ss.getSheets();
-  for (var i = 0; i < sheets.length; i++) {
-    if (sheets[i].getSheetId().toString() === gid.toString()) {
-      return sheets[i];
+  try {
+    var sheets = ss.getSheets();
+    for (var i = 0; i < sheets.length; i++) {
+      if (sheets[i].getSheetId().toString() === gid.toString()) {
+        return sheets[i];
+      }
     }
-  }
+  } catch (e) {}
+  return null;
+}
+
+function findSheetCaseInsensitive(ss, name) {
+  if (!ss || !name) return null;
+  try {
+    var sheets = ss.getSheets();
+
+    function normalize(str) {
+      if (!str) return "";
+      var s = str.toString().toUpperCase().trim();
+      s = s.replace(/[ÁÀÄÂ]/g, "A")
+           .replace(/[ÉÈËÊ]/g, "E")
+           .replace(/[ÍÌÏÎ]/g, "I")
+           .replace(/[ÓÒÖÔ]/g, "O")
+           .replace(/[ÚÙÜÛ]/g, "U")
+           .replace(/[Ñ]/g, "N")
+           .replace(/[^A-Z0-9\s]/g, "");
+      return s.replace(/\s+/g, " ");
+    }
+
+    var searchNorm = normalize(name);
+    if (!searchNorm) return null;
+
+    for (var i = 0; i < sheets.length; i++) {
+      if (normalize(sheets[i].getName()) === searchNorm) return sheets[i];
+    }
+
+    for (var i = 0; i < sheets.length; i++) {
+      var sNameNorm = normalize(sheets[i].getName());
+      if (sNameNorm.indexOf(searchNorm) !== -1 || searchNorm.indexOf(sNameNorm) !== -1) {
+        return sheets[i];
+      }
+    }
+  } catch (e) {}
+
   return null;
 }
 
 function sImg(base64, name) {
-  if (!base64 || base64.length < 100 || base64.startsWith("http")) return base64;
+  if (!base64 || base64.length < 100 || base64.toString().indexOf("http") === 0) return base64 || "";
   try {
     var folderName = "BQA_COMPROBANTES_FLOTA";
     var folders = DriveApp.getFoldersByName(folderName);
     var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
-    var mimeType = base64.substring(5, base64.indexOf(';'));
-    var bytes = Utilities.base64Decode(base64.split(',')[1]);
-    var blob = Utilities.newBlob(bytes, mimeType, name + "_" + Date.now() + (mimeType === 'application/pdf' ? '.pdf' : '.jpg'));
+    var mimeType = "image/jpeg";
+    var str = base64.toString();
+    if (str.indexOf("data:") === 0 && str.indexOf(";") > 5) {
+      mimeType = str.substring(5, str.indexOf(';'));
+    }
+    var parts = str.split(',');
+    if (parts.length < 2) return base64 || "";
+    var bytes = Utilities.base64Decode(parts[1]);
+    var blob = Utilities.newBlob(bytes, mimeType, (name || "FILE") + "_" + Date.now() + (mimeType === 'application/pdf' ? '.pdf' : '.jpg'));
     var file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return file.getUrl();
-  } catch (e) { return "Error Archivo"; }
+  } catch (e) {
+    return (base64 && base64.length > 500) ? "Error Archivo" : (base64 || "");
+  }
 }
 
 function getS(ss, name) {
-  var s = ss.getSheetByName(name);
-  if (!s) s = ss.insertSheet(name);
+  if (!ss) return null;
+  var s = findSheetCaseInsensitive(ss, name);
+  if (!s) {
+    try {
+      s = ss.getSheetByName(name);
+    } catch(e) {}
+  }
+  if (!s) {
+    try {
+      s = ss.insertSheet(name);
+    } catch (e) {
+      try {
+        s = ss.getSheets()[0];
+      } catch(e2) {}
+    }
+  }
   return s;
 }
 
 function today() { return Utilities.formatDate(new Date(), "GMT-5", "yyyy-MM-dd"); }
+
+function getIsoWeek(dateStr) {
+  try {
+    var d = dateStr ? new Date(dateStr) : new Date();
+    if (isNaN(d.getTime())) return "1";
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    var yearStart = new Date(d.getFullYear(), 0, 1);
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7).toString();
+  } catch (e) {
+    return "1";
+  }
+}
 
 function output(status, message) {
   return ContentService.createTextOutput(JSON.stringify({status: status, message: message})).setMimeType(ContentService.MimeType.JSON);

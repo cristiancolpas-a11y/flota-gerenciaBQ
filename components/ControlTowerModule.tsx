@@ -863,8 +863,8 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 data={chartsData.trend}
                 className="cursor-pointer"
                 onClick={(state) => {
-                  if (state && state.activeLabel) {
-                    const wk = state.activeLabel;
+                  if (state && state.activeLabel !== undefined && state.activeLabel !== null) {
+                    const wk = String(state.activeLabel);
                     setFilters(f => ({ ...f, week: f.week === wk ? 'ALL' : wk }));
                   }
                 }}
@@ -931,8 +931,8 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 data={chartsData.trend}
                 className="cursor-pointer"
                 onClick={(state) => {
-                  if (state && state.activeLabel) {
-                    const wk = state.activeLabel;
+                  if (state && state.activeLabel !== undefined && state.activeLabel !== null) {
+                    const wk = String(state.activeLabel);
                     setFilters(f => ({ ...f, week: f.week === wk ? 'ALL' : wk }));
                   }
                 }}
@@ -1089,7 +1089,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 <Bar 
                   dataKey="count" 
                   radius={[4, 4, 0, 0]}
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     if (data && data.plate) {
                       setFilters(f => ({ ...f, plate: f.plate === data.plate ? 'ALL' : data.plate }));
                     }
@@ -1169,8 +1169,8 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 data={dashboardChartsData.monthlyMetrics}
                 className="cursor-pointer"
                 onClick={(state) => {
-                  if (state && state.activeLabel) {
-                    const m = state.activeLabel;
+                  if (state && state.activeLabel !== undefined && state.activeLabel !== null) {
+                    const m = String(state.activeLabel);
                     setFilters(f => ({ ...f, month: f.month === m ? 'ALL' : m }));
                   }
                 }}
@@ -1275,8 +1275,8 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 data={dashboardChartsData.monthlyMetrics}
                 className="cursor-pointer"
                 onClick={(state) => {
-                  if (state && state.activeLabel) {
-                    const m = state.activeLabel;
+                  if (state && state.activeLabel !== undefined && state.activeLabel !== null) {
+                    const m = String(state.activeLabel);
                     setFilters(f => ({ ...f, month: f.month === m ? 'ALL' : m }));
                   }
                 }}
@@ -1336,8 +1336,8 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                 data={dashboardChartsData.monthlyMetrics}
                 className="cursor-pointer"
                 onClick={(state) => {
-                  if (state && state.activeLabel) {
-                    const m = state.activeLabel;
+                  if (state && state.activeLabel !== undefined && state.activeLabel !== null) {
+                    const m = String(state.activeLabel);
                     setFilters(f => ({ ...f, month: f.month === m ? 'ALL' : m }));
                   }
                 }}

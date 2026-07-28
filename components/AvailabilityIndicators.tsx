@@ -710,7 +710,6 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
                   strokeWidth={1} 
                   strokeDasharray="5 5"
                   dot={false}
-                  tension={0.3}
                 />
                 {['GALAPA', 'LA ARENOSA'].map((cd) => (
                   <Line 
@@ -722,7 +721,6 @@ const AvailabilityIndicators: React.FC<AvailabilityIndicatorsProps> = ({
                     strokeWidth={3} 
                     dot={false}
                     activeDot={{ r: 6, fill: getCdColor(cd), strokeWidth: 0 }}
-                    tension={0.3}
                     connectNulls
                   >
                     <LabelList 

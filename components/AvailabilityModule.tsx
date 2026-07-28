@@ -583,8 +583,8 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                 data={processedData.dailyTendency} 
                 margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
                 onClick={(data) => {
-                  if (data && data.activeLabel) {
-                    setSelectedDate(data.activeLabel);
+                  if (data && data.activeLabel !== undefined && data.activeLabel !== null) {
+                    setSelectedDate(String(data.activeLabel));
                     setSelectedWeek(null);
                     setSelectedMonth(null);
                   }
@@ -686,8 +686,8 @@ const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({ availability
                   data={processedData.monthlyChart} 
                   margin={{ top: 20, right: 10, left: -25, bottom: 20 }}
                   onClick={(data) => {
-                    if (data && data.activeLabel) {
-                      setSelectedMonth(data.activeLabel);
+                    if (data && data.activeLabel !== undefined && data.activeLabel !== null) {
+                      setSelectedMonth(String(data.activeLabel));
                       setSelectedDate(null);
                       setSelectedWeek(null);
                     }

@@ -186,6 +186,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
         originalDate: calibrationToUpdate?.calibrationDate,
         certificateUrl: mergedEvidence,
         cd: selectedVehicle?.cd || 'GENERAL',
+        contractor: selectedVehicle?.contractor || 'GENERAL',
         month: calDate.toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
         week: `SEMANA ${getWeekNumber(calDate)}`,
         estado: 'COMPLETADO',

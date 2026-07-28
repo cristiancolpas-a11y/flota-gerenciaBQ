@@ -1485,8 +1485,9 @@ export const VclModule: React.FC<VclModuleProps> = ({ vehicles }) => {
                         margin={{ top: 15, right: 20, left: 20, bottom: 5 }}
                         className="cursor-pointer"
                         onClick={(state) => {
-                          if (state && state.activeLabel) {
-                            setSelectedPeriod(prev => prev === state.activeLabel ? 'all' : state.activeLabel);
+                          if (state && state.activeLabel !== undefined && state.activeLabel !== null) {
+                            const lbl = String(state.activeLabel);
+                            setSelectedPeriod(prev => prev === lbl ? 'all' : lbl);
                           }
                         }}
                       >

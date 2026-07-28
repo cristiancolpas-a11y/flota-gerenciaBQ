@@ -1030,7 +1030,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
       "AÑO": item.year || "",
       "REGIONAL": item.regional ? item.regional.toUpperCase() : "",
       "CENTRO DE DISTRIBUCIÓN": item.cd ? item.cd.toUpperCase() : "",
-      "CONTRATISTA / OPERACIÓN": item.contractorName ? item.contractorName.toUpperCase() : "",
+      "CONTRATISTA / OPERACIÓN": (item as any).contractorName ? (item as any).contractorName.toUpperCase() : ((item as any).contractor ? (item as any).contractor.toUpperCase() : ""),
       "VEHÍCULO / PLACA": item.plate ? item.plate.toUpperCase() : "",
       "NOVEDAD / OBSERVACIÓN": item.observations || "Sin observación registrada",
       "VERIFICACIÓN (COL F)": item.verification || "N/A",

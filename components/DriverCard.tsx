@@ -104,7 +104,7 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
               ].map((item, i) => (
                 <div key={i} className="group">
                    <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] mb-1 flex items-center gap-2">
-                      {React.cloneElement(item.icon as React.ReactElement, { size: 14 })} {item.label}
+                      {React.cloneElement(item.icon as React.ReactElement<any>, { size: 14 })} {item.label}
                    </p>
                    <p className="text-sm font-black text-slate-800 uppercase tracking-tight">
                       {item.value}
@@ -131,7 +131,7 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, onViewDoc }) => {
                   <div key={idx} className={`p-4 md:p-5 rounded-2xl md:rounded-[1.8rem] border-2 transition-all hover:shadow-lg flex flex-col ${s.box}`}>
                      <div className="flex justify-between items-start mb-3 md:mb-4">
                         <div className={`p-2 rounded-xl md:p-2.5 bg-white shadow-sm ${s.icon}`}>
-                           {React.cloneElement(item.icon as React.ReactElement, { size: 16 })}
+                           {React.cloneElement(item.icon as React.ReactElement<any>, { size: 16 })}
                         </div>
                         <span className={`px-2 py-0.5 md:px-3 md:py-1 rounded-lg text-[7px] md:text-[8px] font-black tracking-widest uppercase ${s.badge}`}>
                            {s.label}

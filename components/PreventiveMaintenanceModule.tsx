@@ -483,7 +483,7 @@ const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate }) => {
                   itemStyle={{ color: '#10F9AC' }}
                   cursor={{ stroke: '#10F9AC', strokeWidth: 1 }}
                 />
-                <Area type="monotone" dataKey="rate" stroke="#10F9AC" strokeWidth={5} fillOpacity={1} fill="url(#mainGrad)" dot={{ r: 6, fill: '#10F9AC', strokeWidth: 3, stroke: '#0F172A' }} activeDot={{ r: 10, shadow: '0 0 20px #10F9AC' }}>
+                <Area type="monotone" dataKey="rate" stroke="#10F9AC" strokeWidth={5} fillOpacity={1} fill="url(#mainGrad)" dot={{ r: 6, fill: '#10F9AC', strokeWidth: 3, stroke: '#0F172A' }} activeDot={{ r: 10 }}>
                   <LabelList dataKey="rate" position="top" offset={15} fill="#FFFFFF" style={{ fontSize: '10px', fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
                 </Area>
               </AreaChart>

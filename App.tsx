@@ -97,7 +97,9 @@ import {
   getCleaningDocId,
   setCleaningDocId,
   getCalibrationsDocId,
-  setCalibrationsDocId
+  setCalibrationsDocId,
+  getGoogleScriptUrl,
+  setGoogleScriptUrl
 } from './services/sheetService';
 
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
@@ -162,6 +164,13 @@ const CATEGORY_CHUNKS = {
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('root_menu');
+  const [showGlobalSettings, setShowGlobalSettings] = useState(false);
+  const [globalScriptUrl, setGlobalScriptUrlState] = useState(() => getGoogleScriptUrl());
+  const [globalSpreadsheetId, setGlobalSpreadsheetId] = useState(() => {
+    return localStorage.getItem('GOOGLE_SPREADSHEET_ROUTINES_ID') || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+  });
+  const [globalSaveFeedback, setGlobalSaveFeedback] = useState('');
+  
   const [activeView, setActiveView] = useState<ActiveView>('vehiculos');
   const [activeCategory, setActiveCategory] = useState<'root' | 'doc' | 'gestion' | 'otros'>('root');
   const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | 'otros' | null>('doc');
@@ -208,6 +217,9 @@ const App: React.FC = () => {
   // Session tracking of local updates to prevent stale Google Sheets cache from reverting changes
   const localCierreUpdatesRef = useRef<Record<string, { estado: string; evidencia: string; verificacion: string }>>({});
   const localAuditUpdatesRef = useRef<Record<string, { status: string; noveltyDate: string; evidence: string; observations: string }>>({});
+  const localWashSubmissionsRef = useRef<WashReport[]>([]);
+  const localCalibrationSubmissionsRef = useRef<Calibration[]>([]);
+  const localCalibrationUpdatesRef = useRef<Record<string, Partial<Calibration>>>({});
 
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
@@ -259,6 +271,121 @@ const App: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
+
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<{status: 'success' | 'error', message: string} | null>(null);
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    setConnectionResult(null);
+    try {
+      const docId = globalSpreadsheetId.trim();
+      if (!docId) {
+        setConnectionResult({ status: 'error', message: 'Por favor, introduce un ID de Spreadsheet válido.' });
+        setTestingConnection(false);
+        return;
+      }
+      if (!globalScriptUrl.trim()) {
+        setConnectionResult({ status: 'error', message: 'Por favor, introduce una URL de Apps Script válida.' });
+        setTestingConnection(false);
+        return;
+      }
+      
+      let url = `${globalScriptUrl.trim()}?method=GET_DATA&docId=${docId}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); 
+
+      const response = await fetch(url, { 
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        redirect: 'follow',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Error de red: ${response.status} ${response.statusText}`);
+      }
+
+      const text = await response.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error("El Apps Script no devolvió una respuesta JSON válida. Verifica la URL.");
+      }
+      
+      if (json.status === 'success') {
+        setConnectionResult({ 
+          status: 'success', 
+          message: '¡Conexión Exitosa! El Apps Script respondió correctamente y tiene acceso en la Hoja de Cálculo.' 
+        });
+      } else {
+        let friendlyMessage = json.message || 'Error desconocido';
+        if (friendlyMessage.includes('Exception') || friendlyMessage.includes('permisos') || friendlyMessage.includes('permission') || friendlyMessage.includes('not found') || friendlyMessage.includes('SpreadsheetApp.openById')) {
+          friendlyMessage = `Error de Permisos de Google: Tu Apps Script Web App no tiene permisos para abrir este ID de Hoja de Cálculo. Asegúrate de que la cuenta de Google con la que desplegaste el Apps Script es propietaria o tiene acceso para editar este Spreadsheet.`;
+        } else if (friendlyMessage.includes('no encontrada') || friendlyMessage.includes('Sheet not found')) {
+          friendlyMessage = `Hoja no encontrada: El Spreadsheet se abrió correctamente, pero no se encontró la pestaña por defecto. Esto confirma que tienes conexión, pero verifica los nombres de las pestañas en tu hoja de cálculo.`;
+        }
+        setConnectionResult({ 
+          status: 'error', 
+          message: `Error del Apps Script: ${friendlyMessage}` 
+        });
+      }
+    } catch (e: any) {
+      console.error(e);
+      let errorMsg = e.message || 'Error desconocido de red';
+      if (e.name === 'AbortError') {
+        errorMsg = 'Tiempo de espera agotado (15s). El Apps Script tardó demasiado en responder o la URL no es válida.';
+      } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('Failed to execute')) {
+        errorMsg = 'No se pudo conectar al Apps Script. Esto suele ocurrir por un error de CORS o porque la URL es incorrecta. Por favor, verifica que la URL empiece con https://script.google.com/ y esté desplegada correctamente como "Cualquiera" (Anyone).';
+      }
+      setConnectionResult({ 
+        status: 'error', 
+        message: errorMsg
+      });
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  const handleSaveGlobalSettings = () => {
+    setGoogleScriptUrl(globalScriptUrl);
+    const cleanId = globalSpreadsheetId.trim();
+    const keys = [
+      'GOOGLE_SPREADSHEET_ROUTINES_ID',
+      'GOOGLE_SPREADSHEET_MILEAGE_ID',
+      'GOOGLE_SPREADSHEET_PREVENTIVES_ID',
+      'GOOGLE_SPREADSHEET_CAMPAIGNS_ID',
+      'GOOGLE_SPREADSHEET_MASTER_ID',
+      'GOOGLE_SPREADSHEET_CORRECTIVES_ID',
+      'GOOGLE_SPREADSHEET_FINES_ID',
+      'GOOGLE_SPREADSHEET_CONTROL_TOWER_ID',
+      'GOOGLE_SPREADSHEET_AUDIT_ID',
+      'GOOGLE_SPREADSHEET_AUDIT_QS_ID'
+    ];
+    keys.forEach(k => {
+      localStorage.setItem(k, cleanId);
+    });
+
+    // Guardar IDs individuales específicos por módulo
+    const wId = washSheetIdInput.trim();
+    setWashDocId(wId || cleanId);
+
+    const cId = calibrationsSheetIdInput.trim();
+    setCalibrationsDocId(cId || cleanId);
+
+    const clId = cleaningSheetIdInput.trim();
+    setCleaningDocId(clId || cleanId);
+
+    setGlobalSaveFeedback('¡Configuración guardada correctamente en todos los módulos!');
+    setTimeout(() => {
+      setGlobalSaveFeedback('');
+      setShowGlobalSettings(false);
+    }, 3000);
+  };
 
   const handleFlotaAccess = () => {
     setShowPasswordModal(true);
@@ -313,7 +440,20 @@ const App: React.FC = () => {
 
       setFines(f);
       setReports(r);
-      setWashReports(w);
+      
+      // Merge with local wash submissions to prevent stale cache reverting them
+      const mergedWash = [...w];
+      localWashSubmissionsRef.current.forEach(localWash => {
+        const exists = mergedWash.some(item => 
+          item.id === localWash.id || 
+          (normalizePlate(item.plate) === normalizePlate(localWash.plate) && item.date === localWash.date)
+        );
+        if (!exists) {
+          mergedWash.unshift(localWash);
+        }
+      });
+      setWashReports(mergedWash);
+      
       setCleaningReports(cl);
 
       // Grupo 3: Datos técnicos y de mantenimiento
@@ -325,7 +465,24 @@ const App: React.FC = () => {
         fetchAvailabilitySummaryFromSheet()
       ]);
 
-      setCalibrations(c);
+      // Merge with local calibration submissions/updates
+      let mergedCal = c.map(item => {
+        if (localCalibrationUpdatesRef.current[item.id]) {
+          return { ...item, ...localCalibrationUpdatesRef.current[item.id] };
+        }
+        return item;
+      });
+      localCalibrationSubmissionsRef.current.forEach(localCal => {
+        const exists = mergedCal.some(item => 
+          item.id === localCal.id || 
+          (normalizePlate(item.plate) === normalizePlate(localCal.plate) && item.calibrationDate === localCal.calibrationDate)
+        );
+        if (!exists) {
+          mergedCal.unshift(localCal);
+        }
+      });
+      setCalibrations(mergedCal);
+      
       setPreventives(p);
       setAvailabilityRecords(a);
       setOperationalIndicators(oi);
@@ -746,9 +903,9 @@ const App: React.FC = () => {
       const matchContractor = filterContractor === 'all' || f.contractor === filterContractor;
       let matchStatus = fineStatusFilter === 'all' || f.status === fineStatusFilter;
       
-      if (fineStatusFilter === 'WITH_EVIDENCE') {
+      if ((fineStatusFilter as string) === 'WITH_EVIDENCE') {
         matchStatus = !!(f.evidenceUrl && f.evidenceUrl.startsWith('http'));
-      } else if (fineStatusFilter === 'WITHOUT_EVIDENCE') {
+      } else if ((fineStatusFilter as string) === 'WITHOUT_EVIDENCE') {
         matchStatus = !(f.evidenceUrl && f.evidenceUrl.startsWith('http'));
       }
 
@@ -899,6 +1056,18 @@ const App: React.FC = () => {
           <div className="absolute top-0 left-0 w-full h-full">
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px]"></div>
             <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-600/10 rounded-full blur-[120px]"></div>
+          </div>
+
+          {/* Floating Settings Button */}
+          <div className="absolute top-8 right-8 z-50">
+            <button 
+              onClick={() => setShowGlobalSettings(true)}
+              className="p-4 bg-white/5 border border-white/10 text-slate-300 hover:text-white rounded-2xl flex items-center gap-2 hover:bg-white/10 hover:border-indigo-500/50 transition-all font-black uppercase tracking-wider text-[10px]"
+              title="Ajustes de Integración con Google Sheets"
+            >
+              <Settings size={16} className="animate-spin-slow text-indigo-400" />
+              <span>Configuración Google</span>
+            </button>
           </div>
 
           {/* Central Logo Area */}
@@ -1224,7 +1393,7 @@ const App: React.FC = () => {
       ) : (
         <>
           {/* SIDEBAR PREMIUM */}
-          {activeView !== 'enlaces' && (
+          {(activeView as string) !== 'enlaces' && (
             <>
               {isSidebarOpen && (
                 <div 
@@ -2010,6 +2179,7 @@ const App: React.FC = () => {
                   handleSyncData().catch(e => console.error("Error syncing after save:", e));
                 } catch (err) {
                   console.error("Error submitting mileage:", err);
+                  throw err;
                 }
               }} 
               externalCd={filterCd} 
@@ -2307,6 +2477,21 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
+                    <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center">
+                      <button 
+                        onClick={() => setWashViewMode('calendar')}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${washViewMode === 'calendar' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        Cronograma
+                      </button>
+                      <button 
+                        onClick={() => setWashViewMode('list')}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${washViewMode === 'list' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        Lista
+                      </button>
+                    </div>
+
                     <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-4">
                       <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
                         <CalendarDays size={16} className="text-cyan-600" />
@@ -2347,18 +2532,6 @@ const App: React.FC = () => {
                     </div>
 
                     <button 
-                      onClick={() => setShowWashSettings(!showWashSettings)}
-                      className={`flex items-center gap-2 px-6 py-4 border rounded-3xl text-[11px] font-black uppercase tracking-widest transition-all ${
-                        showWashSettings 
-                          ? 'bg-amber-600 border-amber-500 text-white hover:bg-amber-700' 
-                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Settings size={18} className={showWashSettings ? 'animate-spin' : ''} />
-                      Configurar Hoja
-                    </button>
-
-                    <button 
                       onClick={() => setShowWashForm(true)}
                       className="flex items-center gap-3 px-8 py-4 bg-cyan-600 text-white rounded-3xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-cyan-600/20 hover:bg-cyan-700 transition-all"
                     >
@@ -2366,46 +2539,6 @@ const App: React.FC = () => {
                     </button>
                   </div>
                </div>
-
-               {showWashSettings && (
-                 <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
-                   <div className="flex items-start gap-3">
-                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={24} />
-                     <div>
-                       <h3 className="font-black text-xs uppercase tracking-wider text-amber-950">ID de Google Spreadsheet para LAVADOS</h3>
-                       <p className="text-[11px] text-amber-800 leading-normal uppercase font-bold">
-                         Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Lavados, pega su ID aquí abajo. El sistema buscará la pestaña llamada "LAVADOS" en este nuevo archivo.
-                       </p>
-                     </div>
-                   </div>
-                   <div className="flex flex-col sm:flex-row gap-3">
-                     <input
-                       type="text"
-                       value={washSheetIdInput}
-                       onChange={(e) => setWashSheetIdInput(e.target.value)}
-                       placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
-                       className="flex-1 p-3 border border-amber-200 bg-white rounded-xl text-xs font-bold outline-none text-slate-800 font-mono"
-                     />
-                     <button
-                       onClick={() => {
-                         setWashDocId(washSheetIdInput);
-                         setWashSaveFeedback('¡ID de hoja de Lavados guardado correctamente!');
-                         setTimeout(() => setWashSaveFeedback(''), 4000);
-                         // Actualizar datos
-                         handleSyncData();
-                       }}
-                       className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                     >
-                       Guardar Configuración
-                     </button>
-                   </div>
-                   {washSaveFeedback && (
-                     <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
-                       <Check size={12} /> {washSaveFeedback}
-                     </p>
-                   )}
-                 </div>
-               )}
 
                <WashStats 
                  totalFlota={filteredVehiclesForWash.length}
@@ -2415,22 +2548,35 @@ const App: React.FC = () => {
                  month={selectedMonth}
                />
 
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {filteredWashReports.map(r => (
-                      <WashCard 
-                        key={r.id} 
-                        report={r} 
-                        onViewDoc={(url, t) => setViewDoc({url, title: t})} 
-                      />
-                    ))
-                  }
-                  {filteredWashReports.length === 0 && (
-                    <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
-                      <Droplets size={48} className="mx-auto text-slate-200 mb-4" />
-                      <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado lavados con los filtros aplicados para {selectedMonth}</p>
-                    </div>
-                  )}
-               </div>
+               {washViewMode === 'calendar' ? (
+                 <WashCalendar 
+                   reports={filteredWashReports}
+                   selectedMonth={selectedMonth}
+                   selectedYear={selectedYear}
+                   onMonthChange={setSelectedMonth}
+                   onYearChange={setSelectedYear}
+                   onViewDoc={(url, t) => setViewDoc({url, title: t})}
+                   onManageClosure={() => {}}
+                   searchTerm={searchTerm}
+                 />
+               ) : (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {filteredWashReports.map(r => (
+                        <WashCard 
+                          key={r.id} 
+                          report={r} 
+                          onViewDoc={(url, t) => setViewDoc({url, title: t})} 
+                        />
+                      ))
+                    }
+                    {filteredWashReports.length === 0 && (
+                      <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
+                        <Droplets size={48} className="mx-auto text-slate-200 mb-4" />
+                        <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado lavados con los filtros aplicados para {selectedMonth}</p>
+                      </div>
+                    )}
+                 </div>
+               )}
             </div>
           )}
 
@@ -2531,17 +2677,6 @@ const App: React.FC = () => {
                     </div>
 
                     <button 
-                      onClick={() => setShowCleaningSettings(!showCleaningSettings)}
-                      className={`flex items-center gap-3 px-8 py-4 rounded-3xl text-[11px] font-black uppercase tracking-widest transition-all ${
-                        showCleaningSettings 
-                          ? 'bg-amber-600 text-white hover:bg-amber-700' 
-                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Settings size={20} className={showCleaningSettings ? 'animate-spin' : ''}/> Configurar Hoja
-                    </button>
-
-                    <button 
                       onClick={() => setShowCleaningForm(true)}
                       className="flex items-center gap-3 px-8 py-4 bg-cyan-600 text-white rounded-3xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-cyan-600/20 hover:bg-cyan-700 transition-all"
                     >
@@ -2549,45 +2684,6 @@ const App: React.FC = () => {
                     </button>
                   </div>
                </div>
-
-               {showCleaningSettings && (
-                 <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
-                   <div className="flex items-start gap-3">
-                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={24} />
-                     <div>
-                       <h3 className="font-black text-xs uppercase tracking-wider text-amber-950">ID de Google Spreadsheet para LIMPIEZA 5S</h3>
-                       <p className="text-[11px] text-amber-800 leading-normal uppercase font-bold">
-                         Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Limpieza/5S, pega su ID aquí abajo. El sistema buscará la pestaña llamada "CRONOGRAMA 5S" en este nuevo archivo.
-                       </p>
-                     </div>
-                   </div>
-                   <div className="flex flex-col sm:flex-row gap-3">
-                     <input
-                       type="text"
-                       value={cleaningSheetIdInput}
-                       onChange={(e) => setCleaningSheetIdInput(e.target.value)}
-                       placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
-                       className="flex-1 p-3 border border-amber-200 bg-white rounded-xl text-xs font-bold outline-none text-slate-800 font-mono"
-                     />
-                     <button
-                       onClick={() => {
-                         setCleaningDocId(cleaningSheetIdInput);
-                         setCleaningSaveFeedback('¡ID de hoja de Limpieza guardado correctamente!');
-                         setTimeout(() => setCleaningSaveFeedback(''), 4000);
-                         handleSyncData().catch(e => console.error("Error syncing after config:", e));
-                       }}
-                       className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                     >
-                       Guardar Configuración
-                     </button>
-                   </div>
-                   {cleaningSaveFeedback && (
-                     <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
-                       <Check size={12} /> {cleaningSaveFeedback}
-                     </p>
-                   )}
-                 </div>
-               )}
 
                <WashStats 
                  totalFlota={cleaningStats.total}
@@ -2690,57 +2786,8 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <button 
-                      onClick={() => setShowCalibrationsSettings(!showCalibrationsSettings)}
-                      className={`flex items-center gap-3 px-8 py-4 rounded-3xl text-[11px] font-black uppercase tracking-widest transition-all ${
-                        showCalibrationsSettings 
-                          ? 'bg-amber-600 text-white hover:bg-amber-700' 
-                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Settings size={20} className={showCalibrationsSettings ? 'animate-spin' : ''}/> Configurar Hoja
-                    </button>
                   </div>
                </div>
-
-               {showCalibrationsSettings && (
-                 <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
-                   <div className="flex items-start gap-3">
-                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={24} />
-                     <div>
-                       <h3 className="font-black text-xs uppercase tracking-wider text-amber-950">ID de Google Spreadsheet para CALIBRACIONES</h3>
-                       <p className="text-[11px] text-amber-800 leading-normal uppercase font-bold">
-                         Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Calibraciones, pega su ID aquí abajo. El sistema buscará la pestaña llamada "CALIBRACIONES" en este nuevo archivo.
-                       </p>
-                     </div>
-                   </div>
-                   <div className="flex flex-col sm:flex-row gap-3">
-                     <input
-                       type="text"
-                       value={calibrationsSheetIdInput}
-                       onChange={(e) => setCalibrationsSheetIdInput(e.target.value)}
-                       placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
-                       className="flex-1 p-3 border border-amber-200 bg-white rounded-xl text-xs font-bold outline-none text-slate-800 font-mono"
-                     />
-                     <button
-                       onClick={() => {
-                         setCalibrationsDocId(calibrationsSheetIdInput);
-                         setCalibrationsSaveFeedback('¡ID de hoja de Calibraciones guardado correctamente!');
-                         setTimeout(() => setCalibrationsSaveFeedback(''), 4000);
-                         handleSyncData().catch(e => console.error("Error syncing after config:", e));
-                       }}
-                       className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                     >
-                       Guardar Configuración
-                     </button>
-                   </div>
-                   {calibrationsSaveFeedback && (
-                     <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 uppercase tracking-wider">
-                       <Check size={12} /> {calibrationsSaveFeedback}
-                     </p>
-                   )}
-                 </div>
-               )}
 
                {/* Filtros CD y Contratista */}
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2983,6 +3030,184 @@ const App: React.FC = () => {
       )}
 
       {/* MODALS & FORMS */}
+      {showGlobalSettings && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200] flex items-center justify-center p-6 overflow-y-auto">
+          <div className="bg-[#1e293b] border border-white/10 w-full max-w-2xl rounded-[2.5rem] p-10 shadow-2xl relative my-8">
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-indigo-600"></div>
+            <button 
+              onClick={() => setShowGlobalSettings(false)}
+              className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors p-2"
+            >
+              <X size={24} />
+            </button>
+
+            <div className="flex items-center gap-4 mb-6 border-b border-white/10 pb-6">
+              <div className="p-3 bg-indigo-600/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
+                <Settings size={28} className="animate-spin-slow" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-white uppercase tracking-wider">Ajustes de Google Sheets</h3>
+                <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">Configuración global del origen de datos</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">URL del Google Apps Script Web App:</label>
+                <input
+                  type="text"
+                  value={globalScriptUrl}
+                  onChange={(e) => setGlobalScriptUrlState(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs text-white font-mono outline-none focus:border-indigo-500/50 transition-all"
+                />
+                <p className="text-[9px] text-slate-500 font-semibold leading-relaxed">
+                  * La URL de tu nueva implementación de Apps Script. Es la dirección donde el frontend enviará las peticiones POST.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">ID de Google Spreadsheet Principal:</label>
+                <input
+                  type="text"
+                  value={globalSpreadsheetId}
+                  onChange={(e) => setGlobalSpreadsheetId(e.target.value)}
+                  placeholder="ID de la hoja de cálculo de Google..."
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs text-white font-mono outline-none focus:border-indigo-500/50 transition-all"
+                />
+                <p className="text-[9px] text-slate-500 font-semibold leading-relaxed">
+                  * Este ID se aplicará automáticamente a todos los módulos (Rutinas, Kilómetros, Lavados, Calibraciones, etc.) para que se guarden en tu propio clon de la hoja de cálculo.
+                </p>
+              </div>
+
+              {/* Diagnóstico de Conexión */}
+              <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Diagnóstico de Origen de Datos</h4>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed">Prueba si tu Apps Script y tu Spreadsheet están vinculados correctamente</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={testingConnection}
+                    onClick={handleTestConnection}
+                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-600/50 text-white rounded-xl font-bold uppercase tracking-wider text-[9px] transition-all flex items-center gap-2 shrink-0 shadow-lg shadow-indigo-600/15"
+                  >
+                    {testingConnection ? (
+                      <>
+                        <Loader2 size={12} className="animate-spin" />
+                        Verificando...
+                      </>
+                    ) : (
+                      <>
+                        <Zap size={12} />
+                        Probar Conexión
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {connectionResult && (
+                  <div className={`p-4 rounded-xl border text-[11px] font-semibold leading-relaxed ${
+                    connectionResult.status === 'success' 
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' 
+                      : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                  }`}>
+                    {connectionResult.message}
+                  </div>
+                )}
+              </div>
+
+              {/* Configuración específica por módulo */}
+              <div className="border-t border-white/5 pt-4 space-y-4">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Configuración Específica por Módulo (Opcional):</h4>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">ID para Lavados:</label>
+                    <input
+                      type="text"
+                      value={washSheetIdInput}
+                      onChange={(e) => setWashSheetIdInput(e.target.value)}
+                      placeholder="Dejar vacío para usar principal..."
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-mono outline-none focus:border-indigo-500/50 transition-all"
+                    />
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">ID para Calibraciones:</label>
+                    <input
+                      type="text"
+                      value={calibrationsSheetIdInput}
+                      onChange={(e) => setCalibrationsSheetIdInput(e.target.value)}
+                      placeholder="Dejar vacío para usar principal..."
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-mono outline-none focus:border-indigo-500/50 transition-all"
+                    />
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">ID para Limpieza 5S:</label>
+                    <input
+                      type="text"
+                      value={cleaningSheetIdInput}
+                      onChange={(e) => setCleaningSheetIdInput(e.target.value)}
+                      placeholder="Dejar vacío para usar principal..."
+                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-[10px] text-white font-mono outline-none focus:border-indigo-500/50 transition-all"
+                    />
+                  </div>
+                </div>
+                <p className="text-[8px] text-slate-500 font-semibold leading-relaxed">
+                  * Si dejas un campo vacío, ese módulo usará el ID de Google Spreadsheet Principal configurado arriba.
+                </p>
+              </div>
+
+              {/* Instructions checklist */}
+              <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-6 space-y-3">
+                <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                  <AlertTriangle size={14} /> Instrucciones de Despliegue en Apps Script
+                </h4>
+                <ul className="text-[11px] text-slate-300 font-semibold space-y-2 list-decimal list-inside leading-relaxed">
+                  <li>Crea una copia de la hoja de cálculo de Google y copia su ID de la barra de direcciones.</li>
+                  <li>Ve a <strong className="text-white">Extensiones &gt; Apps Script</strong> en la hoja de cálculo.</li>
+                  <li>Pega el código unificado de <code className="bg-slate-900 px-1 py-0.5 rounded text-indigo-300">GOOGLE_APPS_SCRIPT.gs</code>.</li>
+                  <li>En el script, edita la variable <code className="bg-slate-900 px-1.5 py-0.5 rounded text-amber-300">ID_HOJA</code> con tu propio ID.</li>
+                  <li>Haz clic en <strong className="text-white">Implementar &gt; Nueva implementación</strong>.</li>
+                  <li>Elige tipo <strong className="text-indigo-400">Aplicación web</strong>.</li>
+                  <li>Configura Ejecutar como: <strong className="text-white">"Yo" (Tu correo)</strong>.</li>
+                  <li>Configura Quién tiene acceso: <strong className="text-emerald-400">"Cualquiera" (Anyone)</strong>.</li>
+                  <li>Haz clic en Implementar, concede los permisos correspondientes y copia la URL generada.</li>
+                </ul>
+              </div>
+
+              {globalSaveFeedback && (
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
+                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                    <Check size={16} /> {globalSaveFeedback}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-4 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowGlobalSettings(false)}
+                  className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 hover:border-slate-500/50 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveGlobalSettings}
+                  className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all shadow-lg shadow-indigo-600/20"
+                >
+                  Guardar Cambios
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200] flex items-center justify-center p-6">
           <div className="bg-[#1e293b] border border-white/10 w-full max-w-md rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden">
@@ -3070,7 +3295,8 @@ const App: React.FC = () => {
                 const updatedDoc = {
                   expiryDate: d.expiryDate,
                   status: 'active' as const,
-                  url: d.url
+                  url: d.url,
+                  lastRenewalDate: d.expiryDate
                 };
                 if (d.docType.toLowerCase().includes('soat')) {
                   return { ...v, soat: updatedDoc };
@@ -3122,6 +3348,7 @@ const App: React.FC = () => {
               workshop: d.workshop || '',
               mapUrl: d.mapUrl || ''
             };
+            localWashSubmissionsRef.current = [newWash, ...localWashSubmissionsRef.current];
             setWashReports(prev => [newWash, ...prev]);
             handleSyncData(); 
           }} 
@@ -3173,6 +3400,7 @@ const App: React.FC = () => {
           onSubmit={async (d: any) => { 
             if (d.isUpdate) {
               await submitCalibrationUpdateToSheet(d);
+              localCalibrationUpdatesRef.current[d.id] = d;
               setCalibrations(prev => prev.map(c => c.id === d.id ? { ...c, ...d } : c));
             } else {
               await submitCalibrationToSheet(d);
@@ -3185,6 +3413,7 @@ const App: React.FC = () => {
                 expiryDate: d.expiryDate || '',
                 certificateUrl: d.certificateUrl || ''
               };
+              localCalibrationSubmissionsRef.current = [newCal, ...localCalibrationSubmissionsRef.current];
               setCalibrations(prev => [newCal, ...prev]);
             }
             handleSyncData(); 

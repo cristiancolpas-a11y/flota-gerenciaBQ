@@ -380,7 +380,7 @@ const SustainabilityModule: React.FC = () => {
           <AlertTriangle className="w-16 h-16 text-rose-500 mx-auto justify-center mb-6" />
           <h2 className="text-2xl font-black text-white uppercase tracking-wider mb-2">Error de conexión</h2>
           <p className="text-rose-400 font-medium">{error}</p>
-          <button onClick={fetchData} className="mt-8 px-8 py-4 bg-rose-500 hover:bg-rose-600 text-white font-black uppercase tracking-wider rounded-xl transition-all">Reintentar Conexión</button>
+          <button onClick={() => fetchData()} className="mt-8 px-8 py-4 bg-rose-500 hover:bg-rose-600 text-white font-black uppercase tracking-wider rounded-xl transition-all">Reintentar Conexión</button>
         </div>
       ) : (
         <>
@@ -549,7 +549,7 @@ const SustainabilityModule: React.FC = () => {
               </h3>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={modeloChart} layout="vertical" margin={{ top: 10, right: 30, left: 100, bottom: 10 }} onClick={(data) => data?.activeLabel && setFilterModelo(data.activeLabel)} style={{ cursor: 'pointer' }}>
+                  <BarChart data={modeloChart} layout="vertical" margin={{ top: 10, right: 30, left: 100, bottom: 10 }} onClick={(data) => data?.activeLabel !== undefined && data?.activeLabel !== null && setFilterModelo(String(data.activeLabel))} style={{ cursor: 'pointer' }}>
                     <XAxis type="number" hide />
                     <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 900 }} />
                     <Tooltip cursor={{ fill: '#334155', opacity: 0.2 }} contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
@@ -570,7 +570,7 @@ const SustainabilityModule: React.FC = () => {
               </h3>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={cdChart} margin={{ top: 20, right: 10, left: -25, bottom: 20 }} onClick={(data) => data?.activeLabel && setFilterCd(data.activeLabel)} style={{ cursor: 'pointer' }}>
+                  <BarChart data={cdChart} margin={{ top: 20, right: 10, left: -25, bottom: 20 }} onClick={(data) => data?.activeLabel !== undefined && data?.activeLabel !== null && setFilterCd(String(data.activeLabel))} style={{ cursor: 'pointer' }}>
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 900 }} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} />
                     <Tooltip cursor={{ fill: '#334155', opacity: 0.2 }} contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
@@ -592,7 +592,7 @@ const SustainabilityModule: React.FC = () => {
               </h3>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={trendChart} margin={{ top: 20, right: 10, left: -25, bottom: 20 }} onClick={(data) => data?.activeLabel && setFilterMes(data.activeLabel)} style={{ cursor: 'pointer' }}>
+                  <BarChart data={trendChart} margin={{ top: 20, right: 10, left: -25, bottom: 20 }} onClick={(data) => data?.activeLabel !== undefined && data?.activeLabel !== null && setFilterMes(String(data.activeLabel))} style={{ cursor: 'pointer' }}>
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 900 }} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} />
                     <Tooltip cursor={{ fill: '#334155', opacity: 0.2 }} contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px', fontSize: '10px', fontWeight: 900 }} />
@@ -615,7 +615,7 @@ const SustainabilityModule: React.FC = () => {
               <div className="h-[300px] overflow-y-auto overflow-x-hidden pr-2 custom-scrollbar flex-grow">
                 <div style={{ height: `${Math.max(300, anoChart.length * 40)}px`, minHeight: '100%' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={anoChart} layout="vertical" margin={{ top: 20, right: 30, left: 60, bottom: 20 }} onClick={(data) => data?.activeLabel && setFilterAno(data.activeLabel)} style={{ cursor: 'pointer' }}>
+                    <BarChart data={anoChart} layout="vertical" margin={{ top: 20, right: 30, left: 60, bottom: 20 }} onClick={(data) => data?.activeLabel !== undefined && data?.activeLabel !== null && setFilterAno(String(data.activeLabel))} style={{ cursor: 'pointer' }}>
                       <XAxis type="number" hide />
                       <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#F1F5F9', fontSize: 13, fontWeight: 900 }} />
                       <Tooltip cursor={{ fill: '#334155', opacity: 0.2 }} contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
@@ -635,7 +635,7 @@ const SustainabilityModule: React.FC = () => {
               </h3>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={marcaChart} layout="vertical" margin={{ top: 20, right: 30, left: 80, bottom: 20 }} onClick={(data) => data?.activeLabel && setFilterMarca(data.activeLabel)} style={{ cursor: 'pointer' }}>
+                  <BarChart data={marcaChart} layout="vertical" margin={{ top: 20, right: 30, left: 80, bottom: 20 }} onClick={(data) => data?.activeLabel !== undefined && data?.activeLabel !== null && setFilterMarca(String(data.activeLabel))} style={{ cursor: 'pointer' }}>
                     <XAxis type="number" hide />
                     <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10, fontWeight: 900 }} />
                     <Tooltip cursor={{ fill: '#334155', opacity: 0.2 }} contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
@@ -658,7 +658,7 @@ const SustainabilityModule: React.FC = () => {
               <div className="h-[350px] overflow-x-auto overflow-y-hidden pb-2 custom-scrollbar">
                 <div style={{ width: `${Math.max(100, topPlatesChart.length * 40)}px`, minWidth: '100%', height: '100%' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topPlatesChart} margin={{ top: 20, right: 10, left: -25, bottom: 20 }} onClick={(data) => data?.activeLabel && setFilterPlaca(data.activeLabel)} style={{ cursor: 'pointer' }}>
+                    <BarChart data={topPlatesChart} margin={{ top: 20, right: 10, left: -25, bottom: 20 }} onClick={(data) => data?.activeLabel !== undefined && data?.activeLabel !== null && setFilterPlaca(String(data.activeLabel))} style={{ cursor: 'pointer' }}>
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 9, fontWeight: 900 }} interval={0} angle={-35} textAnchor="end" />
                       <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 10 }} />
                       <Tooltip cursor={{ fill: '#334155', opacity: 0.2 }} contentStyle={{ backgroundColor: '#1E293B', border: '1px solid #334155', borderRadius: '16px' }} />
