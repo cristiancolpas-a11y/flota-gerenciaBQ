@@ -117,19 +117,96 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
     return mapping;
   }, [filteredData]);
 
-  const getStatusColor = (actual: number, trigger: number, meta: number, indicatorName: string) => {
-    const indicatorsToSum = ['DOCUMENTOS VENCIDOS', 'COMPARENDOS', 'VARADAS EN RUTA'];
-    const isSum = indicatorsToSum.some(name => indicatorName.toUpperCase().includes(name));
+  const [indicatorModes, setIndicatorModes] = useState<Record<string, 'higher' | 'lower'>>({});
 
-    if (isSum) {
-      if (actual <= meta) return 'bg-emerald-100 text-emerald-800';
-      if (actual <= trigger) return 'bg-rose-100 text-rose-800';
+  const isLowerIsBetter = (indicatorName: string) => {
+    const name = indicatorName.toUpperCase();
+    const lowerKeywords = [
+      'DOCUMENTO', 'COMPARENDO', 'VARADA', 'ACCIDENTE', 'INCAPACIDAD',
+      'AUSENTISMO', 'INDISPONIBILIDAD', 'MULTA', 'NOVEDAD', 'COSTO',
+      'GASTO', 'RECLAMO', 'DEFECTO', 'MANTENIMIENTO'
+    ];
+    return lowerKeywords.some(kw => name.includes(kw));
+  };
+
+  const getIndicatorMode = (indicatorName: string): 'higher' | 'lower' => {
+    if (indicatorModes[indicatorName]) {
+      return indicatorModes[indicatorName];
+    }
+    return isLowerIsBetter(indicatorName) ? 'lower' : 'higher';
+  };
+
+  const getStatusColor = (actual: number, trigger: number, meta: number, indicatorName: string) => {
+    const mode = getIndicatorMode(indicatorName);
+
+    if (mode === 'higher') {
+      // Mayor es mejor (ej. Check Lists, Disponibilidad, Rendimiento)
+      const effectiveMeta = (meta !== undefined && meta !== null && meta > 0) ? meta : trigger;
+      
+      // 1. Igual o mayor a la Meta -> VERDE
+      if (effectiveMeta > 0 && actual >= effectiveMeta) {
+        return 'bg-emerald-100 text-emerald-800';
+      }
+      
+      // 2. Entre Meta y Disparador -> ROJO
+      if (meta > 0 && trigger > 0 && actual < meta && actual > trigger) {
+        return 'bg-rose-100 text-rose-800';
+      }
+
+      // 3. Menor o igual al Disparador -> AZUL
+      if (trigger > 0 && actual <= trigger) {
+        return 'bg-indigo-100 text-indigo-800';
+      }
+
+      // Fallback si no hay Meta/Trigger definidos
+      if (effectiveMeta > 0 && actual >= effectiveMeta) {
+        return 'bg-emerald-100 text-emerald-800';
+      }
       return 'bg-indigo-100 text-indigo-800';
     } else {
-      if (actual >= meta) return 'bg-emerald-100 text-emerald-800';
-      if (actual >= trigger) return 'bg-rose-100 text-rose-800';
-      return 'bg-indigo-100 text-indigo-800';
+      // Menor es mejor (ej. Comparendos, Documentos Vencidos, Varadas)
+      const effectiveMeta = (meta !== undefined && meta !== null && meta >= 0) ? meta : 0;
+
+      // 1. Menor o igual a la Meta -> VERDE
+      if (actual <= effectiveMeta) {
+        return 'bg-emerald-100 text-emerald-800';
+      }
+
+      // 2. Entre Meta y Disparador -> ROJO
+      if (trigger > 0 && actual > effectiveMeta && actual <= trigger) {
+        return 'bg-rose-100 text-rose-800';
+      }
+
+      // 3. Mayor al Disparador -> AZUL
+      if (trigger > 0 && actual > trigger) {
+        return 'bg-indigo-100 text-indigo-800';
+      }
+
+      return 'bg-rose-100 text-rose-800';
     }
+  };
+
+  const formatMetaValue = (item: { meta?: number; trigger?: number } | undefined, indicatorName: string) => {
+    if (!item) return '';
+    const isLower = getIndicatorMode(indicatorName) === 'lower';
+    const isPct = indicatorName.includes('%');
+
+    if (item.meta !== undefined && item.meta !== null && (item.meta > 0 || isLower)) {
+      return `${item.meta}${isPct ? '%' : ''}`;
+    }
+    if (item.trigger !== undefined && item.trigger !== null && item.trigger > 0) {
+      return `${item.trigger}${isPct ? '%' : ''}`;
+    }
+    return '-';
+  };
+
+  const formatTriggerValue = (item: { meta?: number; trigger?: number } | undefined, indicatorName: string) => {
+    if (!item) return '';
+    const isPct = indicatorName.includes('%');
+    if (item.trigger !== undefined && item.trigger !== null && (item.trigger > 0 || item.trigger === 0)) {
+      return `${item.trigger}${isPct ? '%' : ''}`;
+    }
+    return '-';
   };
 
   return (
@@ -343,18 +420,34 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
                   <React.Fragment key={indicatorName}>
                     {/* Meta Row */}
                     <tr className="border-b border-slate-200">
-                      <td rowSpan={3} className="p-2 font-bold text-slate-800 border-r border-slate-300 bg-white max-w-[150px] uppercase leading-tight">
-                        {indicatorName}
+                      <td rowSpan={3} className="p-2 font-bold text-slate-800 border-r border-slate-300 bg-white min-w-[170px] max-w-[210px] uppercase leading-tight">
+                        <div className="flex flex-col gap-1.5">
+                          <span>{indicatorName}</span>
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={getIndicatorMode(indicatorName)}
+                              onChange={(e) => setIndicatorModes(prev => ({ ...prev, [indicatorName]: e.target.value as 'higher' | 'lower' }))}
+                              className={`text-[9px] font-bold py-1 px-1.5 rounded border transition-colors cursor-pointer w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                                getIndicatorMode(indicatorName) === 'higher'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                  : 'bg-blue-50 text-blue-800 border-blue-300'
+                              }`}
+                            >
+                              <option value="higher">▲ Mayor es Mejor</option>
+                              <option value="lower">▼ Menor es Mejor</option>
+                            </select>
+                          </div>
+                        </div>
                       </td>
                       <td className="p-1 font-bold text-slate-500 border-r border-slate-300 bg-slate-50 text-center">Meta</td>
                       {monthsInMatrix.map(month => (
                         <React.Fragment key={month}>
                           <td className="p-1 border-r border-slate-200 text-center text-slate-700 bg-slate-50/30">
-                            {months[month]?.monthly ? `${months[month].monthly.meta}${indicatorName.includes('%') ? '%' : ''}` : ''}
+                            {formatMetaValue(months[month]?.monthly, indicatorName)}
                           </td>
                           {weeksPerMonth[month]?.map(week => (
                             <td key={`${month}-${week}`} className="p-1 border-r border-slate-200 text-center text-slate-600">
-                              {months[month]?.weeks[week] ? `${months[month].weeks[week].meta}${indicatorName.includes('%') ? '%' : ''}` : ''}
+                              {formatMetaValue(months[month]?.weeks[week], indicatorName)}
                             </td>
                           ))}
                         </React.Fragment>
@@ -366,11 +459,11 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
                       {monthsInMatrix.map(month => (
                         <React.Fragment key={month}>
                           <td className="p-1 border-r border-slate-200 text-center text-slate-700 bg-slate-50/30">
-                            {months[month]?.monthly ? `${months[month].monthly.trigger}${indicatorName.includes('%') ? '%' : ''}` : ''}
+                            {formatTriggerValue(months[month]?.monthly, indicatorName)}
                           </td>
                           {weeksPerMonth[month]?.map(week => (
                             <td key={`${month}-${week}`} className="p-1 border-r border-slate-200 text-center text-slate-600">
-                              {months[month]?.weeks[week] ? `${months[month].weeks[week].trigger}${indicatorName.includes('%') ? '%' : ''}` : ''}
+                              {formatTriggerValue(months[month]?.weeks[week], indicatorName)}
                             </td>
                           ))}
                         </React.Fragment>
