@@ -1,31 +1,46 @@
 import React, { useState, useMemo } from 'react';
 import { OperationalIndicator } from '../types';
-import { Filter, TrendingUp, Activity, Target, AlertTriangle, CheckCircle2, XCircle, Search, Calendar, MapPin, Hash } from 'lucide-react';
+import { Filter, TrendingUp, Activity, Target, AlertTriangle, CheckCircle2, XCircle, Search, Calendar, MapPin, Hash, Building2 } from 'lucide-react';
 
 interface OperationalDashboardProps {
   indicators: OperationalIndicator[];
 }
 
 const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators }) => {
+  const [activeCdTab, setActiveCdTab] = useState<'GALAPA' | 'LA ARENOSA' | 'all'>('GALAPA');
   const [filterCd, setFilterCd] = useState('all');
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterWeek, setFilterWeek] = useState('all');
   const [filterIndicator, setFilterIndicator] = useState('all');
 
-  const uniqueCds = useMemo(() => Array.from(new Set(indicators.map(i => i.cd))).sort(), [indicators]);
-  const uniqueMonths = useMemo(() => Array.from(new Set(indicators.map(i => i.month))).sort(), [indicators]);
-  const uniqueWeeks = useMemo(() => Array.from(new Set(indicators.map(i => i.week))).sort(), [indicators]);
-  const uniqueIndicatorNames = useMemo(() => Array.from(new Set(indicators.map(i => i.indicator))).sort(), [indicators]);
+  // Filter indicators by the selected CD tab (Col B / CD field)
+  const cdFilteredIndicators = useMemo(() => {
+    return indicators.filter(i => {
+      if (activeCdTab === 'all') return true;
+      const cdUpper = (i.cd || '').toUpperCase();
+      if (activeCdTab === 'GALAPA') return cdUpper.includes('GALAPA');
+      if (activeCdTab === 'LA ARENOSA') return cdUpper.includes('ARENOSA') || cdUpper.includes('LA ARENOSA');
+      return cdUpper === String(activeCdTab).toUpperCase();
+    });
+  }, [indicators, activeCdTab]);
+
+  const galapaCount = useMemo(() => indicators.filter(i => (i.cd || '').toUpperCase().includes('GALAPA')).length, [indicators]);
+  const arenosaCount = useMemo(() => indicators.filter(i => (i.cd || '').toUpperCase().includes('ARENOSA')).length, [indicators]);
+
+  const uniqueCds = useMemo(() => Array.from(new Set(cdFilteredIndicators.map(i => i.cd))).sort(), [cdFilteredIndicators]);
+  const uniqueMonths = useMemo(() => Array.from(new Set(cdFilteredIndicators.map(i => i.month))).sort(), [cdFilteredIndicators]);
+  const uniqueWeeks = useMemo(() => Array.from(new Set(cdFilteredIndicators.map(i => i.week))).sort(), [cdFilteredIndicators]);
+  const uniqueIndicatorNames = useMemo(() => Array.from(new Set(cdFilteredIndicators.map(i => i.indicator))).sort(), [cdFilteredIndicators]);
 
   const filteredData = useMemo(() => {
-    return indicators.filter(i => {
+    return cdFilteredIndicators.filter(i => {
       const matchCd = filterCd === 'all' || i.cd === filterCd;
       const matchMonth = filterMonth === 'all' || i.month === filterMonth;
       const matchWeek = filterWeek === 'all' || i.week === filterWeek;
       const matchIndicator = filterIndicator === 'all' || i.indicator === filterIndicator;
       return matchCd && matchMonth && matchWeek && matchIndicator;
     });
-  }, [indicators, filterCd, filterMonth, filterWeek, filterIndicator]);
+  }, [cdFilteredIndicators, filterCd, filterMonth, filterWeek, filterIndicator]);
 
   // Matrix structure: rows = indicators, columns = month > week
   const matrixData = useMemo(() => {
@@ -34,8 +49,8 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
       weeks: Record<string, OperationalIndicator> 
     }>> = {};
     
-    // Group weekly data
-    indicators.forEach(item => {
+    // Group weekly data using filtered items
+    filteredData.forEach(item => {
       // Skip records that are already monthly summaries if they exist in the sheet
       const isMonthlyInSheet = !item.week || item.week.toUpperCase().includes('TOTAL') || item.week.toUpperCase() === item.month.toUpperCase();
       if (isMonthlyInSheet) return;
@@ -74,18 +89,18 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
     });
 
     return rows;
-  }, [indicators]);
+  }, [filteredData]);
 
   const monthsInMatrix = useMemo(() => {
     const months = new Set<string>();
-    indicators.forEach(i => months.add(i.month));
+    filteredData.forEach(i => months.add(i.month));
     const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
     return Array.from(months).sort((a, b) => monthOrder.indexOf(a.toUpperCase()) - monthOrder.indexOf(b.toUpperCase()));
-  }, [indicators]);
+  }, [filteredData]);
 
   const weeksPerMonth = useMemo(() => {
     const mapping: Record<string, string[]> = {};
-    indicators.forEach(i => {
+    filteredData.forEach(i => {
       const isMonthly = !i.week || i.week.toUpperCase().includes('TOTAL') || i.week.toUpperCase() === i.month.toUpperCase();
       if (!isMonthly) {
         if (!mapping[i.month]) mapping[i.month] = [];
@@ -100,25 +115,17 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
       });
     });
     return mapping;
-  }, [indicators]);
+  }, [filteredData]);
 
   const getStatusColor = (actual: number, trigger: number, meta: number, indicatorName: string) => {
     const indicatorsToSum = ['DOCUMENTOS VENCIDOS', 'COMPARENDOS', 'VARADAS EN RUTA'];
     const isSum = indicatorsToSum.some(name => indicatorName.toUpperCase().includes(name));
 
     if (isSum) {
-      // Logic for SUM (Lower is better)
-      // Green: Actual <= Meta
-      // Red: Meta < Actual <= Trigger
-      // Blue: Actual > Trigger
       if (actual <= meta) return 'bg-emerald-100 text-emerald-800';
       if (actual <= trigger) return 'bg-rose-100 text-rose-800';
       return 'bg-indigo-100 text-indigo-800';
     } else {
-      // Logic for AVERAGE (Higher is better)
-      // Green: Actual >= Meta
-      // Red: Meta > Actual >= Trigger
-      // Blue: Actual < Trigger
       if (actual >= meta) return 'bg-emerald-100 text-emerald-800';
       if (actual >= trigger) return 'bg-rose-100 text-rose-800';
       return 'bg-indigo-100 text-indigo-800';
@@ -134,7 +141,7 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
             <Activity className="w-6 h-6 text-indigo-600" />
             Tablero Indicadores
           </h2>
-          <p className="text-slate-500 mt-1">Matriz de control operativo - Vista Gerencial</p>
+          <p className="text-slate-500 mt-1">Matriz de control operativo por Centro de Distribución (Columna B)</p>
         </div>
         
         <div className="flex flex-wrap gap-2">
@@ -148,18 +155,85 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Tabs por Centro de Distribución (CD) */}
+      <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-2">
+        <button
+          onClick={() => {
+            setActiveCdTab('GALAPA');
+            setFilterCd('all');
+          }}
+          className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            activeCdTab === 'GALAPA'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+              : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/60'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>CD GALAPA</span>
+          {galapaCount > 0 && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              activeCdTab === 'GALAPA' ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {galapaCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveCdTab('LA ARENOSA');
+            setFilterCd('all');
+          }}
+          className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            activeCdTab === 'LA ARENOSA'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+              : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/60'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>CD LA ARENOSA</span>
+          {arenosaCount > 0 && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              activeCdTab === 'LA ARENOSA' ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {arenosaCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveCdTab('all');
+            setFilterCd('all');
+          }}
+          className={`flex-0 min-w-[140px] flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all ${
+            activeCdTab === 'all'
+              ? 'bg-slate-900 text-white shadow-md'
+              : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/60'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          <span>TODOS LOS CDS</span>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            activeCdTab === 'all' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'
+          }`}>
+            {indicators.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Secondary Filters */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-1">
           <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-            <MapPin className="w-3 h-3" /> Centro de Distribución
+            <MapPin className="w-3 h-3" /> Sub-filtro CD
           </label>
           <select 
             value={filterCd}
             onChange={(e) => setFilterCd(e.target.value)}
             className="w-full bg-slate-50 border-none rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
           >
-            <option value="all">Todos los CDs</option>
+            <option value="all">Todos en {activeCdTab === 'all' ? 'general' : activeCdTab}</option>
             {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
           </select>
         </div>
@@ -209,6 +283,18 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
 
       {/* Matrix Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-5 h-5 text-indigo-600" />
+            <span className="font-bold text-slate-800 text-sm uppercase">
+              Tablero Indicadores: {activeCdTab === 'all' ? 'Todos los CDs' : `CD ${activeCdTab}`}
+            </span>
+          </div>
+          <span className="text-xs font-semibold text-slate-500">
+            {Object.keys(matrixData).length} Indicadores en pantalla
+          </span>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[10px] font-medium">
             <thead>
@@ -248,7 +334,7 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
                   <td colSpan={100} className="p-12 text-center text-slate-400">
                     <div className="flex flex-col items-center gap-2">
                       <Search className="w-8 h-8 opacity-20" />
-                      <p>No se encontraron datos para los filtros seleccionados</p>
+                      <p>No se encontraron datos para {activeCdTab === 'all' ? 'este tablero' : `el centro de distribución ${activeCdTab}`}</p>
                     </div>
                   </td>
                 </tr>
@@ -341,3 +427,4 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
 };
 
 export default OperationalDashboard;
+

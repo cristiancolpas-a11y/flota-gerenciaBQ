@@ -1411,14 +1411,39 @@ const processIndicatorRows = (rows: any[][]): OperationalIndicator[] => {
   };
 
   return rows.slice(1)
-    .filter(row => row && row[3]) // Indicador en indice 3
+    .filter(row => row && (row[3] || row[2] || row[1]))
     .map((row, i): OperationalIndicator => {
+      const colA = cleanSheetValue(row[0]);
+      const colB = cleanSheetValue(row[1]);
+      const colC = cleanSheetValue(row[2]);
+      const colD = cleanSheetValue(row[3]);
+
+      let cdVal = colC;
+      let weekVal = colB;
+      let indicatorVal = colD;
+
+      const bUpper = colB.toUpperCase();
+      const cUpper = colC.toUpperCase();
+
+      // Smart detection for Column B / Column C
+      if (bUpper.includes('GALAPA') || bUpper.includes('ARENOSA') || bUpper.includes('LA ARENOSA') || bUpper.includes('CD')) {
+        cdVal = colB;
+        weekVal = colC;
+      } else if (cUpper.includes('GALAPA') || cUpper.includes('ARENOSA') || cUpper.includes('LA ARENOSA') || cUpper.includes('CD')) {
+        cdVal = colC;
+        weekVal = colB;
+      }
+
+      if (!indicatorVal && colC && !cUpper.includes('GALAPA') && !cUpper.includes('ARENOSA') && !cUpper.includes('SEMANA')) {
+        indicatorVal = colC;
+      }
+
       return {
         id: `op-${i}`,
-        month: cleanSheetValue(row[0]),
-        week: cleanSheetValue(row[1]),
-        cd: cleanSheetValue(row[2]),
-        indicator: cleanSheetValue(row[3]),
+        month: colA,
+        week: weekVal,
+        cd: cdVal || 'GALAPA',
+        indicator: indicatorVal,
         actual: parseNumericValue(cleanSheetValue(row[4])),
         trigger: parseNumericValue(cleanSheetValue(row[5])),
         meta: parseNumericValue(cleanSheetValue(row[6])),
