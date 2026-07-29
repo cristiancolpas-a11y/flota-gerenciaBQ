@@ -372,32 +372,32 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[75vh]">
           <table className="w-full border-collapse text-[10px] font-medium">
-            <thead>
+            <thead className="sticky top-0 z-20">
               <tr className="bg-slate-100 border-b border-slate-300">
-                <th colSpan={2} className="p-2 text-left font-bold text-slate-700 uppercase border-r border-slate-300 min-w-[180px]">
+                <th colSpan={2} className="sticky left-0 z-30 p-2 text-left font-bold text-slate-700 uppercase border-r border-slate-300 bg-slate-100 w-[240px] min-w-[240px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                   Tablero Indicadores
                 </th>
                 {monthsInMatrix.map(month => (
                   <th 
                     key={month} 
                     colSpan={(weeksPerMonth[month]?.length || 0) + 1}
-                    className="p-1 text-center font-bold text-slate-800 uppercase border-r border-slate-300 bg-slate-200/50"
+                    className="p-1 text-center font-bold text-slate-800 uppercase border-r border-slate-300 bg-slate-200"
                   >
                     {month.substring(0, 3)}
                   </th>
                 ))}
               </tr>
               <tr className="bg-slate-50 border-b border-slate-300">
-                <th colSpan={2} className="border-r border-slate-300"></th>
+                <th colSpan={2} className="sticky left-0 z-30 border-r border-slate-300 bg-slate-50 w-[240px] min-w-[240px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"></th>
                 {monthsInMatrix.map(month => (
                   <React.Fragment key={month}>
-                    <th className="p-1 text-center font-bold text-slate-600 uppercase border-r border-slate-300 bg-slate-100/50 min-w-[60px]">
+                    <th className="p-1 text-center font-bold text-slate-600 uppercase border-r border-slate-300 bg-slate-100 min-w-[60px]">
                       {month.substring(0, 3)}
                     </th>
                     {weeksPerMonth[month]?.map(week => (
-                      <th key={`${month}-${week}`} className="p-1 text-center font-bold text-slate-500 uppercase border-r border-slate-300 min-w-[60px]">
+                      <th key={`${month}-${week}`} className="p-1 text-center font-bold text-slate-500 uppercase border-r border-slate-300 bg-slate-50 min-w-[60px]">
                         {week.replace('Semana ', 'Sem ')}
                       </th>
                     ))}
@@ -420,7 +420,7 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
                   <React.Fragment key={indicatorName}>
                     {/* Meta Row */}
                     <tr className="border-b border-slate-200">
-                      <td rowSpan={3} className="p-2 font-bold text-slate-800 border-r border-slate-300 bg-white min-w-[170px] max-w-[210px] uppercase leading-tight">
+                      <td rowSpan={3} className="sticky left-0 z-10 p-2 font-bold text-slate-800 border-r border-slate-200 bg-white w-[190px] min-w-[190px] max-w-[190px] uppercase leading-tight">
                         <div className="flex flex-col gap-1.5">
                           <span>{indicatorName}</span>
                           <div className="flex items-center gap-1">
@@ -439,7 +439,7 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
                           </div>
                         </div>
                       </td>
-                      <td className="p-1 font-bold text-slate-500 border-r border-slate-300 bg-slate-50 text-center">Meta</td>
+                      <td className="sticky left-[190px] z-10 p-1 font-bold text-slate-500 border-r border-slate-300 bg-slate-50 w-[50px] min-w-[50px] text-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Meta</td>
                       {monthsInMatrix.map(month => (
                         <React.Fragment key={month}>
                           <td className="p-1 border-r border-slate-200 text-center text-slate-700 bg-slate-50/30">
@@ -455,7 +455,7 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
                     </tr>
                     {/* Trigger Row */}
                     <tr className="border-b border-slate-200">
-                      <td className="p-1 font-bold text-slate-500 border-r border-slate-300 bg-slate-50 text-center">Dis</td>
+                      <td className="sticky left-[190px] z-10 p-1 font-bold text-slate-500 border-r border-slate-300 bg-slate-50 w-[50px] min-w-[50px] text-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Dis</td>
                       {monthsInMatrix.map(month => (
                         <React.Fragment key={month}>
                           <td className="p-1 border-r border-slate-200 text-center text-slate-700 bg-slate-50/30">
@@ -471,7 +471,7 @@ const OperationalDashboard: React.FC<OperationalDashboardProps> = ({ indicators 
                     </tr>
                     {/* Actual Row */}
                     <tr className="border-b border-slate-300">
-                      <td className="p-1 font-bold text-slate-500 border-r border-slate-300 bg-slate-50 text-center">Act</td>
+                      <td className="sticky left-[190px] z-10 p-1 font-bold text-slate-500 border-r border-slate-300 bg-slate-50 w-[50px] min-w-[50px] text-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Act</td>
                       {monthsInMatrix.map(month => (
                         <React.Fragment key={month}>
                           {/* Monthly Actual */}
