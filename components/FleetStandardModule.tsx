@@ -49,6 +49,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { submitAuditUpdateToSheet, submitFleetCierreUpdateToSheet } from "../services/sheetService";
 import { getDriveDirectLink, createMosaic, compressImage } from "../utils";
+import { FleetSeguimientoTab } from "./FleetSeguimientoTab";
 
 interface FleetStandardModuleProps {
   data: AuditRecord[];
@@ -254,7 +255,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     return Array.from(list).sort();
   }, [data, masterList, cierreRecords]);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "novedades">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "novedades" | "seguimiento">("dashboard");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAudit, setSelectedAudit] = useState<AuditRecord | null>(null);
 
@@ -448,18 +449,18 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   const filteredData = useMemo(() => {
     return data.filter((r) => {
       const matchRegional =
-        filterRegional === "Todas" || r.regional === filterRegional;
-      const matchCD = filterCD === "Todos" || r.cd === filterCD;
-      const matchMonth = filterMonth === "Todos" || r.month === filterMonth;
+        filterRegional === "Todas" || (r.regional || "").toLowerCase().trim() === filterRegional.toLowerCase().trim();
+      const matchCD = filterCD === "Todos" || (r.cd || "").toLowerCase().trim() === filterCD.toLowerCase().trim() || (r.cd || "").toLowerCase().includes(filterCD.toLowerCase().replace('dc ', '').trim());
+      const matchMonth = filterMonth === "Todos" || (r.month || "").toLowerCase().trim() === filterMonth.toLowerCase().trim();
       const matchYear =
-        filterYear === "Todos" || r.year.toString() === filterYear;
+        filterYear === "Todos" || (r.year ? r.year.toString() : "") === filterYear;
       const matchAuditor =
-        filterAuditor === "Todos" || r.auditor === filterAuditor;
+        filterAuditor === "Todos" || (r.auditor || "").toLowerCase().trim() === filterAuditor.toLowerCase().trim();
 
       const contr =
         plateToContractor[r.plate.toUpperCase().trim()] || "NO ASIGNADO";
       const matchContractor =
-        filterContractor === "Todos" || contr === filterContractor;
+        filterContractor === "Todos" || contr.toLowerCase().trim() === filterContractor.toLowerCase().trim();
 
       const matchPlate =
         filterPlate === "Todos" || r.plate.toUpperCase().trim() === filterPlate.toUpperCase().trim();
@@ -1521,292 +1522,8 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
 
   return (
     <div className="space-y-8 pb-20 text-slate-200">
-      {/* HEADER & FILTERS */}
-      <div className="bg-[#1a1a2e] p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
-
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 relative z-10">
-          <div>
-            <h1 className="text-5xl font-black text-white tracking-tighter uppercase leading-none">
-              ESTÁNDAR <span className="text-indigo-500">FLOTA DOC-IMG</span>
-            </h1>
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-2 flex items-center gap-2">
-              <TrendingUp size={14} className="text-emerald-500" /> Auditoría
-              Mensual de Cumplimiento - Camiones
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 w-full xl:w-auto">
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
-                Regional
-              </label>
-              <select
-                value={filterRegional}
-                onChange={(e) => {
-                  setFilterRegional(e.target.value);
-                  setFilterCD("Todos");
-                }}
-                className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
-              >
-                <option value="Todas">Todas</option>
-                {regionals.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
-                CD
-              </label>
-              <select
-                value={filterCD}
-                onChange={(e) => setFilterCD(e.target.value)}
-                className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
-              >
-                <option value="Todos">Todos</option>
-                {cds.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
-                Mes
-              </label>
-              <select
-                value={filterMonth}
-                onChange={(e) => setFilterMonth(e.target.value)}
-                className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
-              >
-                <option value="Todos">Todos</option>
-                {months.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
-                Año
-              </label>
-              <select
-                value={filterYear}
-                onChange={(e) => setFilterYear(e.target.value)}
-                className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
-              >
-                <option value="Todos">Todos</option>
-                {years.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
-                Auditor
-              </label>
-              <select
-                value={filterAuditor}
-                onChange={(e) => setFilterAuditor(e.target.value)}
-                className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
-              >
-                <option value="Todos">Todos</option>
-                {auditors.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
-                Contratista
-              </label>
-              <select
-                value={filterContractor}
-                onChange={(e) => setFilterContractor(e.target.value)}
-                className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
-              >
-                <option value="Todos">Todos</option>
-                {contractors.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
-                Placa
-              </label>
-              <select
-                value={filterPlate}
-                onChange={(e) => setFilterPlate(e.target.value)}
-                className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
-              >
-                <option value="Todos">Todos</option>
-                {plates.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* MULTIFILTROS CRUZADOS ACTIVOS */}
-      {(filterRegional !== "Todas" ||
-        filterCD !== "Todos" ||
-        filterMonth !== "Todos" ||
-        filterYear !== "Todos" ||
-        filterAuditor !== "Todos" ||
-        filterContractor !== "Todos" ||
-        filterPlate !== "Todos" ||
-        filterDuration !== "Todos" ||
-        filterCategory !== "Todos") && (
-        <div className="bg-[#1e1e35]/80 border border-indigo-500/30 p-5 rounded-3xl flex flex-wrap items-center justify-between gap-4 animate-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center gap-3">
-            <Filter size={18} className="text-indigo-400 animate-pulse" />
-            <div>
-              <span className="text-xs font-black text-white uppercase tracking-wider">
-                Multi-Filtros Cruzados Activos:
-              </span>
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wide mt-1">
-                Haz clic en las barras, porciones, tarjetas o puntos de las
-                gráficas para filtrar cruzado; haz clic de nuevo para desmarcar.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {filterRegional !== "Todas" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-                REGIONAL: {filterRegional}
-                <button
-                  onClick={() => setFilterRegional("Todas")}
-                  className="hover:bg-blue-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {filterCD !== "Todos" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-                CD: {filterCD}
-                <button
-                  onClick={() => setFilterCD("Todos")}
-                  className="hover:bg-purple-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {filterMonth !== "Todos" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-                MES: {filterMonth}
-                <button
-                  onClick={() => setFilterMonth("Todos")}
-                  className="hover:bg-emerald-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {filterYear !== "Todos" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-                AÑO: {filterYear}
-                <button
-                  onClick={() => setFilterYear("Todos")}
-                  className="hover:bg-yellow-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {filterAuditor !== "Todos" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-                AUDITOR: {filterAuditor}
-                <button
-                  onClick={() => setFilterAuditor("Todos")}
-                  className="hover:bg-rose-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {filterContractor !== "Todos" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-                CONTRATISTA: {filterContractor}
-                <button
-                  onClick={() => setFilterContractor("Todos")}
-                  className="hover:bg-sky-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {filterPlate !== "Todos" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pink-500/10 text-pink-400 border border-pink-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-                PLACA: {filterPlate}
-                <button
-                  onClick={() => setFilterPlate("Todos")}
-                  className="hover:bg-pink-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {filterDuration !== "Todos" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-                DURACIÓN: {filterDuration}
-                <button
-                  onClick={() => setFilterDuration("Todos")}
-                  className="hover:bg-cyan-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            {filterCategory !== "Todos" && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
-                CATEGORÍA: {filterCategory}
-                <button
-                  onClick={() => setFilterCategory("Todos")}
-                  className="hover:bg-orange-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            )}
-            <button
-              onClick={() => {
-                setFilterRegional("Todas");
-                setFilterCD("Todos");
-                setFilterMonth("Todos");
-                setFilterYear("Todos");
-                setFilterAuditor("Todos");
-                setFilterContractor("Todos");
-                setFilterDuration("Todos");
-                setFilterCategory("Todos");
-              }}
-              className="text-[10px] font-black text-rose-400 hover:text-rose-300 underline uppercase tracking-widest px-2 py-1 cursor-pointer"
-            >
-              Cerrar Todos
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* TABS NAVIGATION */}
-      <div className="flex gap-4 p-2 bg-[#1a1a2e] rounded-2xl border border-slate-800 w-fit">
+      <div className="flex flex-wrap gap-4 p-2 bg-[#1a1a2e] rounded-2xl border border-slate-800 w-fit">
         <button
           onClick={() => setActiveTab("dashboard")}
           className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
@@ -1827,7 +1544,305 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
         >
           Cierre de Novedades
         </button>
+        <button
+          onClick={() => setActiveTab("seguimiento")}
+          className={`px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            activeTab === "seguimiento"
+              ? "bg-indigo-600 text-white shadow-lg"
+              : "text-slate-500 hover:text-white hover:bg-slate-800"
+          }`}
+        >
+          Seguimiento
+        </button>
       </div>
+
+      {/* HEADER & FILTERS (solo visible en Dashboard y Cierre de Novedades) */}
+      {activeTab !== "seguimiento" && (
+        <>
+          <div className="bg-[#1a1a2e] p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
+
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 relative z-10">
+              <div>
+                <h1 className="text-5xl font-black text-white tracking-tighter uppercase leading-none">
+                  ESTÁNDAR <span className="text-indigo-500">FLOTA DOC-IMG</span>
+                </h1>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-2 flex items-center gap-2">
+                  <TrendingUp size={14} className="text-emerald-500" /> Auditoría
+                  Mensual de Cumplimiento - Camiones
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 w-full xl:w-auto">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
+                    Regional
+                  </label>
+                  <select
+                    value={filterRegional}
+                    onChange={(e) => {
+                      setFilterRegional(e.target.value);
+                      setFilterCD("Todos");
+                    }}
+                    className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
+                  >
+                    <option value="Todas">Todas</option>
+                    {regionals.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
+                    CD
+                  </label>
+                  <select
+                    value={filterCD}
+                    onChange={(e) => setFilterCD(e.target.value)}
+                    className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
+                  >
+                    <option value="Todos">Todos</option>
+                    {cds.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
+                    Mes
+                  </label>
+                  <select
+                    value={filterMonth}
+                    onChange={(e) => setFilterMonth(e.target.value)}
+                    className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
+                  >
+                    <option value="Todos">Todos</option>
+                    {months.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
+                    Año
+                  </label>
+                  <select
+                    value={filterYear}
+                    onChange={(e) => setFilterYear(e.target.value)}
+                    className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
+                  >
+                    <option value="Todos">Todos</option>
+                    {years.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
+                    Auditor
+                  </label>
+                  <select
+                    value={filterAuditor}
+                    onChange={(e) => setFilterAuditor(e.target.value)}
+                    className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
+                  >
+                    <option value="Todos">Todos</option>
+                    {auditors.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
+                    Contratista
+                  </label>
+                  <select
+                    value={filterContractor}
+                    onChange={(e) => setFilterContractor(e.target.value)}
+                    className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
+                  >
+                    <option value="Todos">Todos</option>
+                    {contractors.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-black text-slate-500 uppercase ml-2 px-1">
+                    Placa
+                  </label>
+                  <select
+                    value={filterPlate}
+                    onChange={(e) => setFilterPlate(e.target.value)}
+                    className="bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 ring-indigo-500 outline-none transition-all text-white font-black"
+                  >
+                    <option value="Todos">Todos</option>
+                    {plates.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* MULTIFILTROS CRUZADOS ACTIVOS */}
+          {(filterRegional !== "Todas" ||
+            filterCD !== "Todos" ||
+            filterMonth !== "Todos" ||
+            filterYear !== "Todos" ||
+            filterAuditor !== "Todos" ||
+            filterContractor !== "Todos" ||
+            filterPlate !== "Todos" ||
+            filterDuration !== "Todos" ||
+            filterCategory !== "Todos") && (
+            <div className="bg-[#1e1e35]/80 border border-indigo-500/30 p-5 rounded-3xl flex flex-wrap items-center justify-between gap-4 animate-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center gap-3">
+                <Filter size={18} className="text-indigo-400 animate-pulse" />
+                <div>
+                  <span className="text-xs font-black text-white uppercase tracking-wider">
+                    Multi-Filtros Cruzados Activos:
+                  </span>
+                  <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wide mt-1">
+                    Haz clic en las barras, porciones, tarjetas o puntos de las
+                    gráficas para filtrar cruzado; haz clic de nuevo para desmarcar.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {filterRegional !== "Todas" && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    REGIONAL: {filterRegional}
+                    <button
+                      onClick={() => setFilterRegional("Todas")}
+                      className="hover:bg-blue-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                {filterCD !== "Todos" && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    CD: {filterCD}
+                    <button
+                      onClick={() => setFilterCD("Todos")}
+                      className="hover:bg-purple-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                {filterMonth !== "Todos" && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    MES: {filterMonth}
+                    <button
+                      onClick={() => setFilterMonth("Todos")}
+                      className="hover:bg-emerald-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                {filterYear !== "Todos" && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    AÑO: {filterYear}
+                    <button
+                      onClick={() => setFilterYear("Todos")}
+                      className="hover:bg-yellow-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                {filterAuditor !== "Todos" && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    AUDITOR: {filterAuditor}
+                    <button
+                      onClick={() => setFilterAuditor("Todos")}
+                      className="hover:bg-rose-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                {filterContractor !== "Todos" && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    CONTRATISTA: {filterContractor}
+                    <button
+                      onClick={() => setFilterContractor("Todos")}
+                      className="hover:bg-sky-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                {filterPlate !== "Todos" && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pink-500/10 text-pink-400 border border-pink-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    PLACA: {filterPlate}
+                    <button
+                      onClick={() => setFilterPlate("Todos")}
+                      className="hover:bg-pink-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                {filterDuration !== "Todos" && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    DURACIÓN: {filterDuration}
+                    <button
+                      onClick={() => setFilterDuration("Todos")}
+                      className="hover:bg-cyan-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                {filterCategory !== "Todos" && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    CATEGORÍA: {filterCategory}
+                    <button
+                      onClick={() => setFilterCategory("Todos")}
+                      className="hover:bg-orange-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                )}
+                <button
+                  onClick={() => {
+                    setFilterRegional("Todas");
+                    setFilterCD("Todos");
+                    setFilterMonth("Todos");
+                    setFilterYear("Todos");
+                    setFilterAuditor("Todos");
+                    setFilterContractor("Todos");
+                    setFilterDuration("Todos");
+                    setFilterCategory("Todos");
+                  }}
+                  className="text-[10px] font-black text-rose-400 hover:text-rose-300 underline uppercase tracking-widest px-2 py-1 cursor-pointer"
+                >
+                  Cerrar Todos
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* TAB CONTENT */}
       <div className="relative z-0">
@@ -4150,6 +4165,10 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
               </table>
             </div>
           </div>
+        )}
+
+        {activeTab === "seguimiento" && (
+          <FleetSeguimientoTab isDarkTheme={true} />
         )}
       </div>
 

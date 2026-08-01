@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyifFPjKOJaMXwVSuA6K1wci6vl-U7PN3OSzop_yo0ujRmS1ine-YvRv4bQI7eVV0K5/exec';
@@ -145,12 +145,20 @@ export const getControlTowerDocId = (): string => {
 
 export const getAuditDocId = (): string => {
   const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_AUDIT_ID') : null;
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  const clean = cleanSpreadsheetId(stored || '');
+  if (!clean || clean === '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU') {
+    return AUDIT_DOC_ID;
+  }
+  return clean;
 };
 
 export const getAuditQsDocId = (): string => {
   const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_AUDIT_QS_ID') : null;
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  const clean = cleanSpreadsheetId(stored || '');
+  if (!clean || clean === '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU') {
+    return AUDIT_DOC_ID;
+  }
+  return clean;
 };
 
 export const getCampaignsDocId = (): string => {
@@ -3092,12 +3100,22 @@ export const FLEET_STANDARD_QUALITY_ITEMS = [
 
 export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardAudit[]> => {
   try {
-    // Try ESTRANDAR first on QS doc, then ESTANDAR
-    let rows = await fetchDataFromGAS(getAuditQsDocId(), 'ESTRANDAR', getGoogleScriptUrl());
-    if (!rows || rows.length < 2) {
-      rows = await fetchDataFromGAS(getAuditQsDocId(), 'ESTANDAR', getGoogleScriptUrl());
+    const docId = getAuditQsDocId();
+    const sheets = ['DASHBOARD-ESTANDAR', 'ESTANDAR', 'ESTÁNDAR', 'ESTRANDAR', 'ESTANDAR FLOTA'];
+    let rows: any[][] | null = null;
+
+    for (const sheetName of sheets) {
+      try {
+        const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
+        if (fetched && fetched.length >= 2) {
+          rows = fetched;
+          break;
+        }
+      } catch (e) {
+        // try next
+      }
     }
-    
+
     if (rows && rows.length >= 2) {
       return processFleetStandardAuditRows(rows);
     }
@@ -3109,35 +3127,46 @@ export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardA
 };
 
 const fetchFleetStandardAuditFromSheetCSV = async (): Promise<FleetStandardAudit[]> => {
-  try {
-    // Try both sheet names for CSV fallback
-    let url = `https://docs.google.com/spreadsheets/d/${getAuditQsDocId()}/gviz/tq?tqx=out:csv&sheet=ESTRANDAR${getCacheBuster()}`;
-    let response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
-    let csvText = await response.text();
-    
-    if (!csvText || csvText.includes("<!DOCTYPE html") || csvText.length < 100) {
-      url = `https://docs.google.com/spreadsheets/d/${getAuditQsDocId()}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`;
-      response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
-      csvText = await response.text();
-    }
-    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+  const docId = getAuditQsDocId();
+  const sheets = ['DASHBOARD-ESTANDAR', 'ESTANDAR', 'ESTÁNDAR', 'ESTRANDAR', 'ESTANDAR FLOTA'];
 
-    return new Promise((resolve) => {
-      Papa.parse(csvText, {
-        header: false,
-        skipEmptyLines: 'greedy',
-        complete: (results) => {
-          const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          resolve(processFleetStandardAuditRows(rows));
-        },
-        error: () => resolve([])
-      });
-    });
-  } catch (e) { return []; }
+  for (const sheetName of sheets) {
+    const urls = [
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`
+    ];
+
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+        const csvText = await response.text();
+        
+        if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
+          const parsed = await new Promise<FleetStandardAudit[]>((resolve) => {
+            Papa.parse(csvText, {
+              header: false,
+              skipEmptyLines: 'greedy',
+              complete: (results) => {
+                const rows = results.data as any[][];
+                if (!rows || rows.length < 2) { resolve([]); return; }
+                resolve(processFleetStandardAuditRows(rows));
+              },
+              error: () => resolve([])
+            });
+          });
+          if (parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        // try next
+      }
+    }
+  }
+  return [];
 };
 
 const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
+  if (!rows || rows.length < 2) return [];
+
   const parseScore = (val: any): number => {
     if (val === null || val === undefined) return 0;
     const clean = String(val).replace('%', '').replace(',', '.').trim();
@@ -3146,9 +3175,49 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
     return num <= 1 ? num * 100 : num;
   };
 
+  // Auto-detect header indices if present
+  const header = rows[0].map(c => String(c || '').toLowerCase().trim());
+  let idxPlaca = header.findIndex(h => h.includes('placa'));
+  let idxRegional = header.findIndex(h => h.includes('regional'));
+  let idxCentro = header.findIndex(h => h.includes('centro') || h.includes('cd'));
+  let idxTipo = header.findIndex(h => h.includes('tipo'));
+  let idxAuditor = header.findIndex(h => h.includes('auditor'));
+  let idxMes = header.findIndex(h => h.includes('mes'));
+  let idxAño = header.findIndex(h => h.includes('año') || h.includes('year') || h.includes('ano'));
+
+  if (idxPlaca === -1) idxPlaca = 8;
+  if (idxRegional === -1) idxRegional = 4;
+  if (idxCentro === -1) idxCentro = 5;
+  if (idxTipo === -1) idxTipo = 6;
+  if (idxAuditor === -1) idxAuditor = 7;
+  if (idxMes === -1) idxMes = 43;
+  if (idxAño === -1) idxAño = 44;
+
   return rows.slice(1)
-    .filter(row => row && row[8]) // Placa
+    .filter(row => {
+      if (!row || !Array.isArray(row)) return false;
+      const p = cleanSheetValue(row[idxPlaca]) || cleanSheetValue(row[8]) || cleanSheetValue(row[10]) || cleanSheetValue(row[6]);
+      return p.length >= 3;
+    })
     .map((row, i): FleetStandardAudit => {
+      let placaVal = cleanSheetValue(row[idxPlaca]);
+      let regVal = cleanSheetValue(row[idxRegional]);
+      let cdVal = cleanSheetValue(row[idxCentro]);
+      let tipoVal = cleanSheetValue(row[idxTipo]);
+      let auditorVal = cleanSheetValue(row[idxAuditor]);
+
+      if (!placaVal || placaVal.length < 3) {
+        if (cleanSheetValue(row[10]) && cleanSheetValue(row[10]).length >= 5) {
+          placaVal = cleanSheetValue(row[10]);
+          regVal = regVal || cleanSheetValue(row[6]);
+          cdVal = cdVal || cleanSheetValue(row[7]);
+          tipoVal = tipoVal || cleanSheetValue(row[8]);
+          auditorVal = auditorVal || cleanSheetValue(row[9]);
+        } else if (cleanSheetValue(row[8]) && cleanSheetValue(row[8]).length >= 5) {
+          placaVal = cleanSheetValue(row[8]);
+        }
+      }
+
       // Binary Security Scores: Index 46 to 72 (27 items)
       const securityScores: number[] = [];
       for (let j = 0; j < 27; j++) {
@@ -3161,16 +3230,19 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
         qualityScores.push(parseInt(cleanSheetValue(row[73 + j])) || 0);
       }
 
+      const mesVal = cleanSheetValue(row[idxMes]) || cleanSheetValue(row[43]) || 'ENERO';
+      const anoVal = parseInt(cleanSheetValue(row[idxAño])) || parseInt(cleanSheetValue(row[44])) || 2026;
+
       return {
         id: cleanSheetValue(row[0]) || `std-audit-${i}`,
         startTime: cleanSheetValue(row[1]),
         endTime: cleanSheetValue(row[2]),
         email: cleanSheetValue(row[3]),
-        regional: cleanSheetValue(row[4]),
-        centro: cleanSheetValue(row[5]),
-        tipoAuditoria: cleanSheetValue(row[6]),
-        auditor: cleanSheetValue(row[7]),
-        placa: normalizePlate(cleanSheetValue(row[8])),
+        regional: regVal || 'REGIONAL BARRANQUILLA',
+        centro: cdVal || 'GENERAL',
+        tipoAuditoria: tipoVal || 'Mensual del estándar',
+        auditor: auditorVal || 'SISTEMA',
+        placa: normalizePlate(placaVal),
         securityScores,
         qualityScores,
         scoreSegNoMand: parseScore(row[79]), // CB
@@ -3180,8 +3252,8 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
         scoreCalMand: parseScore(row[83]), // CF
         scoreTotalMand: parseScore(row[84]), // CG
         observations: cleanSheetValue(row[42]), // AQ
-        mes: cleanSheetValue(row[43]), // AR
-        año: parseInt(cleanSheetValue(row[44])) || 2026, // AS
+        mes: mesVal,
+        año: anoVal,
         tiempoMin: parseFloat(cleanSheetValue(row[45])) || 0, // AT
         evidenciaAntes: cleanSheetValue(row[85]), // CH
         fechaCierre: parseFlexibleDate(row[86]), // CI
@@ -3232,11 +3304,26 @@ export const submitFleetCierreUpdateToSheet = async (data: {
 
 export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(getAuditDocId(), 'CIERRE', getGoogleScriptUrl());
-    if (!rows || rows.length < 2) {
-      return fetchFleetCierreFromSheetCSV();
+    const docId = getAuditDocId();
+    const sheets = ['CIERRE DE NOVEDADES', 'CIERRE', 'CIERRE1', 'CIERRE DE NOVEDAD'];
+    let rows: any[][] | null = null;
+
+    for (const sheetName of sheets) {
+      try {
+        const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
+        if (fetched && fetched.length >= 2) {
+          rows = fetched;
+          break;
+        }
+      } catch (e) {
+        // try next
+      }
     }
-    return processFleetCierreRows(rows);
+
+    if (rows && rows.length >= 2) {
+      return processFleetCierreRows(rows);
+    }
+    return fetchFleetCierreFromSheetCSV();
   } catch (e) {
     console.error("Error fetching fleet standard closure from GAS:", e);
     return fetchFleetCierreFromSheetCSV();
@@ -3244,41 +3331,90 @@ export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> 
 };
 
 const fetchFleetCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${getAuditDocId()}/gviz/tq?tqx=out:csv&sheet=CIERRE${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
-    const csvText = await response.text();
-    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+  const docId = getAuditDocId();
+  const sheets = ['CIERRE DE NOVEDADES', 'CIERRE', 'CIERRE1', 'CIERRE DE NOVEDAD'];
 
-    return new Promise((resolve) => {
-      Papa.parse(csvText, {
-        header: false,
-        skipEmptyLines: 'greedy',
-        complete: (results) => {
-          const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          resolve(processFleetCierreRows(rows));
-        },
-        error: () => resolve([])
-      });
-    });
-  } catch (e) { return []; }
+  for (const sheetName of sheets) {
+    const urls = [
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`
+    ];
+
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+        const csvText = await response.text();
+        
+        if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
+          const parsed = await new Promise<FleetCierreRecord[]>((resolve) => {
+            Papa.parse(csvText, {
+              header: false,
+              skipEmptyLines: 'greedy',
+              complete: (results) => {
+                const rows = results.data as any[][];
+                if (!rows || rows.length < 2) { resolve([]); return; }
+                resolve(processFleetCierreRows(rows));
+              },
+              error: () => resolve([])
+            });
+          });
+          if (parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        // try next
+      }
+    }
+  }
+  return [];
 };
 
 const processFleetCierreRows = (rows: any[][]): FleetCierreRecord[] => {
+  if (!rows || rows.length < 2) return [];
+
+  const header = rows[0].map(c => String(c || '').toLowerCase().trim());
+  let idxFecha = header.findIndex(h => h.includes('fecha'));
+  let idxPlaca = header.findIndex(h => h.includes('placa'));
+  let idxCD = header.findIndex(h => h.includes('cd') || h.includes('centro'));
+  let idxContratista = header.findIndex(h => h.includes('contratista') || h.includes('empresa'));
+  let idxItem = header.findIndex(h => h.includes('item') || h.includes('novedad') || h.includes('hallazgo'));
+  let idxVerif = header.findIndex(h => h.includes('verificaci') || h.includes('observaci') || h.includes('accion') || h.includes('acción'));
+  let idxEvid = header.findIndex(h => h.includes('evidenci') || h.includes('foto'));
+  let idxEstado = header.findIndex(h => h.includes('estado') || h.includes('cierre') || h.includes('status'));
+
+  if (idxFecha === -1) idxFecha = 0;
+  if (idxPlaca === -1) idxPlaca = 1;
+  if (idxCD === -1) idxCD = 2;
+  if (idxContratista === -1) idxContratista = 3;
+  if (idxItem === -1) idxItem = 4;
+  if (idxVerif === -1) idxVerif = 5;
+  if (idxEvid === -1) idxEvid = 6;
+  if (idxEstado === -1) idxEstado = 7;
+
   return rows.slice(1)
-    .filter(row => row && row[1]) // Placa Check
+    .filter(row => row && (cleanSheetValue(row[idxPlaca]) || cleanSheetValue(row[1]) || cleanSheetValue(row[2])))
     .map((row, i): FleetCierreRecord => {
+      let pVal = cleanSheetValue(row[idxPlaca]);
+      let cdVal = cleanSheetValue(row[idxCD]);
+
+      if (!pVal || pVal.length < 3) {
+        if (cleanSheetValue(row[2]) && cleanSheetValue(row[2]).length >= 5) {
+          pVal = cleanSheetValue(row[2]);
+          cdVal = cleanSheetValue(row[1]);
+        } else if (cleanSheetValue(row[1]) && cleanSheetValue(row[1]).length >= 5) {
+          pVal = cleanSheetValue(row[1]);
+        }
+      }
+
       return {
-        id: `cierre-${i}-${cleanSheetValue(row[1])}`,
-        fecha: parseFlexibleDate(row[0]),
-        placa: normalizePlate(cleanSheetValue(row[1])),
-        cd: cleanSheetValue(row[2]) || 'GENERAL',
-        contratista: cleanSheetValue(row[3]) || 'Otros',
-        item: cleanSheetValue(row[4]),
-        verificacion: cleanSheetValue(row[5]),
-        evidencia: cleanSheetValue(row[6]),
-        estado: cleanSheetValue(row[7]) || 'PENDIENTE'
+        id: `cierre-${i}-${pVal}`,
+        fecha: parseFlexibleDate(row[idxFecha]),
+        placa: normalizePlate(pVal),
+        cd: cdVal || 'GENERAL',
+        contratista: cleanSheetValue(row[idxContratista]) || 'Otros',
+        item: cleanSheetValue(row[idxItem]),
+        verificacion: cleanSheetValue(row[idxVerif]),
+        evidencia: cleanSheetValue(row[idxEvid]),
+        estado: cleanSheetValue(row[idxEstado]) || 'PENDIENTE'
       };
     });
 };
@@ -3311,21 +3447,36 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
 };
 
 export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
-  try {
-    const rows = await fetchDataFromGAS(getAuditQsDocId(), 'CIERRE1', getGoogleScriptUrl());
-    if (!rows || rows.length < 2) {
-      return fetchCalidadCierreFromSheetCSV();
-    }
-    return processCalidadCierreRows(rows);
-  } catch (e) {
-    console.error("Error fetching calidad standard closure from GAS:", e);
-    return fetchCalidadCierreFromSheetCSV();
-  }
+  return fetchFleetCierreFromSheet();
 };
 
 const fetchCalidadCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
+  return fetchFleetCierreFromSheetCSV();
+};
+
+const processCalidadCierreRows = (rows: any[][]): FleetCierreRecord[] => {
+  return processFleetCierreRows(rows);
+};
+
+export const fetchSeguimientoFromSheet = async (): Promise<FleetSeguimientoRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${getAuditQsDocId()}/gviz/tq?tqx=out:csv&sheet=CIERRE1${getCacheBuster()}`;
+    // SEGUIMIENTO sheet is located in AUDIT_DOC_ID ('1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs')
+    const docId = AUDIT_DOC_ID;
+    const rows = await fetchDataFromGAS(docId, 'SEGUIMIENTO', getGoogleScriptUrl());
+    if (!rows || rows.length < 2) {
+      return fetchSeguimientoFromSheetCSV();
+    }
+    return processSeguimientoRows(rows);
+  } catch (e) {
+    console.error("Error fetching seguimiento from GAS:", e);
+    return fetchSeguimientoFromSheetCSV();
+  }
+};
+
+const fetchSeguimientoFromSheetCSV = async (): Promise<FleetSeguimientoRecord[]> => {
+  try {
+    const docId = AUDIT_DOC_ID;
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=SEGUIMIENTO${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
@@ -3337,7 +3488,7 @@ const fetchCalidadCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> =>
         complete: (results) => {
           const rows = results.data as any[][];
           if (!rows || rows.length < 2) { resolve([]); return; }
-          resolve(processCalidadCierreRows(rows));
+          resolve(processSeguimientoRows(rows));
         },
         error: () => resolve([])
       });
@@ -3345,20 +3496,86 @@ const fetchCalidadCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> =>
   } catch (e) { return []; }
 };
 
-const processCalidadCierreRows = (rows: any[][]): FleetCierreRecord[] => {
+export const formatMonthName = (val: any): string => {
+  if (val === null || val === undefined) return '';
+  const str = String(val).trim().toUpperCase();
+  if (!str) return '';
+
+  const MONTH_NAMES = [
+    'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+    'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+  ];
+
+  // If numeric (e.g. 1..12, "1", "06", "6.0", etc.)
+  const num = parseInt(str, 10);
+  if (!isNaN(num) && num >= 1 && num <= 12 && (String(num) === str || str.startsWith(String(num)) || str.length <= 2 || str.endsWith('.0'))) {
+    return MONTH_NAMES[num - 1];
+  }
+
+  // Exact match with month names
+  const matchIdx = MONTH_NAMES.findIndex(m => m === str);
+  if (matchIdx !== -1) return MONTH_NAMES[matchIdx];
+
+  // Prefix match (e.g., JUN, JUL, SEP, etc.)
+  const prefixIdx = MONTH_NAMES.findIndex(m => m.startsWith(str) && str.length >= 3);
+  if (prefixIdx !== -1) return MONTH_NAMES[prefixIdx];
+
+  return str;
+};
+
+const processSeguimientoRows = (rows: any[][]): FleetSeguimientoRecord[] => {
+  if (!rows || rows.length < 2) return [];
+
+  const headers = (rows[0] || []).map(h => String(h || '').trim().toUpperCase());
+  
+  // Reject form responses sheets (e.g. Tabla_1) if returned by mistake
+  const isFormResponseHeader = headers.some(h => h.includes("HORA DE INICIO") || h.includes("CORREO ELECTRÓNICO") || h.includes("REGISTRE LA PLACA"));
+  if (isFormResponseHeader) {
+    console.warn("processSeguimientoRows received generic form response header instead of SEGUIMIENTO");
+    return [];
+  }
+
+  let idxLlave = headers.findIndex(h => h.includes("LLAVE"));
+  let idxFecha = headers.findIndex(h => h.includes("FECHA"));
+  let idxMes = headers.findIndex(h => h === "MES" || h.includes("MES"));
+  let idxCd = headers.findIndex(h => h === "CD" || h.includes("CENTRO") || h.includes("CD"));
+  let idxContratista = headers.findIndex(h => h.includes("CONTRATISTA"));
+  let idxPlaca = headers.findIndex(h => h.includes("PLACA") || h.includes("MATRICULA") || h.includes("MATRÍCULA"));
+  let idxValidador = headers.findIndex(h => h.includes("VALIDADOR"));
+  let idxEncargado = headers.findIndex(h => h.includes("ENCARCADO") || h.includes("ENCARGADO"));
+
+  // Strict column fallbacks specified for SEGUIMIENTO sheet:
+  // Col A (0): LLAVE
+  // Col B (1): FECHA
+  // Col C (2): MES
+  // Col D (3): CD
+  // Col E (4): contratista
+  // Col F (5): PLACA / MATRÍCULA
+  // Col G (6): VALIDADOR
+  // Col H (7): ENCARCADO / ENCARGADO
+  if (idxLlave === -1) idxLlave = 0;
+  if (idxFecha === -1) idxFecha = 1;
+  if (idxMes === -1) idxMes = 2;
+  if (idxCd === -1) idxCd = 3;
+  if (idxContratista === -1) idxContratista = 4;
+  if (idxPlaca === -1) idxPlaca = 5;
+  if (idxValidador === -1) idxValidador = 6;
+  if (idxEncargado === -1) idxEncargado = 7;
+
   return rows.slice(1)
-    .filter(row => row && row[2]) // Placa Check (Col C / Index 2)
-    .map((row, i): FleetCierreRecord => {
+    .filter(row => row && (row[idxMes] || row[idxCd] || row[idxPlaca]))
+    .map((row, i): FleetSeguimientoRecord => {
+      const placaRaw = cleanSheetValue(row[idxPlaca]);
       return {
-        id: `calidad-cierre-${i}-${cleanSheetValue(row[2])}`,
-        fecha: parseFlexibleDate(row[0]),                 // Col A (FECHA)
-        cd: cleanSheetValue(row[1]) || 'GENERAL',         // Col B (CD)
-        placa: normalizePlate(cleanSheetValue(row[2])),   // Col C (PLACA)
-        item: cleanSheetValue(row[3]),                    // Col D (ITEM)
-        verificacion: cleanSheetValue(row[4]),            // Col E (VERIFICACION)
-        evidencia: cleanSheetValue(row[5]),               // Col F (EVIDENCIA)
-        estado: cleanSheetValue(row[6]) || 'PENDIENTE',   // Col G (ESTADO)
-        contratista: 'Otros'
+        id: `seg-${i}-${placaRaw || i}`,
+        llave: cleanSheetValue(row[idxLlave]),
+        fecha: cleanSheetValue(row[idxFecha]),
+        mes: formatMonthName(cleanSheetValue(row[idxMes])),
+        cd: cleanSheetValue(row[idxCd]) || 'GENERAL',
+        contratista: cleanSheetValue(row[idxContratista]),
+        placa: normalizePlate(placaRaw),
+        validador: cleanSheetValue(row[idxValidador]),
+        encargado: cleanSheetValue(row[idxEncargado]),
       };
     });
 };

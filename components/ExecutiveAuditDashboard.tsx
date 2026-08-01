@@ -21,6 +21,7 @@ import {
   fetchCalidadCierreFromSheet,
   submitCalidadCierreUpdateToSheet
 } from '../services/sheetService';
+import { FleetSeguimientoTab } from './FleetSeguimientoTab';
 
 const COLORS = {
   primary: '#2563EB',    // Professional Blue
@@ -50,12 +51,12 @@ const normalizeAuditor = (name: string) => {
 const ExecutiveAuditDashboard: React.FC = () => {
   const [data, setData] = useState<FleetStandardAudit[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'cierre'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'cierre' | 'seguimiento'>('dashboard');
   
   // Filters
   const [filterCentro, setFilterCentro] = useState('TODOS');
   const [filterMes, setFilterMes] = useState('TODOS');
-  const [filterTipo, setFilterTipo] = useState('Mensual del estándar');
+  const [filterTipo, setFilterTipo] = useState('TODOS');
   const [filterAuditor, setFilterAuditor] = useState('TODOS');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAudit, setSelectedAudit] = useState<FleetStandardAudit | null>(null);
@@ -131,15 +132,25 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
   const filteredData = useMemo(() => {
     return data.filter(item => {
-      // Exclude "Auditoría Cruzada" from global visual as requested
-      if (item.tipoAuditoria === 'Auditoría Cruzada') return false;
+      // Exclude "Auditoría Cruzada" from global visual as requested if explicitly selected
+      const itemTipo = (item.tipoAuditoria || '').toLowerCase().trim();
+      if (itemTipo.includes('cruzada')) return false;
 
-      const matchCentro = filterCentro === 'TODOS' || item.centro === filterCentro;
-      const matchMes = filterMes === 'TODOS' || item.mes.toLowerCase() === filterMes.toLowerCase();
-      const matchTipo = filterTipo === 'TODOS' || item.tipoAuditoria === filterTipo;
+      const itemCentro = (item.centro || '').toLowerCase().trim();
+      const selCentro = filterCentro.toLowerCase().trim();
+      const matchCentro = filterCentro === 'TODOS' || itemCentro === selCentro || itemCentro.includes(selCentro.replace('dc ', '').trim());
+
+      const itemMes = (item.mes || '').toLowerCase().trim();
+      const selMes = filterMes.toLowerCase().trim();
+      const matchMes = filterMes === 'TODOS' || itemMes === selMes;
+
+      const selTipo = filterTipo.toLowerCase().trim();
+      const matchTipo = filterTipo === 'TODOS' || itemTipo === selTipo || (selTipo.includes('mensual') && (itemTipo.includes('mensual') || itemTipo.includes('estandar') || itemTipo.includes('estándar') || !itemTipo));
+
       const matchAuditor = filterAuditor === 'TODOS' || normalizeAuditor(item.auditor) === normalizeAuditor(filterAuditor);
+
       const matchSearch = !searchTerm || 
-        item.placa.toUpperCase().includes(searchTerm.toUpperCase()) ||
+        (item.placa && item.placa.toUpperCase().includes(searchTerm.toUpperCase())) ||
         (item.observations && item.observations.toUpperCase().includes(searchTerm.toUpperCase()));
       return matchCentro && matchMes && matchTipo && matchAuditor && matchSearch;
     });
@@ -602,81 +613,8 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F0F4FF] text-slate-800 p-4 lg:p-8 font-sans selection:bg-blue-200 selection:text-blue-900">
-      {/* Header & Filters */}
-      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-8 mb-12">
-        <header>
-          <div className="flex items-center gap-4 mb-4">
-            <div className="p-3 bg-blue-50 rounded-2xl border border-blue-200 shadow-sm">
-              <Shield className="text-blue-600" size={32} />
-            </div>
-            <div>
-              <h1 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-slate-900">
-                Estándar de Flota <span className="text-blue-600">Calidad y Seg.</span>
-              </h1>
-              <p className="text-blue-600/60 text-xs font-bold uppercase tracking-[0.4em] mt-2 flex items-center gap-2">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
-                BARRANQUILLA
-              </p>
-            </div>
-          </div>
-        </header>
-
-        {/* Filters Panel */}
-        <div className="grid grid-cols-2 lg:flex gap-4 bg-white p-4 rounded-[2rem] border border-slate-200 shadow-sm">
-          <div className="space-y-2 lg:w-48">
-            <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Centro</label>
-            <select 
-              value={filterCentro}
-              onChange={(e) => setFilterCentro(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
-            >
-              <option value="TODOS">TODOS LOS CENTROS</option>
-              <option value="DC Galapa">DC GALAPA</option>
-              <option value="DC La Arenosa">DC LA ARENOSA</option>
-            </select>
-          </div>
-          <div className="space-y-2 lg:w-48">
-            <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Mes</label>
-            <select 
-              value={filterMes}
-              onChange={(e) => setFilterMes(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
-            >
-              <option value="TODOS">TODOS LOS MESES</option>
-              {uniqueMonths.map(m => (
-                <option key={m} value={m}>{m.toUpperCase()}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2 lg:w-48">
-            <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Tipo</label>
-            <select 
-              value={filterTipo}
-              onChange={(e) => setFilterTipo(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
-            >
-              <option value="TODOS">TODAS (EXCL. CRUZADA)</option>
-              <option value="Mensual del estándar">MENSUAL ESTÁNDAR</option>
-            </select>
-          </div>
-          <div className="space-y-2 lg:w-48">
-            <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Auditor</label>
-            <select 
-              value={filterAuditor}
-              onChange={(e) => setFilterAuditor(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
-            >
-              <option value="TODOS">TODOS LOS AUDITORES</option>
-              {uniqueAuditors.map(aud => (
-                <option key={aud} value={aud}>{aud.toUpperCase()}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
       {/* Tab Switcher */}
-      <div className="flex gap-4 mb-8">
+      <div className="flex flex-wrap gap-4 mb-8">
         <button 
           onClick={() => setActiveTab('dashboard')}
           className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
@@ -689,7 +627,88 @@ const ExecutiveAuditDashboard: React.FC = () => {
         >
           Cierre de Novedades
         </button>
+        <button 
+          onClick={() => setActiveTab('seguimiento')}
+          className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'seguimiento' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+        >
+          Seguimiento
+        </button>
       </div>
+
+      {/* Header & Filters (solo visible en Dashboard y Cierre de Novedades) */}
+      {activeTab !== 'seguimiento' && (
+        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-8 mb-12">
+          <header>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-blue-50 rounded-2xl border border-blue-200 shadow-sm">
+                <Shield className="text-blue-600" size={32} />
+              </div>
+              <div>
+                <h1 className="text-3xl font-black italic tracking-tighter uppercase leading-none text-slate-900">
+                  Estándar de Flota <span className="text-blue-600">Calidad y Seg.</span>
+                </h1>
+                <p className="text-blue-600/60 text-xs font-bold uppercase tracking-[0.4em] mt-2 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+                  BARRANQUILLA
+                </p>
+              </div>
+            </div>
+          </header>
+
+          {/* Filters Panel */}
+          <div className="grid grid-cols-2 lg:flex gap-4 bg-white p-4 rounded-[2rem] border border-slate-200 shadow-sm">
+            <div className="space-y-2 lg:w-48">
+              <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Centro</label>
+              <select 
+                value={filterCentro}
+                onChange={(e) => setFilterCentro(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
+              >
+                <option value="TODOS">TODOS LOS CENTROS</option>
+                <option value="DC Galapa">DC GALAPA</option>
+                <option value="DC La Arenosa">DC LA ARENOSA</option>
+              </select>
+            </div>
+            <div className="space-y-2 lg:w-48">
+              <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Mes</label>
+              <select 
+                value={filterMes}
+                onChange={(e) => setFilterMes(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
+              >
+                <option value="TODOS">TODOS LOS MESES</option>
+                {uniqueMonths.map(m => (
+                  <option key={m} value={m}>{m.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2 lg:w-48">
+              <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Tipo</label>
+              <select 
+                value={filterTipo}
+                onChange={(e) => setFilterTipo(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
+              >
+                <option value="TODOS">TODAS (EXCL. CRUZADA)</option>
+                <option value="Mensual del estándar">MENSUAL ESTÁNDAR</option>
+              </select>
+            </div>
+            <div className="space-y-2 lg:w-48">
+              <label className="text-[9px] font-black text-blue-600 uppercase tracking-widest ml-2">Auditor</label>
+              <select 
+                value={filterAuditor}
+                onChange={(e) => setFilterAuditor(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-bold focus:border-blue-500/50 outline-none transition-all appearance-none cursor-pointer"
+              >
+                <option value="TODOS">TODOS LOS AUDITORES</option>
+                {uniqueAuditors.map(aud => (
+                  <option key={aud} value={aud}>{aud.toUpperCase()}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'dashboard' ? (
         metrics ? (
@@ -967,7 +986,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
             <h3 className="text-xl font-black uppercase tracking-widest text-slate-500">No hay datos para los filtros seleccionados</h3>
           </div>
         )
-      ) : (
+      ) : activeTab === 'cierre' ? (
         /* CIERRE DE NOVEDADES TAB */
         <div className="space-y-8">
           {/* Search Bar and Item Filter for Table */}
@@ -1203,6 +1222,8 @@ const ExecutiveAuditDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      ) : (
+        <FleetSeguimientoTab />
       )}
       <AnimatePresence>
         {showEvidenceModal && (

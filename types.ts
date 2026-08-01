@@ -495,6 +495,18 @@ export interface FleetCierreRecord {
   contratista?: string;  // Derived or optional
 }
 
+export interface FleetSeguimientoRecord {
+  id: string;
+  llave?: string;       // Indice 0 (LLAVE)
+  fecha?: string;       // Indice 1 (FECHA)
+  mes: string;          // Indice 2 (MES)
+  cd: string;           // Indice 3 (CD)
+  contratista: string;  // Indice 4 (contratista)
+  placa: string;        // Indice 5 (PLACA / MATRÍCULA)
+  validador: string;    // Indice 6 (VALIDADOR)
+  encargado: string;    // Indice 7 (ENCARCADO / ENCARGADO)
+}
+
 
 
 
