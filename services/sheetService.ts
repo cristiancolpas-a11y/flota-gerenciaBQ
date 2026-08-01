@@ -140,7 +140,11 @@ export const getFinesSheetId = (): string => {
 
 export const getControlTowerDocId = (): string => {
   const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_CONTROL_TOWER_ID') : null;
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  const clean = cleanSpreadsheetId(stored || '');
+  if (!clean || clean === '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU') {
+    return CONTROL_TOWER_DOC_ID;
+  }
+  return clean;
 };
 
 export const getAuditDocId = (): string => {
@@ -2674,16 +2678,27 @@ export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
 
 export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(getControlTowerDocId(), 'CIERRE DE NOVEDADES', getGoogleScriptUrl());
+    const docId = getControlTowerDocId();
+    const scriptUrl = getGoogleScriptUrl();
+    console.log("[fetchControlTowerFromSheet] Iniciando lectura. DocID:", docId, "| ScriptUrl:", scriptUrl);
+
+    const rows = await fetchDataFromGAS(docId, 'CIERRE DE NOVEDADES', scriptUrl);
+    console.log("[fetchControlTowerFromSheet] Filas recibidas de fetchDataFromGAS:", rows ? rows.length : 0);
     
     if (!rows || rows.length < 2) {
       console.warn("GAS fetch control tower failed, attempting CSV fallback");
       return fetchControlTowerFromSheetCSV();
     }
 
-    return rows.slice(1)
-      .filter(row => row && row[5]) // Placa en indice 5
-      .map((row, i): ControlTowerRecord => {
+    const rowsWithoutHeader = rows.slice(1);
+    const filteredRows = rowsWithoutHeader.filter(row => row && row[5]);
+    console.log("[fetchControlTowerFromSheet] Filas sin encabezado:", rowsWithoutHeader.length, "| Filas después del filtro (.filter(row => row && row[5])):", filteredRows.length);
+
+    if (rowsWithoutHeader.length > 0 && filteredRows.length === 0) {
+      console.warn("[fetchControlTowerFromSheet] Ejemplo de primera fila recibida:", rowsWithoutHeader[0]);
+    }
+
+    return filteredRows.map((row, i): ControlTowerRecord => {
         const parseNum = (val: any) => {
           const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
           return parseFloat(clean) || 0;
@@ -2722,7 +2737,9 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
 
 const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${getControlTowerDocId()}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
+    const docId = getControlTowerDocId();
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
+    console.log("[fetchControlTowerFromSheetCSV] Intentando CSV fallback con URL:", url);
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) {
@@ -2736,11 +2753,14 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
         skipEmptyLines: 'greedy',
         complete: (results) => {
           const rows = results.data as any[][];
+          console.log("[fetchControlTowerFromSheetCSV] Filas parseadas del CSV:", rows ? rows.length : 0);
           if (!rows || rows.length < 2) { resolve(getMockControlTowerRecords()); return; }
 
-          const records = rows.slice(1)
-            .filter(row => row && row[5]) // Placa en indice 5
-            .map((row, i): ControlTowerRecord => {
+          const rowsWithoutHeader = rows.slice(1);
+          const filteredRows = rowsWithoutHeader.filter(row => row && row[5]);
+          console.log("[fetchControlTowerFromSheetCSV] Filas sin encabezado:", rowsWithoutHeader.length, "| Filas tras filtro (row[5]):", filteredRows.length);
+
+          const records = filteredRows.map((row, i): ControlTowerRecord => {
               const parseNum = (val: any) => {
                 const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
                 return parseFloat(clean) || 0;
@@ -2774,13 +2794,13 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
           resolve(records);
         },
         error: (err) => {
-          console.warn("PapaParse error (control tower), falling back to mock data:", err);
-          resolve(getMockControlTowerRecords());
+          console.error("[fetchControlTowerFromSheetCSV] Error al parsear CSV:", err);
+          resolve([]);
         }
       });
     });
   } catch (e) {
-    console.warn("Could not fetch control tower online. Serving simulated/demo control tower data: ", e);
+    console.error("[fetchControlTowerFromSheetCSV] Excepción:", e);
     return getMockControlTowerRecords();
   }
 };
