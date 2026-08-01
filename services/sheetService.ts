@@ -3100,20 +3100,30 @@ export const FLEET_STANDARD_QUALITY_ITEMS = [
 
 export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardAudit[]> => {
   try {
-    const docId = getAuditQsDocId();
+    const docIds = [
+      '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
+      '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
+      getAuditQsDocId(),
+      getAuditDocId(),
+      getControlTowerDocId()
+    ];
+    const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
     const sheets = ['DASHBOARD-ESTANDAR', 'ESTANDAR', 'ESTÁNDAR', 'ESTRANDAR', 'ESTANDAR FLOTA'];
     let rows: any[][] | null = null;
 
-    for (const sheetName of sheets) {
-      try {
-        const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
-        if (fetched && fetched.length >= 2) {
-          rows = fetched;
-          break;
+    for (const docId of uniqueDocIds) {
+      for (const sheetName of sheets) {
+        try {
+          const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
+          if (fetched && fetched.length >= 2) {
+            rows = fetched;
+            break;
+          }
+        } catch (e) {
+          // try next
         }
-      } catch (e) {
-        // try next
       }
+      if (rows && rows.length >= 2) break;
     }
 
     if (rows && rows.length >= 2) {
@@ -3127,37 +3137,76 @@ export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardA
 };
 
 const fetchFleetStandardAuditFromSheetCSV = async (): Promise<FleetStandardAudit[]> => {
-  const docId = getAuditQsDocId();
+  const docIds = [
+    '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
+    '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
+    getAuditQsDocId(),
+    getAuditDocId(),
+    getControlTowerDocId()
+  ];
+  const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
   const sheets = ['DASHBOARD-ESTANDAR', 'ESTANDAR', 'ESTÁNDAR', 'ESTRANDAR', 'ESTANDAR FLOTA'];
 
-  for (const sheetName of sheets) {
-    const urls = [
-      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`
-    ];
+  // Direct GID fallback for 326221775
+  const directGidUrls = [
+    `https://docs.google.com/spreadsheets/d/1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs/export?format=csv&gid=326221775${getCacheBuster()}`,
+    `https://docs.google.com/spreadsheets/d/1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs/gviz/tq?tqx=out:csv&gid=326221775${getCacheBuster()}`
+  ];
 
-    for (const url of urls) {
-      try {
-        const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
-        const csvText = await response.text();
-        
-        if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
-          const parsed = await new Promise<FleetStandardAudit[]>((resolve) => {
-            Papa.parse(csvText, {
-              header: false,
-              skipEmptyLines: 'greedy',
-              complete: (results) => {
-                const rows = results.data as any[][];
-                if (!rows || rows.length < 2) { resolve([]); return; }
-                resolve(processFleetStandardAuditRows(rows));
-              },
-              error: () => resolve([])
-            });
+  for (const url of directGidUrls) {
+    try {
+      const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+      const csvText = await response.text();
+      if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
+        const parsed = await new Promise<FleetStandardAudit[]>((resolve) => {
+          Papa.parse(csvText, {
+            header: false,
+            skipEmptyLines: 'greedy',
+            complete: (results) => {
+              const rows = results.data as any[][];
+              if (!rows || rows.length < 2) { resolve([]); return; }
+              resolve(processFleetStandardAuditRows(rows));
+            },
+            error: () => resolve([])
           });
-          if (parsed.length > 0) return parsed;
+        });
+        if (parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      // try next
+    }
+  }
+
+  for (const docId of uniqueDocIds) {
+    for (const sheetName of sheets) {
+      const urls = [
+        `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`,
+        `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`
+      ];
+
+      for (const url of urls) {
+        try {
+          const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+          const csvText = await response.text();
+          
+          if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
+            const parsed = await new Promise<FleetStandardAudit[]>((resolve) => {
+              Papa.parse(csvText, {
+                header: false,
+                skipEmptyLines: 'greedy',
+                complete: (results) => {
+                  const rows = results.data as any[][];
+                  if (!rows || rows.length < 2) { resolve([]); return; }
+                  resolve(processFleetStandardAuditRows(rows));
+                },
+                error: () => resolve([])
+              });
+            });
+            if (parsed.length > 0) return parsed;
+          }
+        } catch (e) {
+          // try next
         }
-      } catch (e) {
-        // try next
       }
     }
   }
@@ -3284,40 +3333,53 @@ export const submitFleetCierreUpdateToSheet = async (data: {
   evidence: string | string[];
   verification?: string;
 }): Promise<boolean> => {
-  try {
-    const result = await sendToGAS({
-      method: 'POST_FLEET_CIERRE_UPDATE',
-      data: { ...data, docId: getAuditDocId() }
-    }, getGoogleScriptUrl(), true);
-    if (result && (result as any).status === 'success') {
-      return true;
+  const docIds = ['1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60', getAuditDocId()];
+  for (const docId of docIds) {
+    try {
+      const result = await sendToGAS({
+        method: 'POST_FLEET_CIERRE_UPDATE',
+        data: { ...data, docId }
+      }, getGoogleScriptUrl(), true);
+      if (result && (result as any).status === 'success') {
+        return true;
+      }
+    } catch (e) {
+      console.warn("GAS - CORS failed for fleet closure update, attempting fallback no-cors:", e);
     }
-  } catch (e) {
-    console.warn("GAS - CORS failed for fleet closure update, attempting fallback no-cors:", e);
+    const success = await sendToGAS({
+      method: 'POST_FLEET_CIERRE_UPDATE',
+      data: { ...data, docId }
+    }, getGoogleScriptUrl(), false);
+    if (success) return true;
   }
-  const success = await sendToGAS({
-    method: 'POST_FLEET_CIERRE_UPDATE',
-    data: { ...data, docId: getAuditDocId() }
-  }, getGoogleScriptUrl(), false);
-  return success;
+  return false;
 };
 
 export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
   try {
-    const docId = getAuditDocId();
-    const sheets = ['CIERRE DE NOVEDADES', 'CIERRE', 'CIERRE1', 'CIERRE DE NOVEDAD'];
+    const docIds = [
+      '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60',
+      getControlTowerDocId(),
+      '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
+      getAuditDocId()
+    ];
+    const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
+    const sheets = ['CIERRE DE NOVEDADES', 'Cierre de Novedades', 'CIERRE', 'CIERRE1', 'CIERRE DE NOVEDAD'];
     let rows: any[][] | null = null;
 
-    for (const sheetName of sheets) {
-      try {
-        const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
-        if (fetched && fetched.length >= 2) {
-          rows = fetched;
-          break;
+    for (const docId of uniqueDocIds) {
+      for (const sheetName of sheets) {
+        try {
+          const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
+          if (fetched && fetched.length >= 2) {
+            rows = fetched;
+            break;
+          }
+        } catch (e) {
+          // try next
         }
-      } catch (e) {
-        // try next
       }
+      if (rows && rows.length >= 2) break;
     }
 
     if (rows && rows.length >= 2) {
@@ -3331,37 +3393,75 @@ export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> 
 };
 
 const fetchFleetCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
-  const docId = getAuditDocId();
-  const sheets = ['CIERRE DE NOVEDADES', 'CIERRE', 'CIERRE1', 'CIERRE DE NOVEDAD'];
+  const docIds = [
+    '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60',
+    getControlTowerDocId(),
+    '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
+    getAuditDocId()
+  ];
+  const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
+  const sheets = ['CIERRE DE NOVEDADES', 'Cierre de Novedades', 'CIERRE', 'CIERRE1', 'CIERRE DE NOVEDAD'];
 
-  for (const sheetName of sheets) {
-    const urls = [
-      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`
-    ];
+  // Direct GID fallback for Torre de Control sheet 1012312873
+  const directGidUrls = [
+    `https://docs.google.com/spreadsheets/d/1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60/export?format=csv&gid=1012312873${getCacheBuster()}`,
+    `https://docs.google.com/spreadsheets/d/1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60/gviz/tq?tqx=out:csv&gid=1012312873${getCacheBuster()}`
+  ];
 
-    for (const url of urls) {
-      try {
-        const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
-        const csvText = await response.text();
-        
-        if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
-          const parsed = await new Promise<FleetCierreRecord[]>((resolve) => {
-            Papa.parse(csvText, {
-              header: false,
-              skipEmptyLines: 'greedy',
-              complete: (results) => {
-                const rows = results.data as any[][];
-                if (!rows || rows.length < 2) { resolve([]); return; }
-                resolve(processFleetCierreRows(rows));
-              },
-              error: () => resolve([])
-            });
+  for (const url of directGidUrls) {
+    try {
+      const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+      const csvText = await response.text();
+      if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
+        const parsed = await new Promise<FleetCierreRecord[]>((resolve) => {
+          Papa.parse(csvText, {
+            header: false,
+            skipEmptyLines: 'greedy',
+            complete: (results) => {
+              const rows = results.data as any[][];
+              if (!rows || rows.length < 2) { resolve([]); return; }
+              resolve(processFleetCierreRows(rows));
+            },
+            error: () => resolve([])
           });
-          if (parsed.length > 0) return parsed;
+        });
+        if (parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      // try next
+    }
+  }
+
+  for (const docId of uniqueDocIds) {
+    for (const sheetName of sheets) {
+      const urls = [
+        `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`,
+        `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`
+      ];
+
+      for (const url of urls) {
+        try {
+          const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+          const csvText = await response.text();
+          
+          if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
+            const parsed = await new Promise<FleetCierreRecord[]>((resolve) => {
+              Papa.parse(csvText, {
+                header: false,
+                skipEmptyLines: 'greedy',
+                complete: (results) => {
+                  const rows = results.data as any[][];
+                  if (!rows || rows.length < 2) { resolve([]); return; }
+                  resolve(processFleetCierreRows(rows));
+                },
+                error: () => resolve([])
+              });
+            });
+            if (parsed.length > 0) return parsed;
+          }
+        } catch (e) {
+          // try next
         }
-      } catch (e) {
-        // try next
       }
     }
   }

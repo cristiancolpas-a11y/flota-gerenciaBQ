@@ -343,9 +343,12 @@ const ExecutiveAuditDashboard: React.FC = () => {
   const filteredCierreRecords = useMemo(() => {
     return cierreRecords.filter(item => {
       // CD filter compatibility (Galapa, Arenosa, etc)
+      const itemCD = (item.cd || '').toUpperCase().trim();
+      const selCentro = filterCentro.toUpperCase().trim();
+      const selCentroNoDC = selCentro.replace('DC ', '').trim();
       const matchCentro = filterCentro === 'TODOS' || 
-        item.cd?.toUpperCase().includes(filterCentro.toUpperCase()) || 
-        item.cd === filterCentro;
+        itemCD === selCentro ||
+        itemCD.includes(selCentroNoDC);
       
       const matchItem = filterCierreItem === 'TODOS' ||
         (item.item && item.item.toUpperCase().trim() === filterCierreItem.toUpperCase().trim());

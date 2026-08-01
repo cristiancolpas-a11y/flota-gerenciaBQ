@@ -970,23 +970,30 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   const filteredCierreRecords = useMemo(() => {
     if (mappedCierreRecords.length === 0) return [];
     return mappedCierreRecords.filter((r) => {
-      const matchRegional = filterRegional === "Todas" || r.regional === filterRegional;
-      const matchCD = filterCD === "Todos" || r.cd === filterCD;
-      const matchMonth = filterMonth === "Todos" || r.month.toLowerCase() === filterMonth.toLowerCase();
-      const matchYear = filterYear === "Todos" || r.year === parseInt(filterYear);
+      const regClean = (r.regional || "").toLowerCase().trim();
+      const selRegClean = filterRegional.toLowerCase().trim();
+      const matchRegional = filterRegional === "Todas" || regClean === selRegClean || regClean.includes(selRegClean) || selRegClean.includes(regClean);
+
+      const cdClean = (r.cd || "").toLowerCase().trim();
+      const selCdClean = filterCD.toLowerCase().trim();
+      const selCdNoDC = selCdClean.replace('dc ', '').trim();
+      const matchCD = filterCD === "Todos" || cdClean === selCdClean || cdClean.includes(selCdNoDC);
+
+      const matchMonth = filterMonth === "Todos" || (r.month || "").toLowerCase().trim() === filterMonth.toLowerCase().trim();
+      const matchYear = filterYear === "Todos" || (r.year ? r.year.toString() : "") === filterYear;
 
       let matchContractor = true;
       if (filterContractor !== "Todos") {
-        const master = masterList.find((m) => m.plate === r.plate);
-        const recordContractor = master?.contractor || "Otros";
-        matchContractor = recordContractor.toLowerCase() === filterContractor.toLowerCase();
+        const master = masterList.find((m) => m.plate.toUpperCase().trim() === r.plate.toUpperCase().trim());
+        const recordContractor = (master?.contractor || "Otros").toLowerCase().trim();
+        matchContractor = recordContractor === filterContractor.toLowerCase().trim();
       }
 
       const matchPlate = filterPlate === "Todos" || r.plate.toUpperCase().trim() === filterPlate.toUpperCase().trim();
 
-      const matchNovelty = filterNovelty === "Todos" || r.observations === filterNovelty;
+      const matchNovelty = filterNovelty === "Todos" || (r.observations || "").toLowerCase().trim() === filterNovelty.toLowerCase().trim();
 
-      const matchSearch =
+      const matchSearch = !searchTerm ||
         r.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (r.observations || "").toLowerCase().includes(searchTerm.toLowerCase());
 
