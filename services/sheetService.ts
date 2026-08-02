@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyifFPjKOJaMXwVSuA6K1wci6vl-U7PN3OSzop_yo0ujRmS1ine-YvRv4bQI7eVV0K5/exec';
@@ -167,6 +167,11 @@ export const getAuditQsDocId = (): string => {
 
 export const getCampaignsDocId = (): string => {
   const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_CAMPAIGNS_ID') : null;
+  return cleanSpreadsheetId(stored || getRoutinesDocId());
+};
+
+export const getVaradasDocId = (): string => {
+  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_VARADAS_ID') : null;
   return cleanSpreadsheetId(stored || getRoutinesDocId());
 };
 
@@ -2738,71 +2743,83 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
 const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> => {
   try {
     const docId = getControlTowerDocId();
-    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`;
-    console.log("[fetchControlTowerFromSheetCSV] Intentando CSV fallback con URL:", url);
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
-    const csvText = await response.text();
-    if (!csvText || csvText.includes("<!DOCTYPE html")) {
-      console.warn("CSV fetch control tower returned HTML or empty - using offline demo control tower data");
-      return getMockControlTowerRecords();
-    }
+    const urls = [
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=CIERRE%20DE%20NOVEDADES${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=CIERRE%20DE%20NOVEDADES${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`
+    ];
 
-    return new Promise((resolve) => {
-      Papa.parse(csvText, {
-        header: false,
-        skipEmptyLines: 'greedy',
-        complete: (results) => {
-          const rows = results.data as any[][];
-          console.log("[fetchControlTowerFromSheetCSV] Filas parseadas del CSV:", rows ? rows.length : 0);
-          if (!rows || rows.length < 2) { resolve(getMockControlTowerRecords()); return; }
+    for (const url of urls) {
+      try {
+        console.log("[fetchControlTowerFromSheetCSV] Intentando CSV fallback con URL:", url);
+        const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+        const csvText = await response.text();
+        if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 30) {
+          const records = await new Promise<ControlTowerRecord[]>((resolve) => {
+            Papa.parse(csvText, {
+              header: false,
+              skipEmptyLines: 'greedy',
+              complete: (results) => {
+                const rows = results.data as any[][];
+                if (!rows || rows.length < 2) { resolve([]); return; }
 
-          const rowsWithoutHeader = rows.slice(1);
-          const filteredRows = rowsWithoutHeader.filter(row => row && row[5]);
-          console.log("[fetchControlTowerFromSheetCSV] Filas sin encabezado:", rowsWithoutHeader.length, "| Filas tras filtro (row[5]):", filteredRows.length);
+                const rowsWithoutHeader = rows.slice(1);
+                const filteredRows = rowsWithoutHeader.filter(row => row && row[5]);
 
-          const records = filteredRows.map((row, i): ControlTowerRecord => {
-              const parseNum = (val: any) => {
-                const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
-                return parseFloat(clean) || 0;
-              };
+                const parsed = filteredRows.map((row, i): ControlTowerRecord => {
+                  const parseNum = (val: any) => {
+                    const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
+                    return parseFloat(clean) || 0;
+                  };
 
-              return {
-                id: `ct-${i}-${cleanSheetValue(row[5])}`,
-                contractor: cleanSheetValue(row[0]),
-                cd: cleanSheetValue(row[1]),
-                reportDate: parseFlexibleDate(row[2]),
-                week: cleanSheetValue(row[3]),
-                month: cleanSheetValue(row[4]),
-                plate: normalizePlate(cleanSheetValue(row[5])),
-                source: cleanSheetValue(row[6]),
-                novelty: cleanSheetValue(row[7]),
-                system: cleanSheetValue(row[8]),
-                status: cleanSheetValue(row[9]),
-                criticality: cleanSheetValue(row[10]),
-                solutionDate: parseFlexibleDate(row[11]),
-                closureDays: parseNum(row[12]),
-                daysToClose: parseNum(row[13]),
-                maintenanceCompliance: cleanSheetValue(row[14]),
-                maintenanceGoal: parseNum(row[15]),
-                workshopGoal: parseNum(row[16]),
-                workshopResponsePercentage: parseNum(row[17]),
-                observations: cleanSheetValue(row[18]),
-                evidenceBefore: cleanSheetValue(row[19]),
-                evidenceAfter: cleanSheetValue(row[20]),
-              };
+                  return {
+                    id: `ct-${i}-${cleanSheetValue(row[5])}`,
+                    contractor: cleanSheetValue(row[0]),
+                    cd: cleanSheetValue(row[1]),
+                    reportDate: parseFlexibleDate(row[2]),
+                    week: cleanSheetValue(row[3]),
+                    month: cleanSheetValue(row[4]),
+                    plate: normalizePlate(cleanSheetValue(row[5])),
+                    source: cleanSheetValue(row[6]),
+                    novelty: cleanSheetValue(row[7]),
+                    system: cleanSheetValue(row[8]),
+                    status: cleanSheetValue(row[9]),
+                    criticality: cleanSheetValue(row[10]),
+                    solutionDate: parseFlexibleDate(row[11]),
+                    closureDays: parseNum(row[12]),
+                    daysToClose: parseNum(row[13]),
+                    maintenanceCompliance: cleanSheetValue(row[14]),
+                    maintenanceGoal: parseNum(row[15]),
+                    workshopGoal: parseNum(row[16]),
+                    workshopResponsePercentage: parseNum(row[17]),
+                    observations: cleanSheetValue(row[18]),
+                    evidenceBefore: cleanSheetValue(row[19]),
+                    evidenceAfter: cleanSheetValue(row[20]),
+                  };
+                });
+                resolve(parsed);
+              },
+              error: (err) => {
+                console.warn("[fetchControlTowerFromSheetCSV] Error al parsear CSV:", err);
+                resolve([]);
+              }
             });
-          resolve(records);
-        },
-        error: (err) => {
-          console.error("[fetchControlTowerFromSheetCSV] Error al parsear CSV:", err);
-          resolve([]);
+          });
+
+          if (records.length > 0) {
+            return records;
+          }
         }
-      });
-    });
+      } catch (err) {
+        console.warn("[fetchControlTowerFromSheetCSV] Advertencia al intentar URL:", url, err);
+      }
+    }
   } catch (e) {
-    console.error("[fetchControlTowerFromSheetCSV] Excepción:", e);
-    return getMockControlTowerRecords();
+    console.warn("[fetchControlTowerFromSheetCSV] Error inesperado en fallback:", e);
   }
+
+  console.warn("[fetchControlTowerFromSheetCSV] No se pudo obtener CSV válido, usando datos de demostración");
+  return getMockControlTowerRecords();
 };
 
 export const submitAuditUpdateToSheet = async (data: any): Promise<boolean> => {
@@ -4019,6 +4036,140 @@ const processReingresosRows = (rows: any[][]): WorkshopActivityRecord[] => {
         tipoIngreso
       };
     });
+};
+
+// ==========================================
+// VARADAS
+// ==========================================
+
+export const processVaradaRows = (rows: any[][]): VaradaRecord[] => {
+  if (!rows || rows.length < 2) return [];
+
+  const dataRows = rows.slice(1);
+  return dataRows
+    .filter(row => row && row.some((val: any) => cleanSheetValue(val) !== ''))
+    .map((row, idx): VaradaRecord => {
+      const week = cleanSheetValue(row[0]);
+      const rawBreakdownDate = cleanSheetValue(row[1]);
+      const breakdownDate = parseFlexibleDate(rawBreakdownDate) || rawBreakdownDate;
+      const plate = cleanSheetValue(row[2]).toUpperCase().replace(/[^A-Z0-9]/g, "");
+      const location = cleanSheetValue(row[3]);
+      const system = cleanSheetValue(row[4]);
+      const component = cleanSheetValue(row[5]);
+      const description = cleanSheetValue(row[6]);
+      const workshop = cleanSheetValue(row[7]);
+      const towed = cleanSheetValue(row[8]).toUpperCase();
+      const rawSolutionDate = cleanSheetValue(row[9]);
+      const solutionDate = parseFlexibleDate(rawSolutionDate) || rawSolutionDate;
+      const observation = cleanSheetValue(row[10]);
+      const rawHours = cleanSheetValue(row[11]);
+      const hoursDown = parseFloat(rawHours.replace(',', '.')) || rawHours;
+      const evidence = cleanSheetValue(row[12]);
+
+      return {
+        id: `varada-${idx}-${plate}-${breakdownDate}`,
+        week,
+        breakdownDate,
+        plate,
+        location,
+        system,
+        component,
+        description,
+        workshop,
+        towed: towed || 'NO',
+        solutionDate,
+        observation,
+        hoursDown,
+        evidence
+      };
+    })
+    .filter(rec => rec.plate || rec.breakdownDate);
+};
+
+export const fetchVaradasFromSheet = async (): Promise<VaradaRecord[]> => {
+  try {
+    const docId = getVaradasDocId();
+    const scriptUrl = getGoogleScriptUrl();
+    const rows = await fetchDataFromGAS(docId, 'VARADAS', scriptUrl);
+    if (rows && rows.length >= 2) {
+      return processVaradaRows(rows);
+    }
+  } catch (e) {
+    console.warn("GAS fetch VARADAS failed, attempting CSV fallback:", e);
+  }
+  return fetchVaradasFromSheetCSV();
+};
+
+const fetchVaradasFromSheetCSV = async (): Promise<VaradaRecord[]> => {
+  try {
+    const docId = getVaradasDocId();
+    const urls = [
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=VARADAS${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=VARADAS${getCacheBuster()}`
+    ];
+
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+        const csvText = await response.text();
+        if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 30) {
+          const parsed = await new Promise<VaradaRecord[]>((resolve) => {
+            Papa.parse(csvText, {
+              header: false,
+              skipEmptyLines: 'greedy',
+              complete: (results) => {
+                const rows = results.data as any[][];
+                if (!rows || rows.length < 2) { resolve([]); return; }
+                resolve(processVaradaRows(rows));
+              },
+              error: () => resolve([])
+            });
+          });
+          if (parsed.length > 0) return parsed;
+        }
+      } catch (e) {
+        // try next
+      }
+    }
+  } catch (e) {
+    console.error("Error fetching varadas CSV:", e);
+  }
+  return [];
+};
+
+export const submitVaradaToSheet = async (varadaData: Partial<VaradaRecord>): Promise<boolean> => {
+  const rawDocId = getVaradasDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+
+  const payloadData = {
+    docId,
+    sheetName: 'VARADAS',
+    week: varadaData.week || '',
+    breakdownDate: varadaData.breakdownDate || new Date().toISOString().split('T')[0],
+    plate: normalizePlate(varadaData.plate || ''),
+    location: varadaData.location || '',
+    system: varadaData.system || '',
+    component: varadaData.component || '',
+    description: varadaData.description || '',
+    workshop: varadaData.workshop || '',
+    towed: varadaData.towed || 'NO',
+    solutionDate: varadaData.solutionDate || '',
+    observation: varadaData.observation || '',
+    hoursDown: varadaData.hoursDown !== undefined && varadaData.hoursDown !== null ? String(varadaData.hoursDown) : '',
+    evidence: varadaData.evidence || ''
+  };
+
+  try {
+    const result = await sendToGAS({ method: 'POST_VARADA', data: payloadData }, getGoogleScriptUrl(), true);
+    if (result && (result as any).status === 'success') {
+      return true;
+    }
+  } catch (e) {
+    console.warn("GAS - CORS failed for POST_VARADA, attempting fallback no-cors:", e);
+  }
+
+  const success = await sendToGAS({ method: 'POST_VARADA', data: payloadData }, getGoogleScriptUrl(), false);
+  return success;
 };
 
 

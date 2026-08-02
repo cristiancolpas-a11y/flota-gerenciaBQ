@@ -562,6 +562,19 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
     const statusDistribution = Object.values(statusMap);
 
+    const MONTH_ORDER_FULL = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+    const MONTH_ORDER_SHORT = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+
+    const getMonthIdx = (str: string) => {
+      if (!str) return 99;
+      const u = str.trim().toUpperCase();
+      let i = MONTH_ORDER_FULL.indexOf(u);
+      if (i !== -1) return i;
+      i = MONTH_ORDER_SHORT.indexOf(u.substring(0, 3));
+      if (i !== -1) return i;
+      return 99;
+    };
+
     const monthlyMetrics = Object.values(monthlyMap).map(m => {
       const avgResponse = m.workshopTotal > 0 ? (m.workshopResponse / m.workshopTotal) : 0;
       return {
@@ -572,7 +585,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
         workshopGoal: m.workshopGoal > 0 ? (m.workshopGoal <= 1.05 ? m.workshopGoal * 100 : m.workshopGoal) : 80,
         avgClosureDays: Number((m.closureDaysCount > 0 ? (m.closureDaysTotal / m.closureDaysCount) : 0).toFixed(1))
       };
-    }).sort((a, b) => a.month.localeCompare(b.month));
+    }).sort((a, b) => getMonthIdx(a.month) - getMonthIdx(b.month));
 
     return { monthlyMetrics, statusDistribution };
   }, [monthlyFilteredData, statusFilteredData]);

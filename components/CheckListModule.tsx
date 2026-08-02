@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { CheckList } from '../types';
-import { Search, Filter, Calendar, Truck, User, ClipboardList, Clock, Building2, Hash, ChevronLeft, ChevronRight, TrendingUp, Award, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid } from 'lucide-react';
+import { Search, Filter, Calendar, Truck, User, ClipboardList, Clock, Building2, Hash, ChevronLeft, ChevronRight, TrendingUp, Award, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, LayoutGrid, AlertTriangle, UserX, XCircle } from 'lucide-react';
 import { normalizePlate } from '../utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -103,7 +103,7 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
     let total = 0;
     let salidas100 = 0;
     let retornos100 = 0;
-    const driverCounts: Record<string, number> = {};
+    const driverStatsMap: Record<string, { total: number; salida100: number; salida0: number; contratista: string }> = {};
     const weeklyGeneral: Record<string, { total: number, salida100: number, retorno100: number }> = {};
     const monthlyGeneral: Record<string, { total: number, salida100: number, retorno100: number }> = {};
 
@@ -116,7 +116,16 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
 
       // Drivers
       if (d.conductor && d.conductor !== 'sin datos' && d.conductor !== '#N/A') {
-        driverCounts[d.conductor] = (driverCounts[d.conductor] || 0) + 1;
+        const condName = d.conductor.trim();
+        if (!driverStatsMap[condName]) {
+          driverStatsMap[condName] = { total: 0, salida100: 0, salida0: 0, contratista: d.contratista || '' };
+        }
+        driverStatsMap[condName].total++;
+        if (d.salida === '100%') {
+          driverStatsMap[condName].salida100++;
+        } else {
+          driverStatsMap[condName].salida0++;
+        }
       }
 
       // Weekly
@@ -143,9 +152,21 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
       if (d.retorno === '100%') monthlyGeneral[month].retorno100++;
     }
     
-    const topDrivers = Object.entries(driverCounts)
-      .map(([name, count]) => ({ name, count }))
+    const topDrivers = Object.entries(driverStatsMap)
+      .map(([name, data]) => ({ name, count: data.salida100, total: data.total, contratista: data.contratista }))
       .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const topFailedDrivers = Object.entries(driverStatsMap)
+      .map(([name, data]) => ({
+        name,
+        contratista: data.contratista,
+        failedCount: data.salida0,
+        totalCount: data.total,
+        failedRate: data.total > 0 ? Math.round((data.salida0 / data.total) * 100) : 0
+      }))
+      .filter(d => d.failedCount > 0)
+      .sort((a, b) => b.failedCount - a.failedCount || b.failedRate - a.failedRate)
       .slice(0, 5);
 
     const weeklyGeneralChartData = Object.entries(weeklyGeneral).map(([week, vals]) => ({
@@ -158,18 +179,26 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
       return a.name.localeCompare(b.name, undefined, { numeric: true });
     });
 
+    const MONTH_ORDER = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+
     const monthlyGeneralChartData = Object.entries(monthlyGeneral).map(([month, vals]) => ({
       name: month,
       Salida: Math.round((vals.salida100 / vals.total) * 100),
       Retorno: Math.round((vals.retorno100 / vals.total) * 100)
-    }));
+    })).sort((a, b) => {
+      const idxA = MONTH_ORDER.indexOf(a.name.toUpperCase());
+      const idxB = MONTH_ORDER.indexOf(b.name.toUpperCase());
+      if (idxA === -1) return 1;
+      if (idxB === -1) return -1;
+      return idxA - idxB;
+    });
 
     const aroData = {
       salida: total > 0 ? Math.round((salidas100 / total) * 100) : 0,
       retorno: total > 0 ? Math.round((retornos100 / total) * 100) : 0
     };
 
-    return { total, salidas100, retornos100, topDrivers, weeklyGeneralChartData, monthlyGeneralChartData, aroData };
+    return { total, salidas100, retornos100, topDrivers, topFailedDrivers, weeklyGeneralChartData, monthlyGeneralChartData, aroData };
   }, [filteredData]);
 
   const DonutChart = ({ value, label, color = "#10b981" }: { value: number, label: string, color?: string }) => {
@@ -351,13 +380,13 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
 
       <div className="flex-grow overflow-auto">
         {/* Stats Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 shrink-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-6 shrink-0">
           <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
               <ClipboardList size={24} />
             </div>
             <div>
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Viajes</p>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Viajes Totales</p>
               <p className="text-2xl font-black text-slate-800">{stats.total}</p>
             </div>
           </div>
@@ -367,8 +396,18 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
               <Truck size={24} />
             </div>
             <div>
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Salidas</p>
-              <p className="text-2xl font-black text-slate-800">{stats.salidas100}</p>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Preoperacional Cumplido (100%)</p>
+              <p className="text-2xl font-black text-emerald-600">{stats.salidas100}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-3xl border border-rose-100 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-600">
+              <AlertTriangle size={24} />
+            </div>
+            <div>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Sin Preoperacional (Salida 0%)</p>
+              <p className="text-2xl font-black text-rose-600">{stats.total - stats.salidas100}</p>
             </div>
           </div>
 
@@ -377,7 +416,7 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
               <User size={24} />
             </div>
             <div>
-              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Retornos</p>
+              <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Retornos Cumplidos (100%)</p>
               <p className="text-2xl font-black text-slate-800">{stats.retornos100}</p>
             </div>
           </div>
@@ -477,33 +516,93 @@ const CheckListModule: React.FC<CheckListModuleProps> = ({ checkLists }) => {
             </div>
           </div>
 
-          {/* Top Performer (Most Active) */}
-          <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2 mb-6">
-              <Award size={18} className="text-emerald-600" />
-              Top Conductores (Más Activos)
-            </h3>
-            <div className="space-y-4">
-              {stats.topDrivers.map((driver, idx) => (
-                <div key={driver.name} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${
-                      idx === 0 ? 'bg-amber-100 text-amber-600' : 
-                      idx === 1 ? 'bg-slate-200 text-slate-600' : 
-                      idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-white text-slate-400'
-                    }`}>
-                      #{idx + 1}
+          {/* Driver Ranking Modules (Top Compliant & Top Non-Compliant) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:col-span-2">
+            {/* Top 5 Conductores Más Cumplidos */}
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <Award size={18} className="text-emerald-600" />
+                  Top 5 Conductores (Mayor Cumplimiento Salida)
+                </h3>
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+                  100% Salida
+                </span>
+              </div>
+              <div className="space-y-3">
+                {stats.topDrivers.map((driver, idx) => (
+                  <div key={driver.name} className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${
+                        idx === 0 ? 'bg-amber-100 text-amber-600' : 
+                        idx === 1 ? 'bg-slate-200 text-slate-600' : 
+                        idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-white text-slate-400'
+                      }`}>
+                        #{idx + 1}
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-slate-700 uppercase tracking-tight">{driver.name}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          {driver.contratista ? driver.contratista : 'Conductor'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-black text-slate-700 uppercase tracking-tight">{driver.name}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Checklists realizados</p>
+                    <div className="text-right">
+                      <span className="text-lg font-black text-emerald-600">{driver.count}</span>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">Checklists 100%</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-xl font-black text-indigo-600">{driver.count}</span>
-                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top 5 Conductores Sin Checklist Preoperacional (Salida 0%) */}
+            <div className="bg-white p-6 rounded-[2rem] border border-rose-100 shadow-xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                  <UserX size={18} className="text-rose-600" />
+                  Top 5 Conductores Sin Checklist Preoperacional
+                </h3>
+                <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-200">
+                  Salida 0% / Incumplimiento
+                </span>
+              </div>
+
+              {stats.topFailedDrivers.length > 0 ? (
+                <div className="space-y-3">
+                  {stats.topFailedDrivers.map((driver, idx) => (
+                    <div key={driver.name} className="flex items-center justify-between p-3.5 bg-rose-50/50 rounded-2xl border border-rose-100 group hover:bg-white hover:shadow-md transition-all">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-black text-xs shrink-0">
+                          #{idx + 1}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{driver.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            {driver.contratista ? driver.contratista : 'Conductor'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <span className="text-lg font-black text-rose-600">{driver.failedCount}</span>
+                          <span className="text-[10px] font-bold text-slate-400">/ {driver.totalCount}</span>
+                        </div>
+                        <span className="inline-block text-[9px] font-black uppercase tracking-wider text-rose-600 bg-rose-100/80 px-2 py-0.5 rounded-md mt-0.5">
+                          {driver.failedRate}% sin realizar
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <div className="p-8 text-center bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                  <Award size={32} className="mx-auto text-emerald-500 mb-2" />
+                  <p className="text-xs font-black text-emerald-800 uppercase tracking-wide">
+                    ¡Excelente! No hay conductores registrados con incumplimiento de checklist preoperacional.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

@@ -739,6 +739,52 @@ function doPost(e) {
         return output("success", "Kilometraje registrado exitosamente (fila " + nextBlankRow + ") en la hoja " + s.getName() + ".");
       }
 
+      else if (m === 'POST_VARADA') {
+        var s = findSheetCaseInsensitive(ss, d.sheetName || "VARADAS")
+             || findSheetCaseInsensitive(ss, "VARADAS")
+             || getS(ss, "VARADAS");
+
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró ni se pudo crear la pestaña VARADAS.");
+        }
+
+        if (s.getLastRow() === 0) {
+          s.appendRow([
+            "SEMANA", "FECHA DE VARADA", "PLACA", "LUGAR DE VARADA", "SISTEMA",
+            "COMPONENTE", "DESCRIPCION", "TALLER QUE PRESTA EL SERVICIO",
+            "TRANSPORTADO EN GRUA", "FECHA DE SOLUCION", "OBSERVACION",
+            "HORAS VARADOS", "EVIDENCIA"
+          ]);
+        }
+
+        var rowPlate = pickVal(d.plate, d.PLACA, d.placa).toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (!rowPlate) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "Placa requerida: no puede estar vacía.");
+        }
+
+        var rowData = [
+          pickVal(d.week, d.SEMANA, d.semana, ""),
+          pickVal(d.breakdownDate, d.fechaVarada, d.fecha, ""),
+          rowPlate,
+          pickVal(d.location, d.lugarVarada, d.lugar, ""),
+          pickVal(d.system, d.sistema, ""),
+          pickVal(d.component, d.componente, ""),
+          pickVal(d.description, d.descripcion, ""),
+          pickVal(d.workshop, d.taller, ""),
+          pickVal(d.towed, d.grua, ""),
+          pickVal(d.solutionDate, d.fechaSolucion, ""),
+          pickVal(d.observation, d.observacion, ""),
+          pickVal(d.hoursDown, d.horasVarados, d.horas, ""),
+          pickVal(d.evidence, d.evidencia, "")
+        ];
+
+        s.appendRow(rowData);
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Varada registrada correctamente.");
+      }
+
       else if (m === 'POST_CLEANING') {
         var s = getSheetByGid(ss, "1853969081") || getS(ss, "CRONOGRAMA 5S");
         if (!s) {

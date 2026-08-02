@@ -507,6 +507,23 @@ export interface FleetSeguimientoRecord {
   encargado: string;    // Indice 7 (ENCARCADO / ENCARGADO)
 }
 
+export interface VaradaRecord {
+  id?: string;
+  week: string;            // Indice 0: SEMANA
+  breakdownDate: string;   // Indice 1: FECHA DE VARADA
+  plate: string;           // Indice 2: PLACA
+  location: string;        // Indice 3: LUGAR DE VARADA
+  system: string;          // Indice 4: SISTEMA
+  component: string;       // Indice 5: COMPONENTE
+  description: string;     // Indice 6: DESCRIPCION
+  workshop: string;        // Indice 7: TALLER QUE PRESTA EL SERVICIO
+  towed: string;           // Indice 8: TRANSPORTADO EN GRUA
+  solutionDate?: string;   // Indice 9: FECHA DE SOLUCION
+  observation?: string;    // Indice 10: OBSERVACION
+  hoursDown?: number | string; // Indice 11: HORAS VARADOS
+  evidence?: string;       // Indice 12: EVIDENCIA
+}
+
 
 
 
