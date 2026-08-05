@@ -1936,7 +1936,7 @@ const sendToGAS = async (payload: any, url: string = getGoogleScriptUrl(), useCo
   if (useCors) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
 
       const response = await fetch(targetUrl, {
         method: 'POST',
@@ -1961,46 +1961,31 @@ const sendToGAS = async (payload: any, url: string = getGoogleScriptUrl(), useCo
         return text || true;
       }
     } catch (err) {
-      console.warn(`GAS - Error en el envío CORS (${payload.method}), intentando fallback no-cors:`, err);
-      try {
-        await fetch(targetUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'text/plain',
-          },
-          body: JSON.stringify(payload),
-        });
-        console.log(`✅ Envío no-cors (fallback) exitoso para ${payload.method}`);
-        return true;
-      } catch (fallbackErr) {
-        console.error(`GAS - Error en envío no-cors fallback (${payload.method}):`, fallbackErr);
-        return false;
-      }
+      console.warn(`GAS - Intento CORS superó límite o falló (${payload.method}), ejecutando envío no-cors:`, err);
     }
-  } else {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+  }
 
-      await fetch(targetUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'text/plain',
-        },
-        body: JSON.stringify(payload),
-        redirect: 'follow',
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-      console.log(`✅ Envío no-cors exitoso para ${payload.method}`);
-      return true;
-    } catch (err) {
-      console.error(`GAS - Error en envío no-cors (${payload.method}):`, err);
-      return false;
-    }
+    await fetch(targetUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'text/plain',
+      },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    console.log(`✅ Envío no-cors ultra rápido exitoso para ${payload.method}`);
+    return true;
+  } catch (err) {
+    console.error(`GAS - Error final en envío no-cors (${payload.method}):`, err);
+    return false;
   }
 };
 
@@ -3358,16 +3343,8 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
 };
 
 export const submitFleetStandardAuditUpdateToSheet = async (data: any): Promise<boolean> => {
-  try {
-    const result = await sendToGAS({ method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: getAuditQsDocId() } }, getGoogleScriptUrl(), true);
-    if (result && (result as any).status === 'success') {
-      return true;
-    }
-  } catch (e) {
-    console.warn("GAS - CORS failed for standard audit update, attempting fallback no-cors:", e);
-  }
-  const success = await sendToGAS({ method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: getAuditQsDocId() } }, getGoogleScriptUrl(), false);
-  return success;
+  const result = await sendToGAS({ method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: getAuditQsDocId() } }, getGoogleScriptUrl(), true);
+  return !!result;
 };
 
 export const submitFleetCierreUpdateToSheet = async (data: {
@@ -3377,26 +3354,17 @@ export const submitFleetCierreUpdateToSheet = async (data: {
   evidence: string | string[];
   verification?: string;
 }): Promise<boolean> => {
-  const docIds = ['1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60', getAuditDocId()];
-  for (const docId of docIds) {
-    try {
-      const result = await sendToGAS({
+  const docIds = ['1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs', getAuditDocId(), '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60'];
+  const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
+  const results = await Promise.all(
+    uniqueDocIds.map(docId =>
+      sendToGAS({
         method: 'POST_FLEET_CIERRE_UPDATE',
         data: { ...data, docId }
-      }, getGoogleScriptUrl(), true);
-      if (result && (result as any).status === 'success') {
-        return true;
-      }
-    } catch (e) {
-      console.warn("GAS - CORS failed for fleet closure update, attempting fallback no-cors:", e);
-    }
-    const success = await sendToGAS({
-      method: 'POST_FLEET_CIERRE_UPDATE',
-      data: { ...data, docId }
-    }, getGoogleScriptUrl(), false);
-    if (success) return true;
-  }
-  return false;
+      }, getGoogleScriptUrl(), true)
+    )
+  );
+  return results.some(r => !!r);
 };
 
 export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
@@ -3406,13 +3374,13 @@ export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> 
       return csvRes;
     }
     const docIds = [
-      '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60',
-      getControlTowerDocId(),
       '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
-      getAuditDocId()
+      getAuditDocId(),
+      '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60',
+      getControlTowerDocId()
     ];
     const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
-    const sheets = ['CIERRE DE NOVEDADES', 'Cierre de Novedades', 'CIERRE', 'CIERRE1', 'CIERRE DE NOVEDAD'];
+    const sheets = ['CIERRE', 'CIERRE DE NOVEDADES', 'Cierre de Novedades', 'CIERRE1', 'CIERRE DE NOVEDAD'];
     let rows: any[][] | null = null;
 
     for (const docId of uniqueDocIds) {
@@ -3442,16 +3410,18 @@ export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> 
 
 const fetchFleetCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
   const docIds = [
-    '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60',
-    getControlTowerDocId(),
     '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
-    getAuditDocId()
+    getAuditDocId(),
+    '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60',
+    getControlTowerDocId()
   ];
   const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
-  const sheets = ['CIERRE DE NOVEDADES', 'Cierre de Novedades', 'CIERRE', 'CIERRE1', 'CIERRE DE NOVEDAD'];
+  const sheets = ['CIERRE', 'CIERRE DE NOVEDADES', 'Cierre de Novedades', 'CIERRE1', 'CIERRE DE NOVEDAD'];
 
-  // Direct GID fallback for Torre de Control sheet 1012312873
+  // Direct GID fallback for ESTÁNDAR FLOTA sheet 1993951123
   const directGidUrls = [
+    `https://docs.google.com/spreadsheets/d/1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs/gviz/tq?tqx=out:csv&gid=1993951123${getCacheBuster()}`,
+    `https://docs.google.com/spreadsheets/d/1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs/export?format=csv&gid=1993951123${getCacheBuster()}`,
     `https://docs.google.com/spreadsheets/d/1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60/export?format=csv&gid=1012312873${getCacheBuster()}`,
     `https://docs.google.com/spreadsheets/d/1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60/gviz/tq?tqx=out:csv&gid=1012312873${getCacheBuster()}`
   ];
@@ -3581,22 +3551,11 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
   evidence: string | string[];
   verification?: string;
 }): Promise<boolean> => {
-  try {
-    const result = await sendToGAS({
-      method: 'POST_CALIDAD_CIERRE_UPDATE',
-      data: { ...data, docId: getAuditQsDocId() }
-    }, getGoogleScriptUrl(), true);
-    if (result && (result as any).status === 'success') {
-      return true;
-    }
-  } catch (e) {
-    console.warn("GAS - CORS failed for calidad closure update, attempting fallback no-cors:", e);
-  }
-  const success = await sendToGAS({
+  const result = await sendToGAS({
     method: 'POST_CALIDAD_CIERRE_UPDATE',
     data: { ...data, docId: getAuditQsDocId() }
-  }, getGoogleScriptUrl(), false);
-  return success;
+  }, getGoogleScriptUrl(), true);
+  return !!result;
 };
 
 export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
@@ -4318,17 +4277,8 @@ export const submitVaradaToSheet = async (varadaData: Partial<VaradaRecord>): Pr
     evidence: varadaData.evidence || ''
   };
 
-  try {
-    const result = await sendToGAS({ method: 'POST_VARADA', data: payloadData }, getGoogleScriptUrl(), true);
-    if (result && (result as any).status === 'success') {
-      return true;
-    }
-  } catch (e) {
-    console.warn("GAS - CORS failed for POST_VARADA, attempting fallback no-cors:", e);
-  }
-
-  const success = await sendToGAS({ method: 'POST_VARADA', data: payloadData }, getGoogleScriptUrl(), false);
-  return success;
+  const result = await sendToGAS({ method: 'POST_VARADA', data: payloadData }, getGoogleScriptUrl(), true);
+  return !!result;
 };
 
 
