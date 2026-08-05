@@ -159,8 +159,8 @@ export const getAuditDocId = (): string => {
 export const getAuditQsDocId = (): string => {
   const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_AUDIT_QS_ID') : null;
   const clean = cleanSpreadsheetId(stored || '');
-  if (!clean || clean === '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU') {
-    return AUDIT_DOC_ID;
+  if (!clean || clean === '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU' || clean === '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs') {
+    return '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM';
   }
   return clean;
 };
@@ -224,7 +224,7 @@ const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: st
       if (sheetName) url += `&sheetName=${encodeURIComponent(sheetName)}`;
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); 
+      const timeoutId = setTimeout(() => controller.abort(), 2500); 
 
       const response = await fetch(url, { 
         method: 'GET',
@@ -3137,15 +3137,19 @@ export const FLEET_STANDARD_QUALITY_ITEMS = [
 
 export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardAudit[]> => {
   try {
+    const csvRes = await fetchFleetStandardAuditFromSheetCSV();
+    if (csvRes && csvRes.length > 0) {
+      return csvRes;
+    }
     const docIds = [
-      '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
-      '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
       getAuditQsDocId(),
+      '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
+      '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
       getAuditDocId(),
       getControlTowerDocId()
     ];
     const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
-    const sheets = ['DASHBOARD-ESTANDAR', 'ESTANDAR', 'ESTÁNDAR', 'ESTRANDAR', 'ESTANDAR FLOTA'];
+    const sheets = ['ESTANDAR', 'ESTÁNDAR', 'DASHBOARD-ESTANDAR', 'ESTRANDAR', 'ESTANDAR FLOTA'];
     let rows: any[][] | null = null;
 
     for (const docId of uniqueDocIds) {
@@ -3166,31 +3170,31 @@ export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardA
     if (rows && rows.length >= 2) {
       return processFleetStandardAuditRows(rows);
     }
-    return fetchFleetStandardAuditFromSheetCSV();
+    return [];
   } catch (e) {
-    console.error("Error fetching Fleet Standard audits from GAS:", e);
+    console.error("Error fetching Fleet Standard audits:", e);
     return fetchFleetStandardAuditFromSheetCSV();
   }
 };
 
 const fetchFleetStandardAuditFromSheetCSV = async (): Promise<FleetStandardAudit[]> => {
   const docIds = [
-    '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
-    '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
     getAuditQsDocId(),
+    '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
+    '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs',
     getAuditDocId(),
     getControlTowerDocId()
   ];
   const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
-  const sheets = ['DASHBOARD-ESTANDAR', 'ESTANDAR', 'ESTÁNDAR', 'ESTRANDAR', 'ESTANDAR FLOTA'];
+  const sheets = ['ESTANDAR', 'ESTÁNDAR', 'DASHBOARD-ESTANDAR', 'ESTRANDAR', 'ESTANDAR FLOTA'];
 
-  // Direct GID fallback for 326221775
-  const directGidUrls = [
-    `https://docs.google.com/spreadsheets/d/1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs/export?format=csv&gid=326221775${getCacheBuster()}`,
-    `https://docs.google.com/spreadsheets/d/1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs/gviz/tq?tqx=out:csv&gid=326221775${getCacheBuster()}`
+  // Direct CSV export URLs for 1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM
+  const directUrls = [
+    `https://docs.google.com/spreadsheets/d/1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`,
+    `https://docs.google.com/spreadsheets/d/1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM/export?format=csv&sheet=ESTANDAR${getCacheBuster()}`
   ];
 
-  for (const url of directGidUrls) {
+  for (const url of directUrls) {
     try {
       const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
       const csvText = await response.text();
@@ -3261,13 +3265,20 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
     return num <= 1 ? num * 100 : num;
   };
 
+  const parseBinaryVal = (v: any): number => {
+    const s = cleanSheetValue(v).toUpperCase();
+    if (s === '1' || s === 'SI') return 1;
+    if (s === '0' || s === 'NO') return 0;
+    return parseInt(s) || 0;
+  };
+
   // Auto-detect header indices if present
   const header = rows[0].map(c => String(c || '').toLowerCase().trim());
   let idxPlaca = header.findIndex(h => h.includes('placa'));
   let idxRegional = header.findIndex(h => h.includes('regional'));
   let idxCentro = header.findIndex(h => h.includes('centro') || h.includes('cd'));
   let idxTipo = header.findIndex(h => h.includes('tipo'));
-  let idxAuditor = header.findIndex(h => h.includes('auditor'));
+  let idxAuditor = header.findIndex(h => (h === 'nombre' || h.includes('auditor')) && !h.includes('tipo'));
   let idxMes = header.findIndex(h => h.includes('mes'));
   let idxAño = header.findIndex(h => h.includes('año') || h.includes('year') || h.includes('ano'));
 
@@ -3293,27 +3304,23 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
       let auditorVal = cleanSheetValue(row[idxAuditor]);
 
       if (!placaVal || placaVal.length < 3) {
-        if (cleanSheetValue(row[10]) && cleanSheetValue(row[10]).length >= 5) {
-          placaVal = cleanSheetValue(row[10]);
-          regVal = regVal || cleanSheetValue(row[6]);
-          cdVal = cdVal || cleanSheetValue(row[7]);
-          tipoVal = tipoVal || cleanSheetValue(row[8]);
-          auditorVal = auditorVal || cleanSheetValue(row[9]);
-        } else if (cleanSheetValue(row[8]) && cleanSheetValue(row[8]).length >= 5) {
+        if (cleanSheetValue(row[8]) && cleanSheetValue(row[8]).length >= 5) {
           placaVal = cleanSheetValue(row[8]);
+        } else if (cleanSheetValue(row[10]) && cleanSheetValue(row[10]).length >= 5) {
+          placaVal = cleanSheetValue(row[10]);
         }
       }
 
       // Binary Security Scores: Index 46 to 72 (27 items)
       const securityScores: number[] = [];
       for (let j = 0; j < 27; j++) {
-        securityScores.push(parseInt(cleanSheetValue(row[46 + j])) || 0);
+        securityScores.push(parseBinaryVal(row[46 + j]));
       }
 
       // Binary Quality Scores: Index 73 to 78 (6 items)
       const qualityScores: number[] = [];
       for (let j = 0; j < 6; j++) {
-        qualityScores.push(parseInt(cleanSheetValue(row[73 + j])) || 0);
+        qualityScores.push(parseBinaryVal(row[73 + j]));
       }
 
       const mesVal = cleanSheetValue(row[idxMes]) || cleanSheetValue(row[43]) || 'ENERO';
@@ -3394,6 +3401,10 @@ export const submitFleetCierreUpdateToSheet = async (data: {
 
 export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
   try {
+    const csvRes = await fetchFleetCierreFromSheetCSV();
+    if (csvRes && csvRes.length > 0) {
+      return csvRes;
+    }
     const docIds = [
       '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60',
       getControlTowerDocId(),
@@ -3422,9 +3433,9 @@ export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> 
     if (rows && rows.length >= 2) {
       return processFleetCierreRows(rows);
     }
-    return fetchFleetCierreFromSheetCSV();
+    return [];
   } catch (e) {
-    console.error("Error fetching fleet standard closure from GAS:", e);
+    console.error("Error fetching fleet standard closure:", e);
     return fetchFleetCierreFromSheetCSV();
   }
 };
@@ -3519,13 +3530,16 @@ const processFleetCierreRows = (rows: any[][]): FleetCierreRecord[] => {
   let idxEstado = header.findIndex(h => h.includes('estado') || h.includes('cierre') || h.includes('status'));
 
   if (idxFecha === -1) idxFecha = 0;
-  if (idxPlaca === -1) idxPlaca = 1;
-  if (idxCD === -1) idxCD = 2;
-  if (idxContratista === -1) idxContratista = 3;
-  if (idxItem === -1) idxItem = 4;
-  if (idxVerif === -1) idxVerif = 5;
-  if (idxEvid === -1) idxEvid = 6;
-  if (idxEstado === -1) idxEstado = 7;
+  if (idxCD === -1) idxCD = 1;
+  if (idxPlaca === -1) idxPlaca = 2;
+  if (idxItem === -1) idxItem = 3;
+  if (idxVerif === -1) idxVerif = 4;
+  if (idxEvid === -1) idxEvid = 5;
+  if (idxEstado === -1) idxEstado = 6;
+
+  if (idxContratista === idxItem || idxContratista === idxCD || idxContratista === idxPlaca) {
+    idxContratista = -1;
+  }
 
   return rows.slice(1)
     .filter(row => row && (cleanSheetValue(row[idxPlaca]) || cleanSheetValue(row[1]) || cleanSheetValue(row[2])))
@@ -3542,12 +3556,14 @@ const processFleetCierreRows = (rows: any[][]): FleetCierreRecord[] => {
         }
       }
 
+      const contratistaVal = idxContratista !== -1 ? cleanSheetValue(row[idxContratista]) : 'Otros';
+
       return {
         id: `cierre-${i}-${pVal}`,
         fecha: parseFlexibleDate(row[idxFecha]),
         placa: normalizePlate(pVal),
         cd: cdVal || 'GENERAL',
-        contratista: cleanSheetValue(row[idxContratista]) || 'Otros',
+        contratista: contratistaVal || 'Otros',
         item: cleanSheetValue(row[idxItem]),
         verificacion: cleanSheetValue(row[idxVerif]),
         evidencia: cleanSheetValue(row[idxEvid]),
@@ -3584,11 +3600,117 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
 };
 
 export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
-  return fetchFleetCierreFromSheet();
+  try {
+    const csvRes = await fetchCalidadCierreFromSheetCSV();
+    if (csvRes && csvRes.length > 0) {
+      return csvRes;
+    }
+    const docIds = [
+      getAuditQsDocId(),
+      '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
+      '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs'
+    ];
+    const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
+    const sheets = ['CIERRE1', 'CIERRE DE NOVEDADES', 'Cierre de Novedades', 'CIERRE'];
+    let rows: any[][] | null = null;
+
+    for (const docId of uniqueDocIds) {
+      for (const sheetName of sheets) {
+        try {
+          const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
+          if (fetched && fetched.length >= 2) {
+            rows = fetched;
+            break;
+          }
+        } catch (e) {
+          // try next
+        }
+      }
+      if (rows && rows.length >= 2) break;
+    }
+
+    if (rows && rows.length >= 2) {
+      return processFleetCierreRows(rows);
+    }
+    return [];
+  } catch (e) {
+    console.error("Error fetching Calidad closure:", e);
+    return fetchCalidadCierreFromSheetCSV();
+  }
 };
 
 const fetchCalidadCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
-  return fetchFleetCierreFromSheetCSV();
+  const docIds = [
+    getAuditQsDocId(),
+    '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
+    '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs'
+  ];
+  const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
+  const sheets = ['CIERRE1', 'CIERRE DE NOVEDADES', 'Cierre de Novedades', 'CIERRE'];
+
+  const directUrls = [
+    `https://docs.google.com/spreadsheets/d/1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM/gviz/tq?tqx=out:csv&sheet=CIERRE1${getCacheBuster()}`,
+    `https://docs.google.com/spreadsheets/d/1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM/export?format=csv&sheet=CIERRE1${getCacheBuster()}`
+  ];
+
+  for (const url of directUrls) {
+    try {
+      const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+      const csvText = await response.text();
+      if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
+        const parsed = await new Promise<FleetCierreRecord[]>((resolve) => {
+          Papa.parse(csvText, {
+            header: false,
+            skipEmptyLines: 'greedy',
+            complete: (results) => {
+              const rows = results.data as any[][];
+              if (!rows || rows.length < 2) { resolve([]); return; }
+              resolve(processFleetCierreRows(rows));
+            },
+            error: () => resolve([])
+          });
+        });
+        if (parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      // try next
+    }
+  }
+
+  for (const docId of uniqueDocIds) {
+    for (const sheetName of sheets) {
+      const urls = [
+        `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`,
+        `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`
+      ];
+
+      for (const url of urls) {
+        try {
+          const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+          const csvText = await response.text();
+          
+          if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
+            const parsed = await new Promise<FleetCierreRecord[]>((resolve) => {
+              Papa.parse(csvText, {
+                header: false,
+                skipEmptyLines: 'greedy',
+                complete: (results) => {
+                  const rows = results.data as any[][];
+                  if (!rows || rows.length < 2) { resolve([]); return; }
+                  resolve(processFleetCierreRows(rows));
+                },
+                error: () => resolve([])
+              });
+            });
+            if (parsed.length > 0) return parsed;
+          }
+        } catch (e) {
+          // try next
+        }
+      }
+    }
+  }
+  return [];
 };
 
 const processCalidadCierreRows = (rows: any[][]): FleetCierreRecord[] => {
@@ -3597,15 +3719,18 @@ const processCalidadCierreRows = (rows: any[][]): FleetCierreRecord[] => {
 
 export const fetchSeguimientoFromSheet = async (): Promise<FleetSeguimientoRecord[]> => {
   try {
-    // SEGUIMIENTO sheet is located in AUDIT_DOC_ID ('1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs')
+    const csvRes = await fetchSeguimientoFromSheetCSV();
+    if (csvRes && csvRes.length > 0) {
+      return csvRes;
+    }
     const docId = AUDIT_DOC_ID;
     const rows = await fetchDataFromGAS(docId, 'SEGUIMIENTO', getGoogleScriptUrl());
     if (!rows || rows.length < 2) {
-      return fetchSeguimientoFromSheetCSV();
+      return [];
     }
     return processSeguimientoRows(rows);
   } catch (e) {
-    console.error("Error fetching seguimiento from GAS:", e);
+    console.error("Error fetching seguimiento:", e);
     return fetchSeguimientoFromSheetCSV();
   }
 };
@@ -4038,6 +4163,36 @@ const processReingresosRows = (rows: any[][]): WorkshopActivityRecord[] => {
     });
 };
 
+const parseFlexibleDateTime = (dateStr: any): string => {
+  const cleanStr = cleanSheetValue(dateStr);
+  if (!cleanStr || cleanStr.toLowerCase().includes('fecha')) return '';
+
+  if (/^\d+(\.\d+)?$/.test(cleanStr)) {
+    const serial = parseFloat(cleanStr);
+    if (serial > 30000 && serial < 60000) {
+      const dateObj = new Date((serial - 25569) * 86400 * 1000);
+      if (!isNaN(dateObj.getTime())) {
+        const y = dateObj.getUTCFullYear();
+        const m = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getUTCDate()).padStart(2, '0');
+        const hh = String(dateObj.getUTCHours()).padStart(2, '0');
+        const mm = String(dateObj.getUTCMinutes()).padStart(2, '0');
+        if (hh !== '00' || mm !== '00') {
+          return `${y}-${m}-${d} ${hh}:${mm}`;
+        }
+        return `${y}-${m}-${d}`;
+      }
+    }
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(cleanStr)) {
+    return cleanStr.replace('T', ' ');
+  }
+
+  const parsed = parseFlexibleDate(cleanStr);
+  return parsed || cleanStr;
+};
+
 // ==========================================
 // VARADAS
 // ==========================================
@@ -4051,7 +4206,7 @@ export const processVaradaRows = (rows: any[][]): VaradaRecord[] => {
     .map((row, idx): VaradaRecord => {
       const week = cleanSheetValue(row[0]);
       const rawBreakdownDate = cleanSheetValue(row[1]);
-      const breakdownDate = parseFlexibleDate(rawBreakdownDate) || rawBreakdownDate;
+      const breakdownDate = parseFlexibleDateTime(rawBreakdownDate) || rawBreakdownDate;
       const plate = cleanSheetValue(row[2]).toUpperCase().replace(/[^A-Z0-9]/g, "");
       const location = cleanSheetValue(row[3]);
       const system = cleanSheetValue(row[4]);
@@ -4060,7 +4215,7 @@ export const processVaradaRows = (rows: any[][]): VaradaRecord[] => {
       const workshop = cleanSheetValue(row[7]);
       const towed = cleanSheetValue(row[8]).toUpperCase();
       const rawSolutionDate = cleanSheetValue(row[9]);
-      const solutionDate = parseFlexibleDate(rawSolutionDate) || rawSolutionDate;
+      const solutionDate = parseFlexibleDateTime(rawSolutionDate) || rawSolutionDate;
       const observation = cleanSheetValue(row[10]);
       const rawHours = cleanSheetValue(row[11]);
       const hoursDown = parseFloat(rawHours.replace(',', '.')) || rawHours;
@@ -4088,6 +4243,10 @@ export const processVaradaRows = (rows: any[][]): VaradaRecord[] => {
 
 export const fetchVaradasFromSheet = async (): Promise<VaradaRecord[]> => {
   try {
+    const csvRes = await fetchVaradasFromSheetCSV();
+    if (csvRes && csvRes.length > 0) {
+      return csvRes;
+    }
     const docId = getVaradasDocId();
     const scriptUrl = getGoogleScriptUrl();
     const rows = await fetchDataFromGAS(docId, 'VARADAS', scriptUrl);

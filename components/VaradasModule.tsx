@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { VaradaRecord, Vehicle } from '../types';
-import { getWeekNumber, normalizePlate } from '../utils';
+import { getWeekNumber } from '../utils';
 import { 
-  AlertTriangle, Plus, Search, RefreshCw, Filter, Truck, Calendar, 
-  MapPin, Wrench, ShieldAlert, Clock, CheckCircle2, FileText, X, Loader2, ExternalLink, Download
+  AlertTriangle, Plus, Search, RefreshCw, Truck, Clock, 
+  CheckCircle2, X, Loader2, ExternalLink, Download, Upload, 
+  Image as ImageIcon, Trash2, Camera, Link, Maximize2
 } from 'lucide-react';
 import Papa from 'papaparse';
 
@@ -28,6 +29,83 @@ const SYSTEMS_LIST = [
   'OTROS'
 ];
 
+const WORKSHOPS_LIST = [
+  'AUTECO',
+  'AUTOMUNDIAL',
+  'CAMION COLOMBIA',
+  'COUNTRY MOTORS',
+  'COUNTRY TRUCK',
+  'COEXITO',
+  'DIVERMOTORS',
+  'ELECTRONIC',
+  'ETM',
+  'GARCILLANTAS',
+  'GLASS LAMINADO',
+  'IVESUR',
+  'NAVISAFT',
+  'NAVITRANS',
+  'ROINCOR',
+  'TECNIBENZ',
+  'TODOFIBRAS',
+  'TRAMICON',
+  'VEHIPESA',
+  'TALLER MÓVIL',
+  'TALLER PROPIO',
+  'OTROS'
+];
+
+// Helper to get local date and time formatted for <input type="datetime-local">
+const getNowLocalDateTime = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+// Helper to calculate hours between two date-time strings
+const calculateHoursDown = (startStr: string, endStr: string): string => {
+  if (!startStr || !endStr) return '';
+  const startDate = new Date(startStr);
+  const endDate = new Date(endStr);
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return '';
+  const diffMs = endDate.getTime() - startDate.getTime();
+  if (diffMs <= 0) return '0';
+  const hours = diffMs / (1000 * 60 * 60);
+  return (Math.round(hours * 10) / 10).toString();
+};
+
+// Helper to compress image before storing as data URL
+const compressImage = (dataUrl: string, maxDim = 1000, quality = 0.8, callback: (res: string) => void) => {
+  const img = new Image();
+  img.src = dataUrl;
+  img.onload = () => {
+    let { width, height } = img;
+    if (width > maxDim || height > maxDim) {
+      if (width > height) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(img, 0, 0, width, height);
+      callback(canvas.toDataURL('image/jpeg', quality));
+    } else {
+      callback(dataUrl);
+    }
+  };
+  img.onerror = () => callback(dataUrl);
+};
+
 export const VaradasModule: React.FC<VaradasModuleProps> = ({
   vehicles,
   varadas,
@@ -46,19 +124,25 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Drag and drop & paste state
+  const [isDragging, setIsDragging] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
   // Form State
-  const initialDate = new Date().toISOString().split('T')[0];
+  const initialDateTime = getNowLocalDateTime();
   const defaultWeek = `S${getWeekNumber(new Date())}`;
 
   const [formData, setFormData] = useState({
     week: defaultWeek,
-    breakdownDate: initialDate,
+    breakdownDate: initialDateTime,
     plate: '',
     location: '',
     system: 'MOTOR',
     component: '',
     description: '',
     workshop: '',
+    otherWorkshop: '',
     towed: 'NO',
     solutionDate: '',
     observation: '',
@@ -113,25 +197,89 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
     return filteredVaradas.filter(v => !v.solutionDate || v.solutionDate.trim() === '').length;
   }, [filteredVaradas]);
 
-  const handleDateChange = (dateVal: string) => {
-    let weekVal = defaultWeek;
-    if (dateVal) {
-      const d = new Date(dateVal + 'T00:00:00');
+  // Handlers for dates and automatic hours calculation
+  const handleBreakdownDateChange = (val: string) => {
+    let weekVal = formData.week;
+    if (val) {
+      const d = new Date(val);
       if (!isNaN(d.getTime())) {
         weekVal = `S${getWeekNumber(d)}`;
       }
     }
+    const autoHours = calculateHoursDown(val, formData.solutionDate);
     setFormData(prev => ({
       ...prev,
-      breakdownDate: dateVal,
-      week: weekVal
+      breakdownDate: val,
+      week: weekVal,
+      hoursDown: autoHours !== '' ? autoHours : prev.hoursDown
     }));
+  };
+
+  const handleSolutionDateChange = (val: string) => {
+    const autoHours = calculateHoursDown(formData.breakdownDate, val);
+    setFormData(prev => ({
+      ...prev,
+      solutionDate: val,
+      hoursDown: autoHours !== '' ? autoHours : prev.hoursDown
+    }));
+  };
+
+  // Image File Handling
+  const processImageFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setSubmitError('Por favor selecciona un archivo de imagen válido (JPG, PNG, WEBP, etc.).');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) {
+        compressImage(dataUrl, 1000, 0.8, (compressed) => {
+          setFormData(prev => ({ ...prev, evidence: compressed }));
+          setSubmitError(null);
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processImageFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          processImageFile(file);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.plate || !formData.breakdownDate || !formData.location || !formData.description) {
-      setSubmitError('Por favor completa los campos obligatorios: Placa, Fecha, Lugar y Descripción.');
+      setSubmitError('Por favor completa los campos obligatorios: Placa, Fecha y Hora de Varada, Lugar y Descripción.');
       return;
     }
 
@@ -139,19 +287,31 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
     setSubmitError(null);
     setSubmitSuccess(null);
 
+    // Format breakdownDate and solutionDate for sheet submission (e.g., YYYY-MM-DD HH:mm)
+    const formattedBreakdown = formData.breakdownDate.replace('T', ' ');
+    const formattedSolution = formData.solutionDate ? formData.solutionDate.replace('T', ' ') : '';
+    const finalWorkshop = formData.workshop === 'OTROS' ? formData.otherWorkshop : formData.workshop;
+
     try {
-      const success = await onSubmitVarada(formData);
+      const success = await onSubmitVarada({
+        ...formData,
+        workshop: finalWorkshop,
+        breakdownDate: formattedBreakdown,
+        solutionDate: formattedSolution
+      });
+
       if (success) {
         setSubmitSuccess('¡Varada registrada exitosamente en Google Sheets!');
         setFormData({
           week: defaultWeek,
-          breakdownDate: initialDate,
+          breakdownDate: getNowLocalDateTime(),
           plate: '',
           location: '',
           system: 'MOTOR',
           component: '',
           description: '',
           workshop: '',
+          otherWorkshop: '',
           towed: 'NO',
           solutionDate: '',
           observation: '',
@@ -220,7 +380,7 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
               REGISTRO Y SEGUIMIENTO DE VARADAS
             </h1>
             <p className="text-slate-400 text-xs md:text-sm max-w-2xl">
-              Registro oportuno de vehículos varados, diagnóstico de sistemas, servicio de grúa y tiempos de paralización con sincronización directa en Google Sheets.
+              Registro oportuno de vehículos varados con fecha y hora, cálculo automático de horas de inoperatividad, carga de evidencias fotográficas y sincronización con Google Sheets.
             </p>
           </div>
 
@@ -235,7 +395,25 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
             </button>
 
             <button
-              onClick={() => setShowModal(true)}
+              onClick={() => {
+                setFormData({
+                  week: `S${getWeekNumber(new Date())}`,
+                  breakdownDate: getNowLocalDateTime(),
+                  plate: '',
+                  location: '',
+                  system: 'MOTOR',
+                  component: '',
+                  description: '',
+                  workshop: '',
+                  otherWorkshop: '',
+                  towed: 'NO',
+                  solutionDate: '',
+                  observation: '',
+                  hoursDown: '',
+                  evidence: ''
+                });
+                setShowModal(true);
+              }}
               className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all transform hover:scale-[1.02]"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
@@ -293,7 +471,7 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
               <h3 className="text-2xl md:text-3xl font-black text-amber-400 mt-1">{pendingCount}</h3>
             </div>
             <div className="p-3 rounded-xl bg-amber-500/10 text-amber-400">
-              <ShieldAlert className="w-6 h-6" />
+              <Clock className="w-6 h-6 animate-spin" />
             </div>
           </div>
           <div className="mt-3 text-[11px] text-slate-400">Novedades aún sin fecha de cierre</div>
@@ -387,18 +565,18 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
       {/* Table Section */}
       <div className="bg-[#1E293B] rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1000px]">
+          <table className="w-full text-left border-collapse min-w-[1050px]">
             <thead>
               <tr className="bg-slate-900/80 border-b border-slate-800 text-[10px] font-black uppercase text-slate-400 tracking-wider">
                 <th className="py-3.5 px-4">Semana</th>
-                <th className="py-3.5 px-4">Fecha Varada</th>
+                <th className="py-3.5 px-4">Fecha / Hora Varada</th>
                 <th className="py-3.5 px-4">Placa</th>
                 <th className="py-3.5 px-4">Lugar</th>
                 <th className="py-3.5 px-4">Sistema / Componente</th>
                 <th className="py-3.5 px-4 max-w-[200px]">Descripción</th>
                 <th className="py-3.5 px-4">Taller</th>
-                <th className="py-3.5 px-4 text-center">Grúa</th>
-                <th className="py-3.5 px-4">Solución</th>
+                <th className="py-3.5 px-4 text-center">Transportado en Grúa (Col. I)</th>
+                <th className="py-3.5 px-4">Fecha / Hora Solución</th>
                 <th className="py-3.5 px-4 text-right">Horas</th>
                 <th className="py-3.5 px-4 text-center">Evidencia</th>
               </tr>
@@ -418,11 +596,17 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                 filteredVaradas.map((item, index) => {
                   const isTowed = item.towed.toUpperCase() === 'SI';
                   const isSolved = Boolean(item.solutionDate && item.solutionDate.trim() !== '');
+                  const formattedBreakdown = (item.breakdownDate || '-').replace('T', ' ');
+                  const formattedSolution = (item.solutionDate || '-').replace('T', ' ');
+
+                  const hasEvidence = Boolean(item.evidence && item.evidence.trim() !== '');
 
                   return (
                     <tr key={item.id || index} className="hover:bg-slate-800/40 transition-colors">
                       <td className="py-3 px-4 font-bold text-amber-400">{item.week || '-'}</td>
-                      <td className="py-3 px-4 font-medium whitespace-nowrap">{item.breakdownDate || '-'}</td>
+                      <td className="py-3 px-4 font-medium whitespace-nowrap text-slate-200">
+                        {formattedBreakdown}
+                      </td>
                       <td className="py-3 px-4 font-black text-white whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 font-mono text-amber-300">
                           {item.plate}
@@ -453,8 +637,8 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                       <td className="py-3 px-4 whitespace-nowrap">
                         {isSolved ? (
                           <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            {item.solutionDate}
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            {formattedSolution}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-amber-400 text-[11px] font-medium bg-amber-500/10 px-2 py-0.5 rounded-full">
@@ -466,15 +650,25 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                         {item.hoursDown !== undefined && item.hoursDown !== '' ? `${item.hoursDown} h` : '-'}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        {item.evidence && item.evidence.startsWith('http') ? (
-                          <a
-                            href={item.evidence}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 underline text-[11px]"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" /> Ver
-                          </a>
+                        {hasEvidence ? (
+                          item.evidence!.startsWith('data:image/') || item.evidence!.startsWith('http') ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage(item.evidence!)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-bold transition-all"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" /> Ver Foto
+                            </button>
+                          ) : (
+                            <a
+                              href={item.evidence}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-300 underline text-[11px]"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" /> Enlace
+                            </a>
+                          )
                         ) : (
                           <span className="text-slate-600">-</span>
                         )}
@@ -490,7 +684,10 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
 
       {/* Modal - Registrar Varada */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto"
+          onPaste={handlePaste}
+        >
           <div className="bg-[#1E293B] border border-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl my-8">
             <div className="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50">
               <div className="flex items-center gap-3">
@@ -499,7 +696,7 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                 </div>
                 <div>
                   <h2 className="text-lg font-black text-white">REGISTRAR NUEVA VARADA</h2>
-                  <p className="text-xs text-slate-400">Guarda directo en la hoja "VARADAS" de Google Sheets</p>
+                  <p className="text-xs text-slate-400">Calculo automático de horas e inclusión de evidencias fotográficas</p>
                 </div>
               </div>
               <button
@@ -540,20 +737,23 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                   />
                 </div>
 
-                {/* Fecha Varada */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                    Fecha Varada *
+                {/* Fecha y Hora Varada */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    Fecha y Hora de Varada *
                   </label>
                   <input
-                    type="date"
+                    type="datetime-local"
                     required
                     value={formData.breakdownDate}
-                    onChange={e => handleDateChange(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                    onChange={e => handleBreakdownDateChange(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500 font-mono"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Placa */}
                 <div>
                   <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
@@ -574,9 +774,7 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                     ))}
                   </datalist>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Lugar */}
                 <div>
                   <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
@@ -591,7 +789,9 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                     className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Sistema */}
                 <div>
                   <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
@@ -607,9 +807,7 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                     ))}
                   </select>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Componente */}
                 <div>
                   <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
@@ -623,19 +821,52 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                     className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Taller que presta el servicio */}
                 <div>
                   <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                    Taller que presta el servicio
+                    Taller que presta el servicio *
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Taller Móvil / Taller Integral"
+                  <select
+                    required
                     value={formData.workshop}
                     onChange={e => setFormData({ ...formData, workshop: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
-                  />
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500 font-semibold"
+                  >
+                    <option value="">-- Seleccionar Taller --</option>
+                    {WORKSHOPS_LIST.map(w => (
+                      <option key={w} value={w}>{w}</option>
+                    ))}
+                  </select>
+
+                  {formData.workshop === 'OTROS' && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Especificar nombre del taller..."
+                      value={formData.otherWorkshop}
+                      onChange={e => setFormData({ ...formData, otherWorkshop: e.target.value })}
+                      className="w-full mt-2 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                    />
+                  )}
+                </div>
+
+                {/* Transportado en Grúa (Columna I) */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Transportado en Grúa (Col. I) *</span>
+                    <span className="text-[9px] text-amber-400 font-semibold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">Columna I</span>
+                  </label>
+                  <select
+                    value={formData.towed}
+                    onChange={e => setFormData({ ...formData, towed: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-bold focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="NO">NO</option>
+                    <option value="SI">SI</option>
+                  </select>
                 </div>
               </div>
 
@@ -654,49 +885,50 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Transportado en Grúa */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                    Transportado en Grúa
-                  </label>
-                  <select
-                    value={formData.towed}
-                    onChange={e => setFormData({ ...formData, towed: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="NO">NO</option>
-                    <option value="SI">SI</option>
-                  </select>
+              {/* Solución y Horas (Cálculo Automático) */}
+              <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Cierre de Novedad y Tiempos
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Cálculo de horas en tiempo real
+                  </span>
                 </div>
 
-                {/* Fecha Solución */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                    Fecha de Solución
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.solutionDate}
-                    onChange={e => setFormData({ ...formData, solutionDate: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
-                  />
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Fecha de Solución (Fecha y Hora) */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1">
+                      Fecha y Hora de Solución
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={formData.solutionDate}
+                      onChange={e => handleSolutionDateChange(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500 font-mono"
+                    />
+                  </div>
 
-                {/* Horas Varados */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                    Horas Varados
-                  </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    placeholder="Ej: 4.5"
-                    value={formData.hoursDown}
-                    onChange={e => setFormData({ ...formData, hoursDown: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
-                  />
+                  {/* Horas Varados (Calculadas automáticamente) */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 flex items-center justify-between">
+                      <span>Horas Varados</span>
+                      {formData.breakdownDate && formData.solutionDate && (
+                        <span className="text-[9px] text-emerald-400 font-normal">Calculado automáticamente</span>
+                      )}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="Ej: 4.5"
+                      value={formData.hoursDown}
+                      onChange={e => setFormData({ ...formData, hoursDown: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-amber-400 font-mono font-bold text-xs focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -714,18 +946,117 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                 />
               </div>
 
-              {/* Evidencia */}
+              {/* Evidencia Fotográfica (Drag & Drop, Paste, Camera/Gallery, URL) */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                  Evidencia / Enlace de Fotografía
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={formData.evidence}
-                  onChange={e => setFormData({ ...formData, evidence: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-amber-400" />
+                    Evidencia Fotográfica
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowUrlInput(!showUrlInput)}
+                    className="text-[10px] text-slate-400 hover:text-amber-400 flex items-center gap-1 underline"
+                  >
+                    <Link className="w-3 h-3" />
+                    {showUrlInput ? 'Ocultar enlace URL' : 'O ingresar enlace URL'}
+                  </button>
+                </div>
+
+                {formData.evidence ? (
+                  <div className="p-3 bg-slate-900 border border-slate-700 rounded-2xl flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      {formData.evidence.startsWith('data:image/') || formData.evidence.startsWith('http') ? (
+                        <img 
+                          src={formData.evidence} 
+                          alt="Evidencia" 
+                          className="w-14 h-14 object-cover rounded-xl border border-slate-700 shrink-0 cursor-pointer hover:opacity-90"
+                          onClick={() => setPreviewImage(formData.evidence)}
+                        />
+                      ) : (
+                        <div className="w-14 h-14 bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 shrink-0">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                      )}
+                      <div className="truncate">
+                        <p className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                          Evidencia cargada
+                        </p>
+                        <p className="text-[10px] text-slate-400 truncate max-w-[280px]">
+                          {formData.evidence.startsWith('data:image/') ? 'Fotografía adjunta (Base64)' : formData.evidence}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, evidence: '' })}
+                      className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-all shrink-0"
+                      title="Eliminar evidencia"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+                      isDragging 
+                        ? 'border-amber-400 bg-amber-500/10 scale-[1.01]' 
+                        : 'border-slate-700 bg-slate-900/60 hover:border-slate-500'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="evidence-file-input"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          processImageFile(e.target.files[0]);
+                        }
+                      }}
+                    />
+
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-200">
+                          Arrastra una foto aquí, o bien <span className="text-amber-400 underline cursor-pointer" onClick={() => document.getElementById('evidence-file-input')?.click()}>pégala con Ctrl+V</span>
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Sombra o suelta archivos, o presiona el botón para tomar/seleccionar foto
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-1">
+                        <label
+                          htmlFor="evidence-file-input"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer border border-slate-700 transition-all"
+                        >
+                          <Camera className="w-3.5 h-3.5 text-amber-400" />
+                          Galería / Cámara
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {showUrlInput && !formData.evidence && (
+                  <div className="mt-2">
+                    <input
+                      type="url"
+                      placeholder="https://ejemplo.com/foto.jpg"
+                      value={formData.evidence}
+                      onChange={e => setFormData({ ...formData, evidence: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
@@ -755,6 +1086,36 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Image Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+          <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center justify-center">
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute -top-12 right-0 p-2 text-white/80 hover:text-white bg-slate-800/80 rounded-full hover:bg-slate-700 transition-all"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={previewImage}
+              alt="Evidencia Varada"
+              className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-slate-800"
+            />
+            {previewImage.startsWith('http') && (
+              <a
+                href={previewImage}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Abrir en nueva pestaña
+              </a>
+            )}
           </div>
         </div>
       )}

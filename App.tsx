@@ -422,79 +422,71 @@ const App: React.FC = () => {
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
-      // Grupo 1: Datos críticos para la navegación inicial
-      const [v, d, m, wv] = await Promise.all([
+      const promiseG1 = Promise.all([
         fetchVehiclesFromSheet(),
         fetchDriversFromSheet(),
         fetchMileageLogsFromSheet(),
         fetchWorkshopVisitsFromSheet()
-      ]);
+      ]).then(([v, d, m, wv]) => {
+        setVehicles(v);
+        setDrivers(d);
+        setMileageLogs(m);
+        setWorkshopVisits(wv);
+      });
 
-      setVehicles(v);
-      setDrivers(d);
-      setMileageLogs(m);
-      setWorkshopVisits(wv);
-
-      // Grupo 2: Reportes y datos secundarios
-      const [f, r, w, cl] = await Promise.all([
+      const promiseG2 = Promise.all([
         fetchFinesFromSheet(),
         fetchReportsFromSheet(),
         fetchWashReportsFromSheet(),
         fetchCleaningReportsFromSheet()
-      ]);
-
-      setFines(f);
-      setReports(r);
-      
-      // Merge with local wash submissions to prevent stale cache reverting them
-      const mergedWash = [...w];
-      localWashSubmissionsRef.current.forEach(localWash => {
-        const exists = mergedWash.some(item => 
-          item.id === localWash.id || 
-          (normalizePlate(item.plate) === normalizePlate(localWash.plate) && item.date === localWash.date)
-        );
-        if (!exists) {
-          mergedWash.unshift(localWash);
-        }
+      ]).then(([f, r, w, cl]) => {
+        setFines(f);
+        setReports(r);
+        
+        const mergedWash = [...w];
+        localWashSubmissionsRef.current.forEach(localWash => {
+          const exists = mergedWash.some(item => 
+            item.id === localWash.id || 
+            (normalizePlate(item.plate) === normalizePlate(localWash.plate) && item.date === localWash.date)
+          );
+          if (!exists) {
+            mergedWash.unshift(localWash);
+          }
+        });
+        setWashReports(mergedWash);
+        setCleaningReports(cl);
       });
-      setWashReports(mergedWash);
-      
-      setCleaningReports(cl);
 
-      // Grupo 3: Datos técnicos y de mantenimiento
-      const [c, p, a, oi, as] = await Promise.all([
+      const promiseG3 = Promise.all([
         fetchCalibrationsFromSheet(),
         fetchPreventivesFromSheet(),
         fetchAvailabilityFromSheet(),
         fetchOperationalIndicatorsFromSheet(),
         fetchAvailabilitySummaryFromSheet()
-      ]);
-
-      // Merge with local calibration submissions/updates
-      let mergedCal = c.map(item => {
-        if (localCalibrationUpdatesRef.current[item.id]) {
-          return { ...item, ...localCalibrationUpdatesRef.current[item.id] };
-        }
-        return item;
+      ]).then(([c, p, a, oi, as]) => {
+        let mergedCal = c.map(item => {
+          if (localCalibrationUpdatesRef.current[item.id]) {
+            return { ...item, ...localCalibrationUpdatesRef.current[item.id] };
+          }
+          return item;
+        });
+        localCalibrationSubmissionsRef.current.forEach(localCal => {
+          const exists = mergedCal.some(item => 
+            item.id === localCal.id || 
+            (normalizePlate(item.plate) === normalizePlate(localCal.plate) && item.calibrationDate === localCal.calibrationDate)
+          );
+          if (!exists) {
+            mergedCal.unshift(localCal);
+          }
+        });
+        setCalibrations(mergedCal);
+        setPreventives(p);
+        setAvailabilityRecords(a);
+        setOperationalIndicators(oi);
+        setAvailabilitySummary(as);
       });
-      localCalibrationSubmissionsRef.current.forEach(localCal => {
-        const exists = mergedCal.some(item => 
-          item.id === localCal.id || 
-          (normalizePlate(item.plate) === normalizePlate(localCal.plate) && item.calibrationDate === localCal.calibrationDate)
-        );
-        if (!exists) {
-          mergedCal.unshift(localCal);
-        }
-      });
-      setCalibrations(mergedCal);
-      
-      setPreventives(p);
-      setAvailabilityRecords(a);
-      setOperationalIndicators(oi);
-      setAvailabilitySummary(as);
 
-      // Grupo 4: Listas de control e indicadores de rendimiento
-      const [ch, fp, pa, corr, unav, ops, ct, aud, fsa, fcr, amv, fb, fFines, varadasData] = await Promise.all([
+      const promiseG4 = Promise.all([
         fetchCheckListFromSheet(),
         fetchFuelPerformanceFromSheet(),
         fetchPlateAdherenceFromSheet(),
@@ -509,50 +501,50 @@ const App: React.FC = () => {
         import('./services/sheetService').then(m => m.fetchFleetBaseData()),
         import('./services/sheetService').then(m => m.fetchForkliftFinesFromSheet()),
         fetchVaradasFromSheet()
-      ]);
-      
-      // Merge with local updates to prevent stale Google Sheets cache from reverting changes
-      const mergedAud = aud.map(r => {
-        if (localAuditUpdatesRef.current[r.id]) {
-          return {
-            ...r,
-            status: localAuditUpdatesRef.current[r.id].status,
-            noveltyDate: localAuditUpdatesRef.current[r.id].noveltyDate,
-            evidence: localAuditUpdatesRef.current[r.id].evidence,
-            observations: localAuditUpdatesRef.current[r.id].observations
-          };
-        }
-        return r;
+      ]).then(([ch, fp, pa, corr, unav, ops, ct, aud, fsa, fcr, amv, fb, fFines, varadasData]) => {
+        const mergedAud = aud.map(r => {
+          if (localAuditUpdatesRef.current[r.id]) {
+            return {
+              ...r,
+              status: localAuditUpdatesRef.current[r.id].status,
+              noveltyDate: localAuditUpdatesRef.current[r.id].noveltyDate,
+              evidence: localAuditUpdatesRef.current[r.id].evidence,
+              observations: localAuditUpdatesRef.current[r.id].observations
+            };
+          }
+          return r;
+        });
+
+        const mergedFcr = fcr.map(r => {
+          const key = `${r.placa.toUpperCase().trim()}_${r.item.toUpperCase().trim()}`;
+          if (localCierreUpdatesRef.current[key]) {
+            return {
+              ...r,
+              estado: localCierreUpdatesRef.current[key].estado,
+              evidencia: localCierreUpdatesRef.current[key].evidencia,
+              verificacion: localCierreUpdatesRef.current[key].verificacion
+            };
+          }
+          return r;
+        });
+
+        setCheckLists(ch);
+        setFuelPerformanceData(fp);
+        setPlateAdherenceData(pa);
+        setCorrectives(corr);
+        setUnavailabilityRecords(unav);
+        setOperators(ops);
+        setControlTowerRecords(ct);
+        setAuditRecords(mergedAud);
+        setFleetStandardAuditRecords(fsa);
+        setFleetCierreRecords(mergedFcr);
+        setAuditMasterVehicles(amv);
+        setFleetBase(fb);
+        setForkliftFines(fFines);
+        setVaradas(varadasData);
       });
 
-      const mergedFcr = fcr.map(r => {
-        const key = `${r.placa.toUpperCase().trim()}_${r.item.toUpperCase().trim()}`;
-        if (localCierreUpdatesRef.current[key]) {
-          return {
-            ...r,
-            estado: localCierreUpdatesRef.current[key].estado,
-            evidencia: localCierreUpdatesRef.current[key].evidencia,
-            verificacion: localCierreUpdatesRef.current[key].verificacion
-          };
-        }
-        return r;
-      });
-
-      setCheckLists(ch);
-      setFuelPerformanceData(fp);
-      setPlateAdherenceData(pa);
-      setCorrectives(corr);
-      setUnavailabilityRecords(unav);
-      setOperators(ops);
-      setControlTowerRecords(ct);
-      setAuditRecords(mergedAud);
-      setFleetStandardAuditRecords(fsa);
-      setFleetCierreRecords(mergedFcr);
-      setAuditMasterVehicles(amv);
-      setFleetBase(fb);
-      setForkliftFines(fFines);
-      setVaradas(varadasData);
-
+      await Promise.all([promiseG1, promiseG2, promiseG3, promiseG4]);
     } catch (err) {
       console.error("Critical Sync Error:", err);
     } finally {
