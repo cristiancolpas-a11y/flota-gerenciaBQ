@@ -504,12 +504,18 @@ const App: React.FC = () => {
       ]).then(([ch, fp, pa, corr, unav, ops, ct, aud, fsa, fcr, amv, fb, fFines, varadasData]) => {
         const mergedAud = aud.map(r => {
           if (localAuditUpdatesRef.current[r.id]) {
+            const sheetEv = r.evidence || '';
+            const localEv = localAuditUpdatesRef.current[r.id].evidence || '';
+            const effectiveEv = sheetEv.trim().startsWith('http') ? sheetEv : (localEv || sheetEv);
+            if (sheetEv.trim().startsWith('http')) {
+              localAuditUpdatesRef.current[r.id].evidence = sheetEv;
+            }
             return {
               ...r,
-              status: localAuditUpdatesRef.current[r.id].status,
-              noveltyDate: localAuditUpdatesRef.current[r.id].noveltyDate,
-              evidence: localAuditUpdatesRef.current[r.id].evidence,
-              observations: localAuditUpdatesRef.current[r.id].observations
+              status: localAuditUpdatesRef.current[r.id].status || r.status,
+              noveltyDate: localAuditUpdatesRef.current[r.id].noveltyDate || r.noveltyDate,
+              evidence: effectiveEv,
+              observations: localAuditUpdatesRef.current[r.id].observations || r.observations
             };
           }
           return r;
@@ -518,11 +524,17 @@ const App: React.FC = () => {
         const mergedFcr = fcr.map(r => {
           const key = `${r.placa.toUpperCase().trim()}_${r.item.toUpperCase().trim()}`;
           if (localCierreUpdatesRef.current[key]) {
+            const sheetEv = r.evidencia || '';
+            const localEv = localCierreUpdatesRef.current[key].evidencia || '';
+            const effectiveEv = sheetEv.trim().startsWith('http') ? sheetEv : (localEv || sheetEv);
+            if (sheetEv.trim().startsWith('http')) {
+              localCierreUpdatesRef.current[key].evidencia = sheetEv;
+            }
             return {
               ...r,
-              estado: localCierreUpdatesRef.current[key].estado,
-              evidencia: localCierreUpdatesRef.current[key].evidencia,
-              verificacion: localCierreUpdatesRef.current[key].verificacion
+              estado: localCierreUpdatesRef.current[key].estado || r.estado,
+              evidencia: effectiveEv,
+              verificacion: localCierreUpdatesRef.current[key].verificacion || r.verificacion
             };
           }
           return r;
@@ -601,8 +613,11 @@ const App: React.FC = () => {
       };
 
       setFleetCierreRecords(prev => prev.map(r => {
-        if (r.placa.toUpperCase().trim() === updated.plate.toUpperCase().trim() && 
-            r.item.toUpperCase().trim() === updated.item.toUpperCase().trim()) {
+        if (
+          (updated.id && r.id === updated.id) ||
+          (r.placa.toUpperCase().trim() === updated.plate.toUpperCase().trim() && 
+           r.item.toUpperCase().trim() === updated.item.toUpperCase().trim())
+        ) {
           return {
             ...r,
             estado: updated.status,

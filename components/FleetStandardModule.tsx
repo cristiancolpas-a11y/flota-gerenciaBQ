@@ -45,6 +45,10 @@ import {
   Trash2,
   Clock,
   FileSpreadsheet,
+  Copy,
+  Edit3,
+  Link as LinkIcon,
+  Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { submitAuditUpdateToSheet, submitFleetCierreUpdateToSheet } from "../services/sheetService";
@@ -90,6 +94,22 @@ const ITEM_LABELS = {
     "Estado de la imagen",
     "Imagen actualizada",
   ],
+};
+
+const isClosedStatus = (status?: string): boolean => {
+  if (!status) return false;
+  const s = status.toUpperCase().trim();
+  return (
+    s === "REALIZADO" ||
+    s === "REALIZADA" ||
+    s === "CERRADO" ||
+    s === "CERRADA" ||
+    s === "COMPLETADO" ||
+    s === "COMPLETADA" ||
+    s === "RESUELTO" ||
+    s.includes("REALIZAD") ||
+    s.includes("CERRAD")
+  );
 };
 
 const getTrafficColor = (percent: number) => {
@@ -346,48 +366,58 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
         }
       }
 
-      let success = false;
+      // Perform local optimistic update immediately so UI reflects change instantly
       if (selectedNovelty.isCierre) {
-        success = await submitFleetCierreUpdateToSheet({
+        selectedNovelty.status = noveltyStatus;
+        selectedNovelty.verification = noveltyVerification;
+        selectedNovelty.evidence = finalEvidence;
+      } else {
+        selectedNovelty.status = noveltyStatus;
+        selectedNovelty.evidence = finalEvidence;
+        selectedNovelty.observations = noveltyObs;
+      }
+
+      if (onUpdateRecord) {
+        if (selectedNovelty.isCierre) {
+          onUpdateRecord({
+            id: selectedNovelty.id,
+            plate: selectedNovelty.plate,
+            item: selectedNovelty.observations,
+            status: noveltyStatus,
+            evidence: finalEvidence,
+            verification: noveltyVerification
+          }, true);
+        } else {
+          onUpdateRecord({
+            id: selectedNovelty.id,
+            status: noveltyStatus,
+            noveltyDate: new Date().toISOString().split("T")[0],
+            evidence: finalEvidence,
+            noveltyObservation: noveltyObs,
+          }, false);
+        }
+      }
+
+      setIsEvidenceModalOpen(false);
+      setIsSubmitting(false);
+
+      // Async background dispatch to Google Apps Script
+      if (selectedNovelty.isCierre) {
+        submitFleetCierreUpdateToSheet({
           plate: selectedNovelty.plate,
           item: selectedNovelty.observations, // observations maps to c.item
           status: noveltyStatus,
           evidence: finalEvidence,
           verification: noveltyVerification
-        });
+        }).catch(err => console.error("Error background syncing cierre:", err));
       } else {
-        success = await submitAuditUpdateToSheet({
+        submitAuditUpdateToSheet({
           id: selectedNovelty.id,
           status: noveltyStatus,
           noveltyDate: new Date().toISOString().split("T")[0],
           evidence: finalEvidence,
           noveltyObservation: noveltyObs,
-        });
-      }
-      if (success) {
-        setIsEvidenceModalOpen(false);
-        if (onUpdateRecord) {
-          if (selectedNovelty.isCierre) {
-            onUpdateRecord({
-              plate: selectedNovelty.plate,
-              item: selectedNovelty.observations,
-              status: noveltyStatus,
-              evidence: finalEvidence,
-              verification: noveltyVerification
-            }, true);
-          } else {
-            onUpdateRecord({
-              id: selectedNovelty.id,
-              status: noveltyStatus,
-              noveltyDate: new Date().toISOString().split("T")[0],
-              evidence: finalEvidence,
-              noveltyObservation: noveltyObs,
-            }, false);
-          }
-        }
-        alert("EVIDENCIA REGISTRADA EXITOSAMENTE. LOS CAMBIOS SE HAN SINCROINZADO EN TIEMPO REAL.");
-      } else {
-        alert("No se pudo guardar la evidencia. Verifique la conexión.");
+        }).catch(err => console.error("Error background syncing audit:", err));
       }
     } catch (e) {
       alert("Error al guardar: " + e);
@@ -1015,7 +1045,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
 
   const displayedNovedadesData = useMemo(() => {
     return novedadesData.filter((r) => {
-      const isRealizado = r.status?.toUpperCase() === "REALIZADO";
+      const isRealizado = isClosedStatus(r.status);
       if (filterCierreEstado === "PENDIENTE") {
         return !isRealizado;
       }
@@ -1099,7 +1129,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
           if (!acc[key])
             acc[key] = { month: r.month, year: r.year, total: 0, closed: 0 };
           acc[key].total += 1;
-          if (r.status?.toUpperCase() === "REALIZADO") acc[key].closed += 1;
+          if (isClosedStatus(r.status)) acc[key].closed += 1;
           return acc;
         },
         {} as Record<string, any>,
@@ -1133,7 +1163,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
           const key = r.cd;
           if (!acc[key]) acc[key] = { name: key, total: 0, closed: 0 };
           acc[key].total += 1;
-          if (r.status?.toUpperCase() === "REALIZADO") acc[key].closed += 1;
+          if (isClosedStatus(r.status)) acc[key].closed += 1;
           return acc;
         },
         {} as Record<string, any>,
@@ -1157,7 +1187,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
           if (!acc[contrName])
             acc[contrName] = { name: contrName, total: 0, closed: 0 };
           acc[contrName].total += 1;
-          if (r.status?.toUpperCase() === "REALIZADO")
+          if (isClosedStatus(r.status))
             acc[contrName].closed += 1;
           return acc;
         },
@@ -1246,7 +1276,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     if (novedadesData.length === 0)
       return { pending: 0, completed: 0, compliance: 0 };
     const completed = novedadesData.filter(
-      (r) => r.status?.toUpperCase() === "REALIZADO",
+      (r) => isClosedStatus(r.status),
     ).length;
     const pending = novedadesData.length - completed;
     const compliance = (completed / novedadesData.length) * 100;
@@ -4123,7 +4153,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                         <td className="px-6 py-5 border-b border-slate-800/50 text-center">
                           <span
                             className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                              r.status?.toUpperCase() === "REALIZADO"
+                              isClosedStatus(r.status)
                                 ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
                                 : "bg-rose-500/10 text-rose-500 border border-rose-500/20"
                             }`}
@@ -4132,34 +4162,66 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                           </span>
                         </td>
                         <td className="px-6 py-5 border-b border-slate-800/50 text-center">
-                          <div className="flex justify-center gap-2">
+                          <div className="flex items-center justify-center gap-2">
                             {r.evidence ? (
-                              <button
-                                onClick={() => {
-                                  const imgs = r.evidence
-                                    ? r.evidence.split(",").map((s) => s.trim())
-                                    : [];
-                                  setGalleryImages(imgs);
-                                  setIsGalleryOpen(true);
-                                  setSelectedNovelty(r);
-                                }}
-                                className="p-3 bg-emerald-600/20 text-emerald-400 rounded-2xl hover:bg-emerald-600 hover:text-white transition-all shadow-xl flex items-center gap-2 font-black text-xs"
-                              >
-                                <span className="text-xl">🖼️</span> VER
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => {
+                                    const imgs = r.evidence
+                                      ? r.evidence.split(",").map((s) => s.trim()).filter(Boolean)
+                                      : [];
+                                    setGalleryImages(imgs);
+                                    setIsGalleryOpen(true);
+                                    setSelectedNovelty(r);
+                                  }}
+                                  className="px-3 py-2 bg-emerald-600/20 text-emerald-400 rounded-xl hover:bg-emerald-600 hover:text-white transition-all shadow-md flex items-center gap-1.5 font-black text-xs"
+                                  title="Ver galería de imágenes"
+                                >
+                                  <span className="text-sm">🖼️</span> VER
+                                </button>
+
+                                {r.evidence.trim().startsWith("http") && (
+                                  <a
+                                    href={getDriveDirectLink(r.evidence)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="px-3 py-2 bg-blue-600/20 text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-md flex items-center gap-1.5 font-black text-xs"
+                                    title="Abrir enlace real de Google Drive / Hoja"
+                                  >
+                                    <ExternalLink size={14} /> LINK
+                                  </a>
+                                )}
+
+                                <button
+                                  onClick={() => {
+                                    setSelectedNovelty(r);
+                                    setNoveltyObs(r.noveltyObservation || "");
+                                    setNoveltyStatus(isClosedStatus(r.status) ? "REALIZADO" : (r.status || "PENDIENTE"));
+                                    setNoveltyVerification(r.verification || "NO");
+                                    setNoveltyEvidence(
+                                      r.evidence ? r.evidence.split(",").map((s) => s.trim()).filter(Boolean) : []
+                                    );
+                                    setIsEvidenceModalOpen(true);
+                                  }}
+                                  className="p-2 bg-slate-800 text-slate-400 hover:text-white hover:bg-indigo-600 rounded-xl transition-all shadow-sm"
+                                  title="Editar / Re-subir Evidencia"
+                                >
+                                  <Edit3 size={14} />
+                                </button>
+                              </>
                             ) : (
                               <button
                                 onClick={() => {
                                   setSelectedNovelty(r);
                                   setNoveltyObs(r.noveltyObservation || "");
-                                  setNoveltyStatus(r.status || "PENDIENTE");
+                                  setNoveltyStatus(isClosedStatus(r.status) ? "REALIZADO" : (r.status || "PENDIENTE"));
                                   setNoveltyVerification(r.verification || "NO");
                                   setNoveltyEvidence([]);
                                   setIsEvidenceModalOpen(true);
                                 }}
-                                className="p-3 bg-indigo-600/20 text-indigo-400 rounded-2xl hover:bg-indigo-600 hover:text-white transition-all shadow-xl flex items-center gap-2 font-black text-xs"
+                                className="px-3 py-2 bg-indigo-600/20 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-md flex items-center gap-1.5 font-black text-xs"
                               >
-                                <span className="text-xl">📸</span> REGISTRAR
+                                <span className="text-sm">📸</span> REGISTRAR
                               </button>
                             )}
                           </div>
@@ -4423,9 +4485,50 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
               </div>
 
               <div className="p-8 space-y-6">
+                {selectedNovelty?.evidence && selectedNovelty.evidence.trim() !== "" && (
+                  <div className="p-4 bg-indigo-950/40 border border-indigo-500/30 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-indigo-300">
+                      <span className="flex items-center gap-1.5">
+                        <LinkIcon size={12} /> Enlace de Evidencia Registrado en Hoja / Drive
+                      </span>
+                      <span className="text-emerald-400 font-extrabold">VERIFICADO</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={selectedNovelty.evidence}
+                        className="bg-[#0f172a] text-[11px] text-slate-200 font-mono w-full px-3 py-2 rounded-xl border border-slate-800 outline-none truncate"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedNovelty.evidence);
+                          alert("¡Enlace copiado al portapapeles!");
+                        }}
+                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 transition-all"
+                        title="Copiar enlace al portapapeles"
+                      >
+                        <Copy size={12} /> Copiar
+                      </button>
+                      {selectedNovelty.evidence.trim().startsWith("http") && (
+                        <a
+                          href={getDriveDirectLink(selectedNovelty.evidence)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 transition-all"
+                          title="Abrir enlace en nueva pestaña"
+                        >
+                          <ExternalLink size={12} /> Abrir
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2 px-1">
-                    Cargar Fotos (Máx. 4)
+                    Cargar / Reemplazar Fotos (Máx. 4)
                   </label>
                   <div
                     onDragOver={handleDragOver}
@@ -4599,40 +4702,83 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                     </p>
                   )}
                 </div>
-                <button
-                  onClick={() => setIsGalleryOpen(false)}
-                  className="p-4 bg-white/5 text-slate-400 hover:text-white rounded-[1.5rem] transition-all"
-                >
-                  <X size={24} />
-                </button>
+                <div className="flex items-center gap-3">
+                  {selectedNovelty && (
+                    <button
+                      onClick={() => {
+                        setIsGalleryOpen(false);
+                        setNoveltyObs(selectedNovelty.noveltyObservation || "");
+                        setNoveltyStatus(selectedNovelty.status || "PENDIENTE");
+                        setNoveltyVerification(selectedNovelty.verification || "NO");
+                        setNoveltyEvidence(
+                          selectedNovelty.evidence ? selectedNovelty.evidence.split(",").map((s) => s.trim()).filter(Boolean) : []
+                        );
+                        setIsEvidenceModalOpen(true);
+                      }}
+                      className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center gap-2"
+                    >
+                      <Edit3 size={14} /> Re-subir / Editar
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setIsGalleryOpen(false)}
+                    className="p-3 bg-white/5 text-slate-400 hover:text-white rounded-2xl transition-all"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-y-auto max-h-[60vh] pr-2 custom-scrollbar">
                 <div
-                  className={`grid gap-4 ${galleryImages.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
+                  className={`grid gap-6 ${galleryImages.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
                 >
-                  {galleryImages.map((img, i) => (
-                    <div
-                      key={i}
-                      className="aspect-video rounded-3xl overflow-hidden border border-white/5 shadow-2xl relative group bg-[#0f172a]"
-                    >
-                      <img
-                        src={getDriveDirectLink(img)}
-                        alt={`Evidence ${i}`}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <a
-                        href={img}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-4 bg-white/10 backdrop-blur-md text-white rounded-2xl opacity-0 group-hover:opacity-100 transition-all hover:bg-indigo-600 shadow-2xl border border-white/20"
-                      >
-                        <ExternalLink size={24} />
-                      </a>
-                    </div>
-                  ))}
+                  {galleryImages.map((img, i) => {
+                    const isUrl = img.trim().startsWith("http");
+                    const directLink = getDriveDirectLink(img);
+                    return (
+                      <div key={i} className="flex flex-col gap-2">
+                        <div className="aspect-video rounded-3xl overflow-hidden border border-white/5 shadow-2xl relative group bg-[#0f172a]">
+                          <img
+                            src={directLink}
+                            alt={`Evidence ${i}`}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                            <a
+                              href={isUrl ? img : directLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-4 py-2 bg-white/20 backdrop-blur-md text-white rounded-xl hover:bg-indigo-600 transition-all shadow-xl border border-white/20 flex items-center gap-2 text-xs font-bold"
+                            >
+                              <ExternalLink size={16} /> Abrir Link
+                            </a>
+                          </div>
+                        </div>
+
+                        {isUrl && (
+                          <div className="flex items-center gap-2 bg-[#0f172a] p-2.5 rounded-2xl border border-slate-800">
+                            <input
+                              type="text"
+                              readOnly
+                              value={img}
+                              className="bg-transparent text-[10px] text-slate-300 font-mono w-full truncate border-none outline-none"
+                            />
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(img);
+                                alert("¡Enlace copiado al portapapeles!");
+                              }}
+                              className="px-3 py-1.5 bg-indigo-600/30 text-indigo-300 hover:bg-indigo-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1 shrink-0"
+                            >
+                              <Copy size={12} /> Copiar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 {galleryImages.length === 0 && (
                   <div className="flex flex-col items-center py-20 bg-[#0f172a]/50 rounded-[3rem] border border-dashed border-slate-800">

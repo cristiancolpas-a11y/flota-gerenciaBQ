@@ -108,11 +108,17 @@ const ExecutiveAuditDashboard: React.FC = () => {
       const mergedCierres = cierres.map(c => {
         const key = `${c.placa.toUpperCase().trim()}_${c.item.toUpperCase().trim()}`;
         if (localUpdatesRef.current[key]) {
+          const sheetEv = c.evidencia || '';
+          const localEv = localUpdatesRef.current[key].evidencia || '';
+          const effectiveEv = sheetEv.trim().startsWith('http') ? sheetEv : (localEv || sheetEv);
+          if (sheetEv.trim().startsWith('http')) {
+            localUpdatesRef.current[key].evidencia = sheetEv;
+          }
           return {
             ...c,
-            estado: localUpdatesRef.current[key].estado,
-            evidencia: localUpdatesRef.current[key].evidencia,
-            verificacion: localUpdatesRef.current[key].verificacion
+            estado: localUpdatesRef.current[key].estado || c.estado,
+            evidencia: effectiveEv,
+            verificacion: localUpdatesRef.current[key].verificacion || c.verificacion
           };
         }
         return c;
@@ -289,39 +295,31 @@ const ExecutiveAuditDashboard: React.FC = () => {
         finalDespues = await uploadImageToDrive(base64, `AUDIT_DESPUES_${selectedAudit.placa}_${Date.now()}.jpg`);
       }
 
-      // Enviar a la hoja (Ahora enviamos los links de Drive)
-      const success = await submitFleetStandardAuditUpdateToSheet({
+      // Local optimistic update
+      setData(prev => prev.map(a => {
+        if (a.id === selectedAudit.id) {
+          return {
+            ...a,
+            evidenciaAntes: finalAntes,
+            evidenciaDespues: finalDespues,
+            fechaCierre: evidenceData.fechaCierre,
+            estado: 'CERRADO'
+          };
+        }
+        return a;
+      }));
+      setShowEvidenceModal(false);
+      setIsUpdating(false);
+
+      // Async background submit to Google Sheets
+      submitFleetStandardAuditUpdateToSheet({
         id: selectedAudit.id,
         placa: selectedAudit.placa,
         evidenciaAntes: finalAntes,
         evidenciaDespues: finalDespues,
         fechaCierre: evidenceData.fechaCierre,
         estado: 'CERRADO'
-      });
-
-      if (success) {
-        setData(prev => prev.map(a => {
-          if (a.id === selectedAudit.id) {
-            return {
-              ...a,
-              evidenciaAntes: finalAntes,
-              evidenciaDespues: finalDespues,
-              fechaCierre: evidenceData.fechaCierre,
-              estado: 'CERRADO'
-            };
-          }
-          return a;
-        }));
-        setShowEvidenceModal(false);
-        setIsUpdating(false);
-        alert('Evidencias registradas y novedad cerrada con éxito en Drive y Hoja.');
-        setTimeout(async () => {
-          await fetchData();
-        }, 5000);
-      } else {
-        alert('Error al registrar evidencias en el servidor.');
-        setIsUpdating(false);
-      }
+      }).catch(err => console.error("Error background syncing audit update:", err));
     } catch (error) {
       console.error("Error al actualizar evidencia:", error);
       alert('Error de conexión o timeout. Verifique su internet.');
@@ -428,44 +426,36 @@ const ExecutiveAuditDashboard: React.FC = () => {
         finalEvidence = await uploadImageToDrive(base64, `CIERRE_QS_${selectedCierre.placa}_${Date.now()}.jpg`);
       }
 
-      const success = await submitCalidadCierreUpdateToSheet({
+      // Track locally immediately to avoid Google Sheet stale cache reversion
+      const updateKey = `${selectedCierre.placa.toUpperCase().trim()}_${selectedCierre.item.toUpperCase().trim()}`;
+      localUpdatesRef.current[updateKey] = {
+        estado: cierreEvidenceData.estado,
+        evidencia: finalEvidence,
+        verificacion: cierreEvidenceData.verificacion || 'SI'
+      };
+
+      setCierreRecords(prev => prev.map(c => {
+        if (c.placa === selectedCierre.placa && c.item === selectedCierre.item) {
+          return {
+            ...c,
+            estado: cierreEvidenceData.estado,
+            evidencia: finalEvidence,
+            verificacion: cierreEvidenceData.verificacion
+          };
+        }
+        return c;
+      }));
+      setShowCierreEvidenceModal(false);
+      setIsUpdating(false);
+
+      // Submit in background
+      submitCalidadCierreUpdateToSheet({
         plate: selectedCierre.placa,
         item: selectedCierre.item,
         status: cierreEvidenceData.estado,
         evidence: finalEvidence,
         verification: cierreEvidenceData.verificacion
-      });
-
-      if (success) {
-        // Track locally to avoid Google Sheet stale cache reversion
-        const updateKey = `${selectedCierre.placa.toUpperCase().trim()}_${selectedCierre.item.toUpperCase().trim()}`;
-        localUpdatesRef.current[updateKey] = {
-          estado: cierreEvidenceData.estado,
-          evidencia: finalEvidence,
-          verificacion: cierreEvidenceData.verificacion || 'SI'
-        };
-
-        setCierreRecords(prev => prev.map(c => {
-          if (c.placa === selectedCierre.placa && c.item === selectedCierre.item) {
-            return {
-              ...c,
-              estado: cierreEvidenceData.estado,
-              evidencia: finalEvidence,
-              verificacion: cierreEvidenceData.verificacion
-            };
-          }
-          return c;
-        }));
-        setShowCierreEvidenceModal(false);
-        setIsUpdating(false);
-        alert('Evidencia registrada y caso actualizado exitosamente en el servidor de Calidad y Seguridad.');
-        setTimeout(async () => {
-          await fetchData(true); // Silent background fetch to not block user
-        }, 2000);
-      } else {
-        alert('Error al registrar evidencias en el servidor.');
-        setIsUpdating(false);
-      }
+      }).catch(err => console.error("Error background syncing calidad cierre:", err));
     } catch (error) {
       console.error("Error al actualizar cierre de novedad:", error);
       alert('Error de conexión o timeout. Verifique su internet.');

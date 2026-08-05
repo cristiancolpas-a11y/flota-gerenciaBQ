@@ -1936,7 +1936,7 @@ const sendToGAS = async (payload: any, url: string = getGoogleScriptUrl(), useCo
   if (useCors) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       const response = await fetch(targetUrl, {
         method: 'POST',
@@ -1967,7 +1967,7 @@ const sendToGAS = async (payload: any, url: string = getGoogleScriptUrl(), useCo
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
 
     await fetch(targetUrl, {
       method: 'POST',
@@ -1981,10 +1981,14 @@ const sendToGAS = async (payload: any, url: string = getGoogleScriptUrl(), useCo
     });
     clearTimeout(timeoutId);
 
-    console.log(`✅ Envío no-cors ultra rápido exitoso para ${payload.method}`);
+    console.log(`✅ Envío no-cors exitoso para ${payload.method}`);
     return true;
-  } catch (err) {
-    console.error(`GAS - Error final en envío no-cors (${payload.method}):`, err);
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      console.warn(`GAS - Envío en segundo plano (${payload.method}) continuará en Apps Script.`);
+    } else {
+      console.error(`GAS - Error en envío no-cors (${payload.method}):`, err);
+    }
     return false;
   }
 };
@@ -3347,20 +3351,25 @@ export const submitFleetStandardAuditUpdateToSheet = async (data: any): Promise<
   return !!result;
 };
 
-export const submitFleetCierreUpdateToSheet = async (data: {
-  plate: string;
-  item: string;
-  status: string;
-  evidence: string | string[];
-  verification?: string;
-}): Promise<boolean> => {
-  const docIds = ['1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs', getAuditDocId(), '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60'];
+export const submitFleetCierreUpdateToSheet = async (data: any): Promise<boolean> => {
+  const docIds = ['1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs', '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60'];
   const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
+  const payloadData = {
+    ...data,
+    placa: data.placa || data.plate || '',
+    plate: data.plate || data.placa || '',
+    estado: data.estado || data.status || '',
+    status: data.status || data.estado || '',
+    evidencia: data.evidencia || data.evidence || '',
+    evidence: data.evidence || data.evidencia || '',
+    verificacion: data.verificacion || data.verification || '',
+    verification: data.verification || data.verificacion || ''
+  };
   const results = await Promise.all(
     uniqueDocIds.map(docId =>
       sendToGAS({
         method: 'POST_FLEET_CIERRE_UPDATE',
-        data: { ...data, docId }
+        data: { ...payloadData, docId }
       }, getGoogleScriptUrl(), true)
     )
   );
