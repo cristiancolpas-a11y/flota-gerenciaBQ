@@ -51,7 +51,7 @@ import {
   Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { submitAuditUpdateToSheet, submitFleetCierreUpdateToSheet } from "../services/sheetService";
+import { submitAuditUpdateToSheet, submitFleetCierreUpdateToSheet, uploadImageToDrive } from "../services/sheetService";
 import { getDriveDirectLink, createMosaic, compressImage } from "../utils";
 import { FleetSeguimientoTab } from "./FleetSeguimientoTab";
 
@@ -357,13 +357,34 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     try {
       let finalEvidence = "";
       if (noveltyEvidence.length > 0) {
-        if (noveltyEvidence.length === 1) {
-          finalEvidence = noveltyEvidence[0];
-        } else {
-          // Use the robust utility from utils.ts
-          const title = `EVIDENCIA: ${selectedNovelty.plate} - ${selectedNovelty.auditType}`;
-          finalEvidence = await createMosaic(noveltyEvidence, title);
+        const httpLinks = noveltyEvidence.filter((ev) => ev.trim().startsWith("http"));
+        const base64Items = noveltyEvidence.filter((ev) => !ev.trim().startsWith("http") && ev.trim().length > 0);
+
+        if (base64Items.length > 0) {
+          let rawBase64 = "";
+          if (base64Items.length === 1) {
+            rawBase64 = base64Items[0];
+          } else {
+            const title = `EVIDENCIA: ${selectedNovelty.plate} - ${selectedNovelty.auditType}`;
+            rawBase64 = await createMosaic(base64Items, title);
+          }
+
+          // Upload image/mosaic to Google Drive so Google Sheets gets an actual HTTP URL link
+          try {
+            const fileName = `EVIDENCIA_${selectedNovelty.plate}_${Date.now()}.jpg`;
+            const uploadedUrl = await uploadImageToDrive(rawBase64, fileName);
+            if (uploadedUrl && uploadedUrl.trim().startsWith("http")) {
+              httpLinks.push(uploadedUrl.trim());
+            } else {
+              httpLinks.push(rawBase64);
+            }
+          } catch (uploadErr) {
+            console.warn("Upload to Drive failed, using base64 fallback:", uploadErr);
+            httpLinks.push(rawBase64);
+          }
         }
+
+        finalEvidence = httpLinks.join(", ");
       }
 
       // Perform local optimistic update immediately so UI reflects change instantly
@@ -4163,7 +4184,11 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                         </td>
                         <td className="px-6 py-5 border-b border-slate-800/50 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            {r.evidence ? (
+                            {Boolean(
+                              r.evidence &&
+                              r.evidence.trim().length > 0 &&
+                              (r.evidence.trim().startsWith("http") || r.evidence.trim().startsWith("data:image/"))
+                            ) ? (
                               <>
                                 <button
                                   onClick={() => {
