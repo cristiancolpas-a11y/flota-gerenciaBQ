@@ -94,6 +94,9 @@ import {
   fetchFleetStandardAuditFromSheet,
   fetchFleetCierreFromSheet,
   fetchVaradasFromSheet,
+  fetchAuditMasterListFromSheet,
+  fetchFleetBaseData,
+  fetchForkliftFinesFromSheet,
   submitVaradaToSheet,
   getWashDocId,
   setWashDocId,
@@ -408,41 +411,24 @@ const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    handleSyncData();
-    
-    // Auto-refresh data every 5 minutes
-    const intervalId = setInterval(() => {
-      handleSyncData();
-    }, 5 * 60 * 1000);
-    
-    return () => clearInterval(intervalId);
-  }, []);
+  const [loadedSections, setLoadedSections] = useState<Record<string, boolean>>({});
 
-  const handleSyncData = async () => {
-    setIsSyncing(true);
-    try {
-      const promiseG1 = Promise.all([
-        fetchVehiclesFromSheet(),
-        fetchDriversFromSheet(),
-        fetchMileageLogsFromSheet(),
-        fetchWorkshopVisitsFromSheet()
-      ]).then(([v, d, m, wv]) => {
-        setVehicles(v);
-        setDrivers(d);
-        setMileageLogs(m);
-        setWorkshopVisits(wv);
-      });
-
-      const promiseG2 = Promise.all([
-        fetchFinesFromSheet(),
-        fetchReportsFromSheet(),
-        fetchWashReportsFromSheet(),
-        fetchCleaningReportsFromSheet()
-      ]).then(([f, r, w, cl]) => {
-        setFines(f);
-        setReports(r);
-        
+  const fetchSectionData = async (view: ActiveView) => {
+    switch (view) {
+      case 'kilometrajes':
+        setMileageLogs(await fetchMileageLogsFromSheet());
+        break;
+      case 'visitas':
+        setWorkshopVisits(await fetchWorkshopVisitsFromSheet());
+        break;
+      case 'comparendos':
+        setFines(await fetchFinesFromSheet());
+        break;
+      case 'novedades':
+        setReports(await fetchReportsFromSheet());
+        break;
+      case 'lavados': {
+        const w = await fetchWashReportsFromSheet();
         const mergedWash = [...w];
         localWashSubmissionsRef.current.forEach(localWash => {
           const exists = mergedWash.some(item => 
@@ -454,16 +440,13 @@ const App: React.FC = () => {
           }
         });
         setWashReports(mergedWash);
-        setCleaningReports(cl);
-      });
-
-      const promiseG3 = Promise.all([
-        fetchCalibrationsFromSheet(),
-        fetchPreventivesFromSheet(),
-        fetchAvailabilityFromSheet(),
-        fetchOperationalIndicatorsFromSheet(),
-        fetchAvailabilitySummaryFromSheet()
-      ]).then(([c, p, a, oi, as]) => {
+        break;
+      }
+      case 'limpieza':
+        setCleaningReports(await fetchCleaningReportsFromSheet());
+        break;
+      case 'calibraciones': {
+        const c = await fetchCalibrationsFromSheet();
         let mergedCal = c.map(item => {
           if (localCalibrationUpdatesRef.current[item.id]) {
             return { ...item, ...localCalibrationUpdatesRef.current[item.id] };
@@ -480,28 +463,65 @@ const App: React.FC = () => {
           }
         });
         setCalibrations(mergedCal);
-        setPreventives(p);
+        break;
+      }
+      case 'torre_preventivos':
+        setPreventives(await fetchPreventivesFromSheet());
+        break;
+      case 'disponibilidad': {
+        const [a, fb] = await Promise.all([
+          fetchAvailabilityFromSheet(),
+          fetchFleetBaseData()
+        ]);
         setAvailabilityRecords(a);
-        setOperationalIndicators(oi);
+        setFleetBase(fb);
+        break;
+      }
+      case 'indicadoresOperativos':
+        setOperationalIndicators(await fetchOperationalIndicatorsFromSheet());
+        break;
+      case 'indicadoresDisponibilidad': {
+        const [a, as] = await Promise.all([
+          fetchAvailabilityFromSheet(),
+          fetchAvailabilitySummaryFromSheet()
+        ]);
+        setAvailabilityRecords(a);
         setAvailabilitySummary(as);
-      });
+        break;
+      }
+      case 'checklist':
+        setCheckLists(await fetchCheckListFromSheet());
+        break;
+      case 'rendimiento':
+        setFuelPerformanceData(await fetchFuelPerformanceFromSheet());
+        break;
+      case 'adherencia':
+        setPlateAdherenceData(await fetchPlateAdherenceFromSheet());
+        break;
+      case 'correctivos':
+        setCorrectives(await fetchCorrectivesFromSheet());
+        break;
+      case 'indisponibilidad':
+        setUnavailabilityRecords(await fetchUnavailabilityFromSheet());
+        break;
+      case 'operadores':
+        setOperators(await fetchOperatorsFromSheet());
+        break;
+      case 'cierre_novedades':
+        setControlTowerRecords(await fetchControlTowerFromSheet());
+        break;
+      case 'auditoria_calidad_seguridad':
+        setAuditRecords(await fetchAuditRecordsFromSheet());
+        break;
+      case 'estandar_flota': {
+        const [aud, fsa, fcr, amv, fb] = await Promise.all([
+          fetchAuditRecordsFromSheet(),
+          fetchFleetStandardAuditFromSheet(),
+          fetchFleetCierreFromSheet(),
+          fetchAuditMasterListFromSheet(),
+          fetchFleetBaseData()
+        ]);
 
-      const promiseG4 = Promise.all([
-        fetchCheckListFromSheet(),
-        fetchFuelPerformanceFromSheet(),
-        fetchPlateAdherenceFromSheet(),
-        fetchCorrectivesFromSheet(),
-        fetchUnavailabilityFromSheet(),
-        fetchOperatorsFromSheet(),
-        fetchControlTowerFromSheet(),
-        fetchAuditRecordsFromSheet(),
-        fetchFleetStandardAuditFromSheet(),
-        fetchFleetCierreFromSheet(),
-        import('./services/sheetService').then(m => m.fetchAuditMasterListFromSheet()),
-        import('./services/sheetService').then(m => m.fetchFleetBaseData()),
-        import('./services/sheetService').then(m => m.fetchForkliftFinesFromSheet()),
-        fetchVaradasFromSheet()
-      ]).then(([ch, fp, pa, corr, unav, ops, ct, aud, fsa, fcr, amv, fb, fFines, varadasData]) => {
         const mergedAud = aud.map(r => {
           if (localAuditUpdatesRef.current[r.id]) {
             const sheetEv = r.evidence || '';
@@ -540,29 +560,81 @@ const App: React.FC = () => {
           return r;
         });
 
-        setCheckLists(ch);
-        setFuelPerformanceData(fp);
-        setPlateAdherenceData(pa);
-        setCorrectives(corr);
-        setUnavailabilityRecords(unav);
-        setOperators(ops);
-        setControlTowerRecords(ct);
         setAuditRecords(mergedAud);
         setFleetStandardAuditRecords(fsa);
         setFleetCierreRecords(mergedFcr);
         setAuditMasterVehicles(amv);
         setFleetBase(fb);
-        setForkliftFines(fFines);
-        setVaradas(varadasData);
-      });
+        break;
+      }
+      case 'comparendos_montacargas':
+        setForkliftFines(await fetchForkliftFinesFromSheet());
+        break;
+      case 'varadas':
+        setVaradas(await fetchVaradasFromSheet());
+        break;
+      default:
+        break;
+    }
+  };
 
-      await Promise.all([promiseG1, promiseG2, promiseG3, promiseG4]);
+  const handleSyncData = async () => {
+    setIsSyncing(true);
+    try {
+      const [v, d] = await Promise.all([
+        fetchVehiclesFromSheet(),
+        fetchDriversFromSheet()
+      ]);
+      setVehicles(v);
+      setDrivers(d);
+
+      await fetchSectionData(activeView);
+      setLoadedSections(prev => ({ ...prev, [activeView]: true }));
     } catch (err) {
-      console.error("Critical Sync Error:", err);
+      console.error("Error al sincronizar:", err);
     } finally {
       setIsSyncing(false);
     }
   };
+
+  // Efecto A — carga base (solo una vez)
+  useEffect(() => {
+    const loadBase = async () => {
+      setIsSyncing(true);
+      try {
+        const [v, d] = await Promise.all([
+          fetchVehiclesFromSheet(),
+          fetchDriversFromSheet()
+        ]);
+        setVehicles(v);
+        setDrivers(d);
+      } catch (e) {
+        console.warn("Error cargando datos base:", e);
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+    loadBase();
+  }, []);
+
+  // Efecto B — carga por sección (cada vez que cambia activeView, si no está cargada)
+  useEffect(() => {
+    if (loadedSections[activeView]) return;
+
+    const loadSection = async () => {
+      setIsSyncing(true);
+      try {
+        await fetchSectionData(activeView);
+        setLoadedSections(prev => ({ ...prev, [activeView]: true }));
+      } catch (e) {
+        console.warn("Error cargando la sección " + activeView + ":", e);
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+
+    loadSection();
+  }, [activeView, loadedSections]);
 
   const handleReportRoutineNovelty = async (noveltyData: {
     plate: string;
@@ -572,34 +644,39 @@ const App: React.FC = () => {
     cd?: string;
     contractor?: string;
   }) => {
+    const payload = {
+      id: 'NOV-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      date: noveltyData.date,
+      plate: noveltyData.plate,
+      source: noveltyData.source,
+      novelty: noveltyData.novelty,
+      status: 'PENDIENTES',
+      cd: noveltyData.cd || 'GENERAL',
+      contractor: noveltyData.contractor || 'GENERAL'
+    } as any;
+
+    const newReport: Report = {
+      id: payload.id,
+      date: payload.date,
+      plate: payload.plate,
+      source: payload.source,
+      novelty: payload.novelty,
+      status: 'PENDIENTES',
+      cd: payload.cd,
+      contractor: payload.contractor
+    };
+
+    // Optimistic update: show immediately
+    setReports(prev => [newReport, ...prev]);
+
     try {
-      const payload = {
-        id: 'NOV-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-        date: noveltyData.date,
-        plate: noveltyData.plate,
-        source: noveltyData.source,
-        novelty: noveltyData.novelty,
-        status: 'PENDIENTES',
-        cd: noveltyData.cd || 'GENERAL',
-        contractor: noveltyData.contractor || 'GENERAL'
-      } as any;
-      
       await submitReportToSheet(payload);
-      
-      const newReport: Report = {
-        id: payload.id,
-        date: payload.date,
-        plate: payload.plate,
-        source: payload.source,
-        novelty: payload.novelty,
-        status: 'PENDIENTES',
-        cd: payload.cd,
-        contractor: payload.contractor
-      };
-      
-      setReports(prev => [newReport, ...prev]);
+      handleSyncData().catch(e => console.error("Sync error after novelty submit:", e));
     } catch (error) {
+      // Revert if error
+      setReports(prev => prev.filter(r => r.id !== newReport.id));
       console.error("Error submitting routine novelty: ", error);
+      alert("No se pudo guardar la novedad. Intenta nuevamente.");
     }
   };
 
@@ -2186,12 +2263,26 @@ const App: React.FC = () => {
               vehicles={vehicles} 
               mileageLogs={mileageLogs} 
               onSubmit={async (data) => {
+                const tempLog: MileageLog = {
+                  id: `temp-${Date.now()}`,
+                  plate: data.plate,
+                  mileage: data.mileage,
+                  date: data.date,
+                  cd: data.cd,
+                  contractor: data.contractor,
+                  week: data.week
+                };
+
+                // Optimistic update
+                setMileageLogs(prev => [tempLog, ...prev]);
+
                 try {
                   await submitMileageToSheet(data);
                   console.log("✅ Kilometraje guardado con éxito.");
-                  // Intentamos sincronizar pero no bloqueamos el éxito previo
                   handleSyncData().catch(e => console.error("Error syncing after save:", e));
                 } catch (err) {
+                  // Revert if error
+                  setMileageLogs(prev => prev.filter(m => m.id !== tempLog.id));
                   console.error("Error submitting mileage:", err);
                   throw err;
                 }
@@ -3046,11 +3137,40 @@ const App: React.FC = () => {
                 varadas={varadas}
                 onRefresh={handleSyncData}
                 onSubmitVarada={async (data) => {
-                  const ok = await submitVaradaToSheet(data);
-                  if (ok) {
-                    handleSyncData();
+                  const tempVarada: VaradaRecord = {
+                    id: `temp-${Date.now()}`,
+                    week: data.week || `S${getWeekNumber(new Date())}`,
+                    breakdownDate: data.breakdownDate || new Date().toISOString().replace('T', ' ').substring(0, 16),
+                    plate: data.plate || '',
+                    location: data.location || '',
+                    system: data.system || 'MOTOR',
+                    component: data.component || '',
+                    description: data.description || '',
+                    workshop: data.workshop || '',
+                    towed: data.towed || 'NO',
+                    solutionDate: data.solutionDate || '',
+                    observation: data.observation || '',
+                    hoursDown: data.hoursDown || '',
+                    evidence: data.evidence || '',
+                    status: data.solutionDate ? 'CERRADO' : 'ABIERTO'
+                  };
+
+                  // Optimistic update
+                  setVaradas(prev => [tempVarada, ...prev]);
+
+                  try {
+                    const ok = await submitVaradaToSheet(data);
+                    if (ok) {
+                      handleSyncData().catch(e => console.error("Sync error after varada:", e));
+                      return true;
+                    } else {
+                      setVaradas(prev => prev.filter(v => v.id !== tempVarada.id));
+                      return false;
+                    }
+                  } catch (err) {
+                    setVaradas(prev => prev.filter(v => v.id !== tempVarada.id));
+                    throw err;
                   }
-                  return ok;
                 }}
                 loading={isSyncing}
               />
@@ -3289,9 +3409,8 @@ const App: React.FC = () => {
           drivers={drivers} 
           onClose={() => setShowFineForm(false)} 
           onSubmit={async (d) => { 
-            await submitFineToSheet(d); 
             const formattedFine: Fine = {
-              id: d.id || String(Date.now()),
+              id: d.id || `temp-${Date.now()}`,
               date: d.date || new Date().toISOString().split('T')[0],
               plate: d.plate,
               infractionCode: d.infractionCode || '',
@@ -3300,8 +3419,16 @@ const App: React.FC = () => {
               status: 'PENDIENTE',
               evidenceUrl: d.evidenceUrl || ''
             };
+            setShowFineForm(false);
             setFines(prev => [formattedFine, ...prev]);
-            handleSyncData(); 
+
+            try {
+              await submitFineToSheet(d); 
+              handleSyncData().catch(e => console.error(e));
+            } catch (err) {
+              setFines(prev => prev.filter(f => f.id !== formattedFine.id));
+              alert("No se pudo guardar el comparendo. Intenta de nuevo.");
+            }
           }} 
         />
       )}
@@ -3310,9 +3437,17 @@ const App: React.FC = () => {
           fine={managingFineSupport} 
           onClose={() => setManagingFineSupport(null)} 
           onSubmit={async (d) => { 
-            await submitFineToSheet(d); 
+            const previousFines = [...fines];
+            setManagingFineSupport(null);
             setFines(prev => prev.map(f => f.id === d.id ? { ...f, ...d, status: d.status || f.status, evidenceUrl: d.evidenceUrl || f.evidenceUrl } : f));
-            handleSyncData(); 
+
+            try {
+              await submitFineToSheet(d); 
+              handleSyncData().catch(e => console.error(e));
+            } catch (err) {
+              setFines(previousFines);
+              alert("No se pudo actualizar el soporte del comparendo.");
+            }
           }} 
         />
       )}
@@ -3321,7 +3456,8 @@ const App: React.FC = () => {
           vehicles={vehicles} 
           onClose={() => setShowDocUpdateForm(false)} 
           onSubmit={async (d) => { 
-            await submitDocumentUpdateToSheet(d); 
+            const previousVehicles = [...vehicles];
+            setShowDocUpdateForm(false);
             setVehicles(prevVehicles => prevVehicles.map(v => {
               if (v.plate.toUpperCase().trim() === d.plate.toUpperCase().trim()) {
                 const updatedDoc = {
@@ -3340,7 +3476,14 @@ const App: React.FC = () => {
               }
               return v;
             }));
-            handleSyncData(); 
+
+            try {
+              await submitDocumentUpdateToSheet(d); 
+              handleSyncData().catch(e => console.error(e));
+            } catch (err) {
+              setVehicles(previousVehicles);
+              alert("No se pudo actualizar el documento. Intenta de nuevo.");
+            }
           }} 
         />
       )}
@@ -3349,9 +3492,8 @@ const App: React.FC = () => {
           vehicles={vehicles} 
           onClose={() => setShowReportForm(false)} 
           onSubmit={async (d) => { 
-            await submitReportToSheet(d); 
             const newReport: Report = {
-              id: d.id || String(Date.now()),
+              id: d.id || `temp-${Date.now()}`,
               date: d.date || new Date().toISOString().split('T')[0],
               plate: d.plate,
               source: d.source || 'CONDUCTOR',
@@ -3359,8 +3501,16 @@ const App: React.FC = () => {
               status: 'PENDIENTES',
               initialEvidence: d.initialEvidence || ''
             };
+            setShowReportForm(false);
             setReports(prev => [newReport, ...prev]);
-            handleSyncData(); 
+
+            try {
+              await submitReportToSheet(d); 
+              handleSyncData().catch(e => console.error(e));
+            } catch (err) {
+              setReports(prev => prev.filter(r => r.id !== newReport.id));
+              alert("No se pudo guardar la novedad. Intenta de nuevo.");
+            }
           }} 
         />
       )}
@@ -3369,9 +3519,8 @@ const App: React.FC = () => {
           vehicles={vehicles} 
           onClose={() => setShowWashForm(false)} 
           onSubmit={async (d) => { 
-            await submitWashToSheet(d); 
             const newWash: WashReport = {
-              id: d.id || String(Date.now()),
+              id: d.id || `temp-${Date.now()}`,
               month: d.month || new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase(),
               week: d.week || '1',
               date: d.date || new Date().toISOString().split('T')[0],
@@ -3380,9 +3529,18 @@ const App: React.FC = () => {
               workshop: d.workshop || '',
               mapUrl: d.mapUrl || ''
             };
+            setShowWashForm(false);
             localWashSubmissionsRef.current = [newWash, ...localWashSubmissionsRef.current];
             setWashReports(prev => [newWash, ...prev]);
-            handleSyncData(); 
+
+            try {
+              await submitWashToSheet(d); 
+              handleSyncData().catch(e => console.error(e));
+            } catch (err) {
+              setWashReports(prev => prev.filter(w => w.id !== newWash.id));
+              localWashSubmissionsRef.current = localWashSubmissionsRef.current.filter(w => w.id !== newWash.id);
+              alert("No se pudo guardar el lavado. Intenta de nuevo.");
+            }
           }} 
         />
       )}
@@ -3391,9 +3549,8 @@ const App: React.FC = () => {
           vehicles={vehicles} 
           onClose={() => setShowCleaningForm(false)} 
           onSubmit={async (d) => { 
-            await submitCleaningToSheet(d); 
             const newCleaning: WashReport = {
-              id: d.id || String(Date.now()),
+              id: d.id || `temp-${Date.now()}`,
               month: d.month || new Date().toLocaleString('es-CO', { month: 'long' }).toUpperCase(),
               week: d.week || '1',
               date: d.date || new Date().toISOString().split('T')[0],
@@ -3403,8 +3560,16 @@ const App: React.FC = () => {
               mapUrl: d.mapUrl || '',
               status: 'ABIERTO'
             };
+            setShowCleaningForm(false);
             setCleaningReports(prev => [newCleaning, ...prev]);
-            handleSyncData(); 
+
+            try {
+              await submitCleaningToSheet(d); 
+              handleSyncData().catch(e => console.error(e));
+            } catch (err) {
+              setCleaningReports(prev => prev.filter(c => c.id !== newCleaning.id));
+              alert("No se pudo guardar la limpieza. Intenta de nuevo.");
+            }
           }} 
         />
       )}
@@ -3415,9 +3580,17 @@ const App: React.FC = () => {
           initialDate={closingCleaning.date} 
           onClose={() => setClosingCleaning(null)} 
           onSubmit={async (d) => { 
-            await submitCleaningToSheet(d); 
+            const previousCleanings = [...cleaningReports];
+            setClosingCleaning(null);
             setCleaningReports(prev => prev.map(c => c.id === d.id ? { ...c, ...d, status: 'CERRADO' } : c));
-            handleSyncData(); 
+
+            try {
+              await submitCleaningToSheet(d); 
+              handleSyncData().catch(e => console.error(e));
+            } catch (err) {
+              setCleaningReports(previousCleanings);
+              alert("No se pudo cerrar la limpieza.");
+            }
           }} 
         />
       )}
@@ -3430,14 +3603,24 @@ const App: React.FC = () => {
             setUpdatingCalibration(null);
           }} 
           onSubmit={async (d: any) => { 
+            setShowCalibrationForm(false);
+            setUpdatingCalibration(null);
+
             if (d.isUpdate) {
-              await submitCalibrationUpdateToSheet(d);
+              const previousCalibrations = [...calibrations];
               localCalibrationUpdatesRef.current[d.id] = d;
               setCalibrations(prev => prev.map(c => c.id === d.id ? { ...c, ...d } : c));
+
+              try {
+                await submitCalibrationUpdateToSheet(d);
+                handleSyncData().catch(e => console.error(e));
+              } catch (err) {
+                setCalibrations(previousCalibrations);
+                alert("No se pudo actualizar la calibración.");
+              }
             } else {
-              await submitCalibrationToSheet(d);
               const newCal: Calibration = {
-                id: d.id || String(Date.now()),
+                id: d.id || `temp-${Date.now()}`,
                 calibrationDate: d.date || new Date().toISOString().split('T')[0],
                 plate: d.plate,
                 equipment: d.type || 'ALCOHOLSENSOR',
@@ -3447,8 +3630,16 @@ const App: React.FC = () => {
               };
               localCalibrationSubmissionsRef.current = [newCal, ...localCalibrationSubmissionsRef.current];
               setCalibrations(prev => [newCal, ...prev]);
+
+              try {
+                await submitCalibrationToSheet(d);
+                handleSyncData().catch(e => console.error(e));
+              } catch (err) {
+                setCalibrations(prev => prev.filter(c => c.id !== newCal.id));
+                localCalibrationSubmissionsRef.current = localCalibrationSubmissionsRef.current.filter(c => c.id !== newCal.id);
+                alert("No se pudo guardar la calibración.");
+              }
             }
-            handleSyncData(); 
           }} 
         />
       )}
@@ -3457,6 +3648,7 @@ const App: React.FC = () => {
           report={closingReport} 
           onClose={() => setClosingReport(null)} 
           onSubmit={async (id, d) => { 
+            const previousReports = [...reports];
             const selectedVehicle = vehicles.find(v => v.plate === closingReport.plate);
             const finalReport = {
               ...closingReport, 
@@ -3464,9 +3656,17 @@ const App: React.FC = () => {
               cd: selectedVehicle?.cd || closingReport.cd || 'GENERAL',
               contractor: selectedVehicle?.contractor || closingReport.contractor || 'GENERAL'
             } as any;
-            await submitReportToSheet(finalReport); 
+
+            setClosingReport(null);
             setReports(prev => prev.map(r => r.id === closingReport.id ? { ...r, ...finalReport, status: 'COMPLETADOS' } : r));
-            handleSyncData(); 
+
+            try {
+              await submitReportToSheet(finalReport); 
+              handleSyncData().catch(e => console.error(e));
+            } catch (err) {
+              setReports(previousReports);
+              alert("No se pudo cerrar el reporte.");
+            }
           }} 
         />
       )}
@@ -3475,6 +3675,7 @@ const App: React.FC = () => {
           report={registeringEntry} 
           onClose={() => setRegisteringEntry(null)} 
           onSubmit={async (d) => { 
+            const previousReports = [...reports];
             const selectedVehicle = vehicles.find(v => v.plate === registeringEntry.plate);
             const finalReport = {
               ...registeringEntry, 
@@ -3482,9 +3683,17 @@ const App: React.FC = () => {
               cd: selectedVehicle?.cd || registeringEntry.cd || 'GENERAL',
               contractor: selectedVehicle?.contractor || registeringEntry.contractor || 'GENERAL'
             } as any;
-            await submitReportToSheet(finalReport); 
+
+            setRegisteringEntry(null);
             setReports(prev => prev.map(r => r.id === registeringEntry.id ? { ...r, ...finalReport } : r));
-            handleSyncData(); 
+
+            try {
+              await submitReportToSheet(finalReport); 
+              handleSyncData().catch(e => console.error(e));
+            } catch (err) {
+              setReports(previousReports);
+              alert("No se pudo registrar el ingreso a taller.");
+            }
           }} 
         />
       )}
@@ -3493,12 +3702,21 @@ const App: React.FC = () => {
           visit={closingWorkshopVisit} 
           onClose={() => setClosingWorkshopVisit(null)} 
           onSubmit={async (d) => { 
-            const res = await submitWorkshopVisitUpdateToSheet(d); 
-            if (res.success) {
-              setWorkshopVisits(prev => prev.map(v => v.id === closingWorkshopVisit.id ? { ...v, status: 'COMPLETADOS', closureDate: d.closureDate, solutionEvidence: d.solutionEvidence } : v));
-              handleSyncData(); 
-            } else {
-              alert("Error al guardar evidencias: " + (res.message || "No se encontró el registro en la hoja"));
+            const previousVisits = [...workshopVisits];
+            setClosingWorkshopVisit(null);
+            setWorkshopVisits(prev => prev.map(v => v.id === closingWorkshopVisit.id ? { ...v, status: 'COMPLETADOS', closureDate: d.closureDate, solutionEvidence: d.solutionEvidence } : v));
+
+            try {
+              const res = await submitWorkshopVisitUpdateToSheet(d); 
+              if (res.success) {
+                handleSyncData().catch(e => console.error(e));
+              } else {
+                setWorkshopVisits(previousVisits);
+                alert("Error al guardar evidencias: " + (res.message || "No se encontró el registro en la hoja"));
+              }
+            } catch (err) {
+              setWorkshopVisits(previousVisits);
+              alert("Error al guardar evidencias en Google Sheets.");
             }
           }} 
         />

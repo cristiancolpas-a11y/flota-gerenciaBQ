@@ -104,6 +104,7 @@ export interface Vehicle {
 }
 
 export interface MileageLog {
+  id?: string;
   date: string;
   plate: string;
   mileage: number;
@@ -522,6 +523,7 @@ export interface VaradaRecord {
   observation?: string;    // Indice 10: OBSERVACION
   hoursDown?: number | string; // Indice 11: HORAS VARADOS
   evidence?: string;       // Indice 12: EVIDENCIA
+  status?: 'ABIERTO' | 'CERRADO' | string;
 }
 
 

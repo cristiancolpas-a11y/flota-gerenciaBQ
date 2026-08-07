@@ -224,7 +224,7 @@ const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: st
       if (sheetName) url += `&sheetName=${encodeURIComponent(sheetName)}`;
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500); 
+      const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
       const response = await fetch(url, { 
         method: 'GET',
@@ -1967,7 +1967,7 @@ const sendToGAS = async (payload: any, url: string = getGoogleScriptUrl(), useCo
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     await fetch(targetUrl, {
       method: 'POST',
