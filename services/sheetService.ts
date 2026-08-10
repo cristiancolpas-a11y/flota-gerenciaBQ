@@ -171,8 +171,9 @@ export const getCampaignsDocId = (): string => {
 };
 
 export const getVaradasDocId = (): string => {
-  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_VARADAS_ID') : null;
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  // VARADAS es independiente: apunta directo a su propio documento.
+  // No depende de getRoutinesDocId ni de la configuración de RUTINAS.
+  return '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
 };
 
 // HOJA MAESTRA (Donde se encuentran los Vehículos y Conductores)

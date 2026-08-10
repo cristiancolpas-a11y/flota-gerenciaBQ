@@ -108,12 +108,13 @@ import {
   setGoogleScriptUrl
 } from './services/sheetService';
 
+import Papa from 'papaparse';
 import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
 import { 
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, Check, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, Check, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame, FileSpreadsheet, Download
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas' | 'campanas';
@@ -962,6 +963,51 @@ const App: React.FC = () => {
       searchCount: filteredCalibrations.length
     };
   }, [filteredCalibrations]);
+
+  const handleExportCalibrationsExcel = () => {
+    if (!filteredCalibrations || filteredCalibrations.length === 0) {
+      alert("No hay registros de calibración para exportar con los filtros seleccionados.");
+      return;
+    }
+
+    const exportData = filteredCalibrations.map((item) => {
+      const veh = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(item.plate));
+      const cd = item.cd || veh?.cd || 'GENERAL';
+      const contractor = item.contractor || veh?.contractor || 'GENERAL';
+      const estadoEjecucion = item.estado || (item.status === 'active' ? 'VIGENTE' : item.status === 'warning' ? 'POR VENCER' : item.status === 'expired' ? 'VENCIDO' : 'PENDIENTE');
+
+      return {
+        "MES": item.month || selectedMonth,
+        "SEMANA": item.week || '',
+        "PLACA": item.plate || '',
+        "TALLER / EQUIPO": item.equipment || '',
+        "CENTRO DE DISTRIBUCIÓN (CD)": cd,
+        "CONTRATISTA / OPERACIÓN": contractor,
+        "FECHA DE CALIBRACIÓN": item.calibrationDate || '',
+        "FECHA DE VENCIMIENTO": item.expiryDate || '',
+        "ESTADO DE EJECUCIÓN": estadoEjecucion,
+        "DÍAS RESTANTES": item.daysPending !== undefined ? item.daysPending : '',
+        "AÑO": item.year || selectedYear,
+        "CERTIFICADO / EVIDENCIA": item.certificateUrl || ''
+      };
+    });
+
+    const csv = Papa.unparse(exportData, {
+      delimiter: ";", // Delimitador punto y coma para Excel en español
+    });
+
+    const csvWithBom = "\uFEFF" + csv;
+    const blob = new Blob([csvWithBom], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    const monthLabel = selectedMonth !== 'TODOS' ? selectedMonth : 'TODOS_LOS_MESES';
+    link.setAttribute("download", `Reporte_Calibraciones_${monthLabel}_${selectedYear}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const filteredFines = useMemo(() => {
     return fines.filter(f => {
@@ -2891,6 +2937,16 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
+                    <button 
+                      onClick={handleExportCalibrationsExcel}
+                      className="flex items-center gap-2 px-5 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-3xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all hover:scale-105 active:scale-95 cursor-pointer group"
+                      title="Exportar calibraciones del mes a Excel/CSV"
+                    >
+                      <FileSpreadsheet size={18} className="group-hover:rotate-12 transition-transform text-emerald-200" />
+                      <span>Exportar Excel</span>
+                      <Download size={14} className="opacity-70 ml-0.5" />
+                    </button>
+
                   </div>
                </div>
 
@@ -2930,6 +2986,7 @@ const App: React.FC = () => {
                  pending={statsCalibrations.pending}
                  searchCount={statsCalibrations.searchCount}
                  month={selectedMonth}
+                 onExport={handleExportCalibrationsExcel}
                />
 
                {calibrationViewMode === 'visual' ? (

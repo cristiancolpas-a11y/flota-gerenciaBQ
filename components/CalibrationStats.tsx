@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardList, CheckCircle2, Clock, Search } from 'lucide-react';
+import { ClipboardList, CheckCircle2, Clock, Search, FileSpreadsheet, Download } from 'lucide-react';
 
 interface CalibrationStatsProps {
   total: number;
@@ -7,9 +7,10 @@ interface CalibrationStatsProps {
   pending: number;
   searchCount: number;
   month: string;
+  onExport?: () => void;
 }
 
-const CalibrationStats: React.FC<CalibrationStatsProps> = ({ total, completed, pending, searchCount, month }) => {
+const CalibrationStats: React.FC<CalibrationStatsProps> = ({ total, completed, pending, searchCount, month, onExport }) => {
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   return (
@@ -34,8 +35,8 @@ const CalibrationStats: React.FC<CalibrationStatsProps> = ({ total, completed, p
       </div>
 
       {/* Stats Cards */}
-      <div className="flex flex-wrap justify-center lg:justify-start gap-4 flex-grow">
-        <div className="bg-indigo-600 rounded-2xl p-4 flex items-center gap-3 min-w-[160px] shadow-xl shadow-indigo-600/20">
+      <div className="flex flex-wrap justify-center lg:justify-start gap-4 flex-grow items-center">
+        <div className="bg-indigo-600 rounded-2xl p-4 flex items-center gap-3 min-w-[150px] shadow-xl shadow-indigo-600/20">
           <div className="p-2.5 bg-white/20 rounded-xl text-white">
             <ClipboardList size={20} />
           </div>
@@ -45,7 +46,7 @@ const CalibrationStats: React.FC<CalibrationStatsProps> = ({ total, completed, p
           </div>
         </div>
 
-        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[160px] border border-white/5">
+        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[150px] border border-white/5">
           <div className="p-2.5 bg-emerald-500/20 rounded-xl text-emerald-400">
             <CheckCircle2 size={20} />
           </div>
@@ -55,7 +56,7 @@ const CalibrationStats: React.FC<CalibrationStatsProps> = ({ total, completed, p
           </div>
         </div>
 
-        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[160px] border border-white/5">
+        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[150px] border border-white/5">
           <div className="p-2.5 bg-rose-500/20 rounded-xl text-rose-400">
             <Clock size={20} />
           </div>
@@ -65,7 +66,7 @@ const CalibrationStats: React.FC<CalibrationStatsProps> = ({ total, completed, p
           </div>
         </div>
 
-        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[160px] border border-white/5">
+        <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3 min-w-[150px] border border-white/5">
           <div className="p-2.5 bg-slate-500/20 rounded-xl text-slate-300">
             <Search size={20} />
           </div>
@@ -75,6 +76,21 @@ const CalibrationStats: React.FC<CalibrationStatsProps> = ({ total, completed, p
           </div>
         </div>
       </div>
+
+      {onExport && (
+        <button
+          onClick={onExport}
+          className="flex items-center gap-2.5 px-6 py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-900/40 transition-all hover:scale-105 active:scale-95 cursor-pointer group shrink-0"
+          title="Exportar calibraciones a archivo Excel/CSV"
+        >
+          <FileSpreadsheet size={18} className="group-hover:rotate-12 transition-transform text-emerald-200" />
+          <div className="flex flex-col items-start leading-none">
+            <span className="text-[7px] text-emerald-200 font-bold tracking-widest mb-0.5">DESCARGAR EXCEL</span>
+            <span className="text-[10px] font-black tracking-wider">{month}</span>
+          </div>
+          <Download size={14} className="opacity-80 ml-1" />
+        </button>
+      )}
     </div>
   );
 };
