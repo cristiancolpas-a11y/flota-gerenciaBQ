@@ -4231,9 +4231,11 @@ export const fetchVaradasFromSheet = async (): Promise<VaradaRecord[]> => {
 const fetchVaradasFromSheetCSV = async (): Promise<VaradaRecord[]> => {
   try {
     const docId = getVaradasDocId();
+    const VARADAS_GID = '1900206774';
     const urls = [
-      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=VARADAS${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=VARADAS${getCacheBuster()}`
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${VARADAS_GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${VARADAS_GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=VARADAS${getCacheBuster()}`
     ];
 
     for (const url of urls) {
