@@ -740,7 +740,8 @@ function doPost(e) {
       }
 
       else if (m === 'POST_VARADA') {
-        var s = findSheetCaseInsensitive(ss, d.sheetName || "VARADAS")
+        var s = getSheetByGid(ss, "1900206774")
+             || findSheetCaseInsensitive(ss, d.sheetName || "VARADAS")
              || findSheetCaseInsensitive(ss, "VARADAS")
              || getS(ss, "VARADAS");
 
@@ -764,6 +765,9 @@ function doPost(e) {
           return output("error", "Placa requerida: no puede estar vacía.");
         }
 
+        var rawEv = pickVal(d.evidence, d.evidencia, d.evidenceUrl, "");
+        var imgUrl = sImg(rawEv, "VARADA_" + rowPlate);
+
         var rowData = [
           pickVal(d.week, d.SEMANA, d.semana, ""),
           pickVal(d.breakdownDate, d.fechaVarada, d.fecha, ""),
@@ -777,7 +781,7 @@ function doPost(e) {
           pickVal(d.solutionDate, d.fechaSolucion, ""),
           pickVal(d.observation, d.observacion, ""),
           pickVal(d.hoursDown, d.horasVarados, d.horas, ""),
-          pickVal(d.evidence, d.evidencia, "")
+          imgUrl
         ];
 
         s.appendRow(rowData);
