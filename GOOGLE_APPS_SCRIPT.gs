@@ -739,7 +739,7 @@ function doPost(e) {
         return output("success", "Kilometraje registrado exitosamente (fila " + nextBlankRow + ") en la hoja " + s.getName() + ".");
       }
 
-      else if (m === 'POST_VARADA') {
+      else if (m === 'POST_VARADA' || m === 'POSTVARADA' || m === 'POST_VARADAS' || m === 'POSTVARADAS') {
         var s = getSheetByGid(ss, "1900206774")
              || findSheetCaseInsensitive(ss, d.sheetName || "VARADAS")
              || findSheetCaseInsensitive(ss, "VARADAS")
