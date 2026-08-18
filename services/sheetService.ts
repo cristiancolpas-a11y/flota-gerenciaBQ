@@ -2,7 +2,7 @@ import Papa from 'papaparse';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
-export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
+export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
 
 export const sanitizeScriptUrl = (url: string): string => {
   if (!url) return '';
@@ -22,7 +22,7 @@ export const getGoogleScriptUrl = (): string => {
       const sanitized = sanitizeScriptUrl(stored);
       if (sanitized && sanitized !== 'undefined' && sanitized !== 'null' && sanitized.startsWith('http')) {
         // Si la URL guardada es una anterior desactualizada o con error, migramos automáticamente
-        if (!sanitized.includes('AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW')) {
+        if (!sanitized.includes('AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw')) {
           localStorage.setItem('GOOGLE_SCRIPT_WEB_APP_URL', DEFAULT_WORKING_SCRIPT_URL);
           return DEFAULT_WORKING_SCRIPT_URL;
         }
@@ -2838,7 +2838,7 @@ if (typeof window !== 'undefined' && window.localStorage) {
     const defaultUrl = DEFAULT_WORKING_SCRIPT_URL;
     
     const currentUrl = localStorage.getItem('GOOGLE_SCRIPT_WEB_APP_URL');
-    if (!currentUrl || !currentUrl.includes('AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW')) {
+    if (!currentUrl || !currentUrl.includes('AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw')) {
       localStorage.setItem('GOOGLE_SCRIPT_WEB_APP_URL', defaultUrl);
     }
     

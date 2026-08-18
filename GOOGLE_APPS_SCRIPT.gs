@@ -393,7 +393,24 @@ function doPost(e) {
           return output("error", "No se encontró la programación para " + plateSearch + " en " + dateSearch);
         }
       }
-      else if (m === 'POST_ROUTINE') {
+      else if (m === 'POST_ROUTINE' || m === 'POSTROUTINE' || m === 'POST_RUTINA' || m === 'POSTRUTINA') {
+        var targetDocId = cleanId(d.docId || ID_HOJA || DEFAULT_FALLBACK_ID);
+        var targetSS = null;
+        if (targetDocId) {
+          try { targetSS = SpreadsheetApp.openById(targetDocId); } catch(e) {}
+        }
+        if (!targetSS) {
+          try { targetSS = ss; } catch(e) {}
+        }
+        if (!targetSS) {
+          try { targetSS = SpreadsheetApp.getActiveSpreadsheet(); } catch(e) {}
+        }
+
+        if (!targetSS) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se pudo abrir la hoja de cálculo (ID: " + targetDocId + ")");
+        }
+
         var sheetName = "";
         var rowData = [];
 
@@ -408,7 +425,9 @@ function doPost(e) {
           }
         }
 
-        if (d.templateId === 'rutina_4') {
+        var tid = (d.templateId || "").toString().toLowerCase().trim();
+
+        if (tid === 'rutina_4' || tid === 'rutina 4' || tid === 'r4') {
           sheetName = "RUTINA 4";
 
           var detailFailures = "";
@@ -478,7 +497,7 @@ function doPost(e) {
             responsesMap['r4_i_varillaje_direccion'] || "NA"
           ];
         }
-        else if (d.templateId === 'rutina_3') {
+        else if (tid === 'rutina_3' || tid === 'rutina 3' || tid === 'r3') {
           sheetName = "RUTINA 3";
 
           rowData = [
@@ -524,7 +543,7 @@ function doPost(e) {
             responsesMap['r3_i_sistema_combustible'] || "NA"
           ];
         }
-        else if (d.templateId === 'rutina_2') {
+        else if (tid === 'rutina_2' || tid === 'rutina 2' || tid === 'r2') {
           sheetName = "RUTINA 2";
 
           rowData = [
@@ -568,7 +587,7 @@ function doPost(e) {
             imgSignature || ""
           ];
         }
-        else if (d.templateId === 'rutina_1') {
+        else {
           sheetName = "RUTINA 1";
 
           rowData = [
@@ -613,7 +632,11 @@ function doPost(e) {
         }
 
         if (sheetName) {
-          var s = getS(ss, sheetName);
+          var s = getS(targetSS, sheetName);
+          if (!s) {
+            if (lock.hasLock()) lock.releaseLock();
+            return output("error", "No se encontró ni se pudo crear la pestaña " + sheetName);
+          }
           s.appendRow(rowData);
           if (lock.hasLock()) lock.releaseLock();
           return output("success", "Registro de rutina agregado exitosamente en " + sheetName);
