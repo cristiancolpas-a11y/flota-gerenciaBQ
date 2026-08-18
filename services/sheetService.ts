@@ -4,6 +4,9 @@ import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../u
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
 
+// Varadas usa un script de Apps Script distinto al principal (rutinas).
+export const VARADAS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
+
 export const sanitizeScriptUrl = (url: string): string => {
   if (!url) return '';
   let cleaned = url.trim();
@@ -4217,7 +4220,7 @@ export const fetchVaradasFromSheet = async (): Promise<VaradaRecord[]> => {
       return csvRes;
     }
     const docId = getVaradasDocId();
-    const scriptUrl = getGoogleScriptUrl();
+    const scriptUrl = VARADAS_SCRIPT_URL;
     const rows = await fetchDataFromGAS(docId, 'VARADAS', scriptUrl);
     if (rows && rows.length >= 2) {
       return processVaradaRows(rows);
@@ -4289,7 +4292,7 @@ export const submitVaradaToSheet = async (varadaData: Partial<VaradaRecord>): Pr
     evidence: varadaData.evidence || ''
   };
 
-  const result = await sendToGAS({ method: 'POST_VARADA', data: payloadData }, getGoogleScriptUrl(), true);
+  const result = await sendToGAS({ method: 'POST_VARADA', data: payloadData }, VARADAS_SCRIPT_URL, true);
   return !!result;
 };
 
