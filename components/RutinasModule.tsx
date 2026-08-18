@@ -930,7 +930,7 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
               type="text"
               value={sheetIdInput}
               onChange={(e) => setSheetIdInput(e.target.value)}
-              placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
+              placeholder="Ej: 1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE"
               className="flex-1 p-3 border border-amber-200 bg-white rounded-xl text-xs font-bold outline-none text-slate-800"
             />
             <button

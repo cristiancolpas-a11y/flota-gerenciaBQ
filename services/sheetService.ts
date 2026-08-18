@@ -92,7 +92,6 @@ export const cleanSpreadsheetId = (idOrUrl: string): string => {
   }
   
   const legacyIds = [
-    '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE',
     '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U',
     '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo',
     '1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M',
@@ -101,7 +100,6 @@ export const cleanSpreadsheetId = (idOrUrl: string): string => {
 
   if (legacyIds.includes(id)) {
     const keys = [
-      'GOOGLE_SPREADSHEET_ROUTINES_ID',
       'GOOGLE_SPREADSHEET_WASH_ID',
       'GOOGLE_SPREADSHEET_CALIBRATIONS_ID',
       'GOOGLE_SPREADSHEET_CLEANING_ID',
@@ -125,9 +123,11 @@ export const cleanSpreadsheetId = (idOrUrl: string): string => {
   return id;
 };
 
+export const ROUTINES_DEFAULT_DOC_ID = '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE';
+
 export const getRoutinesDocId = (): string => {
   const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_ROUTINES_ID') : null;
-  return cleanSpreadsheetId(stored || '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU');
+  return cleanSpreadsheetId(stored || ROUTINES_DEFAULT_DOC_ID);
 };
 
 export const getMasterDocId = (): string => {
@@ -2850,7 +2850,6 @@ if (typeof window !== 'undefined' && window.localStorage) {
     }
     
     const keys = [
-      'GOOGLE_SPREADSHEET_ROUTINES_ID',
       'GOOGLE_SPREADSHEET_WASH_ID',
       'GOOGLE_SPREADSHEET_CALIBRATIONS_ID',
       'GOOGLE_SPREADSHEET_CLEANING_ID',
@@ -2863,7 +2862,6 @@ if (typeof window !== 'undefined' && window.localStorage) {
       'GOOGLE_SPREADSHEET_AUDIT_QS_ID'
     ];
     const legacyList = [
-      '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE',
       '1GPfhWOUM8As4vVRirzWgSzFwvQ01I6EAc14uGoWc98U',
       '1rrY2XyCYqZyAbCJtEOWuPxAtWaQ_lmqG28KQz5w_NSo',
       '1WnzEFfVMTHZVVKWGTMLU2WjY-GIzSRpWz52i_Es0E1M',
@@ -2875,6 +2873,11 @@ if (typeof window !== 'undefined' && window.localStorage) {
         localStorage.setItem(k, defaultId);
       }
     });
+
+    const routinesStored = localStorage.getItem('GOOGLE_SPREADSHEET_ROUTINES_ID');
+    if (!routinesStored || legacyList.includes(routinesStored.trim()) || routinesStored === '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU') {
+      localStorage.setItem('GOOGLE_SPREADSHEET_ROUTINES_ID', ROUTINES_DEFAULT_DOC_ID);
+    }
   } catch (e) {
     console.warn('Error running spreadsheet default initialization:', e);
   }
