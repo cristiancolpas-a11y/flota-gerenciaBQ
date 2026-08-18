@@ -8,8 +8,14 @@ export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AK
 export const ROUTINES_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
 export const PREVENTIVES_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
 
-// Varadas usa un script de Apps Script distinto al principal (rutinas).
-export const VARADAS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
+// Script específico para Módulos Operativos (Kilometraje, Calibraciones, Visitas a Taller, Cronograma 5S, Lavados, Varadas)
+export const OPERATIONAL_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
+export const VARADAS_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
+export const MILEAGE_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
+export const CALIBRATIONS_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
+export const WORKSHOP_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
+export const CLEANING_5S_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
+export const WASH_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
 
 export const sanitizeScriptUrl = (url: string): string => {
   if (!url) return '';
@@ -51,7 +57,7 @@ const getFinesScriptUrl = (): string => getGoogleScriptUrl();
 const getDailyProgramScriptUrl = (): string => getGoogleScriptUrl();
 
 export const getWorkshopScriptUrl = (): string => {
-  return localStorage.getItem('GOOGLE_SCRIPT_WORKSHOP_URL') || getGoogleScriptUrl();
+  return localStorage.getItem('GOOGLE_SCRIPT_WORKSHOP_URL') || WORKSHOP_SCRIPT_URL;
 };
 
 export const setWorkshopScriptUrl = (url: string): void => {
@@ -489,7 +495,7 @@ export const fetchWorkshopVisitsFromSheet = async (): Promise<Report[]> => {
   try {
     // Intentar primero con GAS
     const docId = getRoutinesDocId();
-    const rows = await fetchDataFromGAS(docId, 'VISITAS A TALLER');
+    const rows = await fetchDataFromGAS(docId, 'VISITAS A TALLER', WORKSHOP_SCRIPT_URL);
     if (rows && rows.length >= 2) {
       return processWorkshopVisitRows(rows);
     }
@@ -560,9 +566,9 @@ const processWorkshopVisitRows = (rows: any[][]): Report[] => {
 export const fetchMileageLogsFromSheet = async (): Promise<MileageLog[]> => {
   try {
     const docId = getMileageDocId();
-    let rows = await fetchDataFromGAS(docId, 'KILOMETRAJE');
+    let rows = await fetchDataFromGAS(docId, 'KILOMETRAJE', MILEAGE_SCRIPT_URL);
     if (!rows || rows.length < 2) {
-      rows = await fetchDataFromGAS(docId, 'KILOMETRAJES');
+      rows = await fetchDataFromGAS(docId, 'KILOMETRAJES', MILEAGE_SCRIPT_URL);
     }
     if (!rows || rows.length < 2) {
       return fetchMileageLogsFromSheetCSV();
@@ -633,7 +639,7 @@ export const fetchCalibrationsFromSheet = async (): Promise<Calibration[]> => {
   try {
     const vehicles = await fetchVehiclesFromSheet();
     const docId = getCalibrationsDocId();
-    const rows = await fetchDataFromGAS(docId, 'CALIBRACIONES');
+    const rows = await fetchDataFromGAS(docId, 'CALIBRACIONES', CALIBRATIONS_SCRIPT_URL);
     if (!rows || rows.length < 2) {
       return fetchCalibrationsFromSheetCSV(vehicles);
     }
@@ -717,7 +723,7 @@ const processCalibrationRows = (rows: any[][], vehicles: Vehicle[] = []): Calibr
 export const fetchWashReportsFromSheet = async (): Promise<WashReport[]> => {
   try {
     const docId = getWashDocId();
-    const rows = await fetchDataFromGAS(docId, 'LAVADOS');
+    const rows = await fetchDataFromGAS(docId, 'LAVADOS', WASH_SCRIPT_URL);
     if (!rows || rows.length < 2) {
       return fetchWashReportsFromSheetCSV();
     }
@@ -801,7 +807,7 @@ const processWashRows = (rows: any[][]): WashReport[] => {
 export const fetchCleaningReportsFromSheet = async (): Promise<WashReport[]> => {
   try {
     const docId = getCleaningDocId();
-    const rows = await fetchDataFromGAS(docId, 'CRONOGRAMA 5S');
+    const rows = await fetchDataFromGAS(docId, 'CRONOGRAMA 5S', CLEANING_5S_SCRIPT_URL);
     if (!rows || rows.length < 2) {
       return fetchCleaningReportsFromSheetCSV();
     }
@@ -1005,7 +1011,7 @@ const processDriverRows = (rows: any[][]): Driver[] => {
 export const fetchReportsFromSheet = async (): Promise<Report[]> => {
   try {
     const docId = getRoutinesDocId();
-    const rows = await fetchDataFromGAS(docId, 'NOVEDADES');
+    const rows = await fetchDataFromGAS(docId, 'NOVEDADES', WORKSHOP_SCRIPT_URL);
     if (!rows || rows.length === 0) {
       return fetchReportsFromSheetCSV();
     }
@@ -2044,7 +2050,7 @@ export const submitReportToSheet = async (report: Report): Promise<void> => {
   };
 
   try {
-    const result = await sendToGAS({ method: 'POST_REPORT', data: sanitizedReport }, getGoogleScriptUrl(), true); 
+    const result = await sendToGAS({ method: 'POST_REPORT', data: sanitizedReport }, WORKSHOP_SCRIPT_URL, true); 
     if (result && typeof result === 'object') {
       if ((result as any).status === 'success') {
         return;
@@ -2061,7 +2067,7 @@ export const submitReportToSheet = async (report: Report): Promise<void> => {
   }
 
   // Fallback seguro usando modo no-cors (fire-and-forget)
-  const success = await sendToGAS({ method: 'POST_REPORT', data: sanitizedReport }, getGoogleScriptUrl(), false);
+  const success = await sendToGAS({ method: 'POST_REPORT', data: sanitizedReport }, WORKSHOP_SCRIPT_URL, false);
   if (!success) {
     throw new Error("Error al registrar novedad en el servidor");
   }
@@ -2088,7 +2094,7 @@ export const submitMileageToSheet = async (mileageData: any): Promise<void> => {
 
   try {
     // Intentar primero con CORS activado para poder validar la respuesta
-    const result = await sendToGAS({ method: 'POST_MILEAGE', data: payloadData }, getGoogleScriptUrl(), true); 
+    const result = await sendToGAS({ method: 'POST_MILEAGE', data: payloadData }, MILEAGE_SCRIPT_URL, true); 
     if (result && typeof result === 'object') {
       if ((result as any).status === 'success') {
         return;
@@ -2105,7 +2111,7 @@ export const submitMileageToSheet = async (mileageData: any): Promise<void> => {
   }
 
   // Fallback seguro usando modo no-cors (fire-and-forget)
-  const success = await sendToGAS({ method: 'POST_MILEAGE', data: payloadData }, getGoogleScriptUrl(), false);
+  const success = await sendToGAS({ method: 'POST_MILEAGE', data: payloadData }, MILEAGE_SCRIPT_URL, false);
   if (!success) {
     throw new Error("Error al guardar en el servidor");
   }
@@ -2114,7 +2120,7 @@ export const submitCalibrationToSheet = async (calibrationDate: any): Promise<vo
   const rawDocId = getCalibrationsDocId();
   const docId = cleanSpreadsheetId(rawDocId);
   try {
-    const result = await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }, getGoogleScriptUrl(), true); 
+    const result = await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }, CALIBRATIONS_SCRIPT_URL, true); 
     if (result && typeof result === 'object') {
       if ((result as any).status === 'success') {
         return;
@@ -2130,7 +2136,7 @@ export const submitCalibrationToSheet = async (calibrationDate: any): Promise<vo
     console.warn("GAS - Envío de calibración con CORS falló, intentando fallback no-cors:", err);
   }
 
-  const success = await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }, getGoogleScriptUrl(), false);
+  const success = await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }, CALIBRATIONS_SCRIPT_URL, false);
   if (!success) {
     throw new Error("Error al guardar la calibración en el servidor");
   }
@@ -2140,7 +2146,7 @@ export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> =
   const rawDocId = getCalibrationsDocId();
   const docId = cleanSpreadsheetId(rawDocId);
   try {
-    const result = await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }, getGoogleScriptUrl(), true); 
+    const result = await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }, CALIBRATIONS_SCRIPT_URL, true); 
     if (result && typeof result === 'object') {
       if ((result as any).status === 'success') {
         return;
@@ -2156,7 +2162,7 @@ export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> =
     console.warn("GAS - Envío de actualización de calibración con CORS falló, intentando fallback no-cors:", err);
   }
 
-  const success = await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }, getGoogleScriptUrl(), false);
+  const success = await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }, CALIBRATIONS_SCRIPT_URL, false);
   if (!success) {
     throw new Error("Error al actualizar la calibración en el servidor");
   }
@@ -2183,7 +2189,7 @@ export const submitWashToSheet = async (washData: any): Promise<void> => {
   };
 
   try {
-    const result = await sendToGAS({ method: 'POST_WASH', data: payloadData }, getGoogleScriptUrl(), true); 
+    const result = await sendToGAS({ method: 'POST_WASH', data: payloadData }, WASH_SCRIPT_URL, true); 
     if (result && typeof result === 'object') {
       if ((result as any).status === 'success') {
         return;
@@ -2199,7 +2205,7 @@ export const submitWashToSheet = async (washData: any): Promise<void> => {
     console.warn("GAS - Envío de lavado con CORS falló, intentando fallback no-cors:", err);
   }
 
-  const success = await sendToGAS({ method: 'POST_WASH', data: payloadData }, getGoogleScriptUrl(), false);
+  const success = await sendToGAS({ method: 'POST_WASH', data: payloadData }, WASH_SCRIPT_URL, false);
   if (!success) {
     throw new Error("Error al guardar el lavado en el servidor");
   }
@@ -2209,7 +2215,7 @@ export const submitCleaningToSheet = async (cleaningData: any): Promise<void> =>
   const rawDocId = getCleaningDocId();
   const docId = cleanSpreadsheetId(rawDocId);
   try {
-    const result = await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }, getGoogleScriptUrl(), true); 
+    const result = await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }, CLEANING_5S_SCRIPT_URL, true); 
     if (result && typeof result === 'object') {
       if ((result as any).status === 'success') {
         return;
@@ -2225,7 +2231,7 @@ export const submitCleaningToSheet = async (cleaningData: any): Promise<void> =>
     console.warn("GAS - Envío de limpieza con CORS falló, intentando fallback no-cors:", err);
   }
 
-  const success = await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }, getGoogleScriptUrl(), false);
+  const success = await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }, CLEANING_5S_SCRIPT_URL, false);
   if (!success) {
     throw new Error("Error al guardar la limpieza en el servidor");
   }
@@ -2234,7 +2240,7 @@ export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<
   try {
     const rawDocId = getRoutinesDocId();
     const docId = cleanSpreadsheetId(rawDocId);
-    const result = await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: { ...visitData, docId } }); 
+    const result = await sendToGAS({ method: 'POST_WORKSHOP_VISIT_UPDATE', data: { ...visitData, docId } }, WORKSHOP_SCRIPT_URL); 
     return {
       success: !!result,
       message: typeof result === 'string' ? result : undefined
