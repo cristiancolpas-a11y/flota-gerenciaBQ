@@ -4,6 +4,10 @@ import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../u
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
 
+// Script específico para Rutinas y Mantenimiento Preventivo
+export const ROUTINES_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
+export const PREVENTIVES_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
+
 // Varadas usa un script de Apps Script distinto al principal (rutinas).
 export const VARADAS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
 
@@ -2289,7 +2293,7 @@ export const uploadImageToDrive = async (base64Data: string, fileName: string): 
 export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
   try {
     const docId = getPreventivesDocId();
-    const rows = await fetchDataFromGAS(docId, 'PREVENTIVO');
+    const rows = await fetchDataFromGAS(docId, 'PREVENTIVO', PREVENTIVES_SCRIPT_URL);
     if (!rows || rows.length < 2) {
       return fetchPreventivesFromSheetCSV();
     }
@@ -2830,7 +2834,7 @@ export const submitPreventiveUpdateToSheet = async (data: {
   const result = await sendToGAS({ 
     method: 'POST_PREVENTIVE_UPDATE', 
     data: { ...data, docId } 
-  });
+  }, PREVENTIVES_SCRIPT_URL, true);
   return result === true;
 };
 
@@ -3043,6 +3047,7 @@ export const submitRoutineToSheet = async (execution: any): Promise<boolean> => 
     console.warn("No Google Spreadsheet ID configured for Routines. Storing only locally.");
     return false;
   }
+  const scriptUrl = ROUTINES_SCRIPT_URL;
   try {
     const result = await sendToGAS({
       method: 'POST_ROUTINE',
@@ -3050,7 +3055,7 @@ export const submitRoutineToSheet = async (execution: any): Promise<boolean> => 
         ...execution,
         docId
       }
-    }, getGoogleScriptUrl(), true);
+    }, scriptUrl, true);
 
     if (result && typeof result === 'object') {
       if ((result as any).status === 'success') {
@@ -3072,7 +3077,7 @@ export const submitRoutineToSheet = async (execution: any): Promise<boolean> => 
       ...execution,
       docId
     }
-  }, getGoogleScriptUrl(), false);
+  }, scriptUrl, false);
 
   return success;
 };
