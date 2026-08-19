@@ -4,7 +4,7 @@
     "geolocation"
   ],
   "name": "Flota Gerencia Barranquilla - Seguimiento Vehicular",
-  "description": "Sistema de gestión de flota con Torre de Control para mantenimientos preventivos, control de campañas especiales (esteras, llantas, estructuras, frenos, luces, portaconos) y seguimiento operativo.",
+  "description": "Sistema de gestión de flota con Torre de Control para mantenimientos preventivos, control de campañas especiales, inspección de stock de repuestos en talleres y seguimiento operativo.",
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

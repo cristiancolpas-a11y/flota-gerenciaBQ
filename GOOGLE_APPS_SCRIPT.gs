@@ -812,6 +812,52 @@ function doPost(e) {
         return output("success", "Varada registrada correctamente.");
       }
 
+      else if (m === 'POST_REPUESTO' || m === 'POST_REPUESTOS' || m === 'POSTREPUESTO' || m === 'POSTREPUESTOS') {
+        var s = findSheetCaseInsensitive(ss, d.sheetName || "REPUESTO")
+             || findSheetCaseInsensitive(ss, "REPUESTO")
+             || findSheetCaseInsensitive(ss, "REPUESTOS")
+             || getS(ss, "REPUESTO");
+
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró ni se pudo crear la pestaña REPUESTO.");
+        }
+
+        if (s.getLastRow() === 0) {
+          s.appendRow([
+            "FECHA", "INSPECTOR", "PROVEEDOR", "TALLER", "REPUESTO",
+            "CANTIDAD ENCONTRADA", "MINIMO REQUERIDO", "UND", "ESTADO", "OBSERVACION"
+          ]);
+        }
+
+        var repuesto = pickVal(d.repuesto, d.part, "").toString();
+        if (!repuesto) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "Repuesto requerido: no puede estar vacío.");
+        }
+
+        var cantidad = Number(pickVal(d.cantidad, d.quantity, 0));
+        var minimo = Number(pickVal(d.minimo, d.min, 0));
+        var estado = (cantidad < minimo) ? "ALERTA" : "OK";
+
+        var rowData = [
+          pickVal(d.fecha, d.date, today()),
+          pickVal(d.inspector, d.inspectorName, ""),
+          pickVal(d.proveedor, d.provider, ""),
+          pickVal(d.taller, d.workshop, ""),
+          repuesto,
+          cantidad,
+          minimo,
+          pickVal(d.und, d.unit, ""),
+          estado,
+          pickVal(d.observacion, d.observation, "")
+        ];
+
+        s.appendRow(rowData);
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Repuesto registrado correctamente. Estado: " + estado);
+      }
+
       else if (m === 'POST_CLEANING') {
         var s = getSheetByGid(ss, "1853969081") || getS(ss, "CRONOGRAMA 5S");
         if (!s) {

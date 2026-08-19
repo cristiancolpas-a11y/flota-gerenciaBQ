@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
@@ -8,9 +8,10 @@ export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AK
 export const ROUTINES_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
 export const PREVENTIVES_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
 
-// Script específico para Módulos Operativos (Kilometraje, Calibraciones, Visitas a Taller, Cronograma 5S, Lavados, Varadas)
+// Script específico para Módulos Operativos (Kilometraje, Calibraciones, Visitas a Taller, Cronograma 5S, Lavados, Varadas, Repuestos)
 export const OPERATIONAL_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxztSeQFSRD3Ae794Aiqs-MvXsYB5Ylfcu4ny4EJtpZqV0rB7lJBrfjnL7gfD2uWGnW/exec';
 export const VARADAS_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
+export const SPARE_PARTS_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
 export const MILEAGE_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
 export const CALIBRATIONS_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
 export const WORKSHOP_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
@@ -4309,6 +4310,132 @@ export const submitVaradaToSheet = async (varadaData: Partial<VaradaRecord>): Pr
   const result = await sendToGAS({ method: 'POST_VARADA', data: payloadData }, VARADAS_SCRIPT_URL, true);
   return !!result;
 };
+
+/**
+ * REPUESTOS (Inspección de Stock en Talleres - Hoja REPUESTO)
+ */
+export const getSparePartsDocId = (): string => '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+
+export const fetchSparePartsFromSheet = async (): Promise<SparePartRecord[]> => {
+  const docId = getSparePartsDocId();
+  try {
+    const rows = await fetchDataFromGAS(docId, 'REPUESTO', SPARE_PARTS_SCRIPT_URL);
+    if (rows && rows.length >= 2) {
+      return processSparePartRows(rows);
+    }
+  } catch (e) {
+    console.warn("GAS fetch REPUESTO failed, attempting CSV fallback:", e);
+  }
+  return fetchSparePartsFromSheetCSV();
+};
+
+const fetchSparePartsFromSheetCSV = async (): Promise<SparePartRecord[]> => {
+  try {
+    const docId = getSparePartsDocId();
+    const urls = [
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=REPUESTO${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=REPUESTO${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=REPUESTOS${getCacheBuster()}`
+    ];
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+        const csvText = await response.text();
+        if (csvText && !csvText.includes("<!DOCTYPE html") && !csvText.includes("RESOURCE_NOT_FOUND") && !csvText.includes("error")) {
+          const parsed = await new Promise<SparePartRecord[]>((resolve) => {
+            Papa.parse(csvText, {
+              header: false,
+              skipEmptyLines: 'greedy',
+              complete: (results) => {
+                const rows = results.data as any[][];
+                resolve(processSparePartRows(rows));
+              },
+              error: () => resolve([])
+            });
+          });
+          if (parsed && parsed.length > 0) return parsed;
+        }
+      } catch (err) {
+        // continue to next URL
+      }
+    }
+  } catch (e) {
+    console.error("Error fetching repuestos CSV:", e);
+  }
+  return [];
+};
+
+const processSparePartRows = (rows: any[][]): SparePartRecord[] => {
+  if (!rows || rows.length < 2) return [];
+  return rows.slice(1)
+    .filter(row => row && (row[4] || row[0])) // Tiene Repuesto o Fecha
+    .map((row, i): SparePartRecord => {
+      const fecha = cleanSheetValue(row[0]);
+      const inspector = cleanSheetValue(row[1]);
+      const proveedor = cleanSheetValue(row[2]);
+      const taller = cleanSheetValue(row[3]);
+      const repuesto = cleanSheetValue(row[4]);
+      const cantidad = Number(cleanSheetValue(row[5])) || 0;
+      const minimo = Number(cleanSheetValue(row[6])) || 0;
+      const und = cleanSheetValue(row[7]);
+      let estado = cleanSheetValue(row[8]).toUpperCase();
+      if (!estado) {
+        estado = (cantidad < minimo) ? 'ALERTA' : 'OK';
+      }
+      const observacion = cleanSheetValue(row[9]);
+
+      return {
+        id: `rep-${i}-${repuesto}-${fecha}`,
+        fecha: parseFlexibleDate(fecha) || fecha,
+        inspector,
+        proveedor,
+        taller,
+        repuesto,
+        cantidad,
+        minimo,
+        und,
+        estado,
+        observacion
+      };
+    });
+};
+
+export const submitSparePartToSheet = async (data: Partial<SparePartRecord>): Promise<boolean> => {
+  const docId = getSparePartsDocId();
+  const cantidad = Number(data.cantidad ?? 0);
+  const minimo = Number(data.minimo ?? 0);
+  const estado = (cantidad < minimo) ? 'ALERTA' : 'OK';
+
+  const payloadData = {
+    docId,
+    sheetName: 'REPUESTO',
+    fecha: data.fecha || new Date().toISOString().split('T')[0],
+    inspector: data.inspector || '',
+    proveedor: data.proveedor || '',
+    taller: data.taller || '',
+    repuesto: data.repuesto || '',
+    cantidad: cantidad,
+    minimo: minimo,
+    und: data.und || 'UND',
+    estado: estado,
+    observacion: data.observacion || ''
+  };
+
+  try {
+    const result = await sendToGAS({ method: 'POST_REPUESTO', data: payloadData }, SPARE_PARTS_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') {
+      return true;
+    }
+    if (result === true) return true;
+  } catch (err) {
+    console.warn("GAS - Envío de repuesto con CORS falló, intentando fallback no-cors:", err);
+  }
+
+  // Fallback seguro usando modo no-cors
+  const success = await sendToGAS({ method: 'POST_REPUESTO', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
+  return !!success;
+};
+
 
 
 

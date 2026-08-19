@@ -526,6 +526,27 @@ export interface VaradaRecord {
   status?: 'ABIERTO' | 'CERRADO' | string;
 }
 
+export interface SparePartRecord {
+  id: string;
+  fecha: string;         // FECHA
+  inspector: string;     // INSPECTOR
+  proveedor: string;     // PROVEEDOR
+  taller: string;        // TALLER
+  repuesto: string;      // REPUESTO
+  cantidad: number;      // CANTIDAD ENCONTRADA
+  minimo: number;        // MINIMO REQUERIDO
+  und: string;           // UND
+  estado: string;        // ESTADO (OK / ALERTA)
+  observacion: string;   // OBSERVACION
+}
+
+export interface SparePartDefinition {
+  name: string;
+  min: number;
+  unit: string;
+}
+
+
 
 
 

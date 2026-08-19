@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord } from './types';
 import { VaradasModule } from './components/VaradasModule';
+import { SparePartsModule } from './components/SparePartsModule';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
 import DriverStats from './components/DriverStats';
@@ -94,6 +95,8 @@ import {
   fetchFleetStandardAuditFromSheet,
   fetchFleetCierreFromSheet,
   fetchVaradasFromSheet,
+  fetchSparePartsFromSheet,
+  submitSparePartToSheet,
   fetchAuditMasterListFromSheet,
   fetchFleetBaseData,
   fetchForkliftFinesFromSheet,
@@ -114,11 +117,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, Check, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame, FileSpreadsheet, Download
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, Check, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame, FileSpreadsheet, Download, Boxes, Package
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas' | 'campanas';
-type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
 
 const CATEGORY_CHUNKS = {
   doc: {
@@ -143,6 +146,7 @@ const CATEGORY_CHUNKS = {
     items: [
       { id: 'kilometrajes', label: 'Kilometrajes', icon: Gauge },
       { id: 'varadas', label: 'VARADAS', icon: AlertTriangle },
+      { id: 'repuestos', label: 'REPUESTOS', icon: Boxes },
       { id: 'cierre_novedades', label: 'Cierre de Novedades', icon: Lock },
       { id: 'limpieza', label: 'Limpieza 5S', icon: Sparkles },
       { id: 'visitas', label: 'Visitas a Taller', icon: Store },
@@ -222,6 +226,7 @@ const App: React.FC = () => {
   const [fleetCierreRecords, setFleetCierreRecords] = useState<FleetCierreRecord[]>([]);
   const [auditMasterVehicles, setAuditMasterVehicles] = useState<AuditMasterVehicle[]>([]);
   const [varadas, setVaradas] = useState<VaradaRecord[]>([]);
+  const [spareParts, setSpareParts] = useState<SparePartRecord[]>([]);
 
   // Session tracking of local updates to prevent stale Google Sheets cache from reverting changes
   const localCierreUpdatesRef = useRef<Record<string, { estado: string; evidencia: string; verificacion: string }>>({});
@@ -573,6 +578,9 @@ const App: React.FC = () => {
         break;
       case 'varadas':
         setVaradas(await fetchVaradasFromSheet());
+        break;
+      case 'repuestos':
+        setSpareParts(await fetchSparePartsFromSheet());
         break;
       default:
         break;
@@ -3226,6 +3234,48 @@ const App: React.FC = () => {
                     }
                   } catch (err) {
                     setVaradas(prev => prev.filter(v => v.id !== tempVarada.id));
+                    throw err;
+                  }
+                }}
+                loading={isSyncing}
+              />
+            </div>
+          )}
+
+          {activeView === 'repuestos' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <SparePartsModule
+                records={spareParts}
+                onRefresh={handleSyncData}
+                onSubmitRecord={async (data) => {
+                  const tempRecord: SparePartRecord = {
+                    id: `temp-${Date.now()}`,
+                    fecha: data.fecha || new Date().toISOString().split('T')[0],
+                    inspector: data.inspector || '',
+                    proveedor: data.proveedor || '',
+                    taller: data.taller || '',
+                    repuesto: data.repuesto || '',
+                    cantidad: Number(data.cantidad) || 0,
+                    minimo: Number(data.minimo) || 0,
+                    und: data.und || 'UND',
+                    estado: data.estado || ((Number(data.cantidad) < Number(data.minimo)) ? 'ALERTA' : 'OK'),
+                    observacion: data.observacion || ''
+                  };
+
+                  // Optimistic update
+                  setSpareParts(prev => [tempRecord, ...prev]);
+
+                  try {
+                    const ok = await submitSparePartToSheet(data);
+                    if (ok) {
+                      handleSyncData().catch(e => console.error("Sync error after spare part:", e));
+                      return true;
+                    } else {
+                      setSpareParts(prev => prev.filter(r => r.id !== tempRecord.id));
+                      return false;
+                    }
+                  } catch (err) {
+                    setSpareParts(prev => prev.filter(r => r.id !== tempRecord.id));
                     throw err;
                   }
                 }}
