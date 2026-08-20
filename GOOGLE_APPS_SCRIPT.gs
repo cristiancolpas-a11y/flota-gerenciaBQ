@@ -858,6 +858,68 @@ function doPost(e) {
         return output("success", "Repuesto registrado correctamente. Estado: " + estado);
       }
 
+      else if (m === 'POST_REPUESTO_INSPECCION') {
+        var s = findSheetCaseInsensitive(ss, d.sheetName || "REPUESTO")
+             || findSheetCaseInsensitive(ss, "REPUESTO")
+             || findSheetCaseInsensitive(ss, "REPUESTOS")
+             || getS(ss, "REPUESTO");
+
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró ni se pudo crear la pestaña REPUESTO.");
+        }
+
+        if (s.getLastRow() === 0) {
+          s.appendRow([
+            "FECHA", "INSPECTOR", "PROVEEDOR", "TALLER", "REPUESTO",
+            "CANTIDAD ENCONTRADA", "MINIMO REQUERIDO", "UND", "ESTADO", "OBSERVACION"
+          ]);
+        }
+
+        var fecha = pickVal(d.fecha, d.date, today());
+        var inspector = pickVal(d.inspector, d.inspectorName, "");
+        var proveedor = pickVal(d.proveedor, d.provider, "");
+        var taller = pickVal(d.taller, d.workshop, "");
+        var items = d.items || [];
+
+        if (!items.length) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "La inspección no tiene ítems.");
+        }
+
+        var alertas = [];
+        var filas = [];
+
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          var cantidad = Number(it.cantidad || 0);
+          var minimo = Number(it.minimo || 0);
+          var estado = (cantidad < minimo) ? "ALERTA" : "OK";
+
+          filas.push([
+            fecha, inspector, proveedor, taller,
+            it.repuesto || "", cantidad, minimo, it.und || "", estado, it.observacion || ""
+          ]);
+
+          if (estado === "ALERTA") {
+            alertas.push({ repuesto: it.repuesto || "", cantidad: cantidad, minimo: minimo, faltan: (minimo - cantidad) });
+          }
+        }
+
+        s.getRange(s.getLastRow() + 1, 1, filas.length, filas[0].length).setValues(filas);
+
+        if (alertas.length > 0) {
+          try {
+            enviarCorreoAlertaRepuestos(taller, inspector, fecha, alertas);
+          } catch (mailErr) {
+            log("Error enviando correo de alerta: " + mailErr.toString(), docId);
+          }
+        }
+
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Inspección guardada. " + filas.length + " ítems registrados, " + alertas.length + " en alerta.");
+      }
+
       else if (m === 'POST_CLEANING') {
         var s = getSheetByGid(ss, "1853969081") || getS(ss, "CRONOGRAMA 5S");
         if (!s) {
@@ -1419,3 +1481,46 @@ function getIsoWeek(dateStr) {
 function output(status, message) {
   return ContentService.createTextOutput(JSON.stringify({status: status, message: message})).setMimeType(ContentService.MimeType.JSON);
 }
+
+function enviarCorreoAlertaRepuestos(taller, inspector, fecha, alertas) {
+  var destinatario = "edgar.arrieta@ab-inbev.com";
+  var asunto = "⚠️ Alerta de stock - Taller " + taller;
+
+  var filasHtml = "";
+  for (var i = 0; i < alertas.length; i++) {
+    var a = alertas[i];
+    filasHtml +=
+      '<tr style="background:#fdecec;">' +
+        '<td style="padding:8px;border:1px solid #ddd;">' + a.repuesto + '</td>' +
+        '<td style="padding:8px;border:1px solid #ddd;text-align:center;">' + a.cantidad + '</td>' +
+        '<td style="padding:8px;border:1px solid #ddd;text-align:center;">' + a.minimo + '</td>' +
+        '<td style="padding:8px;border:1px solid #ddd;text-align:center;color:#c0392b;font-weight:bold;">' + a.faltan + '</td>' +
+      '</tr>';
+  }
+
+  var html =
+    '<div style="font-family:Arial,sans-serif;max-width:600px;">' +
+      '<h2 style="color:#c0392b;">⚠️ Alerta de stock - Taller ' + taller + '</h2>' +
+      '<p>Inspección del <b>' + fecha + '</b> realizada por <b>' + (inspector || "N/D") + '</b>.</p>' +
+      '<p>Los siguientes repuestos están por debajo del mínimo:</p>' +
+      '<table style="border-collapse:collapse;width:100%;font-size:14px;">' +
+        '<thead>' +
+          '<tr style="background:#2c3e50;color:#fff;">' +
+            '<th style="padding:10px;border:1px solid #ddd;text-align:left;">Repuesto</th>' +
+            '<th style="padding:10px;border:1px solid #ddd;">Encontrado</th>' +
+            '<th style="padding:10px;border:1px solid #ddd;">Mínimo</th>' +
+            '<th style="padding:10px;border:1px solid #ddd;">Faltan</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' + filasHtml + '</tbody>' +
+      '</table>' +
+      '<p style="color:#888;font-size:12px;margin-top:20px;">Mensaje automático del Sistema de Gestión Flota BQA.</p>' +
+    '</div>';
+
+  MailApp.sendEmail({
+    to: destinatario,
+    subject: asunto,
+    htmlBody: html
+  });
+}
+
