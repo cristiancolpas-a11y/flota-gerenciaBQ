@@ -4332,16 +4332,24 @@ export const fetchSparePartsFromSheet = async (): Promise<SparePartRecord[]> => 
 const fetchSparePartsFromSheetCSV = async (): Promise<SparePartRecord[]> => {
   try {
     const docId = getSparePartsDocId();
+    const REPUESTO_GID = '2062393449';
     const urls = [
-      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=REPUESTO${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=REPUESTO${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=REPUESTOS${getCacheBuster()}`
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${REPUESTO_GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${REPUESTO_GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=REPUESTO${getCacheBuster()}`
     ];
     for (const url of urls) {
       try {
         const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
         const csvText = await response.text();
         if (csvText && !csvText.includes("<!DOCTYPE html") && !csvText.includes("RESOURCE_NOT_FOUND") && !csvText.includes("error")) {
+          // Verificar que el CSV sea realmente de la hoja REPUESTO (por sus encabezados)
+          const firstLine = (csvText.split('\n')[0] || '').toUpperCase();
+          const looksLikeRepuesto = firstLine.includes('REPUESTO') || firstLine.includes('INSPECTOR') || firstLine.includes('MINIMO');
+          if (!looksLikeRepuesto) {
+            continue; // No es la hoja REPUESTO, probar siguiente URL
+          }
+
           const parsed = await new Promise<SparePartRecord[]>((resolve) => {
             Papa.parse(csvText, {
               header: false,
@@ -4435,6 +4443,31 @@ export const submitSparePartToSheet = async (data: Partial<SparePartRecord>): Pr
   const success = await sendToGAS({ method: 'POST_REPUESTO', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
   return !!success;
 };
+
+export const submitSparePartInspection = async (inspection: {
+  fecha: string;
+  inspector: string;
+  proveedor: string;
+  taller: string;
+  items: { repuesto: string; cantidad: number; minimo: number; und: string; observacion?: string }[];
+}): Promise<boolean> => {
+  const payloadData = {
+    docId: getSparePartsDocId(),
+    sheetName: 'REPUESTO',
+    ...inspection
+  };
+  try {
+    const result = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+  } catch (err) {
+    console.warn("GAS - Envío inspección con CORS falló, intentando fallback:", err);
+  }
+  const success = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
+  return !!success;
+};
+
+
 
 
 

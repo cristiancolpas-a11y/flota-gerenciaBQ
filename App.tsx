@@ -97,6 +97,7 @@ import {
   fetchVaradasFromSheet,
   fetchSparePartsFromSheet,
   submitSparePartToSheet,
+  submitSparePartInspection,
   fetchAuditMasterListFromSheet,
   fetchFleetBaseData,
   fetchForkliftFinesFromSheet,
@@ -3247,6 +3248,40 @@ const App: React.FC = () => {
               <SparePartsModule
                 records={spareParts}
                 onRefresh={handleSyncData}
+                onSubmitInspection={async (inspection) => {
+                  const tempRecords: SparePartRecord[] = inspection.items.map((it, idx) => ({
+                    id: `temp-${Date.now()}-${idx}`,
+                    fecha: inspection.fecha || new Date().toISOString().split('T')[0],
+                    inspector: inspection.inspector || '',
+                    proveedor: inspection.proveedor || '',
+                    taller: inspection.taller || '',
+                    repuesto: it.repuesto || '',
+                    cantidad: Number(it.cantidad) || 0,
+                    minimo: Number(it.minimo) || 0,
+                    und: it.und || 'UND',
+                    estado: (Number(it.cantidad) < Number(it.minimo)) ? 'ALERTA' : 'OK',
+                    observacion: it.observacion || ''
+                  }));
+
+                  // Optimistic update
+                  setSpareParts(prev => [...tempRecords, ...prev]);
+
+                  try {
+                    const ok = await submitSparePartInspection(inspection);
+                    if (ok) {
+                      handleSyncData().catch(e => console.error("Sync error after spare parts inspection:", e));
+                      return true;
+                    } else {
+                      const tempIds = new Set(tempRecords.map(r => r.id));
+                      setSpareParts(prev => prev.filter(r => !tempIds.has(r.id)));
+                      return false;
+                    }
+                  } catch (err) {
+                    const tempIds = new Set(tempRecords.map(r => r.id));
+                    setSpareParts(prev => prev.filter(r => !tempIds.has(r.id)));
+                    throw err;
+                  }
+                }}
                 onSubmitRecord={async (data) => {
                   const tempRecord: SparePartRecord = {
                     id: `temp-${Date.now()}`,
