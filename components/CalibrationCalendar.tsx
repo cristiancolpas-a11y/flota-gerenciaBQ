@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Calibration } from '../types';
 import { normalizePlate } from '../utils';
@@ -12,79 +11,79 @@ interface CalibrationCalendarProps {
   onYearChange: (year: number) => void;
   onViewDoc: (url: string, title: string) => void;
   onUpdateEvidence: (calibration: Calibration) => void;
-  searchTerm: string;
+  searchTerm?: string;
 }
 
-const CalibrationCalendar: React.FC<CalibrationCalendarProps> = ({ 
-  calibrations, 
-  selectedMonth, 
-  selectedYear, 
-  onMonthChange, 
+const MONTHS = [
+  'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+  'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+];
+
+const CalibrationCalendar: React.FC<CalibrationCalendarProps> = ({
+  calibrations,
+  selectedMonth,
+  selectedYear,
+  onMonthChange,
   onYearChange,
   onViewDoc,
   onUpdateEvidence,
-  searchTerm
+  searchTerm = ''
 }) => {
-  const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-  
-  const monthIndex = months.indexOf(selectedMonth);
-  
-  const daysInMonth = useMemo(() => {
-    return new Date(selectedYear, monthIndex + 1, 0).getDate();
-  }, [selectedYear, monthIndex]);
-
-  const firstDayOfMonth = useMemo(() => {
-    return new Date(selectedYear, monthIndex, 1).getDay();
-  }, [selectedYear, monthIndex]);
-
-  const calendarDays = useMemo(() => {
-    const days = [];
-    // Previous month padding
-    for (let i = 0; i < firstDayOfMonth; i++) {
-      days.push(null);
-    }
-    // Current month days
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
-    return days;
-  }, [daysInMonth, firstDayOfMonth]);
-
-  const getCalibrationsForDay = (day: number) => {
-    return calibrations.filter(c => {
-      if (!c.calibrationDate) return false;
-      try {
-        const cDate = new Date(c.calibrationDate + 'T12:00:00');
-        return cDate.getFullYear() === selectedYear && 
-               cDate.getMonth() === monthIndex && 
-               cDate.getDate() === day;
-      } catch (e) {
-        return false;
-      }
-    });
-  };
-
-  const calibrationsWithoutExactDay = useMemo(() => {
-    return calibrations.filter(c => !c.calibrationDate || c.calibrationDate === '');
-  }, [calibrations]);
+  const currentMonthIndex = MONTHS.indexOf(selectedMonth);
 
   const handlePrevMonth = () => {
-    if (monthIndex === 0) {
-      onMonthChange(months[11]);
+    if (currentMonthIndex === 0) {
+      onMonthChange(MONTHS[11]);
       onYearChange(selectedYear - 1);
     } else {
-      onMonthChange(months[monthIndex - 1]);
+      onMonthChange(MONTHS[currentMonthIndex - 1]);
     }
   };
 
   const handleNextMonth = () => {
-    if (monthIndex === 11) {
-      onMonthChange(months[0]);
+    if (currentMonthIndex === 11) {
+      onMonthChange(MONTHS[0]);
       onYearChange(selectedYear + 1);
     } else {
-      onMonthChange(months[monthIndex + 1]);
+      onMonthChange(MONTHS[currentMonthIndex + 1]);
     }
   };
+
+  const calendarDays = useMemo(() => {
+    if (currentMonthIndex === -1) return [];
+    const firstDay = new Date(selectedYear, currentMonthIndex, 1).getDay();
+    const daysInMonth = new Date(selectedYear, currentMonthIndex + 1, 0).getDate();
+    
+    // Convert Sunday=0 to Monday=0 format
+    const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+    
+    const days = [];
+    for (let i = 0; i < startOffset; i++) {
+      days.push(null);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i);
+    }
+    return days;
+  }, [selectedYear, currentMonthIndex]);
+
+  const getCalibrationsForDay = (day: number) => {
+    const targetDateStr = `${selectedYear}-${String(currentMonthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return calibrations.filter(c => {
+      const matchSearch = !searchTerm || normalizePlate(c.plate).includes(normalizePlate(searchTerm));
+      return c.calibrationDate === targetDateStr && matchSearch;
+    });
+  };
+
+  const calibrationsWithoutExactDay = useMemo(() => {
+    return calibrations.filter(c => {
+      const matchSearch = !searchTerm || normalizePlate(c.plate).includes(normalizePlate(searchTerm));
+      if (!matchSearch) return false;
+      if (!c.calibrationDate) return c.month === selectedMonth;
+      const d = new Date(c.calibrationDate + 'T12:00:00');
+      return isNaN(d.getTime()) && c.month === selectedMonth;
+    });
+  }, [calibrations, selectedMonth, searchTerm]);
 
   return (
     <div className="bg-white rounded-[3.5rem] shadow-2xl border border-slate-100 overflow-hidden">
@@ -111,12 +110,12 @@ const CalibrationCalendar: React.FC<CalibrationCalendarProps> = ({
         </div>
       </div>
 
-      {/* Calendar Grid */}
+      {/* Grid */}
       <div className="p-8">
-        <div className="grid grid-cols-7 mb-6">
-          {['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'].map(day => (
-            <div key={day} className="text-center text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
-              {day}
+        <div className="grid grid-cols-7 gap-4 mb-4">
+          {['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'].map(d => (
+            <div key={d} className="text-center font-black text-xs text-slate-400 uppercase tracking-widest py-2">
+              {d}
             </div>
           ))}
         </div>
@@ -142,7 +141,7 @@ const CalibrationCalendar: React.FC<CalibrationCalendarProps> = ({
                         }}
                         className={`group px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-2 ${cal.estado === 'COMPLETADO' ? 'bg-emerald-500 text-white border border-emerald-600 shadow-sm' : 'bg-rose-500 text-white border border-rose-600 shadow-sm'}`}
                       >
-                        <span className="truncate">{cal.plate}</span>
+                        <span className="truncate font-mono">{cal.plate}</span>
                         <div className="shrink-0">
                           {cal.estado === 'COMPLETADO' ? (
                             <CheckCircle2 size={12} className="text-white" />
@@ -160,11 +159,11 @@ const CalibrationCalendar: React.FC<CalibrationCalendarProps> = ({
         </div>
       </div>
 
-      {/* Registros sin fecha exacta */}
+      {/* Calibrations Without Specific Day */}
       {calibrationsWithoutExactDay.length > 0 && (
-        <div className="p-8 border-t border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-3 mb-6">
-            <AlertCircle size={20} className="text-amber-500" />
+        <div className="p-8 bg-slate-50 border-t border-slate-100">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
             <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest">Registros de {selectedMonth} sin fecha exacta ({calibrationsWithoutExactDay.length})</h4>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -180,7 +179,7 @@ const CalibrationCalendar: React.FC<CalibrationCalendarProps> = ({
                 }}
                 className={`group px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-3 ${cal.estado === 'COMPLETADO' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'}`}
               >
-                <span className="truncate">{cal.plate}</span>
+                <span className="truncate font-mono">{cal.plate}</span>
                 {cal.estado === 'COMPLETADO' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} className="animate-pulse" />}
               </div>
             ))}

@@ -26,6 +26,23 @@ export interface Corrective {
   evidence4?: string;
 }
 
+export interface TirePressures {
+  p1_inicial?: string;
+  p1_final?: string;
+  p2_inicial?: string;
+  p2_final?: string;
+  p3_inicial?: string;
+  p3_final?: string;
+  p4_inicial?: string;
+  p4_final?: string;
+  p5_inicial?: string;
+  p5_final?: string;
+  p6_inicial?: string;
+  p6_final?: string;
+}
+
+export type CalibrationSemaforo = 'VIGENTE' | 'POR_VENCER' | 'VENCIDA';
+
 export interface Calibration {
   id: string;
   plate: string;
@@ -36,11 +53,14 @@ export interface Calibration {
   expiryDate: string;
   certificateUrl?: string;
   status: DocumentStatus;
+  semaforo?: CalibrationSemaforo;
   daysPending?: number;
+  daysToExpiry?: number;
   month?: string;
   week?: string;
   estado?: string;
   year?: number;
+  pressures?: TirePressures;
 }
 
 export interface Fine {

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Calibration } from '../types';
 import { formatDate, getDriveDirectLink } from '../utils';
@@ -6,7 +5,7 @@ import { Settings2, Calendar, Eye, Clock, ShieldCheck, Key, MapPin, Disc, Camera
 
 interface CalibrationCardProps {
   calibration: Calibration;
-  onViewDoc: (url: string | string[], title: string) => void;
+  onViewDoc: (url: string, title: string) => void;
   onUpdateEvidence: (calibration: Calibration) => void;
 }
 
@@ -42,76 +41,86 @@ const CalibrationCard: React.FC<CalibrationCardProps> = ({ calibration, onViewDo
   };
 
   const hasExpiry = !!calibration.expiryDate;
-  const s = styles[calibration.status];
+  const s = styles[calibration.status] || styles.active;
   const thumbUrl = calibration.certificateUrl ? getDriveDirectLink(calibration.certificateUrl) : null;
 
   return (
-    <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
+    <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden flex flex-col justify-between">
       <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -mr-16 -mt-16 opacity-50 group-hover:bg-indigo-50 transition-colors"></div>
       
-      <div className="flex justify-between items-start mb-8 relative z-10">
-        <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-transform group-hover:scale-110 ${s.dotBorder}`}>
-          <div className={`w-2.5 h-2.5 rounded-full ${s.dot}`}></div>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <div className="flex gap-2">
-            {calibration.estado && (
-              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase shadow-sm ${calibration.estado === 'COMPLETADO' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
-                {calibration.estado}
+      <div>
+        <div className="flex justify-between items-start mb-8 relative z-10">
+          <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center transition-transform group-hover:scale-110 ${s.dotBorder}`}>
+            <div className={`w-2.5 h-2.5 rounded-full ${s.dot}`}></div>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex gap-2">
+              {calibration.estado && (
+                <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase shadow-sm ${calibration.estado === 'COMPLETADO' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                  {calibration.estado}
+                </span>
+              )}
+              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase shadow-sm ${s.badge}`}>
+                {s.label}
+              </span>
+            </div>
+            {hasExpiry && calibration.daysPending !== undefined && (
+              <span className="text-[10px] font-black text-slate-400 flex items-center gap-1.5">
+                <Clock size={12} className="text-indigo-400" /> {calibration.daysPending} DÍAS RESTANTES
               </span>
             )}
-            <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase shadow-sm ${s.badge}`}>
-              {s.label}
-            </span>
           </div>
-          {hasExpiry && calibration.daysPending !== undefined && (
-            <span className="text-[10px] font-black text-slate-400 flex items-center gap-1.5">
-              <Clock size={12} className="text-indigo-400" /> {calibration.daysPending} DÍAS RESTANTES
-            </span>
-          )}
+        </div>
+
+        <div className="space-y-6 relative z-10">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-4 leading-none">{calibration.equipment}</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-4 py-1.5 bg-[#0f172a] text-white rounded-xl font-mono font-black text-[11px] tracking-tight shadow-md">
+                {calibration.plate}
+              </span>
+              {calibration.cd && (
+                <span className="px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 flex items-center gap-1.5">
+                  <MapPin size={12} /> {calibration.cd}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50">
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-2">Últ. Calibración</span>
+              <span className="text-[12px] font-black text-slate-700 leading-none">{formatDate(calibration.calibrationDate)}</span>
+            </div>
+            <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50">
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-2">Vencimiento</span>
+              <span className="text-[12px] font-black text-slate-700 leading-none">{hasExpiry ? formatDate(calibration.expiryDate) : 'S/D'}</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-6 relative z-10">
-        <div>
-          <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-4 leading-none">{calibration.equipment}</h3>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-4 py-1.5 bg-[#0f172a] text-white rounded-xl font-mono font-black text-[11px] tracking-tight shadow-md">
-              {calibration.plate}
-            </span>
-            {calibration.cd && (
-              <span className="px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest border border-indigo-100 flex items-center gap-1.5">
-                <MapPin size={12} /> {calibration.cd}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50">
-             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-2">Últ. Calibración</span>
-             <span className="text-[12px] font-black text-slate-700 leading-none">{formatDate(calibration.calibrationDate)}</span>
-          </div>
-          <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100/50">
-             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-2">Vencimiento</span>
-             <span className="text-[12px] font-black text-slate-700 leading-none">{hasExpiry ? formatDate(calibration.expiryDate) : 'S/D'}</span>
-          </div>
-        </div>
-
+      <div className="mt-6 relative z-10">
         {calibration.certificateUrl ? (
           <div className="space-y-3">
             <div 
               onClick={() => onViewDoc(calibration.certificateUrl!, `${calibration.plate} - ${calibration.equipment}`)}
               className="aspect-video rounded-2xl overflow-hidden bg-slate-100 relative group/img cursor-pointer border border-slate-100"
             >
-              <img 
-                src={thumbUrl!} 
-                alt="Certificado Calibración" 
-                className="w-full h-full object-cover transition-transform group-hover/img:scale-110"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
-                 <Eye size={24} className="text-white" />
+              {thumbUrl ? (
+                <img 
+                  src={thumbUrl} 
+                  alt="Certificado" 
+                  className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-500" 
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-400">
+                  <Eye size={24} />
+                </div>
+              )}
+              <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-black uppercase tracking-widest">
+                Ampliar Evidencia
               </div>
             </div>
             <button 

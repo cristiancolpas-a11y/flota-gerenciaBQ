@@ -52,6 +52,7 @@ import FleetStandardModule from './components/FleetStandardModule';
 import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
 import { MttrModule } from './components/MttrModule';
 import CalibrationVisuals from './components/CalibrationVisuals';
+import CalibrationFleetTracking from './components/CalibrationFleetTracking';
 import { VclModule } from './components/VclModule';
 import SustainabilityModule from './components/SustainabilityModule';
 import RutinasModule from './components/RutinasModule';
@@ -256,13 +257,14 @@ const App: React.FC = () => {
   const [showCleaningForm, setShowCleaningForm] = useState(false);
   const [showCalibrationForm, setShowCalibrationForm] = useState(false);
   const [updatingCalibration, setUpdatingCalibration] = useState<Calibration | null>(null);
+  const [calibrationPreselectedPlate, setCalibrationPreselectedPlate] = useState<string>('');
   const [showDocUpdateForm, setShowDocUpdateForm] = useState(false);
   const [closingReport, setClosingReport] = useState<Report | null>(null);
   const [registeringEntry, setRegisteringEntry] = useState<Report | null>(null);
   const [closingWorkshopVisit, setClosingWorkshopVisit] = useState<Report | null>(null);
   const [closingCleaning, setClosingCleaning] = useState<WashReport | null>(null);
   const [workshopViewMode, setWorkshopViewMode] = useState<'list' | 'calendar'>('calendar');
-  const [calibrationViewMode, setCalibrationViewMode] = useState<'list' | 'calendar' | 'visual'>('calendar');
+  const [calibrationViewMode, setCalibrationViewMode] = useState<'seguimiento' | 'calendar' | 'list' | 'visual'>('seguimiento');
   const [washViewMode, setWashViewMode] = useState<'list' | 'calendar'>('calendar');
   const [cleaningViewMode, setCleaningViewMode] = useState<'list' | 'calendar'>('calendar');
 
@@ -994,8 +996,8 @@ const App: React.FC = () => {
         "CONTRATISTA / OPERACIÓN": contractor,
         "FECHA DE CALIBRACIÓN": item.calibrationDate || '',
         "FECHA DE VENCIMIENTO": item.expiryDate || '',
-        "ESTADO DE EJECUCIÓN": estadoEjecucion,
-        "DÍAS RESTANTES": item.daysPending !== undefined ? item.daysPending : '',
+        "ESTADO": estadoEjecucion,
+        "DÍAS VENCIMIENTO": item.daysPending !== undefined ? item.daysPending : '',
         "AÑO": item.year || selectedYear,
         "CERTIFICADO / EVIDENCIA": item.certificateUrl || ''
       };
@@ -2896,7 +2898,13 @@ const App: React.FC = () => {
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-4">
-                      <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center">
+                      <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-1">
+                        <button 
+                          onClick={() => setCalibrationViewMode('seguimiento')}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'seguimiento' ? 'bg-[#0f172a] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                        >
+                          Seguimiento Flota
+                        </button>
                         <button 
                           onClick={() => setCalibrationViewMode('calendar')}
                           className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'calendar' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
@@ -2959,87 +2967,112 @@ const App: React.FC = () => {
                   </div>
                </div>
 
-               {/* Filtros CD y Contratista */}
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <Building2 size={14} className="text-indigo-400" /> Filtrar por CD
-                    </p>
-                    <select 
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 appearance-none cursor-pointer"
-                      value={filterCd}
-                      onChange={e => setFilterCd(e.target.value)}
-                    >
-                      <option value="all">TODOS LOS CENTROS</option>
-                      {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
-                    </select>
-                  </div>
-                  <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <UserCircle size={14} className="text-indigo-400" /> Filtrar por Contratista
-                    </p>
-                    <select 
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 appearance-none cursor-pointer"
-                      value={filterContractor}
-                      onChange={e => setFilterContractor(e.target.value)}
-                    >
-                      <option value="all">TODOS LOS OPERADORES</option>
-                      {uniqueContractors.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-               </div>
-
-               <CalibrationStats 
-                 total={statsCalibrations.total}
-                 completed={statsCalibrations.completed}
-                 pending={statsCalibrations.pending}
-                 searchCount={statsCalibrations.searchCount}
-                 month={selectedMonth}
-                 onExport={handleExportCalibrationsExcel}
-               />
-
-               {calibrationViewMode === 'visual' ? (
-                 <CalibrationVisuals 
+               {calibrationViewMode === 'seguimiento' ? (
+                 <CalibrationFleetTracking 
+                   vehicles={vehicles}
                    calibrations={calibrations}
-                   selectedYear={selectedYear}
-                   selectedMonth={selectedMonth}
-                   selectedCd={filterCd}
-                   selectedContractor={filterContractor}
-                 />
-               ) : calibrationViewMode === 'list' ? (
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {filteredCalibrations.map(c => (
-                      <CalibrationCard 
-                        key={c.id} 
-                        calibration={c} 
-                        onViewDoc={(url, t) => setViewDoc({url, title: t})} 
-                        onUpdateEvidence={(cal) => {
-                          setUpdatingCalibration(cal);
-                          setShowCalibrationForm(true);
-                        }}
-                      />
-                    ))}
-                    {filteredCalibrations.length === 0 && (
-                      <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
-                        <Disc size={48} className="mx-auto text-slate-200 mb-4" />
-                        <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado calibraciones con los filtros seleccionados</p>
-                      </div>
-                    )}
-                 </div>
-               ) : (
-                 <CalibrationCalendar 
-                   calibrations={filteredCalibrations}
-                   selectedMonth={selectedMonth}
+                   selectedMonth={selectedMonth === 'TODOS' ? ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'][new Date().getMonth()] : selectedMonth}
                    selectedYear={selectedYear}
                    onMonthChange={setSelectedMonth}
                    onYearChange={setSelectedYear}
-                   onViewDoc={(url, t) => setViewDoc({url, title: t})}
-                   onUpdateEvidence={(cal) => {
-                     setUpdatingCalibration(cal);
+                   onRegisterCalibrationForPlate={(plate) => {
+                     setCalibrationPreselectedPlate(plate);
+                     setUpdatingCalibration(null);
                      setShowCalibrationForm(true);
                    }}
-                   searchTerm={searchTerm}
+                   onViewDoc={(url, t) => setViewDoc({url, title: t})}
+                   filterCd={filterCd}
+                   filterContractor={filterContractor}
+                   onFilterCdChange={setFilterCd}
+                   onFilterContractorChange={setFilterContractor}
+                   uniqueCds={uniqueCds}
+                   uniqueContractors={uniqueContractors}
                  />
+               ) : (
+                 <>
+                   {/* Filtros CD y Contratista */}
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                          <Building2 size={14} className="text-indigo-400" /> Filtrar por CD
+                        </p>
+                        <select 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                          value={filterCd}
+                          onChange={e => setFilterCd(e.target.value)}
+                        >
+                          <option value="all">TODOS LOS CENTROS</option>
+                          {uniqueCds.map(cd => <option key={cd} value={cd}>{cd}</option>)}
+                        </select>
+                      </div>
+                      <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                          <UserCircle size={14} className="text-indigo-400" /> Filtrar por Contratista
+                        </p>
+                        <select 
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-[11px] font-black uppercase outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                          value={filterContractor}
+                          onChange={e => setFilterContractor(e.target.value)}
+                        >
+                          <option value="all">TODOS LOS OPERADORES</option>
+                          {uniqueContractors.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                   </div>
+
+                   <CalibrationStats 
+                     total={statsCalibrations.total}
+                     completed={statsCalibrations.completed}
+                     pending={statsCalibrations.pending}
+                     searchCount={statsCalibrations.searchCount}
+                     month={selectedMonth}
+                     onExport={handleExportCalibrationsExcel}
+                   />
+
+                   {calibrationViewMode === 'visual' ? (
+                     <CalibrationVisuals 
+                       calibrations={calibrations}
+                       selectedYear={selectedYear}
+                       selectedMonth={selectedMonth}
+                       selectedCd={filterCd}
+                       selectedContractor={filterContractor}
+                     />
+                   ) : calibrationViewMode === 'list' ? (
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {filteredCalibrations.map(c => (
+                          <CalibrationCard 
+                            key={c.id} 
+                            calibration={c} 
+                            onViewDoc={(url, t) => setViewDoc({url, title: t})} 
+                            onUpdateEvidence={(cal) => {
+                              setUpdatingCalibration(cal);
+                              setShowCalibrationForm(true);
+                            }}
+                          />
+                        ))}
+                        {filteredCalibrations.length === 0 && (
+                          <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
+                            <Disc size={48} className="mx-auto text-slate-200 mb-4" />
+                            <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado calibraciones con los filtros seleccionados</p>
+                          </div>
+                        )}
+                     </div>
+                   ) : (
+                     <CalibrationCalendar 
+                       calibrations={filteredCalibrations}
+                       selectedMonth={selectedMonth}
+                       selectedYear={selectedYear}
+                       onMonthChange={setSelectedMonth}
+                       onYearChange={setSelectedYear}
+                       onViewDoc={(url, t) => setViewDoc({url, title: t})}
+                       onUpdateEvidence={(cal) => {
+                         setUpdatingCalibration(cal);
+                         setShowCalibrationForm(true);
+                       }}
+                       searchTerm={searchTerm}
+                     />
+                   )}
+                 </>
                )}
             </div>
           )}
@@ -3740,13 +3773,16 @@ const App: React.FC = () => {
         <CalibrationForm 
           vehicles={vehicles} 
           calibrationToUpdate={updatingCalibration || undefined}
+          preSelectedPlate={calibrationPreselectedPlate}
           onClose={() => {
             setShowCalibrationForm(false);
             setUpdatingCalibration(null);
+            setCalibrationPreselectedPlate('');
           }} 
           onSubmit={async (d: any) => { 
             setShowCalibrationForm(false);
             setUpdatingCalibration(null);
+            setCalibrationPreselectedPlate('');
 
             if (d.isUpdate) {
               const previousCalibrations = [...calibrations];

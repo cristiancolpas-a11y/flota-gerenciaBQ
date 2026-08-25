@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useMemo } from 'react';
 import { Calibration, Vehicle } from '../types';
 import { compressImage, createMosaic, processImageWithWatermark, normalizeStr, getWeekNumber } from '../utils';
@@ -56,7 +55,6 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
 
     const sorted = list.sort((a, b) => a.plate.localeCompare(b.plate));
 
-    // Auto-select if only one result and not already selected
     if (sorted.length === 1 && formData.plate !== sorted[0].plate && plateSearch.length >= 3) {
       setFormData(prev => ({ ...prev, plate: sorted[0].plate }));
     }
@@ -79,12 +77,12 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
     setIsDragging(false);
     
     if (!formData.plate) {
-      alert("Seleccione la placa antes de añadir evidencia.");
+      alert("Seleccione la placa antes de capturar la evidencia.");
       return;
     }
 
-    const files = Array.from(e.dataTransfer.files) as File[];
-    if (files.length === 0) return;
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
 
     setIsProcessingPhotoLocal(true);
     
@@ -100,8 +98,9 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
 
     const coords = await getCoords();
 
-    for (const file of files) {
-      if (capturedPhotos.length >= 4) break;
+    for (let i = 0; i < files.length; i++) {
+      if (capturedPhotos.length + i >= 4) break; 
+      const file = files[i];
       if (!file.type.startsWith('image/')) continue;
       
       const watermarked = await new Promise<string>((resolve) => {
@@ -115,6 +114,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
 
       setCapturedPhotos(prev => [...prev, watermarked].slice(0, 4));
     }
+    
     setIsProcessingPhotoLocal(false);
   };
 
@@ -166,7 +166,7 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.plate || !formData.taller || capturedPhotos.length === 0) {
-      alert("Por favor complete todos los campos y capture evidencia.");
+      alert("Por favor complete todos los campos obligatorios y capture evidencia.");
       return;
     }
     
@@ -175,7 +175,6 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
       const mergedEvidence = await createMosaic(capturedPhotos, `CALIBRACIÓN: ${formData.plate} - ${formData.calibrationDate}`);
       
       const selectedVehicle = vehicles.find(v => v.plate === formData.plate);
-
       const calDate = new Date(formData.calibrationDate + 'T12:00:00');
       const payload = { 
         id: calibrationToUpdate?.id,
@@ -224,10 +223,10 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
             </div>
             <div>
               <h2 className="text-xl font-black uppercase tracking-tighter">
-                {isUpdateMode ? 'VINCULAR EVIDENCIA' : '🛞 CALIBRACIÓN NEUMÁTICOS'}
+                {isUpdateMode ? 'VINCULAR EVIDENCIA' : 'CALIBRACIÓN NEUMÁTICOS'}
               </h2>
               <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest">
-                {isUpdateMode ? `ID: ${calibrationToUpdate.id}` : (preSelectedPlate ? `REPORTE DIRECTO: ${preSelectedPlate}` : 'Compresión de datos activa')}
+                {isUpdateMode ? `ID: ${calibrationToUpdate.id}` : (preSelectedPlate ? `REPORTE DIRECTO: ${preSelectedPlate}` : 'Compresión y registro')}
               </p>
             </div>
           </div>
@@ -321,9 +320,9 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
               onDrop={handleDrop}
             >
               {capturedPhotos.map((photo, index) => (
-                <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                <div key={index} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
                   <img src={photo} className="w-full h-full object-cover" />
-                  <button type="button" onClick={() => removePhoto(index)} className="absolute top-1 right-1 p-1 bg-rose-500 text-white rounded-lg"><Trash2 size={12} /></button>
+                  <button type="button" onClick={() => removePhoto(index)} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-xl"><Trash2 size={14} /></button>
                 </div>
               ))}
               {capturedPhotos.length < 4 && (

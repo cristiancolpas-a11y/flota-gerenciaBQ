@@ -1058,19 +1058,29 @@ function doPost(e) {
         }
 
         var img = sImg(d.certificateUrl, "CALIB_" + d.plate);
-        if (foundIdx !== -1) {
-          s.getRange(foundIdx, 5).setValue(d.taller);
-          s.getRange(foundIdx, 6).setValue(img);
-          s.getRange(foundIdx, 7).setValue("COMPLETADO");
+        var press = d.pressures || {};
+        var p1_ini = pickVal(d.p1_inicial, press.p1_inicial, "");
+        var p1_fin = pickVal(d.p1_final, press.p1_final, "");
+        var p2_ini = pickVal(d.p2_inicial, press.p2_inicial, "");
+        var p2_fin = pickVal(d.p2_final, press.p2_final, "");
+        var p3_ini = pickVal(d.p3_inicial, press.p3_inicial, "");
+        var p3_fin = pickVal(d.p3_final, press.p3_final, "");
+        var p4_ini = pickVal(d.p4_inicial, press.p4_inicial, "");
+        var p4_fin = pickVal(d.p4_final, press.p4_final, "");
+        var p5_ini = pickVal(d.p5_inicial, press.p5_inicial, "");
+        var p5_fin = pickVal(d.p5_final, press.p5_final, "");
+        var p6_ini = pickVal(d.p6_inicial, press.p6_inicial, "");
+        var p6_fin = pickVal(d.p6_final, press.p6_final, "");
 
-          s.getRange(foundIdx, 1).setValue(d.month);
-          s.getRange(foundIdx, 2).setValue(d.calibrationDate);
-          s.getRange(foundIdx, 3).setValue(d.week);
-          s.getRange(foundIdx, 4).setValue(d.plate);
-          s.getRange(foundIdx, 8).setValue(d.cd || "");
-          s.getRange(foundIdx, 9).setValue(d.contractor || "");
+        var rowCalib = [
+          d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, img, "COMPLETADO", d.cd || "", d.contractor || "",
+          p1_ini, p1_fin, p2_ini, p2_fin, p3_ini, p3_fin, p4_ini, p4_fin, p5_ini, p5_fin, p6_ini, p6_fin
+        ];
+
+        if (foundIdx !== -1) {
+          s.getRange(foundIdx, 1, 1, rowCalib.length).setValues([rowCalib]);
         } else {
-          s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller, img, "COMPLETADO", d.cd || "", d.contractor || ""]);
+          s.appendRow(rowCalib);
         }
         if (lock.hasLock()) lock.releaseLock();
         return output("success", "Calibración actualizada correctamente.");
@@ -1081,7 +1091,25 @@ function doPost(e) {
           if (lock.hasLock()) lock.releaseLock();
           return output("error", "No se encontró ni se pudo crear la pestaña CALIBRACIONES.");
         }
-        s.appendRow([d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, sImg(d.certificateUrl, "CALIB_" + d.plate), "COMPLETADO", d.cd || "", d.contractor || ""]);
+        var img = sImg(d.certificateUrl, "CALIB_" + d.plate);
+        var press = d.pressures || {};
+        var p1_ini = pickVal(d.p1_inicial, press.p1_inicial, "");
+        var p1_fin = pickVal(d.p1_final, press.p1_final, "");
+        var p2_ini = pickVal(d.p2_inicial, press.p2_inicial, "");
+        var p2_fin = pickVal(d.p2_final, press.p2_final, "");
+        var p3_ini = pickVal(d.p3_inicial, press.p3_inicial, "");
+        var p3_fin = pickVal(d.p3_final, press.p3_final, "");
+        var p4_ini = pickVal(d.p4_inicial, press.p4_inicial, "");
+        var p4_fin = pickVal(d.p4_final, press.p4_final, "");
+        var p5_ini = pickVal(d.p5_inicial, press.p5_inicial, "");
+        var p5_fin = pickVal(d.p5_final, press.p5_final, "");
+        var p6_ini = pickVal(d.p6_inicial, press.p6_inicial, "");
+        var p6_fin = pickVal(d.p6_final, press.p6_final, "");
+
+        s.appendRow([
+          d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, img, "COMPLETADO", d.cd || "", d.contractor || "",
+          p1_ini, p1_fin, p2_ini, p2_fin, p3_ini, p3_fin, p4_ini, p4_fin, p5_ini, p5_fin, p6_ini, p6_fin
+        ]);
         if (lock.hasLock()) lock.releaseLock();
         return output("success", "Calibración registrada correctamente.");
       }
