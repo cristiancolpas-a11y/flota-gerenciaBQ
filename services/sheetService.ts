@@ -713,7 +713,21 @@ const processCalibrationRows = (rows: any[][], vehicles: Vehicle[] = []): Calibr
       estado,
       year,
       cd: cd,
-      contractor: contractor
+      contractor: contractor,
+      pressures: {
+        p1i: cleanSheetValue(row[9]),  p1f: cleanSheetValue(row[10]),
+        p2i: cleanSheetValue(row[11]), p2f: cleanSheetValue(row[12]),
+        p3i: cleanSheetValue(row[13]), p3f: cleanSheetValue(row[14]),
+        p4i: cleanSheetValue(row[15]), p4f: cleanSheetValue(row[16]),
+        p5i: cleanSheetValue(row[17]), p5f: cleanSheetValue(row[18]),
+        p6i: cleanSheetValue(row[19]), p6f: cleanSheetValue(row[20]),
+        p1_inicial: cleanSheetValue(row[9]),  p1_final: cleanSheetValue(row[10]),
+        p2_inicial: cleanSheetValue(row[11]), p2_final: cleanSheetValue(row[12]),
+        p3_inicial: cleanSheetValue(row[13]), p3_final: cleanSheetValue(row[14]),
+        p4_inicial: cleanSheetValue(row[15]), p4_final: cleanSheetValue(row[16]),
+        p5_inicial: cleanSheetValue(row[17]), p5_final: cleanSheetValue(row[18]),
+        p6_inicial: cleanSheetValue(row[19]), p6_final: cleanSheetValue(row[20]),
+      }
     };
   });
 };

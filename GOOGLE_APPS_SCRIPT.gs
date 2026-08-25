@@ -1059,18 +1059,18 @@ function doPost(e) {
 
         var img = sImg(d.certificateUrl, "CALIB_" + d.plate);
         var press = d.pressures || {};
-        var p1_ini = pickVal(d.p1_inicial, press.p1_inicial, "");
-        var p1_fin = pickVal(d.p1_final, press.p1_final, "");
-        var p2_ini = pickVal(d.p2_inicial, press.p2_inicial, "");
-        var p2_fin = pickVal(d.p2_final, press.p2_final, "");
-        var p3_ini = pickVal(d.p3_inicial, press.p3_inicial, "");
-        var p3_fin = pickVal(d.p3_final, press.p3_final, "");
-        var p4_ini = pickVal(d.p4_inicial, press.p4_inicial, "");
-        var p4_fin = pickVal(d.p4_final, press.p4_final, "");
-        var p5_ini = pickVal(d.p5_inicial, press.p5_inicial, "");
-        var p5_fin = pickVal(d.p5_final, press.p5_final, "");
-        var p6_ini = pickVal(d.p6_inicial, press.p6_inicial, "");
-        var p6_fin = pickVal(d.p6_final, press.p6_final, "");
+        var p1_ini = pickVal(d.p1i, d.p1_inicial, d.p1Inicial, press.p1i, press.p1_inicial, "");
+        var p1_fin = pickVal(d.p1f, d.p1_final, d.p1Final, press.p1f, press.p1_final, "");
+        var p2_ini = pickVal(d.p2i, d.p2_inicial, d.p2Inicial, press.p2i, press.p2_inicial, "");
+        var p2_fin = pickVal(d.p2f, d.p2_final, d.p2Final, press.p2f, press.p2_final, "");
+        var p3_ini = pickVal(d.p3i, d.p3_inicial, d.p3Inicial, press.p3i, press.p3_inicial, "");
+        var p3_fin = pickVal(d.p3f, d.p3_final, d.p3Final, press.p3f, press.p3_final, "");
+        var p4_ini = pickVal(d.p4i, d.p4_inicial, d.p4Inicial, press.p4i, press.p4_inicial, "");
+        var p4_fin = pickVal(d.p4f, d.p4_final, d.p4Final, press.p4f, press.p4_final, "");
+        var p5_ini = pickVal(d.p5i, d.p5_inicial, d.p5Inicial, press.p5i, press.p5_inicial, "");
+        var p5_fin = pickVal(d.p5f, d.p5_final, d.p5Final, press.p5f, press.p5_final, "");
+        var p6_ini = pickVal(d.p6i, d.p6_inicial, d.p6Inicial, press.p6i, press.p6_inicial, "");
+        var p6_fin = pickVal(d.p6f, d.p6_final, d.p6Final, press.p6f, press.p6_final, "");
 
         var rowCalib = [
           d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, img, "COMPLETADO", d.cd || "", d.contractor || "",
@@ -1093,18 +1093,18 @@ function doPost(e) {
         }
         var img = sImg(d.certificateUrl, "CALIB_" + d.plate);
         var press = d.pressures || {};
-        var p1_ini = pickVal(d.p1_inicial, press.p1_inicial, "");
-        var p1_fin = pickVal(d.p1_final, press.p1_final, "");
-        var p2_ini = pickVal(d.p2_inicial, press.p2_inicial, "");
-        var p2_fin = pickVal(d.p2_final, press.p2_final, "");
-        var p3_ini = pickVal(d.p3_inicial, press.p3_inicial, "");
-        var p3_fin = pickVal(d.p3_final, press.p3_final, "");
-        var p4_ini = pickVal(d.p4_inicial, press.p4_inicial, "");
-        var p4_fin = pickVal(d.p4_final, press.p4_final, "");
-        var p5_ini = pickVal(d.p5_inicial, press.p5_inicial, "");
-        var p5_fin = pickVal(d.p5_final, press.p5_final, "");
-        var p6_ini = pickVal(d.p6_inicial, press.p6_inicial, "");
-        var p6_fin = pickVal(d.p6_final, press.p6_final, "");
+        var p1_ini = pickVal(d.p1i, d.p1_inicial, d.p1Inicial, press.p1i, press.p1_inicial, "");
+        var p1_fin = pickVal(d.p1f, d.p1_final, d.p1Final, press.p1f, press.p1_final, "");
+        var p2_ini = pickVal(d.p2i, d.p2_inicial, d.p2Inicial, press.p2i, press.p2_inicial, "");
+        var p2_fin = pickVal(d.p2f, d.p2_final, d.p2Final, press.p2f, press.p2_final, "");
+        var p3_ini = pickVal(d.p3i, d.p3_inicial, d.p3Inicial, press.p3i, press.p3_inicial, "");
+        var p3_fin = pickVal(d.p3f, d.p3_final, d.p3Final, press.p3f, press.p3_final, "");
+        var p4_ini = pickVal(d.p4i, d.p4_inicial, d.p4Inicial, press.p4i, press.p4_inicial, "");
+        var p4_fin = pickVal(d.p4f, d.p4_final, d.p4Final, press.p4f, press.p4_final, "");
+        var p5_ini = pickVal(d.p5i, d.p5_inicial, d.p5Inicial, press.p5i, press.p5_inicial, "");
+        var p5_fin = pickVal(d.p5f, d.p5_final, d.p5Final, press.p5f, press.p5_final, "");
+        var p6_ini = pickVal(d.p6i, d.p6_inicial, d.p6Inicial, press.p6i, press.p6_inicial, "");
+        var p6_fin = pickVal(d.p6f, d.p6_final, d.p6Final, press.p6f, press.p6_final, "");
 
         s.appendRow([
           d.month, d.calibrationDate, d.week, d.plate, d.taller || d.equipment, img, "COMPLETADO", d.cd || "", d.contractor || "",

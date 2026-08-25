@@ -27,6 +27,18 @@ export interface Corrective {
 }
 
 export interface TirePressures {
+  p1i?: string;
+  p1f?: string;
+  p2i?: string;
+  p2f?: string;
+  p3i?: string;
+  p3f?: string;
+  p4i?: string;
+  p4f?: string;
+  p5i?: string;
+  p5f?: string;
+  p6i?: string;
+  p6f?: string;
   p1_inicial?: string;
   p1_final?: string;
   p2_inicial?: string;

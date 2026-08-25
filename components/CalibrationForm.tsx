@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { Calibration, Vehicle } from '../types';
 import { compressImage, createMosaic, processImageWithWatermark, normalizeStr, getWeekNumber } from '../utils';
-import { X, Key, Camera, CheckCircle, MapPin, Plus, Trash2, Loader2, Calendar, Settings2, Clock, ImageIcon, Building2, UserCircle, Disc, Save } from 'lucide-react';
+import { X, Key, Camera, CheckCircle, MapPin, Plus, Trash2, Loader2, Calendar, Settings2, Clock, ImageIcon, Building2, UserCircle, Disc, Save, Gauge } from 'lucide-react';
 
 interface CalibrationFormProps {
   onClose: () => void;
@@ -27,6 +27,21 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
     taller: calibrationToUpdate?.equipment || '',
     calibrationDate: calibrationToUpdate?.calibrationDate || new Date().toISOString().split('T')[0],
     certificateUrl: '',
+  });
+
+  const [presiones, setPresiones] = useState({
+    p1i: calibrationToUpdate?.pressures?.p1i || calibrationToUpdate?.pressures?.p1_inicial || '',
+    p1f: calibrationToUpdate?.pressures?.p1f || calibrationToUpdate?.pressures?.p1_final || '',
+    p2i: calibrationToUpdate?.pressures?.p2i || calibrationToUpdate?.pressures?.p2_inicial || '',
+    p2f: calibrationToUpdate?.pressures?.p2f || calibrationToUpdate?.pressures?.p2_final || '',
+    p3i: calibrationToUpdate?.pressures?.p3i || calibrationToUpdate?.pressures?.p3_inicial || '',
+    p3f: calibrationToUpdate?.pressures?.p3f || calibrationToUpdate?.pressures?.p3_final || '',
+    p4i: calibrationToUpdate?.pressures?.p4i || calibrationToUpdate?.pressures?.p4_inicial || '',
+    p4f: calibrationToUpdate?.pressures?.p4f || calibrationToUpdate?.pressures?.p4_final || '',
+    p5i: calibrationToUpdate?.pressures?.p5i || calibrationToUpdate?.pressures?.p5_inicial || '',
+    p5f: calibrationToUpdate?.pressures?.p5f || calibrationToUpdate?.pressures?.p5_final || '',
+    p6i: calibrationToUpdate?.pressures?.p6i || calibrationToUpdate?.pressures?.p6_inicial || '',
+    p6f: calibrationToUpdate?.pressures?.p6f || calibrationToUpdate?.pressures?.p6_final || '',
   });
 
   const [isDragging, setIsDragging] = useState(false);
@@ -189,7 +204,8 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
         month: calDate.toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
         week: `SEMANA ${getWeekNumber(calDate)}`,
         estado: 'COMPLETADO',
-        isUpdate: isUpdateMode
+        isUpdate: isUpdateMode,
+        ...presiones
       };
       await onSubmit(payload);
       setIsSuccess(true);
@@ -304,6 +320,78 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Fecha</label>
               <input required type="date" className="w-full bg-slate-50 border-2 border-slate-200 rounded-2xl px-5 py-4 text-sm font-black text-slate-800 outline-none disabled:opacity-50" value={formData.calibrationDate} onChange={e => setFormData({ ...formData, calibrationDate: e.target.value })} />
+            </div>
+          </div>
+
+          {/* Sección Presión por posición de llanta (P1 a P6) */}
+          <div className="bg-slate-50 p-5 sm:p-6 rounded-[2rem] border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-sm">
+                  <Gauge size={18} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight">Presión por Posición de Llanta</h4>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Inicial y Final (PSI) • 6 Posiciones</p>
+                </div>
+              </div>
+              <span className="text-[9px] font-black bg-indigo-100/80 text-indigo-700 px-3 py-1 rounded-full uppercase tracking-wider">
+                P1 – P6
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {[
+                { key: 'p1', pos: 'P1', desc: 'Delantera Izquierda' },
+                { key: 'p2', pos: 'P2', desc: 'Delantera Derecha' },
+                { key: 'p3', pos: 'P3', desc: 'Trasera Ext. Izquierda' },
+                { key: 'p4', pos: 'P4', desc: 'Trasera Int. Izquierda' },
+                { key: 'p5', pos: 'P5', desc: 'Trasera Int. Derecha' },
+                { key: 'p6', pos: 'P6', desc: 'Trasera Ext. Derecha' },
+              ].map((item) => {
+                const iKey = `${item.key}i` as keyof typeof presiones;
+                const fKey = `${item.key}f` as keyof typeof presiones;
+                return (
+                  <div key={item.key} className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-xs space-y-2 hover:border-indigo-300 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 bg-[#0f172a] text-white rounded-md text-[10px] font-black font-mono">
+                          {item.pos}
+                        </span>
+                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-tight">
+                          {item.desc}
+                        </span>
+                      </div>
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">PSI</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block">INICIAL</label>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="PSI"
+                          value={presiones[iKey]}
+                          onChange={(e) => setPresiones(prev => ({ ...prev, [iKey]: e.target.value }))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black text-slate-800 outline-none focus:border-indigo-500 focus:bg-white transition-all text-center placeholder:text-slate-300"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[8px] font-black text-indigo-600 uppercase tracking-widest block">FINAL</label>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="PSI"
+                          value={presiones[fKey]}
+                          onChange={(e) => setPresiones(prev => ({ ...prev, [fKey]: e.target.value }))}
+                          className="w-full bg-indigo-50/40 border border-indigo-200 rounded-xl px-3 py-2 text-xs font-black text-indigo-900 outline-none focus:border-indigo-500 focus:bg-white transition-all text-center placeholder:text-indigo-200"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

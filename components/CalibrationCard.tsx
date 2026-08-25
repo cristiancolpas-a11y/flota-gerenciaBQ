@@ -1,7 +1,7 @@
 import React from 'react';
 import { Calibration } from '../types';
 import { formatDate, getDriveDirectLink } from '../utils';
-import { Settings2, Calendar, Eye, Clock, ShieldCheck, Key, MapPin, Disc, Camera } from 'lucide-react';
+import { Settings2, Calendar, Eye, Clock, ShieldCheck, Key, MapPin, Disc, Camera, Gauge } from 'lucide-react';
 
 interface CalibrationCardProps {
   calibration: Calibration;
@@ -43,6 +43,7 @@ const CalibrationCard: React.FC<CalibrationCardProps> = ({ calibration, onViewDo
   const hasExpiry = !!calibration.expiryDate;
   const s = styles[calibration.status] || styles.active;
   const thumbUrl = calibration.certificateUrl ? getDriveDirectLink(calibration.certificateUrl) : null;
+  const hasPressures = calibration.pressures && Object.values(calibration.pressures).some(v => v && String(v).trim() !== '');
 
   return (
     <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden flex flex-col justify-between">
@@ -97,6 +98,42 @@ const CalibrationCard: React.FC<CalibrationCardProps> = ({ calibration, onViewDo
               <span className="text-[12px] font-black text-slate-700 leading-none">{hasExpiry ? formatDate(calibration.expiryDate) : 'S/D'}</span>
             </div>
           </div>
+
+          {hasPressures && (
+            <div className="bg-slate-50/70 p-4 rounded-2xl border border-slate-100 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-slate-600">
+                  <Gauge size={13} className="text-indigo-600" />
+                  <span className="text-[9px] font-black uppercase tracking-wider">Presiones (PSI)</span>
+                </div>
+                <span className="text-[8px] font-bold text-slate-400">P1–P6 [Inicial → Final]</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {[
+                  { pos: 'P1', i: calibration.pressures?.p1i || calibration.pressures?.p1_inicial, f: calibration.pressures?.p1f || calibration.pressures?.p1_final },
+                  { pos: 'P2', i: calibration.pressures?.p2i || calibration.pressures?.p2_inicial, f: calibration.pressures?.p2f || calibration.pressures?.p2_final },
+                  { pos: 'P3', i: calibration.pressures?.p3i || calibration.pressures?.p3_inicial, f: calibration.pressures?.p3f || calibration.pressures?.p3_final },
+                  { pos: 'P4', i: calibration.pressures?.p4i || calibration.pressures?.p4_inicial, f: calibration.pressures?.p4f || calibration.pressures?.p4_final },
+                  { pos: 'P5', i: calibration.pressures?.p5i || calibration.pressures?.p5_inicial, f: calibration.pressures?.p5f || calibration.pressures?.p5_final },
+                  { pos: 'P6', i: calibration.pressures?.p6i || calibration.pressures?.p6_inicial, f: calibration.pressures?.p6f || calibration.pressures?.p6_final },
+                ].map((p) => {
+                  const hasVal = (p.i && p.i.trim() !== '') || (p.f && p.f.trim() !== '');
+                  return (
+                    <div key={p.pos} className="bg-white px-2 py-1.5 rounded-xl border border-slate-200/70 text-center shadow-xs">
+                      <span className="text-[8px] font-black text-slate-400 block font-mono">{p.pos}</span>
+                      <span className="text-[10px] font-black text-slate-800 leading-tight block">
+                        {hasVal ? (
+                          <>
+                            {p.i || '-'}{p.f ? <span className="text-indigo-600 font-bold"> → {p.f}</span> : ''}
+                          </>
+                        ) : '-'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

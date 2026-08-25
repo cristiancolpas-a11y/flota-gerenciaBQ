@@ -3786,8 +3786,25 @@ const App: React.FC = () => {
 
             if (d.isUpdate) {
               const previousCalibrations = [...calibrations];
-              localCalibrationUpdatesRef.current[d.id] = d;
-              setCalibrations(prev => prev.map(c => c.id === d.id ? { ...c, ...d } : c));
+              const updatedItem = {
+                ...d,
+                pressures: {
+                  p1i: d.p1i, p1f: d.p1f,
+                  p2i: d.p2i, p2f: d.p2f,
+                  p3i: d.p3i, p3f: d.p3f,
+                  p4i: d.p4i, p4f: d.p4f,
+                  p5i: d.p5i, p5f: d.p5f,
+                  p6i: d.p6i, p6f: d.p6f,
+                  p1_inicial: d.p1i, p1_final: d.p1f,
+                  p2_inicial: d.p2i, p2_final: d.p2f,
+                  p3_inicial: d.p3i, p3_final: d.p3f,
+                  p4_inicial: d.p4i, p4_final: d.p4f,
+                  p5_inicial: d.p5i, p5_final: d.p5f,
+                  p6_inicial: d.p6i, p6_final: d.p6f
+                }
+              };
+              localCalibrationUpdatesRef.current[d.id] = updatedItem;
+              setCalibrations(prev => prev.map(c => c.id === d.id ? { ...c, ...updatedItem } : c));
 
               try {
                 await submitCalibrationUpdateToSheet(d);
@@ -3797,14 +3814,38 @@ const App: React.FC = () => {
                 alert("No se pudo actualizar la calibración.");
               }
             } else {
+              const calDate = d.calibrationDate || d.date || new Date().toISOString().split('T')[0];
+              const expDateObj = new Date(calDate + 'T12:00:00');
+              expDateObj.setFullYear(expDateObj.getFullYear() + 1);
+              const expDateStr = expDateObj.toISOString().split('T')[0];
+
               const newCal: Calibration = {
                 id: d.id || `temp-${Date.now()}`,
-                calibrationDate: d.date || new Date().toISOString().split('T')[0],
+                calibrationDate: calDate,
                 plate: d.plate,
-                equipment: d.type || 'ALCOHOLSENSOR',
+                equipment: d.taller || d.equipment || d.type || 'AUTOMUNDIAL',
                 status: 'active',
-                expiryDate: d.expiryDate || '',
-                certificateUrl: d.certificateUrl || ''
+                expiryDate: d.expiryDate || expDateStr,
+                certificateUrl: d.certificateUrl || '',
+                cd: d.cd || 'GENERAL',
+                contractor: d.contractor || 'GENERAL',
+                month: d.month || expDateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
+                week: d.week || '',
+                estado: d.estado || 'COMPLETADO',
+                pressures: {
+                  p1i: d.p1i, p1f: d.p1f,
+                  p2i: d.p2i, p2f: d.p2f,
+                  p3i: d.p3i, p3f: d.p3f,
+                  p4i: d.p4i, p4f: d.p4f,
+                  p5i: d.p5i, p5f: d.p5f,
+                  p6i: d.p6i, p6f: d.p6f,
+                  p1_inicial: d.p1i, p1_final: d.p1f,
+                  p2_inicial: d.p2i, p2_final: d.p2f,
+                  p3_inicial: d.p3i, p3_final: d.p3f,
+                  p4_inicial: d.p4i, p4_final: d.p4f,
+                  p5_inicial: d.p5i, p5_final: d.p5f,
+                  p6_inicial: d.p6i, p6_final: d.p6f
+                }
               };
               localCalibrationSubmissionsRef.current = [newCal, ...localCalibrationSubmissionsRef.current];
               setCalibrations(prev => [newCal, ...prev]);
