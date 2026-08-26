@@ -924,12 +924,10 @@ function doPost(e) {
 
         s.getRange(s.getLastRow() + 1, 1, filas.length, filas[0].length).setValues(filas);
 
-        if (alertas.length > 0) {
-          try {
-            enviarCorreoAlertaRepuestos(taller, inspector, fecha, alertas);
-          } catch (mailErr) {
-            log("Error enviando correo de alerta: " + mailErr.toString(), docId);
-          }
+        try {
+          enviarCorreoInspeccionRepuestos(taller, inspector, fecha, items, alertas.length);
+        } catch (mailErr) {
+          log("Error enviando correo de inspección: " + mailErr.toString(), docId);
         }
 
         if (lock.hasLock()) lock.releaseLock();
@@ -1571,43 +1569,62 @@ function output(status, message) {
   return ContentService.createTextOutput(JSON.stringify({status: status, message: message})).setMimeType(ContentService.MimeType.JSON);
 }
 
-function enviarCorreoAlertaRepuestos(taller, inspector, fecha, alertas) {
-  var destinatario = "edgar.arrieta@ab-inbev.com";
-  var asunto = "⚠️ Alerta de stock - Taller " + taller;
+function enviarCorreoInspeccionRepuestos(taller, inspector, fecha, items, numAlertas) {
+  var destinatarios = "edgar.arrieta@ab-inbev.com,aperez@rentingcolombia.com";
+  var todoOk = (numAlertas === 0);
+
+  var asunto = todoOk
+    ? "✅ Inspección de repuestos COMPLETA - Taller " + taller
+    : "⚠️ Inspección de repuestos - Taller " + taller + " (" + numAlertas + " en alerta)";
 
   var filasHtml = "";
-  for (var i = 0; i < alertas.length; i++) {
-    var a = alertas[i];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var cantidad = Number(it.cantidad || 0);
+    var minimo = Number(it.minimo || 0);
+    var enAlerta = cantidad < minimo;
+    var bg = enAlerta ? "#fdecec" : "#eafaf1";
+    var estadoTxt = enAlerta ? "ALERTA" : "OK";
+    var estadoColor = enAlerta ? "#c0392b" : "#1e8449";
+
     filasHtml +=
-      '<tr style="background:#fdecec;">' +
-        '<td style="padding:8px;border:1px solid #ddd;">' + a.repuesto + '</td>' +
-        '<td style="padding:8px;border:1px solid #ddd;text-align:center;">' + a.cantidad + '</td>' +
-        '<td style="padding:8px;border:1px solid #ddd;text-align:center;">' + a.minimo + '</td>' +
-        '<td style="padding:8px;border:1px solid #ddd;text-align:center;color:#c0392b;font-weight:bold;">' + a.faltan + '</td>' +
+      '<tr style="background:' + bg + ';">' +
+        '<td style="padding:8px;border:1px solid #ddd;">' + (it.repuesto || "") + '</td>' +
+        '<td style="padding:8px;border:1px solid #ddd;text-align:center;">' + cantidad + '</td>' +
+        '<td style="padding:8px;border:1px solid #ddd;text-align:center;">' + minimo + '</td>' +
+        '<td style="padding:8px;border:1px solid #ddd;text-align:center;">' + (it.und || "") + '</td>' +
+        '<td style="padding:8px;border:1px solid #ddd;text-align:center;color:' + estadoColor + ';font-weight:bold;">' + estadoTxt + '</td>' +
       '</tr>';
   }
 
+  var encabezadoColor = todoOk ? "#1e8449" : "#c0392b";
+  var mensajeIntro = todoOk
+    ? '¡Buenas noticias! La inspección del taller <b>' + taller + '</b> se completó y <b>todos los repuestos están en óptimo nivel de stock</b>. A continuación el detalle completo:'
+    : 'Inspección del taller <b>' + taller + '</b> completada. Hay <b>' + numAlertas + '</b> repuesto(s) por debajo del mínimo (resaltados en rojo). Detalle completo:';
+
   var html =
-    '<div style="font-family:Arial,sans-serif;max-width:600px;">' +
-      '<h2 style="color:#c0392b;">⚠️ Alerta de stock - Taller ' + taller + '</h2>' +
-      '<p>Inspección del <b>' + fecha + '</b> realizada por <b>' + (inspector || "N/D") + '</b>.</p>' +
-      '<p>Los siguientes repuestos están por debajo del mínimo:</p>' +
+    '<div style="font-family:Arial,sans-serif;max-width:640px;">' +
+      '<h2 style="color:' + encabezadoColor + ';">' + (todoOk ? "✅" : "⚠️") + ' Inspección de repuestos - Taller ' + taller + '</h2>' +
+      '<p>Fecha: <b>' + fecha + '</b> &nbsp;|&nbsp; Inspector: <b>' + (inspector || "N/D") + '</b></p>' +
+      '<p>' + mensajeIntro + '</p>' +
       '<table style="border-collapse:collapse;width:100%;font-size:14px;">' +
         '<thead>' +
           '<tr style="background:#2c3e50;color:#fff;">' +
             '<th style="padding:10px;border:1px solid #ddd;text-align:left;">Repuesto</th>' +
             '<th style="padding:10px;border:1px solid #ddd;">Encontrado</th>' +
             '<th style="padding:10px;border:1px solid #ddd;">Mínimo</th>' +
-            '<th style="padding:10px;border:1px solid #ddd;">Faltan</th>' +
+            '<th style="padding:10px;border:1px solid #ddd;">Und</th>' +
+            '<th style="padding:10px;border:1px solid #ddd;">Estado</th>' +
           '</tr>' +
         '</thead>' +
         '<tbody>' + filasHtml + '</tbody>' +
       '</table>' +
+      '<p style="margin-top:16px;font-size:13px;color:#555;">Total repuestos inspeccionados: <b>' + items.length + '</b> &nbsp;|&nbsp; En alerta: <b style="color:#c0392b;">' + numAlertas + '</b> &nbsp;|&nbsp; En orden: <b style="color:#1e8449;">' + (items.length - numAlertas) + '</b></p>' +
       '<p style="color:#888;font-size:12px;margin-top:20px;">Mensaje automático del Sistema de Gestión Flota BQA.</p>' +
     '</div>';
 
   MailApp.sendEmail({
-    to: destinatario,
+    to: destinatarios,
     subject: asunto,
     htmlBody: html
   });

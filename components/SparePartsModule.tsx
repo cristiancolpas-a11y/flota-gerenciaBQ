@@ -257,8 +257,8 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
       if (ok) {
         const alertCount = inspectionItems.filter(it => it.cantidad < it.minimo).length;
         const msg = alertCount > 0 
-          ? `Inspección guardada correctamente (${inspectionItems.length} ítems). Se envió alerta por correo a edgar.arrieta@ab-inbev.com por ${alertCount} repuesto(s) en déficit.`
-          : `Inspección guardada correctamente (${inspectionItems.length} ítems). Todo el stock está en nivel óptimo (OK).`;
+          ? `Inspección guardada correctamente (${inspectionItems.length} ítems). Se envió reporte completo por correo a edgar.arrieta@ab-inbev.com y aperez@rentingcolombia.com (${alertCount} repuesto(s) en déficit).`
+          : `Inspección guardada correctamente (${inspectionItems.length} ítems). Se envió reporte por correo a edgar.arrieta@ab-inbev.com y aperez@rentingcolombia.com. Todo el stock en nivel óptimo (OK).`;
 
         alert(msg);
         setFeedback({
