@@ -3287,7 +3287,8 @@ const App: React.FC = () => {
                     minimo: Number(it.minimo) || 0,
                     und: it.und || 'UND',
                     estado: (Number(it.cantidad) < Number(it.minimo)) ? 'ALERTA' : 'OK',
-                    observacion: it.observacion || ''
+                    observacion: it.observacion || '',
+                    evidencia: inspection.evidencia || ''
                   }));
 
                   // Optimistic update

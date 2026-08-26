@@ -826,7 +826,7 @@ function doPost(e) {
         if (s.getLastRow() === 0) {
           s.appendRow([
             "FECHA", "INSPECTOR", "PROVEEDOR", "TALLER", "REPUESTO",
-            "CANTIDAD ENCONTRADA", "MINIMO REQUERIDO", "UND", "ESTADO", "OBSERVACION"
+            "CANTIDAD ENCONTRADA", "MINIMO REQUERIDO", "UND", "ESTADO", "OBSERVACION", "EVIDENCIA"
           ]);
         }
 
@@ -839,6 +839,13 @@ function doPost(e) {
         var cantidad = Number(pickVal(d.cantidad, d.quantity, 0));
         var minimo = Number(pickVal(d.minimo, d.min, 0));
         var estado = (cantidad < minimo) ? "ALERTA" : "OK";
+        var rawEv = pickVal(d.evidencia, d.evidence, "");
+        var evidenciaUrl = "";
+        if (rawEv) {
+          evidenciaUrl = (typeof rawEv === 'string' && rawEv.indexOf('data:image') === 0) 
+            ? sImg(rawEv, "REPUESTO_" + (d.taller || "") + "_" + (d.fecha || today())) 
+            : rawEv;
+        }
 
         var rowData = [
           pickVal(d.fecha, d.date, today()),
@@ -850,7 +857,8 @@ function doPost(e) {
           minimo,
           pickVal(d.und, d.unit, ""),
           estado,
-          pickVal(d.observacion, d.observation, "")
+          pickVal(d.observacion, d.observation, ""),
+          evidenciaUrl
         ];
 
         s.appendRow(rowData);
@@ -872,7 +880,7 @@ function doPost(e) {
         if (s.getLastRow() === 0) {
           s.appendRow([
             "FECHA", "INSPECTOR", "PROVEEDOR", "TALLER", "REPUESTO",
-            "CANTIDAD ENCONTRADA", "MINIMO REQUERIDO", "UND", "ESTADO", "OBSERVACION"
+            "CANTIDAD ENCONTRADA", "MINIMO REQUERIDO", "UND", "ESTADO", "OBSERVACION", "EVIDENCIA"
           ]);
         }
 
@@ -881,6 +889,13 @@ function doPost(e) {
         var proveedor = pickVal(d.proveedor, d.provider, "");
         var taller = pickVal(d.taller, d.workshop, "");
         var items = d.items || [];
+        var rawEv = pickVal(d.evidencia, d.evidence, "");
+        var evidenciaUrl = "";
+        if (rawEv) {
+          evidenciaUrl = (typeof rawEv === 'string' && rawEv.indexOf('data:image') === 0)
+            ? sImg(rawEv, "REPUESTO_" + taller + "_" + fecha)
+            : rawEv;
+        }
 
         if (!items.length) {
           if (lock.hasLock()) lock.releaseLock();
@@ -898,7 +913,8 @@ function doPost(e) {
 
           filas.push([
             fecha, inspector, proveedor, taller,
-            it.repuesto || "", cantidad, minimo, it.und || "", estado, it.observacion || ""
+            it.repuesto || "", cantidad, minimo, it.und || "", estado, it.observacion || "",
+            evidenciaUrl
           ]);
 
           if (estado === "ALERTA") {

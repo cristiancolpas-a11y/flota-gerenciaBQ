@@ -570,6 +570,7 @@ export interface SparePartRecord {
   und: string;           // UND
   estado: string;        // ESTADO (OK / ALERTA)
   observacion: string;   // OBSERVACION
+  evidencia?: string;    // EVIDENCIA
 }
 
 export interface SparePartDefinition {

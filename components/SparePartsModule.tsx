@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { SparePartRecord } from '../types';
 import { 
-  Package, AlertTriangle, CheckCircle2, Search, Plus, 
+  Package, AlertTriangle, CheckCircle2, Search, Plus, Minus,
   RefreshCw, Filter, Download, Building2, Store, 
   User, Calendar, FileText, X, Loader2,
   Boxes, ShieldAlert, BarChart3, ChevronDown, ListChecks,
-  CheckCheck, Info, Mail
+  CheckCheck, Info, Mail, Camera, Image as ImageIcon, Eye, ExternalLink
 } from 'lucide-react';
 import Papa from 'papaparse';
 import { submitSparePartInspection } from '../services/sheetService';
@@ -85,6 +85,7 @@ interface SparePartsModuleProps {
     proveedor: string;
     taller: string;
     items: { repuesto: string; cantidad: number; minimo: number; und: string; observacion?: string }[];
+    evidencia?: string;
   }) => Promise<boolean>;
   loading?: boolean;
 }
@@ -103,6 +104,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [selectedEvidenceView, setSelectedEvidenceView] = useState<{ url: string; title: string } | null>(null);
 
   // Form State for Full Inspection
   const [fecha, setFecha] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -111,6 +113,8 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
   const [tallerSeleccionado, setTallerSeleccionado] = useState<string>(SPARE_PARTS_WORKSHOPS[0] || 'ELECTRONIC');
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
   const [observaciones, setObservaciones] = useState<Record<string, string>>({});
+  const [evidencia, setEvidencia] = useState<string>('');
+  const [isCompressing, setIsCompressing] = useState<boolean>(false);
 
   // Reset quantities when selected workshop changes
   useEffect(() => {
@@ -149,6 +153,57 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
     };
   }, [currentInspectionItems, cantidades]);
 
+  // Handler for image compression (Canvas max 1000px, 0.7 JPEG)
+  const handleEvidenciaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsCompressing(true);
+    const reader = new FileReader();
+
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 1000;
+        const maxH = 1000;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxW) {
+            height = Math.round((height * maxW) / width);
+            width = maxW;
+          }
+        } else {
+          if (height > maxH) {
+            width = Math.round((width * maxH) / height);
+            height = maxH;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        const compressed = canvas.toDataURL('image/jpeg', 0.7);
+        setEvidencia(compressed);
+        setIsCompressing(false);
+      };
+
+      img.onerror = () => {
+        setEvidencia(result);
+        setIsCompressing(false);
+      };
+
+      img.src = result;
+    };
+
+    reader.readAsDataURL(file);
+  };
+
   // Handler for Saving Full Inspection in a single batch call
   const handleGuardarInspeccion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,22 +239,19 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
 
     try {
       let ok = false;
+      const payload = {
+        fecha,
+        inspector: inspector.trim(),
+        proveedor,
+        taller: tallerSeleccionado,
+        items: inspectionItems,
+        evidencia: evidencia || undefined
+      };
+
       if (onSubmitInspection) {
-        ok = await onSubmitInspection({
-          fecha,
-          inspector: inspector.trim(),
-          proveedor,
-          taller: tallerSeleccionado,
-          items: inspectionItems
-        });
+        ok = await onSubmitInspection(payload);
       } else {
-        ok = await submitSparePartInspection({
-          fecha,
-          inspector: inspector.trim(),
-          proveedor,
-          taller: tallerSeleccionado,
-          items: inspectionItems
-        });
+        ok = await submitSparePartInspection(payload);
       }
 
       if (ok) {
@@ -219,6 +271,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
         setTimeout(() => {
           setShowModal(false);
           setFeedback(null);
+          setEvidencia('');
           // Reset quantities to 0
           const resetCant: Record<string, number> = {};
           const resetObs: Record<string, string> = {};
@@ -275,13 +328,12 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
     });
   }, [records, selectedWorkshop, selectedProvider, selectedStatus, searchTerm]);
 
-  // Overall metrics and breakdown by workshop (Card with count of alert parts per workshop)
+  // Overall metrics and breakdown by workshop
   const stats = useMemo(() => {
     const total = records.length;
     let alerts = 0;
     let ok = 0;
 
-    // Per workshop stats from registered records
     const workshopSummary: Record<string, { total: number; alerts: number; ok: number; lastDate: string }> = {};
 
     SPARE_PARTS_WORKSHOPS.forEach(ws => {
@@ -332,7 +384,8 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
       'MINIMO REQUERIDO': r.minimo,
       UND: r.und,
       ESTADO: r.estado,
-      OBSERVACION: r.observacion
+      OBSERVACION: r.observacion,
+      EVIDENCIA: r.evidencia || ''
     }));
     const csv = Papa.unparse(csvData);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -348,31 +401,31 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
   return (
     <div id="spare-parts-module" className="space-y-6 animate-fade-in text-slate-100 pb-16">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 border border-slate-700/60 rounded-2xl p-6 shadow-xl backdrop-blur-md">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 border border-slate-700/60 rounded-2xl p-4 sm:p-6 shadow-xl backdrop-blur-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-indigo-600/20 border border-indigo-500/30 rounded-xl text-indigo-400">
+            <div className="p-3 bg-indigo-600/20 border border-indigo-500/30 rounded-xl text-indigo-400 shrink-0">
               <Boxes className="w-7 h-7" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold tracking-tight text-white">REPUESTOS</h1>
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">REPUESTOS</h1>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Inspección Completa de Stock por Taller
+                  Inspección de Stock por Taller
                 </span>
               </div>
-              <p className="text-sm text-slate-400 mt-1">
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
                 Auditoría del stock crítico de repuestos por taller (ELECTRONIC, VEHIPESA, TODOFIBRA).
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
             <button
               id="btn-refresh-spare-parts"
               onClick={onRefresh}
               disabled={loading}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-sm font-medium transition shadow-sm disabled:opacity-50"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs sm:text-sm font-medium transition shadow-sm disabled:opacity-50 min-h-[42px]"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               <span>Actualizar</span>
@@ -382,7 +435,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
               id="btn-export-spare-parts"
               onClick={handleExportCSV}
               disabled={records.length === 0}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-sm font-medium transition shadow-sm disabled:opacity-50"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs sm:text-sm font-medium transition shadow-sm disabled:opacity-50 min-h-[42px]"
             >
               <Download className="w-4 h-4" />
               <span>Exportar</span>
@@ -392,9 +445,10 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
               id="btn-new-spare-part-inspection"
               onClick={() => {
                 setFeedback(null);
+                setEvidencia('');
                 setShowModal(true);
               }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold transition shadow-lg shadow-indigo-600/30 border border-indigo-400/40"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs sm:text-sm font-bold transition shadow-lg shadow-indigo-600/30 border border-indigo-400/40 min-h-[42px]"
             >
               <Plus className="w-4 h-4" />
               <span>Nueva Inspección de Taller</span>
@@ -403,66 +457,66 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
         </div>
       </div>
 
-      {/* KPI Cards: Total Inspections, Global Alerts, and Alert breakdown by workshop */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI Cards: Total Inspections, Global Alerts, OK, and Workshop Count */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Inspections */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex items-center justify-between shadow-sm">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-sm">
           <div>
-            <p className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Total Ítems Auditados</p>
-            <h3 className="text-2xl font-bold text-white mt-1">{stats.total}</h3>
-            <p className="text-xs text-slate-400 mt-1">Registros en hoja REPUESTO</p>
+            <p className="text-[10px] sm:text-xs uppercase font-semibold text-slate-400 tracking-wider">Total Ítems</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-white mt-1">{stats.total}</h3>
+            <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">En hoja REPUESTO</p>
           </div>
-          <div className="p-3 bg-slate-800 rounded-lg text-slate-300 border border-slate-700">
-            <BarChart3 className="w-6 h-6" />
+          <div className="p-2.5 sm:p-3 bg-slate-800 rounded-lg text-slate-300 border border-slate-700">
+            <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* In Alert */}
-        <div className="bg-rose-950/40 border border-rose-800/50 rounded-xl p-4 flex items-center justify-between shadow-sm">
+        <div className="bg-rose-950/40 border border-rose-800/50 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-sm">
           <div>
-            <p className="text-xs uppercase font-semibold text-rose-300 tracking-wider">Ítems en ALERTA</p>
-            <div className="flex items-baseline gap-2 mt-1">
-              <h3 className="text-2xl font-bold text-rose-200">{stats.alerts}</h3>
-              <span className="text-xs font-semibold text-rose-300 bg-rose-900/60 px-2 py-0.5 rounded-full border border-rose-700/50">
+            <p className="text-[10px] sm:text-xs uppercase font-semibold text-rose-300 tracking-wider">En ALERTA</p>
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <h3 className="text-xl sm:text-2xl font-bold text-rose-200">{stats.alerts}</h3>
+              <span className="text-[10px] sm:text-xs font-semibold text-rose-300 bg-rose-900/60 px-1.5 py-0.5 rounded-full border border-rose-700/50">
                 {stats.alertPct}%
               </span>
             </div>
-            <p className="text-xs text-rose-300/80 mt-1">Cantidad &lt; mínimo requerido</p>
+            <p className="text-[10px] sm:text-xs text-rose-300/80 mt-0.5">&lt; mínimo</p>
           </div>
-          <div className="p-3 bg-rose-900/40 rounded-lg text-rose-400 border border-rose-700/60">
-            <AlertTriangle className="w-6 h-6" />
+          <div className="p-2.5 sm:p-3 bg-rose-900/40 rounded-lg text-rose-400 border border-rose-700/60">
+            <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* In OK */}
-        <div className="bg-emerald-950/40 border border-emerald-800/50 rounded-xl p-4 flex items-center justify-between shadow-sm">
+        <div className="bg-emerald-950/40 border border-emerald-800/50 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-sm">
           <div>
-            <p className="text-xs uppercase font-semibold text-emerald-300 tracking-wider">Ítems en OK</p>
-            <h3 className="text-2xl font-bold text-emerald-200 mt-1">{stats.ok}</h3>
-            <p className="text-xs text-emerald-300/80 mt-1">Cumplen con el stock mínimo</p>
+            <p className="text-[10px] sm:text-xs uppercase font-semibold text-emerald-300 tracking-wider">En OK</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-emerald-200 mt-1">{stats.ok}</h3>
+            <p className="text-[10px] sm:text-xs text-emerald-300/80 mt-0.5">Stock óptimo</p>
           </div>
-          <div className="p-3 bg-emerald-900/40 rounded-lg text-emerald-400 border border-emerald-700/60">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="p-2.5 sm:p-3 bg-emerald-900/40 rounded-lg text-emerald-400 border border-emerald-700/60">
+            <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Talleres Activos */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex items-center justify-between shadow-sm">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 sm:p-4 flex items-center justify-between shadow-sm">
           <div>
-            <p className="text-xs uppercase font-semibold text-slate-400 tracking-wider">Talleres Configurados</p>
-            <h3 className="text-2xl font-bold text-indigo-300 mt-1">
+            <p className="text-[10px] sm:text-xs uppercase font-semibold text-slate-400 tracking-wider">Talleres</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-indigo-300 mt-1">
               {SPARE_PARTS_WORKSHOPS.length}
             </h3>
-            <p className="text-xs text-slate-400 mt-1">ELECTRONIC, VEHIPESA, TODOFIBRA</p>
+            <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">ELECTRONIC, VEHIPESA...</p>
           </div>
-          <div className="p-3 bg-indigo-950/60 rounded-lg text-indigo-400 border border-indigo-800/60">
-            <Store className="w-6 h-6" />
+          <div className="p-2.5 sm:p-3 bg-indigo-950/60 rounded-lg text-indigo-400 border border-indigo-800/60">
+            <Store className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
 
       {/* Cards de Resumen de Repuestos en ALERTA por Taller */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         {SPARE_PARTS_WORKSHOPS.map(ws => {
           const wsStats = stats.workshopSummary[ws] || { total: 0, alerts: 0, ok: 0, lastDate: '' };
           const configCount = (STOCK_POR_TALLER[ws] || []).length;
@@ -517,7 +571,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-sm space-y-3">
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-sm space-y-3">
         <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
           {/* Search Input */}
           <div className="relative flex-1">
@@ -528,7 +582,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
               placeholder="Buscar por repuesto, inspector, taller o proveedor..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition"
+              className="w-full pl-10 pr-4 py-2.5 sm:py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs sm:text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition"
             />
             {searchTerm && (
               <button
@@ -541,15 +595,15 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
           </div>
 
           {/* Filter Dropdowns */}
-          <div className="flex flex-wrap gap-2.5 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
             {/* Filter by Workshop */}
-            <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1">
-              <Store className="w-3.5 h-3.5 text-slate-400" />
+            <div className="flex-1 sm:flex-initial flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5">
+              <Store className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <select
                 id="select-filter-workshop"
                 value={selectedWorkshop}
                 onChange={(e) => setSelectedWorkshop(e.target.value)}
-                className="bg-transparent text-xs text-slate-200 font-medium focus:outline-none cursor-pointer py-1"
+                className="bg-transparent text-xs text-slate-200 font-medium focus:outline-none cursor-pointer w-full"
               >
                 <option value="ALL" className="bg-slate-800">Todos los Talleres</option>
                 {SPARE_PARTS_WORKSHOPS.map(ws => (
@@ -559,13 +613,13 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
             </div>
 
             {/* Filter by Provider */}
-            <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1">
-              <Building2 className="w-3.5 h-3.5 text-slate-400" />
+            <div className="flex-1 sm:flex-initial flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5">
+              <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <select
                 id="select-filter-provider"
                 value={selectedProvider}
                 onChange={(e) => setSelectedProvider(e.target.value)}
-                className="bg-transparent text-xs text-slate-200 font-medium focus:outline-none cursor-pointer py-1"
+                className="bg-transparent text-xs text-slate-200 font-medium focus:outline-none cursor-pointer w-full"
               >
                 <option value="ALL" className="bg-slate-800">Todos los Proveedores</option>
                 {SPARE_PARTS_PROVIDERS.map(prov => (
@@ -575,13 +629,13 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
             </div>
 
             {/* Filter by Status */}
-            <div className="flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <div className="flex-1 sm:flex-initial flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5">
+              <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <select
                 id="select-filter-status"
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="bg-transparent text-xs text-slate-200 font-medium focus:outline-none cursor-pointer py-1"
+                className="bg-transparent text-xs text-slate-200 font-medium focus:outline-none cursor-pointer w-full"
               >
                 <option value="ALL" className="bg-slate-800">Todos los Estados</option>
                 <option value="ALERTA" className="bg-slate-800 text-rose-400">⚠️ Solo ALERTA</option>
@@ -662,13 +716,14 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                 <th className="py-3 px-4 text-center">Mín. Requerido</th>
                 <th className="py-3 px-4 text-center">Unidad</th>
                 <th className="py-3 px-4 text-center">Estado</th>
+                <th className="py-3 px-4 text-center">Evidencia</th>
                 <th className="py-3 px-4">Observación</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-500">
+                  <td colSpan={11} className="py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Boxes className="w-10 h-10 text-slate-600 stroke-1" />
                       <p className="text-base font-medium text-slate-400">No hay registros de inspección disponibles</p>
@@ -710,7 +765,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                           {item.taller || '-'}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-medium text-slate-100 min-w-[220px]">
+                      <td className="py-3 px-4 font-medium text-slate-100 min-w-[200px]">
                         {item.repuesto}
                       </td>
                       <td className="py-3 px-4 text-center whitespace-nowrap">
@@ -743,6 +798,25 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                           </span>
                         )}
                       </td>
+                      {/* Evidencia Column */}
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        {item.evidencia ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedEvidenceView({
+                              url: item.evidencia || '',
+                              title: `Evidencia - Taller ${item.taller} (${item.fecha})`
+                            })}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-900/40 hover:bg-indigo-900/70 text-indigo-300 border border-indigo-700/60 text-xs font-semibold transition shadow-sm"
+                            title="Ver fotografía de evidencia"
+                          >
+                            <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>Ver Foto</span>
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-600">-</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-xs text-slate-400 max-w-xs truncate" title={item.observacion}>
                         {item.observacion || '-'}
                       </td>
@@ -755,42 +829,92 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
         </div>
       </div>
 
-      {/* FORMULARIO MODAL DE INSPECCIÓN COMPLETA POR TALLER */}
+      {/* MODAL PARA VER FOTOGRAFÍA DE EVIDENCIA */}
+      {selectedEvidenceView && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-4 sm:p-5 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-sm sm:text-base font-bold text-white truncate">
+                  {selectedEvidenceView.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedEvidenceView(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto flex items-center justify-center bg-black/60 rounded-xl p-2 min-h-[250px]">
+              <img
+                src={selectedEvidenceView.url}
+                alt="Evidencia repuestos"
+                className="max-h-[60vh] max-w-full object-contain rounded-lg shadow"
+              />
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+              {selectedEvidenceView.url.startsWith('http') ? (
+                <a
+                  href={selectedEvidenceView.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Abrir enlace original
+                </a>
+              ) : <span />}
+              <button
+                type="button"
+                onClick={() => setSelectedEvidenceView(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FORMULARIO MODAL DE INSPECCIÓN COMPLETA POR TALLER (100% RESPONSIVE EN MÓVIL + EVIDENCIAS) */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
           <div 
             id="modal-spare-part-full-inspection"
-            className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-5 my-6 text-slate-100 max-h-[92vh] flex flex-col"
+            className="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-4xl w-full p-3.5 sm:p-6 shadow-2xl space-y-4 my-2 sm:my-6 text-slate-100 max-h-[96vh] sm:max-h-[92vh] flex flex-col min-w-0"
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30">
-                  <ListChecks className="w-6 h-6" />
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 sm:pb-4 shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="p-2 sm:p-2.5 bg-indigo-600/20 text-indigo-400 rounded-xl border border-indigo-500/30 shrink-0">
+                  <ListChecks className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-white">Inspección de Stock Completo por Taller</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Registra las cantidades encontradas para todos los ítems críticos de <strong className="text-indigo-300">{tallerSeleccionado}</strong>.
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-xl font-bold text-white truncate">Inspección de Stock Completo</h3>
+                  <p className="text-[11px] sm:text-xs text-slate-400 truncate">
+                    Taller: <strong className="text-indigo-300 font-bold">{tallerSeleccionado}</strong> ({currentInspectionItems.length} repuestos)
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => !isSubmitting && setShowModal(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition shrink-0 ml-2"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleGuardarInspeccion} className="flex flex-col flex-1 overflow-hidden space-y-4">
-              {/* Paso 2: Campos Generales de la Inspección (Arriba, una sola vez) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-950/80 p-4 rounded-xl border border-slate-800 shrink-0">
+            <form onSubmit={handleGuardarInspeccion} className="flex flex-col flex-1 overflow-hidden space-y-3.5 sm:space-y-4 min-w-0">
+              {/* Campos Generales de la Inspección (Responsivo: 1 col móvil, 2 col tablet, 4 col desktop) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 bg-slate-950/80 p-3 sm:p-4 rounded-xl border border-slate-800 shrink-0">
                 {/* Fecha */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                     Fecha *
                   </label>
@@ -800,13 +924,13 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                     required
                     value={fecha}
                     onChange={(e) => setFecha(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 transition"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 transition min-h-[38px]"
                   />
                 </div>
 
                 {/* Inspector */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-indigo-400" />
                     Inspector *
                   </label>
@@ -814,16 +938,16 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                     id="form-inspection-inspector"
                     type="text"
                     required
-                    placeholder="Escribe el nombre del inspector"
+                    placeholder="Nombre del inspector"
                     value={inspector}
                     onChange={(e) => setInspector(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition min-h-[38px]"
                   />
                 </div>
 
                 {/* Proveedor */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5 text-indigo-400" />
                     Proveedor *
                   </label>
@@ -832,7 +956,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                     required
                     value={proveedor}
                     onChange={(e) => setProveedor(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 transition cursor-pointer min-h-[38px]"
                   >
                     {SPARE_PARTS_PROVIDERS.map(p => (
                       <option key={p} value={p} className="bg-slate-800">{p}</option>
@@ -842,7 +966,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
 
                 {/* Taller */}
                 <div>
-                  <label className="block text-xs font-bold text-indigo-300 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <label className="block text-[11px] sm:text-xs font-bold text-indigo-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                     <Store className="w-3.5 h-3.5 text-indigo-400" />
                     Taller Auditado *
                   </label>
@@ -851,7 +975,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                     required
                     value={tallerSeleccionado}
                     onChange={(e) => setTallerSeleccionado(e.target.value)}
-                    className="w-full px-3 py-2 bg-indigo-900/40 border border-indigo-500 rounded-lg text-xs text-white font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition cursor-pointer"
+                    className="w-full px-3 py-2 bg-indigo-900/40 border border-indigo-500 rounded-lg text-xs text-white font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition cursor-pointer min-h-[38px]"
                   >
                     {SPARE_PARTS_WORKSHOPS.map(w => (
                       <option key={w} value={w} className="bg-slate-800">{w}</option>
@@ -860,16 +984,70 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                 </div>
               </div>
 
+              {/* SECCIÓN DE CARGA DE EVIDENCIA (FOTOGRAFÍA) */}
+              <div className="bg-slate-950/80 p-3 sm:p-4 rounded-xl border border-slate-800 shrink-0 space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-indigo-400" />
+                    Evidencia Fotográfica de la Inspección (Opcional)
+                  </label>
+                  {evidencia && (
+                    <button
+                      type="button"
+                      onClick={() => setEvidencia('')}
+                      className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 self-start sm:self-auto font-medium"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Quitar fotografía
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                  <label className="cursor-pointer flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 rounded-xl text-xs font-bold transition shadow-sm min-h-[42px]">
+                    <Camera className="w-4 h-4 text-indigo-400" />
+                    <span>{evidencia ? 'Cambiar Fotografía' : 'Tomar Foto o Cargar Evidencia'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleEvidenciaChange}
+                      className="hidden"
+                    />
+                  </label>
+
+                  {isCompressing && (
+                    <div className="flex items-center gap-2 text-xs text-indigo-300">
+                      <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                      <span>Optimizando imagen...</span>
+                    </div>
+                  )}
+
+                  {evidencia && !isCompressing && (
+                    <div className="flex items-center gap-3 bg-slate-900/90 border border-slate-700/80 p-2 rounded-xl">
+                      <img
+                        src={evidencia}
+                        alt="Vista previa evidencia"
+                        className="h-12 w-16 object-cover rounded-lg border border-slate-700"
+                      />
+                      <div className="text-[11px] text-emerald-400 font-medium">
+                        ✓ Foto lista para guardar
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Status bar inside inspection header */}
-              <div className="flex items-center justify-between px-3 py-2 bg-slate-800/60 rounded-lg border border-slate-700/60 text-xs shrink-0">
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold text-slate-300">
-                    Catálogo de <strong className="text-white">{tallerSeleccionado}</strong> ({currentInspectionItems.length} ítems):
+              <div className="flex items-center justify-between px-3 py-2 bg-slate-800/60 rounded-lg border border-slate-700/60 text-xs shrink-0 flex-wrap gap-2">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                  <span className="font-semibold text-slate-300 text-[11px] sm:text-xs">
+                    Catálogo de <strong className="text-white">{tallerSeleccionado}</strong>:
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-bold">
+                  <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-bold text-[11px]">
                     {inspectionSummary.okCount} en OK
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-bold">
+                  <span className="px-2 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-800/60 font-bold text-[11px]">
                     {inspectionSummary.alertCount} en ALERTA
                   </span>
                 </div>
@@ -878,9 +1056,128 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                 </p>
               </div>
 
-              {/* TABLA CON TODOS LOS REPUESTOS DEL TALLER */}
-              <div className="flex-1 overflow-y-auto border border-slate-800 rounded-xl shadow-inner min-h-[220px]">
-                <table className="w-full text-left text-xs border-collapse">
+              {/* LISTA DE REPUESTOS DEL TALLER (ADAPTATIVA: Cards táctiles en Móvil, Tabla en Desktop) */}
+              <div className="flex-1 overflow-y-auto border border-slate-800 rounded-xl shadow-inner min-h-[220px] p-2 sm:p-0 bg-slate-950/40">
+                {/* 1. Vista Móvil: Cards táctiles independientes (pantallas < 768px) */}
+                <div className="block md:hidden space-y-2.5">
+                  {currentInspectionItems.map((item, index) => {
+                    const cantidad = cantidades[item.repuesto] ?? 0;
+                    const isAlert = cantidad < item.minimo;
+                    const deficit = item.minimo - cantidad;
+
+                    return (
+                      <div
+                        key={item.repuesto}
+                        className={`p-3 rounded-xl border transition-all ${
+                          isAlert
+                            ? 'bg-rose-950/30 border-rose-800/60 ring-1 ring-rose-500/20'
+                            : 'bg-slate-900/90 border-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2 pb-2 border-b border-slate-800/60">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                              #{index + 1}
+                            </span>
+                            <h4 className="font-bold text-white text-xs leading-snug">
+                              {item.repuesto}
+                            </h4>
+                          </div>
+                          {isAlert ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-rose-600/30 text-rose-200 border border-rose-500/60 shrink-0">
+                              <AlertTriangle className="w-3 h-3 text-rose-400" />
+                              ALERTA (-{deficit > 0 ? deficit : 0})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-600/20 text-emerald-300 border border-emerald-500/50 shrink-0">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              OK
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-2.5 items-center">
+                          <div className="text-[11px] text-slate-400 space-y-1">
+                            <div>
+                              Mínimo: <span className="font-bold font-mono text-slate-200 text-xs">{item.minimo}</span>
+                            </div>
+                            <div>
+                              Unidad: <span className="font-mono text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded text-[10px]">{item.und}</span>
+                            </div>
+                          </div>
+
+                          {/* Control de Cantidad con botones +/- en Celular */}
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = cantidades[item.repuesto] ?? 0;
+                                setCantidades({
+                                  ...cantidades,
+                                  [item.repuesto]: Math.max(0, current - 1)
+                                });
+                              }}
+                              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 active:scale-95 transition text-sm font-bold"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min="0"
+                              step="1"
+                              value={cantidades[item.repuesto] ?? 0}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                setCantidades({
+                                  ...cantidades,
+                                  [item.repuesto]: isNaN(val) ? 0 : Math.max(0, val)
+                                });
+                              }}
+                              className={`w-14 h-8 text-center font-bold rounded-lg border text-sm focus:outline-none transition ${
+                                isAlert 
+                                  ? 'bg-rose-950 border-rose-600 text-rose-200 focus:border-rose-400' 
+                                  : 'bg-slate-800 border-slate-700 text-emerald-300 focus:border-emerald-500'
+                              }`}
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = cantidades[item.repuesto] ?? 0;
+                                setCantidades({
+                                  ...cantidades,
+                                  [item.repuesto]: current + 1
+                                });
+                              }}
+                              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 active:scale-95 transition text-sm font-bold"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Observación en Móvil */}
+                        <div className="pt-2">
+                          <input
+                            type="text"
+                            placeholder="Observación opcional..."
+                            value={observaciones[item.repuesto] || ''}
+                            onChange={(e) => setObservaciones({
+                              ...observaciones,
+                              [item.repuesto]: e.target.value
+                            })}
+                            className="w-full px-2.5 py-1.5 bg-slate-950/70 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 2. Vista Desktop / Tablet: Tabla estructurada (pantallas >= 768px) */}
+                <table className="hidden md:table w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider border-b border-slate-800 sticky top-0 z-10 shadow-sm">
                     <tr>
                       <th className="py-2.5 px-3">#</th>
@@ -932,6 +1229,7 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                           <td className="py-2.5 px-3 text-center">
                             <input
                               type="number"
+                              inputMode="numeric"
                               min="0"
                               step="1"
                               value={cantidades[item.repuesto] ?? 0}
@@ -1006,18 +1304,18 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                 </div>
               )}
 
-              {/* Modal Actions: Un solo botón "Guardar inspección" */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-800 shrink-0">
-                <p className="text-xs text-slate-400">
-                  Se enviarán <strong>{currentInspectionItems.length}</strong> registros en un solo lote a la hoja REPUESTO.
+              {/* Modal Actions: Responsivo en móvil (en columna o fila) */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-800 shrink-0">
+                <p className="text-[11px] sm:text-xs text-slate-400 text-center sm:text-left">
+                  Se enviarán <strong>{currentInspectionItems.length}</strong> registros en lote a la hoja REPUESTO.
                 </p>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
                     disabled={isSubmitting}
-                    className="px-4 py-2.5 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition disabled:opacity-50"
+                    className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs sm:text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition disabled:opacity-50 border border-slate-700/50 min-h-[42px]"
                   >
                     Cancelar
                   </button>
@@ -1025,12 +1323,12 @@ export const SparePartsModule: React.FC<SparePartsModuleProps> = ({
                     id="btn-submit-full-inspection"
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer min-h-[42px]"
                   >
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Guardando inspección completa...</span>
+                        <span>Guardando inspección...</span>
                       </>
                     ) : (
                       <>

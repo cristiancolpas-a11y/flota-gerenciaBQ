@@ -21,6 +21,9 @@ export const WASH_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
 // Script propio del documento de Auditoría Estándar (1HnykQOr...)
 export const AUDIT_STANDARD_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
 
+// Script que atiende el documento de Calidad y Seguridad (hoja CIERRE1, doc 1HnykQOr...)
+export const CALIDAD_SEG_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyWPA_veHmVseG7MlJIMzgY7czzdUlLvqsNqkbGXSEEqjdYggZ_5c5ObkOVdT4z1e-7Vg/exec';
+
 // Script propio del módulo Cierre de Novedades (doc 1y58Rna0...)
 export const CIERRE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
 
@@ -2295,6 +2298,7 @@ export const uploadImageToDrive = async (base64Data: string, fileName: string): 
   };
 
   const scriptUrls = [
+    CALIDAD_SEG_SCRIPT_URL,
     AUDIT_STANDARD_SCRIPT_URL,
     OPERATIONAL_SCRIPT_URL,
     getGoogleScriptUrl()
@@ -3667,17 +3671,18 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
       ...data, 
       status: finalStatus,
       estado: finalStatus,
-      docId: getAuditQsDocId() 
+      docId: '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
+      sheetName: 'CIERRE1'
     }
   };
   try {
-    const result = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, true);
+    const result = await sendToGAS(payload, CALIDAD_SEG_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
   } catch (err) {
     console.warn("Cierre calidad con CORS falló, intentando fallback:", err);
   }
-  const ok = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, false);
+  const ok = await sendToGAS(payload, CALIDAD_SEG_SCRIPT_URL, false);
   return !!ok;
 };
 
@@ -3688,8 +3693,8 @@ export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]
       return csvRes;
     }
     const docIds = [
-      getAuditQsDocId(),
       '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
+      getAuditQsDocId(),
       '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs'
     ];
     const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
@@ -3699,7 +3704,7 @@ export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]
     for (const docId of uniqueDocIds) {
       for (const sheetName of sheets) {
         try {
-          const fetched = await fetchDataFromGAS(docId, sheetName, AUDIT_STANDARD_SCRIPT_URL);
+          const fetched = await fetchDataFromGAS(docId, sheetName, CALIDAD_SEG_SCRIPT_URL);
           if (fetched && fetched.length >= 2) {
             rows = fetched;
             break;
@@ -3723,8 +3728,8 @@ export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]
 
 const fetchCalidadCierreFromSheetCSV = async (): Promise<FleetCierreRecord[]> => {
   const docIds = [
-    getAuditQsDocId(),
     '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
+    getAuditQsDocId(),
     '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs'
   ];
   const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
@@ -4486,6 +4491,7 @@ const processSparePartRows = (rows: any[][]): SparePartRecord[] => {
         estado = (cantidad < minimo) ? 'ALERTA' : 'OK';
       }
       const observacion = cleanSheetValue(row[9]);
+      const evidencia = cleanSheetValue(row[10]);
 
       return {
         id: `rep-${i}-${repuesto}-${fecha}`,
@@ -4498,7 +4504,8 @@ const processSparePartRows = (rows: any[][]): SparePartRecord[] => {
         minimo,
         und,
         estado,
-        observacion
+        observacion,
+        evidencia
       };
     });
 };
@@ -4521,7 +4528,8 @@ export const submitSparePartToSheet = async (data: Partial<SparePartRecord>): Pr
     minimo: minimo,
     und: data.und || 'UND',
     estado: estado,
-    observacion: data.observacion || ''
+    observacion: data.observacion || '',
+    evidencia: data.evidencia || ''
   };
 
   try {
@@ -4545,6 +4553,7 @@ export const submitSparePartInspection = async (inspection: {
   proveedor: string;
   taller: string;
   items: { repuesto: string; cantidad: number; minimo: number; und: string; observacion?: string }[];
+  evidencia?: string;
 }): Promise<boolean> => {
   const payloadData = {
     docId: getSparePartsDocId(),
