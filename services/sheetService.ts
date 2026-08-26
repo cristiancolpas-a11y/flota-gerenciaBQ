@@ -2280,33 +2280,61 @@ export const submitWorkshopRecordToSheet = async (data: any): Promise<void> => {
  * DRIVE UPLOAD
  */
 export const uploadImageToDrive = async (base64Data: string, fileName: string): Promise<string> => {
-  try {
-    const payload = {
-      method: 'UPLOAD_IMAGE',
-      data: {
-        base64: base64Data,
-        name: fileName
-      }
-    };
-    
-    const response = await fetch(getGoogleScriptUrl(), {
-      method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'text/plain',
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const result = await response.json();
-    if (result.status === 'success') {
-      return result.message; // El URL viene en el campo message según el formato estándar de GAS
-    }
-    throw new Error(result.message || 'Error al subir a Drive');
-  } catch (error) {
-    console.error("Error uploadImageToDrive:", error);
-    throw error;
+  if (!base64Data || typeof base64Data !== 'string') return '';
+  // Si ya es una URL web válida de Drive o HTTP, retornarla directamente
+  if (base64Data.startsWith('http://') || base64Data.startsWith('https://')) {
+    return base64Data;
   }
+
+  const payload = {
+    method: 'UPLOAD_IMAGE',
+    data: {
+      base64: base64Data,
+      name: fileName
+    }
+  };
+
+  const scriptUrls = [
+    AUDIT_STANDARD_SCRIPT_URL,
+    OPERATIONAL_SCRIPT_URL,
+    getGoogleScriptUrl()
+  ];
+
+  for (const scriptUrl of scriptUrls) {
+    if (!scriptUrl) continue;
+    try {
+      const response = await fetch(scriptUrl, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const text = await response.text();
+      if (!text || text.includes('<!DOCTYPE html')) continue;
+      
+      try {
+        const result = JSON.parse(text);
+        if (result && (result.status === 'success' || result.status === 'ok')) {
+          const url = result.message || result.url || result.data;
+          if (url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:image'))) {
+            return url;
+          }
+        }
+      } catch (parseErr) {
+        if (text.startsWith('http')) return text.trim();
+      }
+    } catch (err) {
+      console.warn(`uploadImageToDrive falló con ${scriptUrl}, intentando siguiente endpoint:`, err);
+    }
+  }
+
+  // Graceful fallback: si los scripts de Google Drive no están disponibles o dan error,
+  // devolvemos el string base64 para que la evidencia nunca se pierda y no bloquee el cierre
+  console.warn("uploadImageToDrive: No se pudo obtener enlace de Drive en ningún script, usando base64 como fallback.");
+  return base64Data;
 };
 
 /**
@@ -2818,9 +2846,21 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
 };
 
 export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolean> => {
+  const rawEv = data.evidence || data.evidencia || data.evidenceAfter || data.evidenceBefore || '';
+  const hasEvidence = !!(rawEv && (typeof rawEv === 'string' ? rawEv.trim().length > 0 : Array.isArray(rawEv) ? rawEv.length > 0 : true));
+  const finalStatus = (hasEvidence || data.status === 'REALIZADO' || data.estado === 'REALIZADO') 
+    ? 'REALIZADO' 
+    : (data.status || data.estado || 'REALIZADO');
+
   const payload = {
     method: 'POST_CIERRE_UPDATE',
-    data: { ...data, docId: getControlTowerDocId(), sheetName: 'cierre' }
+    data: { 
+      ...data, 
+      estado: finalStatus,
+      status: finalStatus,
+      docId: getControlTowerDocId(), 
+      sheetName: 'cierre' 
+    }
   };
   try {
     const result = await sendToGAS(payload, CIERRE_SCRIPT_URL, true);
@@ -2834,7 +2874,20 @@ export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolea
 };
 
 export const submitAuditUpdateToSheet = async (data: any): Promise<boolean> => {
-  return await sendToGAS({ method: 'POST_AUDIT_UPDATE', data }, getGoogleScriptUrl());
+  const rawEv = data.evidence || data.evidencia || '';
+  const hasEvidence = !!(rawEv && (typeof rawEv === 'string' ? rawEv.trim().length > 0 : Array.isArray(rawEv) ? rawEv.length > 0 : true));
+  const finalStatus = (hasEvidence || data.status === 'REALIZADO' || data.estado === 'REALIZADO') 
+    ? 'REALIZADO' 
+    : (data.status || data.estado || 'REALIZADO');
+
+  return await sendToGAS({ 
+    method: 'POST_AUDIT_UPDATE', 
+    data: {
+      ...data,
+      status: finalStatus,
+      estado: finalStatus
+    } 
+  }, getGoogleScriptUrl());
 };
 
 export const submitPreventiveUpdateToSheet = async (data: {
@@ -3386,28 +3439,36 @@ export const submitFleetStandardAuditUpdateToSheet = async (data: any): Promise<
 };
 
 export const submitFleetCierreUpdateToSheet = async (data: any): Promise<boolean> => {
-  const docIds = ['1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs', '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60'];
-  const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
+  const docId = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
+  const rawEv = data.evidence || data.evidencia || data.evidenceAfter || '';
+  const hasEvidence = !!(rawEv && (typeof rawEv === 'string' ? rawEv.trim().length > 0 : Array.isArray(rawEv) ? rawEv.length > 0 : true));
+  const finalStatus = (hasEvidence || data.status === 'REALIZADO' || data.estado === 'REALIZADO') 
+    ? 'REALIZADO' 
+    : (data.status || data.estado || 'REALIZADO');
+
   const payloadData = {
     ...data,
     placa: data.placa || data.plate || '',
     plate: data.plate || data.placa || '',
-    estado: data.estado || data.status || '',
-    status: data.status || data.estado || '',
-    evidencia: data.evidencia || data.evidence || '',
-    evidence: data.evidence || data.evidencia || '',
+    estado: finalStatus,
+    status: finalStatus,
+    evidencia: rawEv,
+    evidence: rawEv,
     verificacion: data.verificacion || data.verification || '',
-    verification: data.verification || data.verificacion || ''
+    verification: data.verification || data.verificacion || '',
+    docId
   };
-  const results = await Promise.all(
-    uniqueDocIds.map(docId =>
-      sendToGAS({
-        method: 'POST_FLEET_CIERRE_UPDATE',
-        data: { ...payloadData, docId }
-      }, getGoogleScriptUrl(), true)
-    )
-  );
-  return results.some(r => !!r);
+
+  try {
+    const result = await sendToGAS({ method: 'POST_FLEET_CIERRE_UPDATE', data: payloadData }, CIERRE_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+  } catch (err) {
+    console.warn("Cierre con CORS falló, fallback:", err);
+  }
+
+  const ok = await sendToGAS({ method: 'POST_FLEET_CIERRE_UPDATE', data: payloadData }, CIERRE_SCRIPT_URL, false);
+  return !!ok;
 };
 
 export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
@@ -3429,7 +3490,7 @@ export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> 
     for (const docId of uniqueDocIds) {
       for (const sheetName of sheets) {
         try {
-          const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
+          const fetched = await fetchDataFromGAS(docId, sheetName, CIERRE_SCRIPT_URL);
           if (fetched && fetched.length >= 2) {
             rows = fetched;
             break;
@@ -3594,9 +3655,20 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
   evidence: string | string[];
   verification?: string;
 }): Promise<boolean> => {
+  const rawEv = data.evidence || '';
+  const hasEvidence = !!(rawEv && (typeof rawEv === 'string' ? rawEv.trim().length > 0 : Array.isArray(rawEv) ? rawEv.length > 0 : true));
+  const finalStatus = (hasEvidence || data.status === 'REALIZADO' || data.status === 'CERRADO') 
+    ? (data.status === 'CERRADO' ? 'CERRADO' : 'REALIZADO') 
+    : (data.status || 'REALIZADO');
+
   const payload = {
     method: 'POST_CALIDAD_CIERRE_UPDATE',
-    data: { ...data, docId: getAuditQsDocId() }
+    data: { 
+      ...data, 
+      status: finalStatus,
+      estado: finalStatus,
+      docId: getAuditQsDocId() 
+    }
   };
   try {
     const result = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, true);

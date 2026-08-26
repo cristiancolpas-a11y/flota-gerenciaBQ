@@ -426,10 +426,15 @@ const ExecutiveAuditDashboard: React.FC = () => {
         finalEvidence = await uploadImageToDrive(base64, `CIERRE_QS_${selectedCierre.placa}_${Date.now()}.jpg`);
       }
 
+      const hasEvidence = (finalEvidence && finalEvidence.trim().length > 0) || cierreFiles.length > 0;
+      const finalStatus = (hasEvidence || cierreEvidenceData.estado === 'REALIZADO' || cierreEvidenceData.estado === 'CERRADO') 
+        ? (cierreEvidenceData.estado === 'CERRADO' ? 'CERRADO' : 'REALIZADO') 
+        : (cierreEvidenceData.estado || 'REALIZADO');
+
       // Track locally immediately to avoid Google Sheet stale cache reversion
       const updateKey = `${selectedCierre.placa.toUpperCase().trim()}_${selectedCierre.item.toUpperCase().trim()}`;
       localUpdatesRef.current[updateKey] = {
-        estado: cierreEvidenceData.estado,
+        estado: finalStatus,
         evidencia: finalEvidence,
         verificacion: cierreEvidenceData.verificacion || 'SI'
       };
@@ -438,7 +443,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
         if (c.placa === selectedCierre.placa && c.item === selectedCierre.item) {
           return {
             ...c,
-            estado: cierreEvidenceData.estado,
+            estado: finalStatus,
             evidencia: finalEvidence,
             verificacion: cierreEvidenceData.verificacion
           };
@@ -452,7 +457,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
       submitCalidadCierreUpdateToSheet({
         plate: selectedCierre.placa,
         item: selectedCierre.item,
-        status: cierreEvidenceData.estado,
+        status: finalStatus,
         evidence: finalEvidence,
         verification: cierreEvidenceData.verificacion
       }).catch(err => console.error("Error background syncing calidad cierre:", err));

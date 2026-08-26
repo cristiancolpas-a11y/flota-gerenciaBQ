@@ -1146,7 +1146,8 @@ function doPost(e) {
 
         if (foundIdx !== -1) {
           // Col 73 (BU): Fecha Novedad | 74 (BV): Estado | 75 (BW): Evidencia | 76 (BX): Observación
-          if (d.status) s.getRange(foundIdx, 74).setValue(d.status);
+          var statusToSet = (d.evidence || d.status === "REALIZADO") ? "REALIZADO" : (d.status || "REALIZADO");
+          s.getRange(foundIdx, 74).setValue(statusToSet);
           if (d.noveltyObservation) s.getRange(foundIdx, 76).setValue(d.noveltyObservation);
           if (d.noveltyDate) s.getRange(foundIdx, 73).setValue(d.noveltyDate);
 
@@ -1240,8 +1241,8 @@ function doPost(e) {
             s.getRange(foundIdx, 7).setValue(evidenceUrl);
           }
 
-          // Col 8 en 1-based (índice 7 base 0 = columna H / ESTADO)
-          var nuevoEstado = d.estado || d.status || "REALIZADO";
+          // Col 8 en 1-based (índice 7 base 0 = columna H / ESTADO): Al subir evidencia el estado siempre es REALIZADO
+          var nuevoEstado = (rawEv || d.estado === "REALIZADO" || d.status === "REALIZADO") ? "REALIZADO" : (d.estado || d.status || "REALIZADO");
           s.getRange(foundIdx, 8).setValue(nuevoEstado);
 
           if (lock.hasLock()) lock.releaseLock();
@@ -1252,7 +1253,12 @@ function doPost(e) {
         }
       }
       else if (m === 'POST_FLEET_CIERRE_UPDATE') {
-        var s = findSheetCaseInsensitive(ss, "CIERRE") || ss.getSheetByName("CIERRE");
+        var targetDocId = cleanId(d.docId || ID_HOJA);
+        var ssFleet = null;
+        try { ssFleet = SpreadsheetApp.openById(targetDocId); } catch(e) {}
+        if (!ssFleet) ssFleet = ss;
+
+        var s = findSheetCaseInsensitive(ssFleet, "CIERRE") || ssFleet.getSheetByName("CIERRE") || ssFleet.getSheetByName("cierre") || ssFleet.getSheets()[0];
         if (!s) {
           if (lock.hasLock()) lock.releaseLock();
           return output("error", "Hoja CIERRE no encontrada");
@@ -1293,6 +1299,10 @@ function doPost(e) {
             }
             s.getRange(foundIdx, 7).setValue(evidenceUrl);
           }
+
+          // Al subir evidencia el estado es REALIZADO
+          var nuevoEstado = (d.evidence || d.estado === "REALIZADO" || d.status === "REALIZADO") ? "REALIZADO" : (d.estado || d.status || "REALIZADO");
+          s.getRange(foundIdx, 8).setValue(nuevoEstado);
 
           if (lock.hasLock()) lock.releaseLock();
           return output("success", "Cierre de auditoría actualizado en hoja CIERRE, fila " + foundIdx);
@@ -1342,6 +1352,10 @@ function doPost(e) {
             }
             s.getRange(foundIdx, 6).setValue(evidenceUrl);
           }
+
+          // Actualizar Estado en columna 7 (G) de CIERRE1 a REALIZADO cuando se sube evidencia
+          var nuevoEstadoCalidad = (d.evidence || d.estado === "REALIZADO" || d.status === "REALIZADO" || d.status === "CERRADO") ? (d.status === "CERRADO" ? "CERRADO" : "REALIZADO") : (d.estado || d.status || "REALIZADO");
+          s.getRange(foundIdx, 7).setValue(nuevoEstadoCalidad);
 
           if (lock.hasLock()) lock.releaseLock();
           return output("success", "Cierre de calidad actualizado en hoja CIERRE1, fila " + foundIdx);

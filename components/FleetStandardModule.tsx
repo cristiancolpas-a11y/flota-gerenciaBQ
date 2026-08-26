@@ -300,6 +300,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
+      setNoveltyStatus("REALIZADO");
       Array.from(files)
         .slice(0, 4 - noveltyEvidence.length)
         .forEach((file: File) => {
@@ -334,6 +335,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
     const files = Array.from(e.dataTransfer.files || []) as File[];
     const imageFiles = files.filter(f => f.type && f.type.startsWith('image/'));
     if (imageFiles.length > 0) {
+      setNoveltyStatus("REALIZADO");
       const remainingSlots = 4 - noveltyEvidence.length;
       imageFiles.slice(0, remainingSlots).forEach((file: File) => {
         const reader = new FileReader();
@@ -387,13 +389,17 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
         finalEvidence = httpLinks.join(", ");
       }
 
+      // Si se adjunta evidencia o el estado es REALIZADO, siempre consolidar REALIZADO
+      const hasEvidence = (finalEvidence && finalEvidence.trim().length > 0) || noveltyEvidence.length > 0;
+      const effectiveStatus = (hasEvidence || noveltyStatus === "REALIZADO") ? "REALIZADO" : (noveltyStatus || "REALIZADO");
+
       // Perform local optimistic update immediately so UI reflects change instantly
       if (selectedNovelty.isCierre) {
-        selectedNovelty.status = noveltyStatus;
+        selectedNovelty.status = effectiveStatus;
         selectedNovelty.verification = noveltyVerification;
         selectedNovelty.evidence = finalEvidence;
       } else {
-        selectedNovelty.status = noveltyStatus;
+        selectedNovelty.status = effectiveStatus;
         selectedNovelty.evidence = finalEvidence;
         selectedNovelty.observations = noveltyObs;
       }
@@ -404,14 +410,14 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
             id: selectedNovelty.id,
             plate: selectedNovelty.plate,
             item: selectedNovelty.observations,
-            status: noveltyStatus,
+            status: effectiveStatus,
             evidence: finalEvidence,
             verification: noveltyVerification
           }, true);
         } else {
           onUpdateRecord({
             id: selectedNovelty.id,
-            status: noveltyStatus,
+            status: effectiveStatus,
             noveltyDate: new Date().toISOString().split("T")[0],
             evidence: finalEvidence,
             noveltyObservation: noveltyObs,
@@ -427,14 +433,14 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
         submitFleetCierreUpdateToSheet({
           plate: selectedNovelty.plate,
           item: selectedNovelty.observations, // observations maps to c.item
-          status: noveltyStatus,
+          status: effectiveStatus,
           evidence: finalEvidence,
           verification: noveltyVerification
         }).catch(err => console.error("Error background syncing cierre:", err));
       } else {
         submitAuditUpdateToSheet({
           id: selectedNovelty.id,
-          status: noveltyStatus,
+          status: effectiveStatus,
           noveltyDate: new Date().toISOString().split("T")[0],
           evidence: finalEvidence,
           noveltyObservation: noveltyObs,

@@ -487,6 +487,20 @@ function doPost(e) {
       }
     }
 
+    // -------------------------------------------------------------------------------------
+    // MÉTODO: UPLOAD_IMAGE (Subida directa de imágenes a Google Drive)
+    // -------------------------------------------------------------------------------------
+    if (method === "UPLOAD_IMAGE" || method === "UPLOADIMAGE") {
+      var imgToSave = (data && (data.base64 || data.evidence || data.url)) || (payload && (payload.base64 || payload.evidence || payload.url)) || "";
+      var imgName = (data && data.name) || (payload && payload.name) || "IMG_EVIDENCIA";
+      var uploadedUrl = saveBase64ToDrive(imgToSave, imgName);
+      if (lock.hasLock()) lock.releaseLock();
+      return createJsonResponse({
+        status: "success",
+        message: uploadedUrl || imgToSave
+      });
+    }
+
     if (lock.hasLock()) lock.releaseLock();
     return createJsonResponse({
       status: "error",
