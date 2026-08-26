@@ -312,7 +312,8 @@ const CalibrationForm: React.FC<CalibrationFormProps> = ({ onClose, onSubmit, ve
                 <option value="GARCILLANTAS">GARCILLANTAS</option>
                 <option value="OMNIPOTENTE">OMNIPOTENTE</option>
                 <option value="LLANTERIA PATIÑO">LLANTERIA PATIÑO</option>
-                {formData.taller && !["AUTOMUNDIAL", "GARCILLANTAS", "OMNIPOTENTE", "LLANTERIA PATIÑO"].includes(formData.taller) && (
+                <option value="VEHIPESA">VEHIPESA</option>
+                {formData.taller && !["AUTOMUNDIAL", "GARCILLANTAS", "OMNIPOTENTE", "LLANTERIA PATIÑO", "VEHIPESA"].includes(formData.taller) && (
                   <option value={formData.taller}>{formData.taller}</option>
                 )}
               </select>
