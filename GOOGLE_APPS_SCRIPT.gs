@@ -1176,48 +1176,79 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "Auditoria no encontrada con ID: " + idSearch);
       }
-      else if (m === 'POST_CONTROL_TOWER_UPDATE') {
+      else if (m === 'POST_CIERRE_UPDATE' || m === 'POST_CONTROL_TOWER_UPDATE') {
+        var sheetName = d.sheetName || "cierre";
         var targetDocId = cleanId(d.docId || ID_HOJA);
-        var ssCT = SpreadsheetApp.openById(targetDocId);
-        var s = findSheetCaseInsensitive(ssCT, "CIERRE DE NOVEDADES") || ssCT.getSheetByName("CIERRE DE NOVEDADES") || ssCT.getSheets()[0];
+        var ssCT = null;
+        try { ssCT = SpreadsheetApp.openById(targetDocId); } catch(e) {}
+        if (!ssCT) ssCT = ss;
+
+        var s = findSheetCaseInsensitive(ssCT, sheetName) || ssCT.getSheetByName(sheetName) || ssCT.getSheets()[0];
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "Hoja " + sheetName + " no encontrada");
+        }
         var rows = s.getDataRange().getValues();
         var foundIdx = -1;
-        var plateSearch = (d.plate || "").toString().toUpperCase().trim();
-        var noveltySearch = (d.novelty || "").toString().trim();
-        var dateSearch = (d.reportDate || "").toString().trim();
+        var plateSearch = (d.plate || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+        var itemSearch = (d.item || d.novelty || "").toString().toLowerCase().trim();
 
+        // Buscar por PLACA (col 1 / índice 1) e ITEM (col 4 / índice 4)
         for (var i = 1; i < rows.length; i++) {
-          var rowPlate = (rows[i][5] || "").toString().toUpperCase().trim();
-          var rowNovelty = (rows[i][7] || "").toString().trim();
-          var rowDateRaw = rows[i][2];
-          var rowDateStr = "";
+          var rowPlate = (rows[i][1] || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+          var rowItem = (rows[i][4] || "").toString().toLowerCase().trim();
 
-          if (rowDateRaw instanceof Date) {
-            rowDateStr = Utilities.formatDate(rowDateRaw, ssCT.getSpreadsheetTimeZone(), "yyyy-MM-dd");
-          } else if (rowDateRaw) {
-            rowDateStr = rowDateRaw.toString();
-          }
-
-          if (rowPlate === plateSearch && rowNovelty === noveltySearch && rowDateStr.indexOf(dateSearch) !== -1) {
+          if (rowPlate === plateSearch && (rowItem === itemSearch || itemSearch === "")) {
             foundIdx = i + 1;
-            break;
+            var rowStatus = (rows[i][7] || "").toString().trim().toUpperCase();
+            if (rowStatus === "PENDIENTE" || rowStatus === "") break;
+          }
+        }
+
+        // Fallback: si no encontró en col 1/4, intentar buscar en formato previo (col 5 placa / col 7 novedad)
+        if (foundIdx === -1) {
+          for (var i = 1; i < rows.length; i++) {
+            var rP = (rows[i][5] || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+            var rN = (rows[i][7] || "").toString().toLowerCase().trim();
+            if (rP === plateSearch && (rN === itemSearch || itemSearch === "")) {
+              foundIdx = i + 1;
+              break;
+            }
           }
         }
 
         if (foundIdx !== -1) {
-          if (d.evidenceBefore) {
-            var imgBefore = sImg(d.evidenceBefore, "CT_BEFORE_" + plateSearch);
-            s.getRange(foundIdx, 20).setValue(imgBefore);
+          var evidenceUrl = "";
+          var rawEv = d.evidence || d.evidenceAfter || d.evidenceBefore;
+          if (rawEv) {
+            if (Array.isArray(rawEv)) {
+              var links = [];
+              for (var j = 0; j < rawEv.length; j++) {
+                if (rawEv[j] && (rawEv[j].indexOf("data:image") === 0 || rawEv[j].indexOf("http") !== 0)) {
+                  links.push(sImg(rawEv[j], "CIERRE_" + plateSearch + "_" + j));
+                } else if (rawEv[j]) {
+                  links.push(rawEv[j]);
+                }
+              }
+              evidenceUrl = links.join(", ");
+            } else if (typeof rawEv === 'string' && rawEv.indexOf("data:image") === 0) {
+              evidenceUrl = sImg(rawEv, "CIERRE_" + plateSearch);
+            } else {
+              evidenceUrl = rawEv;
+            }
+            // Col 7 en 1-based (índice 6 base 0 = columna G / EVIDENCIA)
+            s.getRange(foundIdx, 7).setValue(evidenceUrl);
           }
-          if (d.evidenceAfter) {
-            var imgAfter = sImg(d.evidenceAfter, "CT_AFTER_" + plateSearch);
-            s.getRange(foundIdx, 21).setValue(imgAfter);
-          }
+
+          // Col 8 en 1-based (índice 7 base 0 = columna H / ESTADO)
+          var nuevoEstado = d.estado || d.status || "REALIZADO";
+          s.getRange(foundIdx, 8).setValue(nuevoEstado);
+
           if (lock.hasLock()) lock.releaseLock();
-          return output("success", "Evidencias actualizadas en fila " + foundIdx);
+          return output("success", "Cierre de novedad actualizado en hoja " + sheetName + ", fila " + foundIdx);
         } else {
           if (lock.hasLock()) lock.releaseLock();
-          return output("error", "No se encontró el registro para " + plateSearch + " (" + dateSearch + ")");
+          return output("error", "No se encontró registro en " + sheetName + " para: Placa " + plateSearch + ", Item " + itemSearch);
         }
       }
       else if (m === 'POST_FLEET_CIERRE_UPDATE') {

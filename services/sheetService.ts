@@ -18,6 +18,12 @@ export const WORKSHOP_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
 export const CLEANING_5S_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
 export const WASH_SCRIPT_URL = OPERATIONAL_SCRIPT_URL;
 
+// Script propio del documento de Auditoría Estándar (1HnykQOr...)
+export const AUDIT_STANDARD_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
+
+// Script propio del módulo Cierre de Novedades (doc 1y58Rna0...)
+export const CIERRE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
+
 export const sanitizeScriptUrl = (url: string): string => {
   if (!url) return '';
   let cleaned = url.trim();
@@ -153,12 +159,7 @@ export const getFinesSheetId = (): string => {
 };
 
 export const getControlTowerDocId = (): string => {
-  const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_CONTROL_TOWER_ID') : null;
-  const clean = cleanSpreadsheetId(stored || '');
-  if (!clean || clean === '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU') {
-    return CONTROL_TOWER_DOC_ID;
-  }
-  return clean;
+  return '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
 };
 
 export const getAuditDocId = (): string => {
@@ -221,9 +222,9 @@ const DISPONIBILIDAD_GID = '1143899477'; // Aproximate, check later if needed
 const CHECKLIST_DOC_ID = '1i6qGjwhQW3AeR1ja5UxZkOXjJU3oh0f_8Grt131NQzk';
 const CHECKLIST_GALAPA_DOC_ID = '14kak0CqSnX9oOXk0GKD0G_QIt5aJxuCu9-_Livst70Y';
 
-// TORRE DE CONTROL
-const CONTROL_TOWER_DOC_ID = '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60';
-const CONTROL_TOWER_GID = '1012312873';
+// TORRE DE CONTROL / CIERRE DE NOVEDADES
+const CONTROL_TOWER_DOC_ID = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
+const CONTROL_TOWER_GID = '1993951123';
 
 const AUDIT_DOC_ID = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
 const FLEET_AVAILABILITY_DOC_ID = '1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E';
@@ -2631,10 +2632,6 @@ const fetchOperatorsFromSheetCSV = async (): Promise<OperatorRecord[]> => {
   }
 };
 
-export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolean> => {
-  return await sendToGAS({ method: 'POST_CONTROL_TOWER_UPDATE', data: { ...data, docId: getControlTowerDocId() } }, getGoogleScriptUrl(), true);
-};
-
 export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
   const contractors = ["OPERADOR LOGÍSTICO SAS", "LOGISFLOTA S.A.", "COPETRAN"];
   const novelties = [
@@ -2699,13 +2696,65 @@ export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
   });
 };
 
+const processControlTowerRows = (rows: any[][]): ControlTowerRecord[] => {
+  if (!rows || rows.length < 2) return [];
+  const rowsWithoutHeader = rows.slice(1);
+  const filteredRows = rowsWithoutHeader.filter(row => row && (cleanSheetValue(row[1]) || cleanSheetValue(row[4])));
+
+  return filteredRows.map((row, i): ControlTowerRecord => {
+    const rawFecha = cleanSheetValue(row[0]);
+    const rawPlaca = cleanSheetValue(row[1]);
+    const rawCd = cleanSheetValue(row[2]);
+    const rawContratista = cleanSheetValue(row[3]);
+    const rawItem = cleanSheetValue(row[4]);
+    const rawVerificacion = cleanSheetValue(row[5]);
+    const rawEvidencia = cleanSheetValue(row[6]);
+    const rawEstado = cleanSheetValue(row[7]) || (rawEvidencia ? 'REALIZADO' : 'PENDIENTE');
+
+    const isClosed = rawEstado.toUpperCase() === 'REALIZADO' || rawEstado.toUpperCase() === 'CERRADO' || rawEstado.toUpperCase() === 'COMPLETADO';
+
+    let dateObj = new Date();
+    if (rawFecha) {
+      const parsedD = new Date(rawFecha);
+      if (!isNaN(parsedD.getTime())) dateObj = parsedD;
+    }
+
+    const weekStr = `W${Math.ceil((dateObj.getDate() || 1) / 7)}`;
+    const monthStr = dateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+
+    return {
+      id: `ct-${i}-${rawPlaca || 'item'}`,
+      contractor: rawContratista || 'LOGISTICA',
+      cd: rawCd || 'GENERAL',
+      reportDate: parseFlexibleDate(rawFecha),
+      week: weekStr,
+      month: monthStr,
+      plate: normalizePlate(rawPlaca),
+      source: 'Cierre de Novedades',
+      novelty: rawItem,
+      system: 'General',
+      status: rawEstado,
+      criticality: 'Media',
+      solutionDate: isClosed ? parseFlexibleDate(rawFecha) : '',
+      closureDays: isClosed ? 1 : 0,
+      daysToClose: isClosed ? 0 : 1,
+      maintenanceCompliance: isClosed ? 'Cumple' : 'No Cumple',
+      maintenanceGoal: 95,
+      workshopGoal: 90,
+      workshopResponsePercentage: isClosed ? 100 : 0,
+      observations: rawVerificacion,
+      evidenceBefore: rawEvidencia,
+      evidenceAfter: rawEvidencia,
+    };
+  });
+};
+
 export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]> => {
   try {
     const docId = getControlTowerDocId();
-    const scriptUrl = getGoogleScriptUrl();
-    console.log("[fetchControlTowerFromSheet] Iniciando lectura. DocID:", docId, "| ScriptUrl:", scriptUrl);
+    console.log("[fetchControlTowerFromSheet] Iniciando lectura. DocID:", docId, "| ScriptUrl:", CIERRE_SCRIPT_URL);
 
-    const rows = await fetchDataFromGAS(docId, 'CIERRE DE NOVEDADES', scriptUrl);
+    const rows = await fetchDataFromGAS(docId, 'cierre', CIERRE_SCRIPT_URL);
     console.log("[fetchControlTowerFromSheet] Filas recibidas de fetchDataFromGAS:", rows ? rows.length : 0);
     
     if (!rows || rows.length < 2) {
@@ -2713,45 +2762,7 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
       return fetchControlTowerFromSheetCSV();
     }
 
-    const rowsWithoutHeader = rows.slice(1);
-    const filteredRows = rowsWithoutHeader.filter(row => row && row[5]);
-    console.log("[fetchControlTowerFromSheet] Filas sin encabezado:", rowsWithoutHeader.length, "| Filas después del filtro (.filter(row => row && row[5])):", filteredRows.length);
-
-    if (rowsWithoutHeader.length > 0 && filteredRows.length === 0) {
-      console.warn("[fetchControlTowerFromSheet] Ejemplo de primera fila recibida:", rowsWithoutHeader[0]);
-    }
-
-    return filteredRows.map((row, i): ControlTowerRecord => {
-        const parseNum = (val: any) => {
-          const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
-          return parseFloat(clean) || 0;
-        };
-
-        return {
-          id: `ct-${i}-${cleanSheetValue(row[5])}`,
-          contractor: cleanSheetValue(row[0]),
-          cd: cleanSheetValue(row[1]),
-          reportDate: parseFlexibleDate(row[2]),
-          week: cleanSheetValue(row[3]),
-          month: cleanSheetValue(row[4]),
-          plate: normalizePlate(cleanSheetValue(row[5])),
-          source: cleanSheetValue(row[6]),
-          novelty: cleanSheetValue(row[7]),
-          system: cleanSheetValue(row[8]),
-          status: cleanSheetValue(row[9]),
-          criticality: cleanSheetValue(row[10]),
-          solutionDate: parseFlexibleDate(row[11]),
-          closureDays: parseNum(row[12]),
-          daysToClose: parseNum(row[13]),
-          maintenanceCompliance: cleanSheetValue(row[14]),
-          maintenanceGoal: parseNum(row[15]),
-          workshopGoal: parseNum(row[16]),
-          workshopResponsePercentage: parseNum(row[17]),
-          observations: cleanSheetValue(row[18]),
-          evidenceBefore: cleanSheetValue(row[19]),
-          evidenceAfter: cleanSheetValue(row[20]),
-        };
-      });
+    return processControlTowerRows(rows);
   } catch (e) {
     console.warn("Error fetching control tower from GAS, using CSV fallback:", e);
     return fetchControlTowerFromSheetCSV();
@@ -2762,9 +2773,10 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
   try {
     const docId = getControlTowerDocId();
     const urls = [
-      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=CIERRE%20DE%20NOVEDADES${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=CIERRE%20DE%20NOVEDADES${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=1993951123${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=1993951123${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=cierre${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=cierre${getCacheBuster()}`
     ];
 
     for (const url of urls) {
@@ -2780,42 +2792,7 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
               complete: (results) => {
                 const rows = results.data as any[][];
                 if (!rows || rows.length < 2) { resolve([]); return; }
-
-                const rowsWithoutHeader = rows.slice(1);
-                const filteredRows = rowsWithoutHeader.filter(row => row && row[5]);
-
-                const parsed = filteredRows.map((row, i): ControlTowerRecord => {
-                  const parseNum = (val: any) => {
-                    const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
-                    return parseFloat(clean) || 0;
-                  };
-
-                  return {
-                    id: `ct-${i}-${cleanSheetValue(row[5])}`,
-                    contractor: cleanSheetValue(row[0]),
-                    cd: cleanSheetValue(row[1]),
-                    reportDate: parseFlexibleDate(row[2]),
-                    week: cleanSheetValue(row[3]),
-                    month: cleanSheetValue(row[4]),
-                    plate: normalizePlate(cleanSheetValue(row[5])),
-                    source: cleanSheetValue(row[6]),
-                    novelty: cleanSheetValue(row[7]),
-                    system: cleanSheetValue(row[8]),
-                    status: cleanSheetValue(row[9]),
-                    criticality: cleanSheetValue(row[10]),
-                    solutionDate: parseFlexibleDate(row[11]),
-                    closureDays: parseNum(row[12]),
-                    daysToClose: parseNum(row[13]),
-                    maintenanceCompliance: cleanSheetValue(row[14]),
-                    maintenanceGoal: parseNum(row[15]),
-                    workshopGoal: parseNum(row[16]),
-                    workshopResponsePercentage: parseNum(row[17]),
-                    observations: cleanSheetValue(row[18]),
-                    evidenceBefore: cleanSheetValue(row[19]),
-                    evidenceAfter: cleanSheetValue(row[20]),
-                  };
-                });
-                resolve(parsed);
+                resolve(processControlTowerRows(rows));
               },
               error: (err) => {
                 console.warn("[fetchControlTowerFromSheetCSV] Error al parsear CSV:", err);
@@ -2838,6 +2815,22 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
 
   console.warn("[fetchControlTowerFromSheetCSV] No se pudo obtener CSV válido, usando datos de demostración");
   return getMockControlTowerRecords();
+};
+
+export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolean> => {
+  const payload = {
+    method: 'POST_CIERRE_UPDATE',
+    data: { ...data, docId: getControlTowerDocId(), sheetName: 'cierre' }
+  };
+  try {
+    const result = await sendToGAS(payload, CIERRE_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+  } catch (err) {
+    console.warn("Cierre con CORS falló, fallback:", err);
+  }
+  const ok = await sendToGAS(payload, CIERRE_SCRIPT_URL, false);
+  return !!ok;
 };
 
 export const submitAuditUpdateToSheet = async (data: any): Promise<boolean> => {
@@ -3108,7 +3101,7 @@ export const submitRoutineToSheet = async (execution: any): Promise<boolean> => 
 
 export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
   try {
-    const rows = await fetchDataFromGAS(getAuditDocId(), 'ESTANDAR', getGoogleScriptUrl());
+    const rows = await fetchDataFromGAS(getAuditDocId(), 'ESTANDAR', AUDIT_STANDARD_SCRIPT_URL);
     
     if (!rows || rows.length < 2) {
       return fetchAuditRecordsFromSheetCSV();
@@ -3177,7 +3170,7 @@ export const fetchFleetStandardAuditFromSheet = async (): Promise<FleetStandardA
     for (const docId of uniqueDocIds) {
       for (const sheetName of sheets) {
         try {
-          const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
+          const fetched = await fetchDataFromGAS(docId, sheetName, AUDIT_STANDARD_SCRIPT_URL);
           if (fetched && fetched.length >= 2) {
             rows = fetched;
             break;
@@ -3380,8 +3373,16 @@ const processFleetStandardAuditRows = (rows: any[][]): FleetStandardAudit[] => {
 };
 
 export const submitFleetStandardAuditUpdateToSheet = async (data: any): Promise<boolean> => {
-  const result = await sendToGAS({ method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: getAuditQsDocId() } }, getGoogleScriptUrl(), true);
-  return !!result;
+  const payload = { method: 'POST_FLEET_STANDARD_AUDIT_UPDATE', data: { ...data, docId: getAuditQsDocId() } };
+  try {
+    const result = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+  } catch (err) {
+    console.warn("Cierre estándar con CORS falló, intentando fallback:", err);
+  }
+  const ok = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, false);
+  return !!ok;
 };
 
 export const submitFleetCierreUpdateToSheet = async (data: any): Promise<boolean> => {
@@ -3593,11 +3594,19 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
   evidence: string | string[];
   verification?: string;
 }): Promise<boolean> => {
-  const result = await sendToGAS({
+  const payload = {
     method: 'POST_CALIDAD_CIERRE_UPDATE',
     data: { ...data, docId: getAuditQsDocId() }
-  }, getGoogleScriptUrl(), true);
-  return !!result;
+  };
+  try {
+    const result = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+  } catch (err) {
+    console.warn("Cierre calidad con CORS falló, intentando fallback:", err);
+  }
+  const ok = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, false);
+  return !!ok;
 };
 
 export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
@@ -3618,7 +3627,7 @@ export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]
     for (const docId of uniqueDocIds) {
       for (const sheetName of sheets) {
         try {
-          const fetched = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
+          const fetched = await fetchDataFromGAS(docId, sheetName, AUDIT_STANDARD_SCRIPT_URL);
           if (fetched && fetched.length >= 2) {
             rows = fetched;
             break;

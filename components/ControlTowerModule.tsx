@@ -148,18 +148,23 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 
     setIsSubmitting(true);
     try {
+      const finalImg = uploadMode === 'before'
+        ? (beforeImages.length > 0 ? await generateCollage(beforeImages) : selectedRecord.evidenceBefore)
+        : (afterImages.length > 0 ? await generateCollage(afterImages) : selectedRecord.evidenceAfter);
+
       const payload: any = {
         plate: selectedRecord.plate,
-        reportDate: selectedRecord.reportDate,
+        item: selectedRecord.novelty,
         novelty: selectedRecord.novelty,
+        evidence: finalImg,
+        estado: 'REALIZADO',
+        reportDate: selectedRecord.reportDate,
       };
 
       if (uploadMode === 'before') {
-        const finalBefore = beforeImages.length > 0 ? await generateCollage(beforeImages) : selectedRecord.evidenceBefore;
-        payload.evidenceBefore = finalBefore;
+        payload.evidenceBefore = finalImg;
       } else {
-        const finalAfter = afterImages.length > 0 ? await generateCollage(afterImages) : selectedRecord.evidenceAfter;
-        payload.evidenceAfter = finalAfter;
+        payload.evidenceAfter = finalImg;
       }
 
       const { submitControlTowerUpdateToSheet } = await import('../services/sheetService');
