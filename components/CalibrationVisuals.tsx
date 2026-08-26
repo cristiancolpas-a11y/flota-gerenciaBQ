@@ -1,6 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { Calibration } from '../types';
+import { isCalibrationCompleted } from '../utils';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend, LabelList
@@ -52,10 +53,7 @@ const CalibrationVisuals: React.FC<CalibrationVisualsProps> = ({
          return cMonth === m || cMonth.includes(m) || m.includes(cMonth);
       });
       const total = monthCalibrations.length;
-      const completed = monthCalibrations.filter(c => {
-        const est = (c.estado || "").toUpperCase().trim();
-        return est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK';
-      }).length;
+      const completed = monthCalibrations.filter(c => isCalibrationCompleted(c)).length;
       const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
       return { name: m.substring(0, 3), percentage, total, completed };
     });
@@ -71,8 +69,7 @@ const CalibrationVisuals: React.FC<CalibrationVisualsProps> = ({
       if (!cds[cd]) cds[cd] = { total: 0, completed: 0 };
       cds[cd].total++;
       
-      const est = (c.estado || "").toUpperCase().trim();
-      if (est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK') {
+      if (isCalibrationCompleted(c)) {
         cds[cd].completed++;
       }
     });
@@ -95,8 +92,7 @@ const CalibrationVisuals: React.FC<CalibrationVisualsProps> = ({
       if (!contractors[contractor]) contractors[contractor] = { total: 0, completed: 0 };
       contractors[contractor].total++;
       
-      const est = (c.estado || "").toUpperCase().trim();
-      if (est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK') {
+      if (isCalibrationCompleted(c)) {
         contractors[contractor].completed++;
       }
     });
@@ -112,10 +108,7 @@ const CalibrationVisuals: React.FC<CalibrationVisualsProps> = ({
   // Global KPIs calculation based on current filters
   const kpiStats = useMemo(() => {
     const total = monthFilteredData.length;
-    const completed = monthFilteredData.filter(c => {
-        const est = (c.estado || "").toUpperCase().trim();
-        return est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK';
-    }).length;
+    const completed = monthFilteredData.filter(c => isCalibrationCompleted(c)).length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { total, completed, percentage };
   }, [monthFilteredData]);

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Calibration, Vehicle } from '../types';
-import { normalizePlate, formatDate } from '../utils';
+import { normalizePlate, formatDate, isCalibrationCompleted } from '../utils';
 import Papa from 'papaparse';
 import { 
   Disc, 
@@ -120,9 +120,10 @@ const CalibrationFleetTracking: React.FC<CalibrationFleetTrackingProps> = ({
     const items: FleetSemaforoStatus[] = filteredVehicles.map(vehicle => {
       const p = normalizePlate(vehicle.plate);
       
-      // Buscar la última calibración registrada para esta placa
+      // Buscar la última calibración EFECTIVA (completada) registrada para esta placa
+      // Si en la hoja el estatus es "PENDIENTE" o similar, significa que NO calibró
       const misCalibs = calibrations
-        .filter(c => normalizePlate(c.plate) === p && c.calibrationDate)
+        .filter(c => normalizePlate(c.plate) === p && isCalibrationCompleted(c))
         .map(c => {
           const d = new Date(c.calibrationDate + 'T12:00:00');
           return { cal: c, dateObj: d };
@@ -305,6 +306,7 @@ const CalibrationFleetTracking: React.FC<CalibrationFleetTrackingProps> = ({
   // =========================================================================
   const monthlyStatus = useMemo(() => {
     const calibrationsThisMonth = calibrations.filter(c => {
+      if (!isCalibrationCompleted(c)) return false;
       if (c.calibrationDate) {
         const d = new Date(c.calibrationDate + 'T12:00:00');
         if (!isNaN(d.getTime())) {
@@ -353,6 +355,7 @@ const CalibrationFleetTracking: React.FC<CalibrationFleetTrackingProps> = ({
   const annualMonthlyProgress = useMemo(() => {
     return MONTHS.map((monthName, monthIndex) => {
       const monthCalibrations = calibrations.filter(c => {
+        if (!isCalibrationCompleted(c)) return false;
         if (c.calibrationDate) {
           const d = new Date(c.calibrationDate + 'T12:00:00');
           if (!isNaN(d.getTime())) {
@@ -397,6 +400,7 @@ const CalibrationFleetTracking: React.FC<CalibrationFleetTrackingProps> = ({
       const monthsData = MONTHS.map((monthName, monthIndex) => {
         const cal = calibrations.find(c => {
           if (normalizePlate(c.plate) !== p) return false;
+          if (!isCalibrationCompleted(c)) return false;
           if (c.calibrationDate) {
             const d = new Date(c.calibrationDate + 'T12:00:00');
             if (!isNaN(d.getTime())) {

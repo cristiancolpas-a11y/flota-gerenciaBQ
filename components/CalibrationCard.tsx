@@ -1,6 +1,6 @@
 import React from 'react';
 import { Calibration } from '../types';
-import { formatDate, getDriveDirectLink } from '../utils';
+import { formatDate, getDriveDirectLink, isCalibrationCompleted } from '../utils';
 import { Settings2, Calendar, Eye, Clock, ShieldCheck, Key, MapPin, Disc, Camera, Gauge } from 'lucide-react';
 
 interface CalibrationCardProps {
@@ -57,7 +57,7 @@ const CalibrationCard: React.FC<CalibrationCardProps> = ({ calibration, onViewDo
           <div className="flex flex-col items-end gap-2">
             <div className="flex gap-2">
               {calibration.estado && (
-                <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase shadow-sm ${calibration.estado === 'COMPLETADO' ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest uppercase shadow-sm ${isCalibrationCompleted(calibration) ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
                   {calibration.estado}
                 </span>
               )}

@@ -114,7 +114,7 @@ import {
 } from './services/sheetService';
 
 import Papa from 'papaparse';
-import { normalizePlate, normalizeStr, getWeekNumber } from './utils';
+import { normalizePlate, normalizeStr, getWeekNumber, isCalibrationCompleted } from './utils';
 import { 
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
@@ -963,14 +963,8 @@ const App: React.FC = () => {
   const statsCalibrations = useMemo(() => {
     return {
       total: filteredCalibrations.length,
-      completed: filteredCalibrations.filter(c => {
-        const est = (c.estado || "").toUpperCase().trim();
-        return est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK';
-      }).length,
-      pending: filteredCalibrations.filter(c => {
-        const est = (c.estado || "").toUpperCase().trim();
-        return !(est === 'COMPLETADO' || est === 'CERRADO' || est === 'REALIZADO' || est === 'OK');
-      }).length,
+      completed: filteredCalibrations.filter(c => isCalibrationCompleted(c)).length,
+      pending: filteredCalibrations.filter(c => !isCalibrationCompleted(c)).length,
       searchCount: filteredCalibrations.length
     };
   }, [filteredCalibrations]);

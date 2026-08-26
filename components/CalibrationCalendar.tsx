@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Calibration } from '../types';
-import { normalizePlate } from '../utils';
+import { normalizePlate, isCalibrationCompleted } from '../utils';
 import { ChevronLeft, ChevronRight, Disc, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface CalibrationCalendarProps {
@@ -129,28 +129,31 @@ const CalibrationCalendar: React.FC<CalibrationCalendarProps> = ({
                 <>
                   <span className="text-sm font-black text-slate-300 mb-3 block ml-1">{day}</span>
                   <div className="space-y-2">
-                    {getCalibrationsForDay(day).map(cal => (
-                      <div 
-                        key={cal.id}
-                        onClick={() => {
-                          if (cal.certificateUrl) {
-                            onViewDoc(cal.certificateUrl, `Certificado Calibración - ${cal.plate}`);
-                          } else {
-                            onUpdateEvidence(cal);
-                          }
-                        }}
-                        className={`group px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-2 ${cal.estado === 'COMPLETADO' ? 'bg-emerald-500 text-white border border-emerald-600 shadow-sm' : 'bg-rose-500 text-white border border-rose-600 shadow-sm'}`}
-                      >
-                        <span className="truncate font-mono">{cal.plate}</span>
-                        <div className="shrink-0">
-                          {cal.estado === 'COMPLETADO' ? (
-                            <CheckCircle2 size={12} className="text-white" />
-                          ) : (
-                            <AlertCircle size={12} className="text-white animate-pulse" />
-                          )}
+                    {getCalibrationsForDay(day).map(cal => {
+                      const isOk = isCalibrationCompleted(cal);
+                      return (
+                        <div 
+                          key={cal.id}
+                          onClick={() => {
+                            if (cal.certificateUrl) {
+                              onViewDoc(cal.certificateUrl, `Certificado Calibración - ${cal.plate}`);
+                            } else {
+                              onUpdateEvidence(cal);
+                            }
+                          }}
+                          className={`group px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-2 ${isOk ? 'bg-emerald-500 text-white border border-emerald-600 shadow-sm' : 'bg-rose-500 text-white border border-rose-600 shadow-sm'}`}
+                        >
+                          <span className="truncate font-mono">{cal.plate}</span>
+                          <div className="shrink-0">
+                            {isOk ? (
+                              <CheckCircle2 size={12} className="text-white" />
+                            ) : (
+                              <AlertCircle size={12} className="text-white animate-pulse" />
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </>
               )}
@@ -167,22 +170,25 @@ const CalibrationCalendar: React.FC<CalibrationCalendarProps> = ({
             <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest">Registros de {selectedMonth} sin fecha exacta ({calibrationsWithoutExactDay.length})</h4>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {calibrationsWithoutExactDay.map(cal => (
-              <div 
-                key={cal.id}
-                onClick={() => {
-                  if (cal.certificateUrl) {
-                    onViewDoc(cal.certificateUrl, `Certificado Calibración - ${cal.plate}`);
-                  } else {
-                    onUpdateEvidence(cal);
-                  }
-                }}
-                className={`group px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-3 ${cal.estado === 'COMPLETADO' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'}`}
-              >
-                <span className="truncate font-mono">{cal.plate}</span>
-                {cal.estado === 'COMPLETADO' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} className="animate-pulse" />}
-              </div>
-            ))}
+            {calibrationsWithoutExactDay.map(cal => {
+              const isOk = isCalibrationCompleted(cal);
+              return (
+                <div 
+                  key={cal.id}
+                  onClick={() => {
+                    if (cal.certificateUrl) {
+                      onViewDoc(cal.certificateUrl, `Certificado Calibración - ${cal.plate}`);
+                    } else {
+                      onUpdateEvidence(cal);
+                    }
+                  }}
+                  className={`group px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-tight cursor-pointer transition-all hover:scale-[1.03] active:scale-95 flex items-center justify-between gap-3 ${isOk ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'}`}
+                >
+                  <span className="truncate font-mono">{cal.plate}</span>
+                  {isOk ? <CheckCircle2 size={14} /> : <AlertCircle size={14} className="animate-pulse" />}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

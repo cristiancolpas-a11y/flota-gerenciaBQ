@@ -57,6 +57,34 @@ export const getDaysDiff = (expiryDate: string): number => {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
 
+/**
+ * Determina si un registro de calibración representa una calibración efectivamente realizada.
+ * Si el estatus en la hoja indica 'PENDIENTE', 'NO CALIBRO', 'SIN CALIBRAR', etc., significa que NO calibró.
+ */
+export const isCalibrationCompleted = (c: { estado?: string; status?: string; calibrationDate?: string } | null | undefined): boolean => {
+  if (!c) return false;
+  const estado = (c.estado || "").toUpperCase().trim();
+  
+  // Si el estatus en la hoja dice PENDIENTE o variantes negativas, NO CALIBRÓ
+  if (
+    estado === 'PENDIENTE' ||
+    estado.includes('PENDIENTE') ||
+    estado.includes('NO CALIBR') ||
+    estado === 'SIN CALIBRAR' ||
+    estado === 'NO REALIZADO' ||
+    estado === 'NO'
+  ) {
+    return false;
+  }
+  
+  // Requiere tener una fecha de calibración registrada
+  if (!c.calibrationDate || c.calibrationDate === '-' || c.calibrationDate.trim() === '') {
+    return false;
+  }
+  
+  return true;
+};
+
 export const getWeekNumber = (date: Date): number => {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
