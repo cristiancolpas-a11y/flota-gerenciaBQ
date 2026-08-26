@@ -2903,7 +2903,7 @@ const App: React.FC = () => {
                           onClick={() => setCalibrationViewMode('seguimiento')}
                           className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${calibrationViewMode === 'seguimiento' ? 'bg-[#0f172a] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
                         >
-                          Seguimiento Flota
+                          Estatus Flota
                         </button>
                         <button 
                           onClick={() => setCalibrationViewMode('calendar')}
