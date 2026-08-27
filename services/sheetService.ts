@@ -1305,7 +1305,7 @@ const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
       }
 
       return {
-        id: `avail-${cleanSheetValue(row[0]) || i}-${Date.now()}`,
+        id: `avail-${cleanSheetValue(row[0]) || 'row'}-${i}-${Date.now()}`,
         fecha: parsedDate, 
         cd: cleanSheetValue(row[2]).toUpperCase(),
         cdOriginal: cleanSheetValue(row[2]).toUpperCase(),
@@ -1360,7 +1360,7 @@ export const processAvailabilitySummaryRows = (rows: any[][]): AvailabilitySumma
       }
 
       return {
-        id: `pct-${cleanSheetValue(row[0]) || idx}-${Date.now()}`,
+        id: `pct-${cleanSheetValue(row[0]) || 'row'}-${idx}-${Date.now()}`,
         llave: cleanSheetValue(row[0]),
         fecha: parsedDate,
         cd: cleanSheetValue(row[2]).toUpperCase(),

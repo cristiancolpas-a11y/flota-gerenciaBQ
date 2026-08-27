@@ -1247,7 +1247,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                   </tr>
                 ) : (
                   paginatedRecords.map((r, idx) => (
-                    <tr key={r.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={r.id ? `${r.id}-${idx}` : `interv-row-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                       {/* 1. Fecha */}
                       <td className="p-3.5 pl-5 font-mono font-bold text-slate-900 whitespace-nowrap">
                         {r.fecha || '-'}
