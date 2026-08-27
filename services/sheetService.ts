@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord } from '../types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
@@ -1280,95 +1280,134 @@ const fetchAvailabilityFromSheetCSV = async (): Promise<AvailabilityRecord[]> =>
   } catch (e) { return []; }
 };
 
+const MONTH_NAMES_ES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+
 const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
-  // Indices based on user mapping:
-  // B: Fecha (1), C: CD (2), D: Sistema (3), E: Detalle (4), G: Taller (6), H: Ingreso (7), I: Salida (8), 
-  // J: PLACAS (9), K: Contratista (10), L: Dias (11), M: Total (12), N: IndispCount (13), O: DispoCount (14),
-  // P: IndispPrc (15), Q: DispoPrc (16), R: VHSCD (17), S: cd_registro (18), T: mes (19), U: sem (20)
+  // Indices based on user specification (Read ONLY up to col K / index 10):
+  // 0: LLAVE, 1: Fecha, 2: Centro de Distribución, 3: Sistema, 4: Detalle, 5: Placa,
+  // 6: Taller, 7: Fecha de Ingreso a Taller, 8: Fecha Estimada de Salida de Taller,
+  // 9: PLACAS (con CO), 10: CONTRATISTA
   return rows.slice(1)
-    .filter(row => row && row[9]) // Using PLACAS (index 9) as the primary identifier
+    .filter(row => row && (row[5] || row[9] || (row[1] && row[2]))) // Filter rows with Placa (col 5 or 9)
     .map((row, i): AvailabilityRecord => {
-      const parseNum = (val: any) => {
-        if (!val) return 0;
-        const clean = String(val).replace('%', '').replace(',', '.').trim();
-        return parseFloat(clean) || 0;
-      };
-      
-      const rawPlate = cleanSheetValue(row[9]);
+      const rawPlate = cleanSheetValue(row[5]) || cleanSheetValue(row[9]);
       const normalizedPlate = normalizePlate(rawPlate);
+      const parsedDate = parseFlexibleDate(row[1]);
+
+      let derivedMes = '';
+      let derivedSemana = '';
+      if (parsedDate) {
+        const dObj = new Date(parsedDate + 'T12:00:00');
+        if (!isNaN(dObj.getTime())) {
+          derivedMes = MONTH_NAMES_ES[dObj.getMonth()];
+          derivedSemana = `S${getWeekNumber(dObj)}`;
+        }
+      }
 
       return {
-        id: `avail-new-${i}`,
-        fecha: parseFlexibleDate(row[1]), 
+        id: `avail-${cleanSheetValue(row[0]) || i}-${Date.now()}`,
+        fecha: parsedDate, 
+        cd: cleanSheetValue(row[2]).toUpperCase(),
         cdOriginal: cleanSheetValue(row[2]).toUpperCase(),
-        sistema: cleanSheetValue(row[3]).toUpperCase(),
-        detalle: cleanSheetValue(row[4]),
+        sistema: cleanSheetValue(row[3]).toUpperCase() || 'GENERAL',
+        detalle: cleanSheetValue(row[4]) || '',
         placa: normalizedPlate,
-        taller: cleanSheetValue(row[6]).toUpperCase(),
+        taller: cleanSheetValue(row[6]).toUpperCase() || 'NO ESPECIFICADO',
         fechaIngreso: parseFlexibleDate(row[7]),
         fechaEstimadaSalida: parseFlexibleDate(row[8]),
-        placasKey: normalizedPlate,
-        contratista: cleanSheetValue(row[10]).toUpperCase(),
-        diasIndisponible: parseNum(row[11]),
-        totalVH: parseNum(row[12]),
-        vehiculoIndisponible: parseNum(row[13]),
-        vehiculosDisponibles: parseNum(row[14]),
-        indisponibilidadPrc: parseNum(row[15]),
-        disponibilidadPrc: parseNum(row[16]),
-        vhsCd: parseNum(row[17]),
-        cdRegistro: cleanSheetValue(row[18]).toUpperCase(),
-        mes: cleanSheetValue(row[19]),
-        semana: cleanSheetValue(row[20])
+        placasKey: normalizePlate(cleanSheetValue(row[9])) || normalizedPlate,
+        contratista: cleanSheetValue(row[10]).toUpperCase() || 'GENERAL',
+        mes: derivedMes,
+        semana: derivedSemana
       };
     });
 };
 
-export interface AvailabilitySummaryRecord {
-  fecha: string;
-  cd: string;
-  contratista: string;
-  indisponibles: number;
-  disponibles: number;
-  total: number;
-  promedio: number;
-}
-
-export const fetchAvailabilitySummaryFromSheet = async (): Promise<AvailabilitySummary[]> => {
-  try {
-    const rows = await fetchDataFromGAS(FLEET_AVAILABILITY_DOC_ID, '%DISPONIBILIDAD');
-    if (!rows || rows.length < 2) {
-      // Fallback CSV - we need a GID for %DISPONIBILIDAD, since I don't have it, GAS is the primary way
-      // If GAS fails and I don't have GID, it will return empty, which is better than crashing
-      return [];
-    }
-    return processAvailabilitySummaryRows(rows);
-  } catch (e) {
-    return [];
-  }
-};
-
-const processAvailabilitySummaryRows = (rows: any[][]): AvailabilitySummary[] => {
-  // B: FECHA (1), C: CD (2), D: CONTRATISTA (3), E: VH INDISPONIBLES (4), F: VHS DISPONIBLES (5), G: TOTAl VH (6), H: %PROMEDIO (7)
+export const processAvailabilitySummaryRows = (rows: any[][]): AvailabilitySummary[] => {
+  // 0: LLAVE, 1: FECHA, 2: CD, 3: CONTRATISTA, 4: VH INDISPONIBLES, 5: VHS DISPONIBLES, 6: TOTAL VH, 7: %PROMEDIO, 8: SEMANA
   return rows.slice(1)
-    .filter(row => row && row[1]) // Fecha is B (index 1)
-    .map((row): AvailabilitySummary => {
+    .filter(row => row && (row[1] || row[2]))
+    .map((row, idx): AvailabilitySummary => {
       const parseNum = (val: any) => {
         if (!val) return 0;
-        const clean = String(val).replace('%', '').replace(',', '.').trim();
+        const str = String(val).trim();
+        if (str.includes('#DIV/0!') || str.includes('#N/A') || str.includes('#VALOR!') || str.includes('#REF!')) return 0;
+        const clean = str.replace('%', '').replace(',', '.').trim();
         return parseFloat(clean) || 0;
       };
-      
+
+      const parsedDate = parseFlexibleDate(row[1]);
+      let rawPromedio = parseNum(row[7]);
+      // If decimal (e.g. 0.9696 or 0.85), convert to percentage 0-100%
+      let promedioPct = rawPromedio;
+      if (rawPromedio > 0 && rawPromedio <= 1.0) {
+        promedioPct = rawPromedio * 100;
+      }
+
+      let rawSemana = cleanSheetValue(row[8]);
+      let derivedMes = '';
+      if (parsedDate) {
+        const dObj = new Date(parsedDate + 'T12:00:00');
+        if (!isNaN(dObj.getTime())) {
+          derivedMes = MONTH_NAMES_ES[dObj.getMonth()];
+          if (!rawSemana) {
+            rawSemana = `S${getWeekNumber(dObj)}`;
+          }
+        }
+      }
+      if (rawSemana && !rawSemana.toUpperCase().startsWith('S') && !isNaN(Number(rawSemana))) {
+        rawSemana = `S${rawSemana}`;
+      }
+
       return {
-        fecha: parseFlexibleDate(row[1]),
+        id: `pct-${cleanSheetValue(row[0]) || idx}-${Date.now()}`,
+        llave: cleanSheetValue(row[0]),
+        fecha: parsedDate,
         cd: cleanSheetValue(row[2]).toUpperCase(),
         contratista: cleanSheetValue(row[3]).toUpperCase(),
-        indisponibles: parseNum(row[4]),
-        disponibles: parseNum(row[5]),
-        total: parseNum(row[6]),
-        promedio: parseNum(row[7]) >= 1 ? parseNum(row[7]) : parseNum(row[7]) * 100 // Handle both 0.95 and 95
+        indisponibles: Math.round(parseNum(row[4])),
+        disponibles: Math.round(parseNum(row[5])),
+        total: Math.round(parseNum(row[6])),
+        promedio: Number(promedioPct.toFixed(2)),
+        semana: rawSemana ? rawSemana.toUpperCase() : 'S1',
+        mes: derivedMes
       };
     });
 };
+
+export const processAvailabilityPctRows = processAvailabilitySummaryRows;
+
+export const fetchAvailabilitySummaryFromSheet = async (): Promise<AvailabilitySummary[]> => {
+  // 1) Intentar por Apps Script (por nombre)
+  try {
+    const rows = await fetchDataFromGAS(FLEET_AVAILABILITY_DOC_ID, '%DISPONIBILIDAD');
+    if (rows && rows.length >= 2) {
+      return processAvailabilitySummaryRows(rows);
+    }
+  } catch (e) {
+    console.warn("GAS %DISPONIBILIDAD falló, intentando CSV por gid:", e);
+  }
+
+  // 2) Fallback CSV por gid (confiable - gid 1491438993)
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${FLEET_AVAILABILITY_DOC_ID}/export?format=csv&gid=1491438993${getCacheBuster()}`;
+    const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    const csv = await resp.text();
+    if (csv && !csv.includes('<!DOCTYPE html')) {
+      const parsed = Papa.parse(csv, { skipEmptyLines: true });
+      const rows = parsed.data as any[][];
+      if (rows && rows.length >= 2) {
+        return processAvailabilitySummaryRows(rows);
+      }
+    }
+  } catch (e) {
+    console.warn("CSV %DISPONIBILIDAD por gid falló:", e);
+  }
+
+  return [];
+};
+
+export const fetchAvailabilityPctFromSheet = fetchAvailabilitySummaryFromSheet;
 
 export const fetchFleetBaseData = async (): Promise<FleetListRecord[]> => {
   try {

@@ -228,37 +228,44 @@ export interface FleetComposition {
 
 export interface AvailabilityRecord {
   id: string;
-  fecha: string;               // Col B
-  cdRegistro: string;          // Col S (cd)
-  sistema: string;             // Col D
-  detalle: string;             // Col E
-  placa: string;               // Col F
-  taller: string;              // Col G
-  fechaIngreso: string;        // Col H
-  fechaEstimadaSalida: string; // Col I
-  placasKey: string;           // Col J
-  contratista: string;         // Col K
-  diasIndisponible: number;    // Col L
-  totalVH: number;             // Col M
-  vehiculoIndisponible: number;// Col N
-  vehiculosDisponibles: number;// Col O
-  indisponibilidadPrc: number; // Col P
-  disponibilidadPrc: number;    // Col Q
-  vhsCd: number;               // Col R
+  fecha: string;               // Col 1 (B)
+  cd: string;                  // Col 2 (C)
+  cdRegistro?: string;         // Alias
+  sistema: string;             // Col 3 (D)
+  detalle: string;             // Col 4 (E)
+  placa: string;               // Col 5 (F) o Col 9 (J)
+  taller: string;              // Col 6 (G)
+  fechaIngreso: string;        // Col 7 (H)
+  fechaEstimadaSalida: string; // Col 8 (I)
+  placasKey?: string;          // Col 9 (J)
+  contratista: string;         // Col 10 (K)
+  diasIndisponible?: number;   // Col L
+  totalVH?: number;            // Col M
+  vehiculoIndisponible?: number;// Col N
+  vehiculosDisponibles?: number;// Col O
+  indisponibilidadPrc?: number;// Col P
+  disponibilidadPrc?: number;  // Col Q
+  vhsCd?: number;              // Col R
   cdOriginal?: string;         // Col C
-  mes?: string;                // Col T (Index 19)
-  semana?: string;             // Col U (Index 20)
+  mes?: string;
+  semana?: string;
 }
 
-export interface AvailabilitySummary {
-  fecha: string;               // Col B
-  cd: string;                  // Col C
-  contratista: string;         // Col D
-  indisponibles: number;       // Col E
-  disponibles: number;         // Col F
-  total: number;               // Col G
-  promedio: number;            // Col H
+export interface AvailabilityPctRecord {
+  id?: string;
+  llave?: string;              // Col 0 (A)
+  fecha: string;               // Col 1 (B)
+  cd: string;                  // Col 2 (C)
+  contratista: string;         // Col 3 (D)
+  indisponibles: number;       // Col 4 (E)
+  disponibles: number;         // Col 5 (F)
+  total: number;               // Col 6 (G)
+  promedio: number;            // Col 7 (H) % Promedio (0-100)
+  semana: string;              // Col 8 (I)
+  mes?: string;
 }
+
+export type AvailabilitySummary = AvailabilityPctRecord;
 
 export interface FleetListRecord {
   placa: string;               // INDICE 0

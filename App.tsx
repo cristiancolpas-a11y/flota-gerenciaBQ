@@ -83,6 +83,7 @@ import {
   submitWorkshopVisitUpdateToSheet,
   fetchPreventivesFromSheet,
   fetchAvailabilityFromSheet,
+  fetchAvailabilityPctFromSheet,
   fetchOperationalIndicatorsFromSheet,
   fetchCheckListFromSheet,
   fetchFuelPerformanceFromSheet,
@@ -478,11 +479,13 @@ const App: React.FC = () => {
         setPreventives(await fetchPreventivesFromSheet());
         break;
       case 'disponibilidad': {
-        const [a, fb] = await Promise.all([
+        const [a, as, fb] = await Promise.all([
           fetchAvailabilityFromSheet(),
+          fetchAvailabilityPctFromSheet(),
           fetchFleetBaseData()
         ]);
         setAvailabilityRecords(a);
+        setAvailabilitySummary(as);
         setFleetBase(fb);
         break;
       }
@@ -1966,7 +1969,10 @@ const App: React.FC = () => {
           {activeView === 'disponibilidad' && (
             <AvailabilityModule 
               availability={availabilityRecords}
+              availabilityPct={availabilitySummary}
               fleetBase={fleetBase}
+              onRefresh={handleSyncData}
+              loading={isSyncing}
             />
           )}
 
