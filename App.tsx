@@ -21,6 +21,7 @@ import WorkshopEntryForm from './components/WorkshopEntryForm';
 import WashCard from './components/WashCard';
 import WashStats from './components/WashStats';
 import WashForm from './components/WashForm';
+import WashMonthlyStatus from './components/WashMonthlyStatus';
 import CleaningForm from './components/CleaningForm';
 import CleaningCalendar from './components/CleaningCalendar';
 import CalibrationCard from './components/CalibrationCard';
@@ -264,7 +265,8 @@ const App: React.FC = () => {
   const [closingCleaning, setClosingCleaning] = useState<WashReport | null>(null);
   const [workshopViewMode, setWorkshopViewMode] = useState<'list' | 'calendar'>('calendar');
   const [calibrationViewMode, setCalibrationViewMode] = useState<'seguimiento' | 'calendar' | 'list' | 'visual'>('seguimiento');
-  const [washViewMode, setWashViewMode] = useState<'list' | 'calendar'>('calendar');
+  const [washViewMode, setWashViewMode] = useState<'seguimiento' | 'list' | 'calendar'>('seguimiento');
+  const [washPreselectedPlate, setWashPreselectedPlate] = useState<string | null>(null);
   const [cleaningViewMode, setCleaningViewMode] = useState<'list' | 'calendar'>('calendar');
 
   // Routine Sub Mode
@@ -2605,7 +2607,7 @@ const App: React.FC = () => {
                     <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
                       <Droplets size={40} className="text-cyan-500" /> Historial de Lavados
                     </h2>
-                    <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Cumplimiento de higiene y limpieza</p>
+                    <p className="text-[11px] text-slate-400 font-black uppercase tracking-[0.3em] ml-14">Cumplimiento de higiene y limpieza mensual</p>
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-4">
@@ -2637,7 +2639,13 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center">
+                    <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-1">
+                      <button 
+                        onClick={() => setWashViewMode('seguimiento')}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${washViewMode === 'seguimiento' ? 'bg-[#0D2B4E] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        Estatus Flota
+                      </button>
                       <button 
                         onClick={() => setWashViewMode('calendar')}
                         className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${washViewMode === 'calendar' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
@@ -2692,7 +2700,10 @@ const App: React.FC = () => {
                     </div>
 
                     <button 
-                      onClick={() => setShowWashForm(true)}
+                      onClick={() => {
+                        setWashPreselectedPlate(null);
+                        setShowWashForm(true);
+                      }}
                       className="flex items-center gap-3 px-8 py-4 bg-cyan-600 text-white rounded-3xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-cyan-600/20 hover:bg-cyan-700 transition-all"
                     >
                       <Plus size={20}/> Registrar Lavado
@@ -2700,42 +2711,76 @@ const App: React.FC = () => {
                   </div>
                </div>
 
-               <WashStats 
-                 totalFlota={filteredVehiclesForWash.length}
-                 lavados={filteredWashReports.length}
-                 pendientes={filteredVehiclesForWash.length - filteredWashReports.length}
-                 busqueda={filteredWashReports.length}
-                 month={selectedMonth}
-               />
-
-               {washViewMode === 'calendar' ? (
-                 <WashCalendar 
-                   reports={filteredWashReports}
-                   selectedMonth={selectedMonth}
+               {washViewMode === 'seguimiento' ? (
+                 <WashMonthlyStatus 
+                   vehicles={vehicles}
+                   washReports={washReports}
+                   selectedMonth={selectedMonth === 'TODOS' ? ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'][new Date().getMonth()] : selectedMonth}
                    selectedYear={selectedYear}
                    onMonthChange={setSelectedMonth}
                    onYearChange={setSelectedYear}
+                   onRegisterWashForPlate={(plate) => {
+                     setWashPreselectedPlate(plate);
+                     setShowWashForm(true);
+                   }}
                    onViewDoc={(url, t) => setViewDoc({url, title: t})}
-                   onManageClosure={() => {}}
-                   searchTerm={searchTerm}
+                   filterCd={filterCd}
+                   filterContractor={filterContractor}
+                   onFilterCdChange={setFilterCd}
+                   onFilterContractorChange={setFilterContractor}
+                   uniqueCds={uniqueCds}
+                   uniqueContractors={uniqueContractors}
+                   onOpenWashForm={() => {
+                     setWashPreselectedPlate(null);
+                     setShowWashForm(true);
+                   }}
                  />
+               ) : washViewMode === 'calendar' ? (
+                 <>
+                   <WashStats 
+                     totalFlota={filteredVehiclesForWash.length}
+                     lavados={filteredWashReports.length}
+                     pendientes={filteredVehiclesForWash.length - filteredWashReports.length}
+                     busqueda={filteredWashReports.length}
+                     month={selectedMonth}
+                   />
+                   <WashCalendar 
+                     reports={filteredWashReports}
+                     selectedMonth={selectedMonth}
+                     selectedYear={selectedYear}
+                     onMonthChange={setSelectedMonth}
+                     onYearChange={setSelectedYear}
+                     onViewDoc={(url, t) => setViewDoc({url, title: t})}
+                     onManageClosure={() => {}}
+                     searchTerm={searchTerm}
+                   />
+                 </>
                ) : (
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {filteredWashReports.map(r => (
-                        <WashCard 
-                          key={r.id} 
-                          report={r} 
-                          onViewDoc={(url, t) => setViewDoc({url, title: t})} 
-                        />
-                      ))
-                    }
-                    {filteredWashReports.length === 0 && (
-                      <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
-                        <Droplets size={48} className="mx-auto text-slate-200 mb-4" />
-                        <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado lavados con los filtros aplicados para {selectedMonth}</p>
-                      </div>
-                    )}
-                 </div>
+                 <>
+                   <WashStats 
+                     totalFlota={filteredVehiclesForWash.length}
+                     lavados={filteredWashReports.length}
+                     pendientes={filteredVehiclesForWash.length - filteredWashReports.length}
+                     busqueda={filteredWashReports.length}
+                     month={selectedMonth}
+                   />
+                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                      {filteredWashReports.map(r => (
+                          <WashCard 
+                            key={r.id} 
+                            report={r} 
+                            onViewDoc={(url, t) => setViewDoc({url, title: t})} 
+                          />
+                        ))
+                      }
+                      {filteredWashReports.length === 0 && (
+                        <div className="col-span-full bg-white rounded-[3rem] p-20 text-center border-2 border-dashed border-slate-200">
+                          <Droplets size={48} className="mx-auto text-slate-200 mb-4" />
+                          <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No se han encontrado lavados con los filtros aplicados para {selectedMonth}</p>
+                        </div>
+                      )}
+                   </div>
+                 </>
                )}
             </div>
           )}
@@ -3691,7 +3736,11 @@ const App: React.FC = () => {
       {showWashForm && (
         <WashForm 
           vehicles={vehicles} 
-          onClose={() => setShowWashForm(false)} 
+          initialPlate={washPreselectedPlate || undefined}
+          onClose={() => {
+            setShowWashForm(false);
+            setWashPreselectedPlate(null);
+          }} 
           onSubmit={async (d) => { 
             const newWash: WashReport = {
               id: d.id || `temp-${Date.now()}`,
@@ -3704,6 +3753,7 @@ const App: React.FC = () => {
               mapUrl: d.mapUrl || ''
             };
             setShowWashForm(false);
+            setWashPreselectedPlate(null);
             localWashSubmissionsRef.current = [newWash, ...localWashSubmissionsRef.current];
             setWashReports(prev => [newWash, ...prev]);
 
