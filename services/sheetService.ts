@@ -214,7 +214,7 @@ const OPERATORS_DOC_ID = '1qLEXUCt1RAr28lwOX2sCJhjoEoG4vKVOrv2d45iZ6kU';
 // GIDs for fallbacks
 const VEHICLES_GID = '1506825194';
 const DRIVERS_GID = '1834987510';
-const NOVEDADES_GID = '1789987673';
+const NOVEDADES_GID = '1190843304';
 const VISITAS_GID = '239875479';
 const MILEAGE_GID = '1929496440';
 const CALIBRATIONS_GID = '505557891';
@@ -1063,61 +1063,73 @@ const fetchReportsFromSheetCSV = async (): Promise<Report[]> => {
 
 const processReportRows = (rows: any[][]): Report[] => {
   if (rows.length === 0) return [];
-  const header = rows[0].map(h => String(h).toUpperCase());
+  const header = rows[0].map(h => String(h).toUpperCase().trim());
 
   const getIdx = (name: string, fallback: number) => {
     const idx = header.findIndex(h => h.includes(name));
     return idx !== -1 ? idx : fallback;
   };
 
-  const plateIdx = getIdx('PLACA', 4);
+  const otIdx = getIdx('ORDEN', 0);
   const dateIdx = getIdx('FECHA', 1);
-  const cdIdx = getIdx('CENTRO', 2);
+  const cdIdx = getIdx('CD', getIdx('CENTRO', 2));
   const contractorIdx = getIdx('CONTRATISTA', 3);
-  const sourceIdx = getIdx('ORIGEN', 5);
-  const workshopDateIdx = getIdx('FECHA TALLER', 6);
-  const initEvidenceIdx = getIdx('EVIDENCIA INICIAL', 7);
-  const noveltyIdx = getIdx('NOVEDAD', 8);
-  const daysToAttendIdx = getIdx('DIAS PARA ATENDER', 9);
-  const entryMapIdx = getIdx('MAPA ENTRADA', 10);
-  const statusIdx = getIdx('ESTADO', 11);
-  const workshopEvidenceIdx = getIdx('EVIDENCIA TALLER', 12);
-  const closureDateIdx = getIdx('FECHA CIERRE', 13);
-  
-  // Si no encuentra 'EVIDENCIA SOLUCION', probamos con 'BW' o el fallback 14
-  let solutionEvidenceIdx = header.findIndex(h => h.includes('EVIDENCIA SOLUCION') || h === 'BW');
-  if (solutionEvidenceIdx === -1) solutionEvidenceIdx = 14; 
-  // Especial handling for user's BW request if index 74 exists and is not found by name
-  if (rows[0].length > 74 && solutionEvidenceIdx === 14) solutionEvidenceIdx = 74;
+  const plateIdx = getIdx('PLACA', 4);
+  const driverIdx = getIdx('CONDUCTOR', 5);
+  const noveltyIdx = getIdx('NOVEDAD', 6);
+  const workshopIdx = getIdx('TALLER', 7);
+  const ev1Idx = getIdx('REPORTE 1', getIdx('INICIAL', 8));
+  const ev2Idx = getIdx('REPORTE 2', 9);
+  const statusIdx = getIdx('ESTADO', 10);
+  const evClose1Idx = getIdx('CIERRE 1', 11);
+  const evClose2Idx = getIdx('CIERRE 2', 12);
 
-  const exitMapIdx = getIdx('MAPA SALIDA', 15);
-  const daysInShopIdx = getIdx('DIAS EN TALLER', 16);
-  const commentsIdx = getIdx('COMENTARIOS', 17);
-  const workshopIdx = getIdx('TALLER', 18);
+  // Fallbacks for optional legacy fields
+  const sourceIdx = header.findIndex(h => h.includes('ORIGEN'));
+  const workshopDateIdx = header.findIndex(h => h.includes('FECHA TALLER'));
+  const daysToAttendIdx = header.findIndex(h => h.includes('DIAS PARA ATENDER'));
+  const entryMapIdx = header.findIndex(h => h.includes('MAPA ENTRADA'));
+  const closureDateIdx = header.findIndex(h => h.includes('FECHA CIERRE'));
+  const exitMapIdx = header.findIndex(h => h.includes('MAPA SALIDA'));
+  const daysInShopIdx = header.findIndex(h => h.includes('DIAS EN TALLER'));
+  const commentsIdx = header.findIndex(h => h.includes('COMENTARIOS'));
 
   return rows.slice(1).filter(row => row && row[0]).map((row): Report => {
     const statusRaw = cleanSheetValue(row[statusIdx]).toUpperCase();
     const isClosed = statusRaw.includes('CERRADO') || statusRaw.includes('COMPLETADOS');
 
+    const ev1 = cleanSheetValue(row[ev1Idx]);
+    const ev2 = cleanSheetValue(row[ev2Idx]);
+    const evClose1 = cleanSheetValue(row[evClose1Idx]);
+    const evClose2 = cleanSheetValue(row[evClose2Idx]);
+    const driverVal = cleanSheetValue(row[driverIdx]);
+
     return {
-      id: cleanSheetValue(row[0]), 
+      id: cleanSheetValue(row[otIdx]) || `OT-${Math.floor(1000 + Math.random() * 9000)}`, 
       date: parseFlexibleDate(row[dateIdx]), 
       cd: cleanSheetValue(row[cdIdx]),
       contractor: cleanSheetValue(row[contractorIdx]),
       plate: normalizePlate(cleanSheetValue(row[plateIdx])), 
-      source: cleanSheetValue(row[sourceIdx]), 
-      workshopDate: parseFlexibleDate(row[workshopDateIdx]),
-      initialEvidence: cleanSheetValue(row[initEvidenceIdx]), 
+      driver: driverVal,
+      conductor: driverVal,
+      driverName: driverVal,
+      source: sourceIdx !== -1 ? cleanSheetValue(row[sourceIdx]) : (driverVal ? `CONDUCTOR: ${driverVal}` : 'REPORTE OPERATIVO'), 
+      workshopDate: workshopDateIdx !== -1 ? parseFlexibleDate(row[workshopDateIdx]) : undefined,
+      initialEvidence: ev1 || ev2, 
+      evidence1: ev1,
+      evidence2: ev2,
       novelty: cleanSheetValue(row[noveltyIdx]), 
-      daysToAttend: parseInt(cleanSheetValue(row[daysToAttendIdx])) || 0,
-      entryMap: cleanSheetValue(row[entryMapIdx]), 
+      daysToAttend: daysToAttendIdx !== -1 ? (parseInt(cleanSheetValue(row[daysToAttendIdx])) || 0) : 0,
+      entryMap: entryMapIdx !== -1 ? cleanSheetValue(row[entryMapIdx]) : '', 
       status: isClosed ? 'COMPLETADOS' : 'PENDIENTES', 
-      workshopEvidence: cleanSheetValue(row[workshopEvidenceIdx]), 
-      closureDate: parseFlexibleDate(row[closureDateIdx]), 
-      solutionEvidence: cleanSheetValue(row[solutionEvidenceIdx]), 
-      exitMap: cleanSheetValue(row[exitMapIdx]), 
-      daysInShop: parseInt(cleanSheetValue(row[daysInShopIdx])) || 0, 
-      closureComments: cleanSheetValue(row[commentsIdx]), 
+      workshopEvidence: ev1, 
+      closureDate: closureDateIdx !== -1 ? parseFlexibleDate(row[closureDateIdx]) : undefined, 
+      solutionEvidence: evClose1 || evClose2, 
+      evidenceClose1: evClose1,
+      evidenceClose2: evClose2,
+      exitMap: exitMapIdx !== -1 ? cleanSheetValue(row[exitMapIdx]) : '', 
+      daysInShop: daysInShopIdx !== -1 ? (parseInt(cleanSheetValue(row[daysInShopIdx])) || 0) : 0, 
+      closureComments: commentsIdx !== -1 ? cleanSheetValue(row[commentsIdx]) : '', 
       workshop: cleanSheetValue(row[workshopIdx])
     };
   });
@@ -2130,6 +2142,25 @@ export const submitReportToSheet = async (report: Report): Promise<void> => {
     throw new Error("Error al registrar novedad en el servidor");
   }
 };
+
+export const submitNoveltyReport = async (data: {
+  fecha: string; cd: string; contratista: string; plate: string;
+  conductor: string; novedad: string; taller: string;
+  evidencia1?: string; evidencia2?: string;
+}): Promise<boolean> => {
+  const payload = {
+    method: 'POST_NOVELTY_REPORT',
+    data: { ...data, docId: '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU', sheetName: 'NOVEDADES' }
+  };
+  try {
+    const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+  } catch (e) { console.warn('Reporte novedad CORS falló, fallback:', e); }
+  const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
+  return !!ok;
+};
+
 export const submitMileageToSheet = async (mileageData: any): Promise<void> => { 
   const rawDocId = getMileageDocId();
   const docId = cleanSpreadsheetId(rawDocId);

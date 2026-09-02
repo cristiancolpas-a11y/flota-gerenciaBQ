@@ -934,6 +934,58 @@ function doPost(e) {
         return output("success", "Inspección guardada. " + filas.length + " ítems registrados, " + alertas.length + " en alerta.");
       }
 
+      else if (m === 'POST_NOVELTY_REPORT') {
+        var s = findSheetCaseInsensitive(ss, "NOVEDADES") || getSheetByGid(ss, "1190843304") || getS(ss, "NOVEDADES");
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró la hoja NOVEDADES.");
+        }
+
+        // Si la hoja está vacía, inicializar encabezados
+        if (s.getLastRow() === 0) {
+          s.appendRow([
+            "ORDEN DE TRABAJO", "FECHA", "CD", "CONTRATISTA", "PLACA",
+            "CONDUCTOR", "NOVEDADES", "TALLER", "EVIDENCIA DE REPORTE 1", "EVIDENCIA DE REPORTE 2",
+            "ESTADO", "EVIDENCIA DEL CIERRE 1", "EVIDENCIA DEL CIERRE 2"
+          ]);
+        }
+
+        // Orden de trabajo automática: OT- + (número de filas)
+        var lastRow = s.getLastRow();
+        var ot = "OT-" + ("0000" + (lastRow)).slice(-4); // lastRow ya cuenta el encabezado; da un consecutivo
+
+        var placa = (d.plate || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        var ev1 = sImg(d.evidencia1 || d.evidencia_1, "NOV_REP1_" + placa);
+        var ev2 = sImg(d.evidencia2 || d.evidencia_2, "NOV_REP2_" + placa);
+
+        var rowData = [
+          ot,
+          d.fecha || today(),
+          d.cd || "",
+          d.contratista || "",
+          placa,
+          d.conductor || "",
+          d.novedad || d.novedades || "",
+          d.taller || "",
+          ev1 || "",
+          ev2 || "",
+          "ABIERTO",
+          "",  // evidencia cierre 1
+          ""   // evidencia cierre 2
+        ];
+        s.appendRow(rowData);
+
+        // Enviar correo al taller
+        try {
+          enviarCorreoNovedad(d.taller, ot, d.fecha || today(), d.cd, d.contratista, placa, d.conductor, d.novedad || d.novedades || "", ev1, ev2);
+        } catch (mailErr) {
+          log("Error correo novedad: " + mailErr.toString(), docId);
+        }
+
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Novedad reportada (" + ot + ") y correo enviado al taller " + d.taller + ".");
+      }
+
       else if (m === 'POST_CLEANING') {
         var s = getSheetByGid(ss, "1853969081") || getS(ss, "CRONOGRAMA 5S");
         if (!s) {
@@ -1629,4 +1681,54 @@ function enviarCorreoInspeccionRepuestos(taller, inspector, fecha, items, numAle
     htmlBody: html
   });
 }
+
+function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conductor, novedad, ev1, ev2) {
+  var correosTaller = {
+    "ELECTRONIC": "cristian.colpas2018@gmail.com",
+    "VEHIPESA": "cristian.colpas2018@gmail.com",
+    "TODOFIBRA": "cristian.colpas2018@gmail.com",
+    "ETM": "cristian.colpas2018@gmail.com",
+    "COUNTRY MOTORS": "cristian.colpas2018@gmail.com",
+    "TECNIBENZ": "cristian.colpas2018@gmail.com"
+  };
+  var cc = "cristian.colpas2018@gmail.com";
+  var destino = correosTaller[(taller || "").toUpperCase()] || cc;
+
+  var evHtml = "";
+  if (ev1 && ev1.indexOf("http") === 0) evHtml += '<p><a href="' + ev1 + '" target="_blank" style="color:#2563eb;font-weight:bold;">📸 Ver Evidencia de Reporte 1</a></p>';
+  if (ev2 && ev2.indexOf("http") === 0) evHtml += '<p><a href="' + ev2 + '" target="_blank" style="color:#2563eb;font-weight:bold;">📸 Ver Evidencia de Reporte 2</a></p>';
+
+  var html =
+    '<div style="font-family:Arial,sans-serif;max-width:600px;border:1px solid #e2e8f0;border-radius:12px;padding:24px;background:#ffffff;">' +
+      '<div style="border-bottom:2px solid #0D2B4E;padding-bottom:12px;margin-bottom:16px;">' +
+        '<h2 style="color:#0D2B4E;margin:0;font-size:20px;">🔧 Reporte de Novedad - ' + ot + '</h2>' +
+        '<p style="color:#64748b;font-size:12px;margin:4px 0 0 0;">Gestión y Control de Flota Barranquilla</p>' +
+      '</div>' +
+      '<table style="border-collapse:collapse;font-size:14px;width:100%;">' +
+        '<tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#334155;width:35%;">Taller Asignado:</td><td style="padding:8px 12px;color:#0f172a;font-weight:bold;">' + (taller||"") + '</td></tr>' +
+        '<tr><td style="padding:8px 12px;font-weight:bold;color:#334155;">Fecha de Reporte:</td><td style="padding:8px 12px;color:#0f172a;">' + (fecha||"") + '</td></tr>' +
+        '<tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#334155;">Placa del Vehículo:</td><td style="padding:8px 12px;color:#0D2B4E;font-size:16px;font-weight:900;">' + (placa||"") + '</td></tr>' +
+        '<tr><td style="padding:8px 12px;font-weight:bold;color:#334155;">Centro de Distribución (CD):</td><td style="padding:8px 12px;color:#0f172a;">' + (cd||"") + '</td></tr>' +
+        '<tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#334155;">Contratista:</td><td style="padding:8px 12px;color:#0f172a;">' + (contratista||"") + '</td></tr>' +
+        '<tr><td style="padding:8px 12px;font-weight:bold;color:#334155;">Conductor:</td><td style="padding:8px 12px;color:#0f172a;">' + (conductor||"") + '</td></tr>' +
+        '<tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#334155;vertical-align:top;">Descripción Novedad:</td><td style="padding:8px 12px;color:#b91c1c;font-weight:bold;white-space:pre-wrap;">' + (novedad||"") + '</td></tr>' +
+        '<tr><td style="padding:8px 12px;font-weight:bold;color:#334155;">Estado:</td><td style="padding:8px 12px;color:#ea580c;font-weight:bold;">ABIERTO</td></tr>' +
+      '</table>' +
+      '<div style="margin-top:20px;padding:16px;background:#f1f5f9;border-radius:8px;">' +
+        '<h3 style="color:#0D2B4E;margin:0 0 10px 0;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Evidencias Fotográficas</h3>' + 
+        (evHtml || '<p style="color:#94a3b8;margin:0;font-size:13px;">Sin evidencias adjuntas.</p>') +
+      '</div>' +
+      '<p style="color:#94a3b8;font-size:11px;margin-top:24px;border-top:1px solid #e2e8f0;padding-top:12px;text-align:center;">' +
+        'Mensaje generado automáticamente por el Sistema de Gestión Flota Barranquilla.' +
+      '</p>' +
+    '</div>';
+
+  MailApp.sendEmail({
+    to: destino,
+    cc: cc,
+    subject: "🔧 Reporte de Novedad " + ot + " - Placa " + placa + " (" + taller + ")",
+    htmlBody: html
+  });
+}
+
 

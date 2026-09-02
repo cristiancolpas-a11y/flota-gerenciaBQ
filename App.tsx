@@ -14,6 +14,7 @@ import FineForm from './components/FineForm';
 import FineSupportForm from './components/FineSupportForm';
 import ReportCard from './components/ReportCard';
 import ReportForm from './components/ReportForm';
+import NoveltyReportForm from './components/NoveltyReportForm';
 import ReportStats from './components/ReportStats';
 import VehicleStats from './components/VehicleStats';
 import ClosureForm from './components/ClosureForm';
@@ -134,6 +135,7 @@ const CATEGORY_CHUNKS = {
     icon: Shield,
     items: [
       { id: 'indicadoresOperativos', label: 'Tablero de Indicadores', icon: Activity },
+      { id: 'novedades', label: 'Reporte de Novedades', icon: ClipboardList },
       { id: 'conductores', label: 'Conductores', icon: Users },
       { id: 'vehiculos', label: 'Vehículos', icon: Truck },
       { id: 'comparendos', label: 'Comparendos', icon: Gavel },
@@ -147,6 +149,7 @@ const CATEGORY_CHUNKS = {
     colorTheme: 'emerald',
     icon: Settings,
     items: [
+      { id: 'novedades', label: 'Reporte de Novedades', icon: ClipboardList },
       { id: 'kilometrajes', label: 'Kilometrajes', icon: Gauge },
       { id: 'varadas', label: 'VARADAS', icon: AlertTriangle },
       { id: 'repuestos', label: 'REPUESTOS', icon: Boxes },
@@ -3707,29 +3710,11 @@ const App: React.FC = () => {
         />
       )}
       {showReportForm && (
-        <ReportForm 
+        <NoveltyReportForm 
           vehicles={vehicles} 
           onClose={() => setShowReportForm(false)} 
-          onSubmit={async (d) => { 
-            const newReport: Report = {
-              id: d.id || `temp-${Date.now()}`,
-              date: d.date || new Date().toISOString().split('T')[0],
-              plate: d.plate,
-              source: d.source || 'CONDUCTOR',
-              novelty: d.novelty || '',
-              status: 'PENDIENTES',
-              initialEvidence: d.initialEvidence || ''
-            };
-            setShowReportForm(false);
-            setReports(prev => [newReport, ...prev]);
-
-            try {
-              await submitReportToSheet(d); 
-              handleSyncData().catch(e => console.error(e));
-            } catch (err) {
-              setReports(prev => prev.filter(r => r.id !== newReport.id));
-              alert("No se pudo guardar la novedad. Intenta de nuevo.");
-            }
+          onSuccess={() => {
+            handleSyncData().catch(e => console.error(e));
           }} 
         />
       )}
