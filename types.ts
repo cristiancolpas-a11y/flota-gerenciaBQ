@@ -158,6 +158,22 @@ export interface WorkshopRecord {
   workshopName: string;
 }
 
+export interface NoveltyReport {
+  ot: string;            // ORDEN DE TRABAJO
+  fecha: string;
+  cd: string;
+  contratista: string;
+  plate: string;
+  conductor: string;
+  novedad: string;
+  taller: string;
+  evidenciaReporte1: string;
+  evidenciaReporte2: string;
+  estado: string;        // ABIERTO / CERRADO
+  evidenciaCierre1: string;
+  evidenciaCierre2: string;
+}
+
 export interface Report {
   id: string;
   date: string;

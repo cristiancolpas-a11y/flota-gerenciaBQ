@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord } from '../types';
+import { Vehicle, Driver, Report, NoveltyReport, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
@@ -214,7 +214,8 @@ const OPERATORS_DOC_ID = '1qLEXUCt1RAr28lwOX2sCJhjoEoG4vKVOrv2d45iZ6kU';
 // GIDs for fallbacks
 const VEHICLES_GID = '1506825194';
 const DRIVERS_GID = '1834987510';
-const NOVEDADES_GID = '1190843304';
+const NOVEDADES_GID = '1789987673';
+const NOVEDADES_TALLER_GID = '1190843304';
 const VISITAS_GID = '239875479';
 const MILEAGE_GID = '1929496440';
 const CALIBRATIONS_GID = '505557891';
@@ -1025,9 +1026,33 @@ const processDriverRows = (rows: any[][]): Driver[] => {
 };
 
 /**
- * NOVEDADES (GID 1789987673)
+ * NOVEDADES (Prioridad Hoja Operativa GID 1190843304 / Fallback GID 1789987673)
  */
 export const fetchReportsFromSheet = async (): Promise<Report[]> => {
+  // 1. Intentar primero con la hoja operativa NOVEDADES (GID 1190843304) en docId oficial
+  try {
+    const docId = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+    const rows = await fetchDataFromGAS(docId, 'NOVEDADES', OPERATIONAL_SCRIPT_URL);
+    if (rows && rows.length >= 2) {
+      return processReportRows(rows);
+    }
+  } catch (e) { }
+
+  // 1.1 Fallback CSV directo a GID 1190843304
+  try {
+    const docId = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${NOVEDADES_TALLER_GID}${getCacheBuster()}`;
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    const csvText = await response.text();
+    if (csvText && !csvText.includes("<!DOCTYPE html")) {
+      const parsed = Papa.parse(csvText, { skipEmptyLines: true });
+      if (parsed.data && (parsed.data as any[][]).length >= 2) {
+        return processReportRows(parsed.data as any[][]);
+      }
+    }
+  } catch (e) { }
+
+  // 2. Fallback a documento de rutinas si no hay datos en la hoja operativa
   try {
     const docId = getRoutinesDocId();
     const rows = await fetchDataFromGAS(docId, 'NOVEDADES', WORKSHOP_SCRIPT_URL);
@@ -1094,9 +1119,9 @@ const processReportRows = (rows: any[][]): Report[] => {
   const daysInShopIdx = header.findIndex(h => h.includes('DIAS EN TALLER'));
   const commentsIdx = header.findIndex(h => h.includes('COMENTARIOS'));
 
-  return rows.slice(1).filter(row => row && row[0]).map((row): Report => {
-    const statusRaw = cleanSheetValue(row[statusIdx]).toUpperCase();
-    const isClosed = statusRaw.includes('CERRADO') || statusRaw.includes('COMPLETADOS');
+  return rows.slice(1).filter(row => row && (row[0] || row[4])).map((row): Report => {
+    const statusRaw = cleanSheetValue(row[statusIdx]).toUpperCase().trim();
+    const isClosed = statusRaw.includes('CERRADO') || statusRaw.includes('COMPLETADO');
 
     const ev1 = cleanSheetValue(row[ev1Idx]);
     const ev2 = cleanSheetValue(row[ev2Idx]);
@@ -1121,7 +1146,7 @@ const processReportRows = (rows: any[][]): Report[] => {
       novelty: cleanSheetValue(row[noveltyIdx]), 
       daysToAttend: daysToAttendIdx !== -1 ? (parseInt(cleanSheetValue(row[daysToAttendIdx])) || 0) : 0,
       entryMap: entryMapIdx !== -1 ? cleanSheetValue(row[entryMapIdx]) : '', 
-      status: isClosed ? 'COMPLETADOS' : 'PENDIENTES', 
+      status: isClosed ? 'CERRADO' : 'ABIERTO', 
       workshopEvidence: ev1, 
       closureDate: closureDateIdx !== -1 ? parseFlexibleDate(row[closureDateIdx]) : undefined, 
       solutionEvidence: evClose1 || evClose2, 
@@ -2150,15 +2175,107 @@ export const submitNoveltyReport = async (data: {
 }): Promise<boolean> => {
   const payload = {
     method: 'POST_NOVELTY_REPORT',
-    data: { ...data, docId: '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU', sheetName: 'NOVEDADES' }
+    data: {
+      ...data,
+      // ID único de envío para deduplicar en el backend:
+      clientRequestId: `${data.plate}-${Date.now()}`,
+      docId: '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU',
+      sheetName: 'NOVEDADES'
+    }
   };
   try {
     const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
-  } catch (e) { console.warn('Reporte novedad CORS falló, fallback:', e); }
-  const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
-  return !!ok;
+    // Si llegó respuesta pero no fue success explícito, NO reintentar (evita duplicado)
+    return false;
+  } catch (e) {
+    // Solo si hubo error REAL de red, intentar una vez sin cors
+    console.warn('Reporte novedad error de red, fallback único:', e);
+    const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
+    return !!ok;
+  }
+};
+
+export const submitCloseNoveltyReport = async (data: {
+  id: string; // OT e.g. "OT-0001"
+  ot?: string;
+  plate?: string;
+  cd?: string;
+  contratista?: string;
+  conductor?: string;
+  novedad?: string;
+  taller?: string;
+  fechaCierre?: string;
+  evidenciaCierre1?: string;
+  evidenciaCierre2?: string;
+  solutionEvidence?: string;
+}): Promise<boolean> => {
+  const payload = {
+    method: 'CLOSE_NOVELTY_REPORT',
+    data: {
+      ...data,
+      plate: (data.plate || '').toUpperCase().replace(/[^A-Z0-9]/g, ''),
+      ot: data.ot || data.id,
+      docId: '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU',
+      sheetName: 'NOVEDADES'
+    }
+  };
+  try {
+    const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+    return true;
+  } catch (e) {
+    console.warn('Cierre novedad error de red, fallback no-cors:', e);
+    const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
+    return !!ok;
+  }
+};
+
+export const fetchNoveltyReportsFromSheet = async (): Promise<NoveltyReport[]> => {
+  const docId = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+  const GID = NOVEDADES_TALLER_GID; // 1190843304
+  const map = (rows: any[][]): NoveltyReport[] =>
+    rows.slice(1)
+      .filter(r => r && (r[0] || r[4])) // tiene OT o placa
+      .map((r): NoveltyReport => {
+        const rawEstado = cleanSheetValue(r[10]);
+        const estado = rawEstado.toUpperCase().includes('CERRAD') ? 'CERRADO' : (rawEstado || 'ABIERTO');
+        return {
+          ot: cleanSheetValue(r[0]),
+          fecha: cleanSheetValue(r[1]),
+          cd: cleanSheetValue(r[2]),
+          contratista: cleanSheetValue(r[3]),
+          plate: cleanSheetValue(r[4]),
+          conductor: cleanSheetValue(r[5]),
+          novedad: cleanSheetValue(r[6]),
+          taller: cleanSheetValue(r[7]),
+          evidenciaReporte1: cleanSheetValue(r[8]),
+          evidenciaReporte2: cleanSheetValue(r[9]),
+          estado,
+          evidenciaCierre1: cleanSheetValue(r[11]),
+          evidenciaCierre2: cleanSheetValue(r[12]),
+        };
+      });
+
+  // Intentar Apps Script por gid; si no, CSV por gid
+  try {
+    const rows = await fetchDataFromGAS(docId, 'NOVEDADES', OPERATIONAL_SCRIPT_URL);
+    if (rows && rows.length >= 2) return map(rows);
+  } catch (e) { /* fallback */ }
+
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${GID}${getCacheBuster()}`;
+    const resp = await fetch(url);
+    const csv = await resp.text();
+    if (csv && !csv.includes('<!DOCTYPE html')) {
+      const parsed = Papa.parse(csv, { skipEmptyLines: true });
+      return map(parsed.data as any[][]);
+    }
+  } catch (e) { /* nada */ }
+
+  return [];
 };
 
 export const submitMileageToSheet = async (mileageData: any): Promise<void> => { 

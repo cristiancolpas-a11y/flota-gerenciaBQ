@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord, NoveltyReport } from './types';
 import { VaradasModule } from './components/VaradasModule';
 import { SparePartsModule } from './components/SparePartsModule';
 import DocumentCard from './components/DocumentCard';
@@ -69,6 +69,8 @@ import {
   fetchDriversFromSheet, 
   fetchFinesFromSheet,
   fetchReportsFromSheet,
+  fetchNoveltyReportsFromSheet,
+  submitCloseNoveltyReport,
   fetchWashReportsFromSheet,
   fetchCleaningReportsFromSheet,
   fetchCalibrationsFromSheet,
@@ -208,6 +210,15 @@ const App: React.FC = () => {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [fines, setFines] = useState<Fine[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [noveltyReports, setNoveltyReports] = useState<NoveltyReport[]>([]);
+  const [novedadesSubTab, setNovedadesSubTab] = useState<'reporte' | 'gestion'>(() => {
+    try {
+      const saved = localStorage.getItem('novedadesSubTab');
+      return (saved === 'reporte' || saved === 'gestion') ? saved : 'gestion';
+    } catch {
+      return 'gestion';
+    }
+  });
   const [washReports, setWashReports] = useState<WashReport[]>([]);
   const [cleaningReports, setCleaningReports] = useState<WashReport[]>([]);
   const [calibrations, setCalibrations] = useState<Calibration[]>([]);
@@ -243,7 +254,7 @@ const App: React.FC = () => {
   // UI States
   const [viewDoc, setViewDoc] = useState<{ url: string | string[] | {url: string, label?: string}[], title: string } | null>(null);
   const [fineStatusFilter, setFineStatusFilter] = useState<'all' | 'PENDIENTE' | 'PAGADO'>('all');
-  const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'PENDIENTES' | 'COMPLETADOS'>('all');
+  const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'PENDIENTES' | 'COMPLETADOS' | 'ABIERTO' | 'CERRADO'>('all');
   const [showFineForm, setShowFineForm] = useState(false);
   const [managingFineSupport, setManagingFineSupport] = useState<Fine | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
@@ -437,9 +448,48 @@ const App: React.FC = () => {
       case 'comparendos':
         setFines(await fetchFinesFromSheet());
         break;
-      case 'novedades':
-        setReports(await fetchReportsFromSheet());
+      case 'novedades': {
+        const [novs, reps] = await Promise.all([
+          fetchNoveltyReportsFromSheet(),
+          fetchReportsFromSheet()
+        ]);
+        setNoveltyReports(novs);
+
+        const novsMapped: Report[] = (novs || []).map(n => {
+          const isClosed = (n.estado || '').toUpperCase().includes('CERRAD');
+          return {
+            id: n.ot || `OT-${n.plate}`,
+            date: n.fecha,
+            cd: n.cd,
+            contractor: n.contratista,
+            plate: n.plate,
+            driver: n.conductor,
+            conductor: n.conductor,
+            driverName: n.conductor,
+            source: n.conductor ? `CONDUCTOR: ${n.conductor}` : 'REPORTE NOVEDAD',
+            novelty: n.novedad,
+            workshop: n.taller,
+            initialEvidence: n.evidenciaReporte1 || n.evidenciaReporte2,
+            evidence1: n.evidenciaReporte1,
+            evidence2: n.evidenciaReporte2,
+            status: isClosed ? 'CERRADO' : 'ABIERTO',
+            solutionEvidence: n.evidenciaCierre1 || n.evidenciaCierre2,
+            evidenceClose1: n.evidenciaCierre1,
+            evidenceClose2: n.evidenciaCierre2,
+            workshopEvidence: n.evidenciaReporte1,
+            daysToAttend: 0,
+            daysInShop: 0,
+            entryMap: '',
+            exitMap: ''
+          };
+        });
+
+        const combinedMap = new Map<string, Report>();
+        (reps || []).forEach(r => combinedMap.set(r.id, r));
+        novsMapped.forEach(r => combinedMap.set(r.id, r));
+        setReports(Array.from(combinedMap.values()));
         break;
+      }
       case 'lavados': {
         const w = await fetchWashReportsFromSheet();
         const mergedWash = [...w];
@@ -612,6 +662,55 @@ const App: React.FC = () => {
       console.error("Error al sincronizar:", err);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const refreshNoveltyReports = async () => {
+    try {
+      const [novs, reps] = await Promise.all([
+        fetchNoveltyReportsFromSheet(),
+        fetchReportsFromSheet()
+      ]);
+      setNoveltyReports(novs);
+
+      const novsMapped: Report[] = (novs || []).map(n => {
+        const isClosed = (n.estado || '').toUpperCase().includes('CERRAD');
+        return {
+          id: n.ot || `OT-${n.plate}`,
+          date: n.fecha,
+          cd: n.cd,
+          contractor: n.contratista,
+          plate: n.plate,
+          driver: n.conductor,
+          conductor: n.conductor,
+          driverName: n.conductor,
+          source: n.conductor ? `CONDUCTOR: ${n.conductor}` : 'REPORTE NOVEDAD',
+          novelty: n.novedad,
+          workshop: n.taller,
+          initialEvidence: n.evidenciaReporte1 || n.evidenciaReporte2,
+          evidence1: n.evidenciaReporte1,
+          evidence2: n.evidenciaReporte2,
+          status: isClosed ? 'CERRADO' : 'ABIERTO',
+          solutionEvidence: n.evidenciaCierre1 || n.evidenciaCierre2,
+          evidenceClose1: n.evidenciaCierre1,
+          evidenceClose2: n.evidenciaCierre2,
+          workshopEvidence: n.evidenciaReporte1,
+          daysToAttend: 0,
+          daysInShop: 0,
+          entryMap: '',
+          exitMap: ''
+        };
+      });
+
+      const combinedMap = new Map<string, Report>();
+      (reps || []).forEach(r => combinedMap.set(r.id, r));
+      novsMapped.forEach(r => combinedMap.set(r.id, r));
+      setReports(Array.from(combinedMap.values()));
+
+      return novs;
+    } catch (err) {
+      console.error("Error al refrescar reportes de novedades:", err);
+      return [];
     }
   };
 
@@ -858,6 +957,15 @@ const App: React.FC = () => {
     });
   }, [vehicles, filterCd, filterContractor, searchTerm]);
 
+  const isReportClosed = (status?: string) => {
+    const s = (status || '').toUpperCase().trim();
+    return s.includes('CERRADO') || s.includes('COMPLETADO');
+  };
+  const isReportOpen = (status?: string) => {
+    const s = (status || '').toUpperCase().trim();
+    return s.includes('ABIERTO') || s.includes('PENDIENTE') || !s;
+  };
+
   const filteredReports = useMemo(() => {
     return reports.filter(r => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate));
@@ -880,7 +988,15 @@ const App: React.FC = () => {
       const matchSource = filterSource === 'all' || r.source === filterSource;
       const matchSearch = normalizePlate(r.plate).includes(normalizePlate(searchTerm)) || 
                           (r.source && r.source.toUpperCase().includes(searchTerm.toUpperCase()));
-      const matchStatus = reportStatusFilter === 'all' || r.status === reportStatusFilter;
+      
+      let matchStatus = true;
+      if (reportStatusFilter === 'ABIERTO' || reportStatusFilter === 'PENDIENTES') {
+        matchStatus = isReportOpen(r.status);
+      } else if (reportStatusFilter === 'CERRADO' || reportStatusFilter === 'COMPLETADOS') {
+        matchStatus = isReportClosed(r.status);
+      } else {
+        matchStatus = true;
+      }
       
       return matchMonth && matchYear && matchCd && matchContractor && matchSearch && matchSource && matchStatus;
     });
@@ -911,8 +1027,8 @@ const App: React.FC = () => {
     
     return {
       total: baseFiltered.length,
-      completed: baseFiltered.filter(r => r.status === 'COMPLETADOS').length,
-      pending: baseFiltered.filter(r => r.status === 'PENDIENTES').length,
+      completed: baseFiltered.filter(r => isReportClosed(r.status)).length,
+      pending: baseFiltered.filter(r => isReportOpen(r.status)).length,
       searchCount: filteredReports.length
     };
   }, [reports, vehicles, selectedMonth, filterCd, filterContractor, filterSource, filteredReports, selectedYear]);
@@ -936,7 +1052,7 @@ const App: React.FC = () => {
       }
       
       weeks[weekKey].total += 1;
-      if (r.status === 'COMPLETADOS') {
+      if (isReportClosed(r.status)) {
         weeks[weekKey].completed += 1;
       }
     });
@@ -2361,8 +2477,62 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'novedades' && (
-            <div className="max-w-7xl mx-auto space-y-8 pb-20">
-               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="max-w-7xl mx-auto space-y-6 pb-20">
+              {/* SUB-TABS: REPORTE DE NOVEDADES (TALLER) vs TABLERO HISTÓRICO */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl shadow-sm border border-slate-200">
+                <div className="flex items-center gap-2">
+                  <button
+                    id="subtab-novedades-reporte"
+                    onClick={() => {
+                      setNovedadesSubTab('reporte');
+                      try { localStorage.setItem('novedadesSubTab', 'reporte'); } catch {}
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                      novedadesSubTab === 'reporte'
+                        ? 'bg-[#0D2B4E] text-white shadow-md'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Reporte de Novedades (Taller)
+                  </button>
+                  <button
+                    id="subtab-novedades-gestion"
+                    onClick={() => {
+                      setNovedadesSubTab('gestion');
+                      try { localStorage.setItem('novedadesSubTab', 'gestion'); } catch {}
+                    }}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                      novedadesSubTab === 'gestion'
+                        ? 'bg-[#0D2B4E] text-white shadow-md'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Tablero y Cierres Históricos
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 px-2 text-[10px] text-slate-500 font-black uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  Hoja NOVEDADES (GID 1190843304)
+                </div>
+              </div>
+
+              {novedadesSubTab === 'reporte' ? (
+                <NoveltyReportForm 
+                  vehicles={vehicles}
+                  reports={noveltyReports}
+                  onRefresh={refreshNoveltyReports}
+                  onSuccess={() => {
+                    refreshNoveltyReports().catch(e => console.error(e));
+                    handleSyncData().catch(e => console.error(e));
+                    setNovedadesSubTab('gestion');
+                    try { localStorage.setItem('novedadesSubTab', 'gestion'); } catch {}
+                  }}
+                  isModal={false}
+                />
+              ) : (
+                <div className="space-y-8">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div className="space-y-1">
                     <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-4">
                       <ClipboardList size={40} className="text-indigo-600" /> Gestión de Novedades
@@ -2390,8 +2560,8 @@ const App: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Filtros CD, Contratista y Origen */}
-                    <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2">
+                    {/* Filtros CD, Contratista, Origen y Estado */}
+                    <div className="bg-white p-2 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-2 flex-wrap">
                       <select 
                         className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-[9px] font-black uppercase outline-none focus:border-indigo-500"
                         value={filterCd}
@@ -2415,6 +2585,15 @@ const App: React.FC = () => {
                       >
                         <option value="all">TODOS LOS ORIGENES</option>
                         {uniqueSources.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <select 
+                        className="bg-indigo-50/80 border border-indigo-200 text-indigo-950 font-black rounded-xl px-3 py-2 text-[9px] uppercase outline-none focus:border-indigo-500 cursor-pointer"
+                        value={reportStatusFilter}
+                        onChange={e => setReportStatusFilter(e.target.value as any)}
+                      >
+                        <option value="all">ESTADO: ABIERTOS Y CERRADOS ({statsReports.total})</option>
+                        <option value="ABIERTO">ESTADO: SOLO ABIERTOS ({statsReports.pending})</option>
+                        <option value="CERRADO">ESTADO: SOLO CERRADOS ({statsReports.completed})</option>
                       </select>
                     </div>
 
@@ -2556,10 +2735,10 @@ const App: React.FC = () => {
                               <td className="p-4 uppercase font-black text-slate-400 truncate max-w-[200px]">{r.novelty}</td>
                               <td className="p-4 uppercase font-black text-slate-600">{r.workshop}</td>
                               <td className="p-4">
-                                <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
-                                  r.status === 'COMPLETADOS' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+                                <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border shadow-xs ${
+                                  isReportClosed(r.status) ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse'
                                 }`}>
-                                  {r.status}
+                                  {isReportClosed(r.status) ? 'CERRADO' : 'ABIERTO'}
                                 </span>
                               </td>
                               <td className="p-4 font-black">{r.daysInShop || '0'}d</td>
@@ -2596,6 +2775,8 @@ const App: React.FC = () => {
                     )}
                   </div>
                 )}
+                </div>
+              )}
             </div>
           )}
 
@@ -3712,10 +3893,14 @@ const App: React.FC = () => {
       {showReportForm && (
         <NoveltyReportForm 
           vehicles={vehicles} 
+          reports={noveltyReports}
+          onRefresh={refreshNoveltyReports}
           onClose={() => setShowReportForm(false)} 
           onSuccess={() => {
+            refreshNoveltyReports().catch(e => console.error(e));
             handleSyncData().catch(e => console.error(e));
           }} 
+          isModal={true}
         />
       )}
       {showWashForm && (
@@ -3906,19 +4091,43 @@ const App: React.FC = () => {
             const finalReport = {
               ...closingReport, 
               ...d,
+              status: 'CERRADO',
               cd: selectedVehicle?.cd || closingReport.cd || 'GENERAL',
               contractor: selectedVehicle?.contractor || closingReport.contractor || 'GENERAL'
             } as any;
 
             setClosingReport(null);
-            setReports(prev => prev.map(r => r.id === closingReport.id ? { ...r, ...finalReport, status: 'COMPLETADOS' } : r));
+            // Actualización optimista inmediata
+            setReports(prev => prev.map(r => r.id === closingReport.id ? { ...r, ...finalReport, status: 'CERRADO' } : r));
 
             try {
-              await submitReportToSheet(finalReport); 
+              // 1. Cerrar la novedad en la hoja NOVEDADES (actualiza Estado a CERRADO y guarda evidencias en Drive)
+              await submitCloseNoveltyReport({
+                id: closingReport.id,
+                ot: (closingReport as any).ot || closingReport.id,
+                plate: closingReport.plate,
+                cd: finalReport.cd,
+                contratista: finalReport.contractor,
+                conductor: closingReport.driver || (closingReport as any).conductor || '',
+                novedad: closingReport.novelty || '',
+                taller: closingReport.workshop || '',
+                fechaCierre: d.closureDate || new Date().toISOString().split('T')[0],
+                evidenciaCierre1: (d as any).evidenceClose1 || d.solutionEvidence || '',
+                evidenciaCierre2: (d as any).evidenceClose2 || ''
+              });
+
+              // 2. Si existe reporte en la otra hoja de rutinas/historial, actualizar en segundo plano
+              submitReportToSheet({ ...finalReport, status: 'CERRADO' }).catch(e => {
+                console.warn("POST_REPORT sincronización complementaria:", e);
+              });
+
+              // 3. Refrescar estado y datos
+              await refreshNoveltyReports().catch(e => console.error(e));
               handleSyncData().catch(e => console.error(e));
             } catch (err) {
+              console.error("Error cerrando novedad:", err);
               setReports(previousReports);
-              alert("No se pudo cerrar el reporte.");
+              alert("No se pudo cerrar el reporte en el servidor.");
             }
           }} 
         />

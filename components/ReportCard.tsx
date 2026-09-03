@@ -40,18 +40,18 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
   const thumbWorkshop = getThumb(report.workshopEvidence);
   const [isNoveltyExpanded, setIsNoveltyExpanded] = useState(false);
 
-  const isClosed = report.status === 'COMPLETADOS';
+  const isClosed = report.status === 'COMPLETADOS' || report.status === 'CERRADO';
   const hasEntry = !!report.entryMap;
 
   return (
-    <div className={`bg-white rounded-[2rem] border-2 overflow-hidden shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full ${isClosed ? 'border-emerald-100 bg-emerald-50/5' : 'border-rose-50 bg-white'}`}>
+    <div className={`bg-white rounded-[2rem] border-2 overflow-hidden shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col h-full ${isClosed ? 'border-emerald-100 bg-emerald-50/5' : 'border-amber-100/60 bg-white'}`}>
       
       {/* CABECERA MÁS COMPACTA */}
       <div className={`p-5 flex justify-between items-center relative overflow-hidden ${isClosed ? 'bg-[#064e3b]' : 'bg-[#0f172a]'}`}>
-        <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-20 -mr-16 -mt-16 ${isClosed ? 'bg-emerald-400' : 'bg-rose-500'}`}></div>
+        <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl opacity-20 -mr-16 -mt-16 ${isClosed ? 'bg-emerald-400' : 'bg-amber-500'}`}></div>
         
         <div className="flex items-center gap-3 relative z-10">
-          <div className={`p-2.5 rounded-xl shadow-md border border-white/10 ${isClosed ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+          <div className={`p-2.5 rounded-xl shadow-md border border-white/10 ${isClosed ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
             <Wrench size={20} />
           </div>
           <div>
@@ -70,8 +70,8 @@ const ReportCard: React.FC<ReportCardProps> = ({ report, onViewDoc, onManageClos
         </div>
 
         <div className="flex flex-col items-end relative z-10">
-          <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest shadow-md border ${isClosed ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-rose-600 text-white border-rose-500 animate-pulse'}`}>
-            {isClosed ? 'COMPLETADOS' : 'PENDIENTES'}
+          <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest shadow-md border ${isClosed ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-amber-500 text-slate-950 font-black border-amber-400 animate-pulse'}`}>
+            {isClosed ? 'CERRADO' : 'ABIERTO'}
           </span>
           <span className="text-[7px] text-white/30 font-bold uppercase tracking-widest mt-2">{report.id}</span>
         </div>

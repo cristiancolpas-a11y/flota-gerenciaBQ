@@ -950,23 +950,41 @@ function doPost(e) {
           ]);
         }
 
+        var placa = (d.plate || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        var novedad = (d.novedad || d.novedades || "").toString().trim();
+        var fechaR = (d.fecha || today()).toString().trim();
+
+        // DEDUP: revisar las últimas 5 filas por placa+novedad+fecha iguales
+        var data = s.getDataRange().getValues();
+        for (var i = Math.max(1, data.length - 5); i < data.length; i++) {
+          var rPlaca = (data[i][4] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+          var rNov = (data[i][6] || "").toString().trim();
+          var rFecha = (data[i][1] || "").toString().trim();
+          if (rPlaca === placa && rNov === novedad && rFecha.indexOf(fechaR) !== -1) {
+            // Ya existe: no duplicar, devolver la OT existente
+            if (lock.hasLock()) lock.releaseLock();
+            return output("success", "Novedad ya registrada (" + (data[i][0] || "") + ").");
+          }
+        }
+
         // Orden de trabajo automática: OT- + (número de filas)
         var lastRow = s.getLastRow();
         var ot = "OT-" + ("0000" + (lastRow)).slice(-4); // lastRow ya cuenta el encabezado; da un consecutivo
 
-        var placa = (d.plate || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
         var ev1 = sImg(d.evidencia1 || d.evidencia_1, "NOV_REP1_" + placa);
         var ev2 = sImg(d.evidencia2 || d.evidencia_2, "NOV_REP2_" + placa);
 
+        var tallerNorm = (d.taller || "").toString().trim().toUpperCase();
+
         var rowData = [
           ot,
-          d.fecha || today(),
+          fechaR,
           d.cd || "",
           d.contratista || "",
           placa,
           d.conductor || "",
-          d.novedad || d.novedades || "",
-          d.taller || "",
+          novedad,
+          tallerNorm,
           ev1 || "",
           ev2 || "",
           "ABIERTO",
@@ -977,13 +995,142 @@ function doPost(e) {
 
         // Enviar correo al taller
         try {
-          enviarCorreoNovedad(d.taller, ot, d.fecha || today(), d.cd, d.contratista, placa, d.conductor, d.novedad || d.novedades || "", ev1, ev2);
+          enviarCorreoNovedad(tallerNorm, ot, fechaR, d.cd, d.contratista, placa, d.conductor, novedad, ev1, ev2);
         } catch (mailErr) {
           log("Error correo novedad: " + mailErr.toString(), docId);
         }
 
         if (lock.hasLock()) lock.releaseLock();
-        return output("success", "Novedad reportada (" + ot + ") y correo enviado al taller " + d.taller + ".");
+        return output("success", "Novedad reportada (" + ot + ") y correo enviado al taller " + tallerNorm + ".");
+      }
+
+      else if (m === 'CLOSE_NOVELTY_REPORT') {
+        var s = findSheetCaseInsensitive(ss, "NOVEDADES") || getSheetByGid(ss, "1190843304") || getS(ss, "NOVEDADES");
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró la hoja NOVEDADES.");
+        }
+        var targetOt = (d.id || d.ot || "").toString().trim().toUpperCase();
+        var targetPlate = (d.plate || "").toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        var data = s.getDataRange().getValues();
+        var header = data[0] ? data[0].map(function(h) { return (h || "").toString().toUpperCase().trim(); }) : [];
+
+        var otIdx = -1;
+        var estadoIdx = -1;
+        var c1Idx = -1;
+        var c2Idx = -1;
+        var placaIdx = -1;
+        var fechaCierreIdx = -1;
+
+        for (var c = 0; c < header.length; c++) {
+          var hTitle = header[c];
+          if ((hTitle.indexOf("ORDEN") !== -1 || hTitle.indexOf("OT") !== -1) && otIdx === -1) otIdx = c;
+          if (hTitle.indexOf("PLACA") !== -1 && placaIdx === -1) placaIdx = c;
+          if (hTitle.indexOf("ESTADO") !== -1 && estadoIdx === -1) estadoIdx = c;
+          if ((hTitle.indexOf("CIERRE") !== -1 || hTitle.indexOf("SOLUCION") !== -1) && hTitle.indexOf("2") === -1 && c1Idx === -1) c1Idx = c;
+          if ((hTitle.indexOf("CIERRE") !== -1 || hTitle.indexOf("SOLUCION") !== -1) && hTitle.indexOf("2") !== -1 && c2Idx === -1) c2Idx = c;
+          if (hTitle.indexOf("FECHA") !== -1 && hTitle.indexOf("CIERRE") !== -1 && fechaCierreIdx === -1) fechaCierreIdx = c;
+        }
+
+        if (otIdx === -1) otIdx = 0;
+        if (placaIdx === -1) placaIdx = 4;
+        if (estadoIdx === -1) estadoIdx = 10;
+        if (c1Idx === -1) c1Idx = 11;
+        if (c2Idx === -1) c2Idx = 12;
+
+        // Asegurar que la hoja tenga los encabezados correspondientes si faltaban
+        var maxCol = Math.max(estadoIdx, c1Idx, c2Idx);
+        if (s.getLastColumn() <= maxCol) {
+          if (!header[estadoIdx]) s.getRange(1, estadoIdx + 1).setValue("ESTADO");
+          if (!header[c1Idx]) s.getRange(1, c1Idx + 1).setValue("EVIDENCIA DEL CIERRE 1");
+          if (!header[c2Idx]) s.getRange(1, c2Idx + 1).setValue("EVIDENCIA DEL CIERRE 2");
+        }
+
+        var foundRow = -1;
+        // 1. Coincidencia exacta de OT
+        if (targetOt) {
+          for (var i = 1; i < data.length; i++) {
+            var rowOt = (data[i][otIdx] || "").toString().trim().toUpperCase();
+            if (rowOt === targetOt) {
+              foundRow = i + 1;
+              break;
+            }
+          }
+        }
+
+        // 2. Coincidencia por número consecutivo de OT (ej: "OT-0006" con "0006" o "6")
+        if (foundRow === -1 && targetOt) {
+          var targetNum = targetOt.replace(/[^0-9]/g, "");
+          if (targetNum) {
+            for (var i = 1; i < data.length; i++) {
+              var rowOt = (data[i][otIdx] || "").toString().trim().toUpperCase();
+              var rowNum = rowOt.replace(/[^0-9]/g, "");
+              if (rowNum && (rowNum === targetNum || parseInt(rowNum, 10) === parseInt(targetNum, 10))) {
+                foundRow = i + 1;
+                break;
+              }
+            }
+          }
+        }
+
+        // 3. Coincidencia por Placa (buscar la última novedad ABIERTA de esa placa)
+        if (foundRow === -1 && targetPlate) {
+          for (var i = data.length - 1; i >= 1; i--) {
+            var rowPlate = (data[i][placaIdx] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+            var rowEstado = (data[i][estadoIdx] || "").toString().toUpperCase().trim();
+            if (rowPlate === targetPlate && rowEstado !== "CERRADO") {
+              foundRow = i + 1;
+              break;
+            }
+          }
+          if (foundRow === -1) {
+            for (var i = data.length - 1; i >= 1; i--) {
+              var rowPlate = (data[i][placaIdx] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+              if (rowPlate === targetPlate) {
+                foundRow = i + 1;
+                break;
+              }
+            }
+          }
+        }
+
+        var rawEv1 = d.evidenciaCierre1 || d.evidenceClose1 || d.solutionEvidence || d.evidencia1 || "";
+        var rawEv2 = d.evidenciaCierre2 || d.evidenceClose2 || d.evidencia2 || "";
+
+        var evCierre1 = rawEv1 ? sImg(rawEv1, "NOV_C1_" + (targetPlate || targetOt)) : "";
+        var evCierre2 = rawEv2 ? sImg(rawEv2, "NOV_C2_" + (targetPlate || targetOt)) : "";
+
+        if (foundRow !== -1) {
+          // Cambiar estado a CERRADO y guardar evidencias
+          s.getRange(foundRow, estadoIdx + 1).setValue("CERRADO");
+          if (evCierre1) s.getRange(foundRow, c1Idx + 1).setValue(evCierre1);
+          if (evCierre2) s.getRange(foundRow, c2Idx + 1).setValue(evCierre2);
+          if (fechaCierreIdx !== -1) s.getRange(foundRow, fechaCierreIdx + 1).setValue(d.fechaCierre || today());
+
+          if (lock.hasLock()) lock.releaseLock();
+          return output("success", "Novedad " + targetOt + " cerrada exitosamente (Estado: CERRADO, Evidencias guardadas).");
+        } else {
+          // Si no existía la fila previa en NOVEDADES, registrarla cerrada para no perder el reporte ni las evidencias
+          var newOt = targetOt || ("OT-" + ("0000" + s.getLastRow()).slice(-4));
+          var newRow = [
+            newOt,
+            d.fecha || d.fechaCierre || today(),
+            d.cd || "GENERAL",
+            d.contratista || "GENERAL",
+            targetPlate || "PLACA",
+            d.conductor || "",
+            d.novedad || "",
+            d.taller || "",
+            "",
+            "",
+            "CERRADO",
+            evCierre1,
+            evCierre2
+          ];
+          s.appendRow(newRow);
+          if (lock.hasLock()) lock.releaseLock();
+          return output("success", "Novedad " + newOt + " registrada y cerrada exitosamente con evidencias.");
+        }
       }
 
       else if (m === 'POST_CLEANING') {
@@ -1566,19 +1713,20 @@ function sImg(base64, name) {
     var folders = DriveApp.getFoldersByName(folderName);
     var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
     var mimeType = "image/jpeg";
-    var str = base64.toString();
+    var str = base64.toString().trim();
     if (str.indexOf("data:") === 0 && str.indexOf(";") > 5) {
       mimeType = str.substring(5, str.indexOf(';'));
     }
     var parts = str.split(',');
-    if (parts.length < 2) return base64 || "";
-    var bytes = Utilities.base64Decode(parts[1]);
-    var blob = Utilities.newBlob(bytes, mimeType, (name || "FILE") + "_" + Date.now() + (mimeType === 'application/pdf' ? '.pdf' : '.jpg'));
+    var base64Data = (parts.length >= 2) ? parts[1] : str;
+    var bytes = Utilities.base64Decode(base64Data);
+    var ext = (mimeType === 'application/pdf') ? '.pdf' : (mimeType.indexOf('png') !== -1 ? '.png' : '.jpg');
+    var blob = Utilities.newBlob(bytes, mimeType, (name || "FILE") + "_" + Date.now() + ext);
     var file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return file.getUrl();
   } catch (e) {
-    return (base64 && base64.length > 500) ? "Error Archivo" : (base64 || "");
+    return (base64 && base64.length > 500) ? "Error Archivo: " + e.toString() : (base64 || "");
   }
 }
 
@@ -1684,44 +1832,54 @@ function enviarCorreoInspeccionRepuestos(taller, inspector, fecha, items, numAle
 
 function enviarCorreoNovedad(taller, ot, fecha, cd, contratista, placa, conductor, novedad, ev1, ev2) {
   var correosTaller = {
-    "ELECTRONIC": "cristian.colpas2018@gmail.com",
-    "VEHIPESA": "cristian.colpas2018@gmail.com",
-    "TODOFIBRA": "cristian.colpas2018@gmail.com",
-    "ETM": "cristian.colpas2018@gmail.com",
-    "COUNTRY MOTORS": "cristian.colpas2018@gmail.com",
-    "TECNIBENZ": "cristian.colpas2018@gmail.com"
+    "TECNIBENZ": "Gerente@mtecnibenz.com,Contabilidad@mtecnibenz.com",
+    "TODOFIBRA": "administracion@carroceriastodofibra.com.co",
+    "ELECTRONIC": "zonanorte@elec-s.com,comercial5@elec-s.com",
+    "NAVITRANS": "jfrancot@navitrans.com.co",
+    "VEHIPESA": "auxi.adm.vehipesa@gmail.com,aux.operativo.vehipesa@gmail.com"
   };
-  var cc = "cristian.colpas2018@gmail.com";
-  var destino = correosTaller[(taller || "").toUpperCase()] || cc;
+  var cc = "aperez@rentingcolombia.com,edgar.arrieta@ab-inbev.com";
+  var destino = correosTaller[(taller || "").toUpperCase().trim()] || cc;
+
+  var estado = "ABIERTO";
+  var estadoColor = "#F2B705"; // dorado para ABIERTO
+
+  // Fila auxiliar (label + valor) con fondo alterno
+  function fila(label, valor, bg, valorColor, bold) {
+    return '<tr style="background:' + bg + ';">' +
+             '<td style="padding:12px 16px;color:#6B7280;font-size:14px;width:45%;">' + label + '</td>' +
+             '<td style="padding:12px 16px;color:' + (valorColor || '#111827') + ';font-size:14px;' + (bold ? 'font-weight:bold;' : '') + '">' + (valor || '') + '</td>' +
+           '</tr>';
+  }
+
+  var filas =
+    fila('Taller Asignado:', taller, '#F1F3F5', '#111827', true) +
+    fila('Fecha de Reporte:', fecha, '#FFFFFF') +
+    fila('Placa del Vehículo:', placa, '#F1F3F5', '#111827', true) +
+    fila('Centro de Distribución (CD):', cd, '#FFFFFF') +
+    fila('Contratista:', contratista, '#F1F3F5') +
+    fila('Conductor:', conductor, '#FFFFFF') +
+    fila('Descripción Novedad:', novedad, '#F1F3F5', '#DC2626', true) +
+    fila('Estado:', estado, '#FFFFFF', estadoColor, true);
 
   var evHtml = "";
-  if (ev1 && ev1.indexOf("http") === 0) evHtml += '<p><a href="' + ev1 + '" target="_blank" style="color:#2563eb;font-weight:bold;">📸 Ver Evidencia de Reporte 1</a></p>';
-  if (ev2 && ev2.indexOf("http") === 0) evHtml += '<p><a href="' + ev2 + '" target="_blank" style="color:#2563eb;font-weight:bold;">📸 Ver Evidencia de Reporte 2</a></p>';
+  if (ev1 && ev1.indexOf("http") === 0) evHtml += '<p style="margin:8px 0;"><a href="' + ev1 + '" style="color:#0D2B4E;text-decoration:none;font-weight:bold;">🔗 Ver Evidencia de Reporte 1</a></p>';
+  if (ev2 && ev2.indexOf("http") === 0) evHtml += '<p style="margin:8px 0;"><a href="' + ev2 + '" style="color:#0D2B4E;text-decoration:none;font-weight:bold;">🔗 Ver Evidencia de Reporte 2</a></p>';
+  if (!evHtml) evHtml = '<p style="color:#6B7280;">Sin evidencias adjuntas.</p>';
 
   var html =
-    '<div style="font-family:Arial,sans-serif;max-width:600px;border:1px solid #e2e8f0;border-radius:12px;padding:24px;background:#ffffff;">' +
-      '<div style="border-bottom:2px solid #0D2B4E;padding-bottom:12px;margin-bottom:16px;">' +
-        '<h2 style="color:#0D2B4E;margin:0;font-size:20px;">🔧 Reporte de Novedad - ' + ot + '</h2>' +
-        '<p style="color:#64748b;font-size:12px;margin:4px 0 0 0;">Gestión y Control de Flota Barranquilla</p>' +
-      '</div>' +
-      '<table style="border-collapse:collapse;font-size:14px;width:100%;">' +
-        '<tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#334155;width:35%;">Taller Asignado:</td><td style="padding:8px 12px;color:#0f172a;font-weight:bold;">' + (taller||"") + '</td></tr>' +
-        '<tr><td style="padding:8px 12px;font-weight:bold;color:#334155;">Fecha de Reporte:</td><td style="padding:8px 12px;color:#0f172a;">' + (fecha||"") + '</td></tr>' +
-        '<tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#334155;">Placa del Vehículo:</td><td style="padding:8px 12px;color:#0D2B4E;font-size:16px;font-weight:900;">' + (placa||"") + '</td></tr>' +
-        '<tr><td style="padding:8px 12px;font-weight:bold;color:#334155;">Centro de Distribución (CD):</td><td style="padding:8px 12px;color:#0f172a;">' + (cd||"") + '</td></tr>' +
-        '<tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#334155;">Contratista:</td><td style="padding:8px 12px;color:#0f172a;">' + (contratista||"") + '</td></tr>' +
-        '<tr><td style="padding:8px 12px;font-weight:bold;color:#334155;">Conductor:</td><td style="padding:8px 12px;color:#0f172a;">' + (conductor||"") + '</td></tr>' +
-        '<tr style="background:#f8fafc;"><td style="padding:8px 12px;font-weight:bold;color:#334155;vertical-align:top;">Descripción Novedad:</td><td style="padding:8px 12px;color:#b91c1c;font-weight:bold;white-space:pre-wrap;">' + (novedad||"") + '</td></tr>' +
-        '<tr><td style="padding:8px 12px;font-weight:bold;color:#334155;">Estado:</td><td style="padding:8px 12px;color:#ea580c;font-weight:bold;">ABIERTO</td></tr>' +
-      '</table>' +
-      '<div style="margin-top:20px;padding:16px;background:#f1f5f9;border-radius:8px;">' +
-        '<h3 style="color:#0D2B4E;margin:0 0 10px 0;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Evidencias Fotográficas</h3>' + 
-        (evHtml || '<p style="color:#94a3b8;margin:0;font-size:13px;">Sin evidencias adjuntas.</p>') +
-      '</div>' +
-      '<p style="color:#94a3b8;font-size:11px;margin-top:24px;border-top:1px solid #e2e8f0;padding-top:12px;text-align:center;">' +
-        'Mensaje generado automáticamente por el Sistema de Gestión Flota Barranquilla.' +
-      '</p>' +
-    '</div>';
+  '<div style="background:#FFFFFF;padding:24px;font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:auto;border:1px solid #F1F3F5;border-radius:12px;">' +
+    '<h1 style="color:#0D2B4E;font-size:22px;margin:0 0 4px 0;">🔧 Reporte de Novedad - ' + ot + '</h1>' +
+    '<p style="color:#6B7280;font-size:13px;margin:0 0 20px 0;border-bottom:1px solid #F1F3F5;padding-bottom:12px;">Gestión y Control de Flota Barranquilla</p>' +
+    '<table style="border-collapse:collapse;width:100%;border-radius:8px;overflow:hidden;">' +
+      filas +
+    '</table>' +
+    '<div style="background:#F1F3F5;border-radius:8px;padding:16px;margin-top:20px;">' +
+      '<h3 style="color:#0D2B4E;font-size:15px;margin:0 0 12px 0;letter-spacing:1px;">EVIDENCIAS FOTOGRÁFICAS</h3>' +
+      evHtml +
+    '</div>' +
+    '<p style="color:#9CA3AF;font-size:12px;text-align:center;margin-top:24px;">Mensaje generado automáticamente por el Sistema de Gestión Flota Barranquilla.</p>' +
+  '</div>';
 
   MailApp.sendEmail({
     to: destino,
