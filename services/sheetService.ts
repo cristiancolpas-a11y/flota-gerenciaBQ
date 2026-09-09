@@ -24,7 +24,7 @@ export const AUDIT_STANDARD_SCRIPT_URL = 'https://script.google.com/macros/s/AKf
 // Script que atiende el documento de Calidad y Seguridad (hoja CIERRE1, doc 1HnykQOr...)
 export const CALIDAD_SEG_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyWPA_veHmVseG7MlJIMzgY7czzdUlLvqsNqkbGXSEEqjdYggZ_5c5ObkOVdT4z1e-7Vg/exec';
 
-// Script propio del módulo Cierre de Novedades (doc 1y58Rna0...)
+// Script propio del módulo Cierre de Novedades (doc 1LdneoDkFwIdYf...)
 export const CIERRE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
 
 export const sanitizeScriptUrl = (url: string): string => {
@@ -124,7 +124,6 @@ export const cleanSpreadsheetId = (idOrUrl: string): string => {
       'GOOGLE_SPREADSHEET_MASTER_ID',
       'GOOGLE_SPREADSHEET_CORRECTIVES_ID',
       'GOOGLE_SPREADSHEET_FINES_ID',
-      'GOOGLE_SPREADSHEET_CONTROL_TOWER_ID',
       'GOOGLE_SPREADSHEET_AUDIT_ID',
       'GOOGLE_SPREADSHEET_AUDIT_QS_ID'
     ];
@@ -162,7 +161,7 @@ export const getFinesSheetId = (): string => {
 };
 
 export const getControlTowerDocId = (): string => {
-  return '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
+  return '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60';
 };
 
 export const getAuditDocId = (): string => {
@@ -227,8 +226,8 @@ const CHECKLIST_DOC_ID = '1i6qGjwhQW3AeR1ja5UxZkOXjJU3oh0f_8Grt131NQzk';
 const CHECKLIST_GALAPA_DOC_ID = '14kak0CqSnX9oOXk0GKD0G_QIt5aJxuCu9-_Livst70Y';
 
 // TORRE DE CONTROL / CIERRE DE NOVEDADES
-const CONTROL_TOWER_DOC_ID = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
-const CONTROL_TOWER_GID = '1993951123';
+export const CONTROL_TOWER_DOC_ID = '1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60';
+export const CONTROL_TOWER_GID = '1012312873';
 
 const AUDIT_DOC_ID = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
 const FLEET_AVAILABILITY_DOC_ID = '1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E';
@@ -2920,20 +2919,89 @@ export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
 
 const processControlTowerRows = (rows: any[][]): ControlTowerRecord[] => {
   if (!rows || rows.length < 2) return [];
+
+  // Detect header indices dynamically
+  const header = rows[0].map(c => String(c || '').toLowerCase().trim());
+  let idxContratista = header.findIndex(h => h.includes('transportista') || h.includes('contratista'));
+  let idxCd = header.findIndex(h => h === 'cd' || h.includes('centro'));
+  let idxFecha = header.findIndex(h => h.includes('fecha') && !h.includes('soluci'));
+  let idxSemana = header.findIndex(h => h.includes('semana'));
+  let idxMes = header.findIndex(h => h.includes('mes'));
+  let idxPlaca = header.findIndex(h => h.includes('placa'));
+  let idxFuente = header.findIndex(h => h.includes('fuente'));
+  let idxReporte = header.findIndex(h => h.includes('reporte') || h.includes('novedad') || h.includes('item'));
+  let idxSistema = header.findIndex(h => h.includes('sistema'));
+  let idxEstado = header.findIndex(h => h.includes('estado'));
+  let idxCriticidad = header.findIndex(h => h.includes('criticidad'));
+  let idxFechaSolucion = header.findIndex(h => h.includes('fecha') && h.includes('soluci'));
+  let idxDiasCierre = header.findIndex(h => h.includes('días de cierre') || h.includes('dias de cierre'));
+  let idxDiasParaCierre = header.findIndex(h => h.includes('para cierre'));
+  let idxCumplimiento = header.findIndex(h => h.includes('cumplimiento'));
+  let idxMeta = header.findIndex(h => h === 'meta');
+  let idxMetaRt = header.findIndex(h => h.includes('meta rt'));
+  let idxPorcentajeRt = header.findIndex(h => h.includes('porcentaje') || h.includes('taller'));
+  let idxObservaciones = header.findIndex(h => h.includes('observaci') || h.includes('verificaci'));
+  let idxEvidenciaAntes = header.findIndex(h => (h.includes('evidencia') || h.includes('foto')) && h.includes('antes'));
+  let idxEvidenciaDespues = header.findIndex(h => (h.includes('evidencia') || h.includes('foto')) && (h.includes('desp') || h.includes('después')));
+
+  // Defaults for Cierre de Novedades (doc 1LdneoDkFwIdYf-7Xii94an5hzwuL2BqQlKqK2DQ3G60, gid 1012312873)
+  if (idxContratista === -1) idxContratista = 0;
+  if (idxCd === -1) idxCd = 1;
+  if (idxFecha === -1) idxFecha = 2;
+  if (idxSemana === -1) idxSemana = 3;
+  if (idxMes === -1) idxMes = 4;
+  if (idxPlaca === -1) idxPlaca = 5;
+  if (idxFuente === -1) idxFuente = 6;
+  if (idxReporte === -1) idxReporte = 7;
+  if (idxSistema === -1) idxSistema = 8;
+  if (idxEstado === -1) idxEstado = 9;
+  if (idxCriticidad === -1) idxCriticidad = 10;
+  if (idxFechaSolucion === -1) idxFechaSolucion = 11;
+  if (idxDiasCierre === -1) idxDiasCierre = 12;
+  if (idxDiasParaCierre === -1) idxDiasParaCierre = 13;
+  if (idxCumplimiento === -1) idxCumplimiento = 14;
+  if (idxMeta === -1) idxMeta = 15;
+  if (idxMetaRt === -1) idxMetaRt = 16;
+  if (idxPorcentajeRt === -1) idxPorcentajeRt = 17;
+  if (idxObservaciones === -1) idxObservaciones = 18;
+  if (idxEvidenciaAntes === -1) idxEvidenciaAntes = 19;
+  if (idxEvidenciaDespues === -1) idxEvidenciaDespues = 20;
+
   const rowsWithoutHeader = rows.slice(1);
-  const filteredRows = rowsWithoutHeader.filter(row => row && (cleanSheetValue(row[1]) || cleanSheetValue(row[4])));
+  const filteredRows = rowsWithoutHeader.filter(row => {
+    if (!row || !Array.isArray(row)) return false;
+    const placa = cleanSheetValue(row[idxPlaca]);
+    const reporte = cleanSheetValue(row[idxReporte]);
+    return (placa && placa.length >= 2) || (reporte && reporte.length >= 2);
+  });
 
   return filteredRows.map((row, i): ControlTowerRecord => {
-    const rawFecha = cleanSheetValue(row[0]);
-    const rawPlaca = cleanSheetValue(row[1]);
-    const rawCd = cleanSheetValue(row[2]);
-    const rawContratista = cleanSheetValue(row[3]);
-    const rawItem = cleanSheetValue(row[4]);
-    const rawVerificacion = cleanSheetValue(row[5]);
-    const rawEvidencia = cleanSheetValue(row[6]);
-    const rawEstado = cleanSheetValue(row[7]) || (rawEvidencia ? 'REALIZADO' : 'PENDIENTE');
+    const rawContratista = cleanSheetValue(row[idxContratista]);
+    const rawCd = cleanSheetValue(row[idxCd]);
+    const rawFecha = cleanSheetValue(row[idxFecha]);
+    const rawSemana = cleanSheetValue(row[idxSemana]);
+    const rawMes = cleanSheetValue(row[idxMes]);
+    const rawPlaca = cleanSheetValue(row[idxPlaca]);
+    const rawFuente = cleanSheetValue(row[idxFuente]);
+    const rawReporte = cleanSheetValue(row[idxReporte]);
+    const rawSistema = cleanSheetValue(row[idxSistema]);
+    const rawEstado = cleanSheetValue(row[idxEstado]);
+    const rawCriticidad = cleanSheetValue(row[idxCriticidad]);
+    const rawFechaSolucion = cleanSheetValue(row[idxFechaSolucion]);
+    const rawDiasCierre = parseFloat(cleanSheetValue(row[idxDiasCierre])) || 0;
+    const rawDiasParaCierre = parseFloat(cleanSheetValue(row[idxDiasParaCierre])) || 0;
+    const rawCumplimiento = cleanSheetValue(row[idxCumplimiento]);
+    const rawMeta = parseFloat(cleanSheetValue(row[idxMeta]).replace('%', '')) || 95;
+    const rawMetaRt = parseFloat(cleanSheetValue(row[idxMetaRt]).replace('%', '')) || 90;
+    const rawPorcentajeRt = parseFloat(cleanSheetValue(row[idxPorcentajeRt]).replace('%', '')) || 0;
+    const rawObservaciones = cleanSheetValue(row[idxObservaciones]);
+    const rawEvidenciaAntes = cleanSheetValue(row[idxEvidenciaAntes]);
+    const rawEvidenciaDespues = cleanSheetValue(row[idxEvidenciaDespues]);
 
-    const isClosed = rawEstado.toUpperCase() === 'REALIZADO' || rawEstado.toUpperCase() === 'CERRADO' || rawEstado.toUpperCase() === 'COMPLETADO';
+    const isClosed = rawEstado.toUpperCase() === 'CERRADO' || 
+                     rawEstado.toUpperCase() === 'REALIZADO' || 
+                     rawEstado.toUpperCase() === 'COMPLETADO' ||
+                     (rawEvidenciaDespues && rawEvidenciaDespues.length > 5);
 
     let dateObj = new Date();
     if (rawFecha) {
@@ -2941,32 +3009,32 @@ const processControlTowerRows = (rows: any[][]): ControlTowerRecord[] => {
       if (!isNaN(parsedD.getTime())) dateObj = parsedD;
     }
 
-    const weekStr = `W${Math.ceil((dateObj.getDate() || 1) / 7)}`;
-    const monthStr = dateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+    const weekStr = rawSemana ? (rawSemana.toUpperCase().startsWith('W') ? rawSemana : `W${rawSemana}`) : `W${Math.ceil((dateObj.getDate() || 1) / 7)}`;
+    const monthStr = rawMes ? rawMes.toUpperCase() : dateObj.toLocaleString('es-ES', { month: 'long' }).toUpperCase();
 
     return {
-      id: `ct-${i}-${rawPlaca || 'item'}`,
+      id: `ct-${i}-${normalizePlate(rawPlaca) || 'item'}`,
       contractor: rawContratista || 'LOGISTICA',
       cd: rawCd || 'GENERAL',
       reportDate: parseFlexibleDate(rawFecha),
       week: weekStr,
       month: monthStr,
       plate: normalizePlate(rawPlaca),
-      source: 'Cierre de Novedades',
-      novelty: rawItem,
-      system: 'General',
-      status: rawEstado,
-      criticality: 'Media',
-      solutionDate: isClosed ? parseFlexibleDate(rawFecha) : '',
-      closureDays: isClosed ? 1 : 0,
-      daysToClose: isClosed ? 0 : 1,
-      maintenanceCompliance: isClosed ? 'Cumple' : 'No Cumple',
-      maintenanceGoal: 95,
-      workshopGoal: 90,
-      workshopResponsePercentage: isClosed ? 100 : 0,
-      observations: rawVerificacion,
-      evidenceBefore: rawEvidencia,
-      evidenceAfter: rawEvidencia,
+      source: rawFuente || 'Cierre de Novedades',
+      novelty: rawReporte,
+      system: rawSistema || 'General',
+      status: rawEstado || (isClosed ? 'Cerrado' : 'Pendiente'),
+      criticality: rawCriticidad || 'Media',
+      solutionDate: rawFechaSolucion ? parseFlexibleDate(rawFechaSolucion) : (isClosed ? parseFlexibleDate(rawFecha) : ''),
+      closureDays: rawDiasCierre,
+      daysToClose: rawDiasParaCierre,
+      maintenanceCompliance: rawCumplimiento || (isClosed ? 'Cumple' : 'No Cumple'),
+      maintenanceGoal: rawMeta,
+      workshopGoal: rawMetaRt,
+      workshopResponsePercentage: rawPorcentajeRt || (isClosed ? 100 : 0),
+      observations: rawObservaciones,
+      evidenceBefore: rawEvidenciaAntes,
+      evidenceAfter: rawEvidenciaDespues,
     };
   });
 };
@@ -2976,7 +3044,7 @@ export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]
     const docId = getControlTowerDocId();
     console.log("[fetchControlTowerFromSheet] Iniciando lectura. DocID:", docId, "| ScriptUrl:", CIERRE_SCRIPT_URL);
 
-    const rows = await fetchDataFromGAS(docId, 'cierre', CIERRE_SCRIPT_URL);
+    const rows = await fetchDataFromGAS(docId, 'Cierre de Novedades', CIERRE_SCRIPT_URL);
     console.log("[fetchControlTowerFromSheet] Filas recibidas de fetchDataFromGAS:", rows ? rows.length : 0);
     
     if (!rows || rows.length < 2) {
@@ -2995,10 +3063,10 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
   try {
     const docId = getControlTowerDocId();
     const urls = [
-      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=1993951123${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=1993951123${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=cierre${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=cierre${getCacheBuster()}`
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=${encodeURIComponent('Cierre de Novedades')}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('Cierre de Novedades')}${getCacheBuster()}`
     ];
 
     for (const url of urls) {
@@ -3042,9 +3110,9 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
 export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolean> => {
   const rawEv = data.evidence || data.evidencia || data.evidenceAfter || data.evidenceBefore || '';
   const hasEvidence = !!(rawEv && (typeof rawEv === 'string' ? rawEv.trim().length > 0 : Array.isArray(rawEv) ? rawEv.length > 0 : true));
-  const finalStatus = (hasEvidence || data.status === 'REALIZADO' || data.estado === 'REALIZADO') 
-    ? 'REALIZADO' 
-    : (data.status || data.estado || 'REALIZADO');
+  const finalStatus = (hasEvidence || data.status === 'REALIZADO' || data.estado === 'REALIZADO' || data.status === 'Cerrado' || data.estado === 'Cerrado') 
+    ? 'Cerrado' 
+    : (data.status || data.estado || 'Cerrado');
 
   const payload = {
     method: 'POST_CIERRE_UPDATE',
@@ -3053,7 +3121,8 @@ export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolea
       estado: finalStatus,
       status: finalStatus,
       docId: getControlTowerDocId(), 
-      sheetName: 'cierre' 
+      sheetName: 'Cierre de Novedades',
+      gid: CONTROL_TOWER_GID
     }
   };
   try {
@@ -4778,8 +4847,6 @@ export const submitSparePartInspection = async (inspection: {
   const success = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
   return !!success;
 };
-
-
 
 
 
