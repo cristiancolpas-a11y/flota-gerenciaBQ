@@ -20,7 +20,8 @@ import {
   FLEET_STANDARD_QUALITY_ITEMS,
   fetchCalidadCierreFromSheet,
   submitCalidadCierreUpdateToSheet,
-  CALIDAD_SEG_SPREADSHEET_URL
+  CALIDAD_SEG_SPREADSHEET_URL,
+  formatMonthName
 } from '../services/sheetService';
 import { FleetSeguimientoTab } from './FleetSeguimientoTab';
 
@@ -147,8 +148,8 @@ const ExecutiveAuditDashboard: React.FC = () => {
       const selCentro = filterCentro.toLowerCase().trim();
       const matchCentro = filterCentro === 'TODOS' || itemCentro === selCentro || itemCentro.includes(selCentro.replace('dc ', '').trim());
 
-      const itemMes = (item.mes || '').toLowerCase().trim();
-      const selMes = filterMes.toLowerCase().trim();
+      const itemMes = (formatMonthName(item.mes) || item.mes || '').toLowerCase().trim();
+      const selMes = (formatMonthName(filterMes) || filterMes).toLowerCase().trim();
       const matchMes = filterMes === 'TODOS' || itemMes === selMes;
 
       const selTipo = filterTipo.toLowerCase().trim();
@@ -166,8 +167,15 @@ const ExecutiveAuditDashboard: React.FC = () => {
   const uniqueMonths = useMemo(() => {
     const monthsSet = new Set<string>();
     data.forEach(item => {
-      if (item.mes) {
-        monthsSet.add(item.mes.toLowerCase().trim());
+      const m = formatMonthName(item.mes);
+      if (m) {
+        monthsSet.add(m.toLowerCase().trim());
+      }
+    });
+    cierreRecords.forEach(rec => {
+      const m = formatMonthName(rec.fecha);
+      if (m) {
+        monthsSet.add(m.toLowerCase().trim());
       }
     });
     
@@ -184,7 +192,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
       if (idxB === -1) return -1;
       return idxA - idxB;
     });
-  }, [data]);
+  }, [data, cierreRecords]);
 
   const fileToImage = (file: File): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -339,31 +347,52 @@ const ExecutiveAuditDashboard: React.FC = () => {
     return Array.from(itemsSet).sort();
   }, [cierreRecords]);
 
+  const isItemRealizado = (estado?: string): boolean => {
+    if (!estado) return false;
+    const s = estado.toUpperCase().trim();
+    return s.includes('REALIZADO') || s.includes('CERRADO') || s === 'SI' || s === 'OK' || s === '1';
+  };
+
   const filteredCierreRecords = useMemo(() => {
-    return cierreRecords.filter(item => {
-      // CD filter compatibility (Galapa, Arenosa, etc)
-      const itemCD = (item.cd || '').toUpperCase().trim();
-      const selCentro = filterCentro.toUpperCase().trim();
-      const selCentroNoDC = selCentro.replace('DC ', '').trim();
-      const matchCentro = filterCentro === 'TODOS' || 
-        itemCD === selCentro ||
-        itemCD.includes(selCentroNoDC);
-      
-      const matchItem = filterCierreItem === 'TODOS' ||
-        (item.item && item.item.toUpperCase().trim() === filterCierreItem.toUpperCase().trim());
+    return cierreRecords
+      .filter(item => {
+        // CD filter compatibility (Galapa, Arenosa, etc)
+        const itemCD = (item.cd || '').toUpperCase().trim();
+        const selCentro = filterCentro.toUpperCase().trim();
+        const selCentroNoDC = selCentro.replace('DC ', '').trim();
+        const matchCentro = filterCentro === 'TODOS' || 
+          itemCD === selCentro ||
+          itemCD.includes(selCentroNoDC);
+        
+        // Month filter
+        const itemMes = (formatMonthName(item.fecha) || '').toLowerCase().trim();
+        const selMes = (formatMonthName(filterMes) || filterMes).toLowerCase().trim();
+        const matchMes = filterMes === 'TODOS' || itemMes === selMes;
+        if (!matchMes) return false;
 
-      const matchSearch = !searchTerm || 
-        item.placa.toUpperCase().includes(searchTerm.toUpperCase()) ||
-        (item.item && item.item.toUpperCase().includes(searchTerm.toUpperCase()));
+        const matchItem = filterCierreItem === 'TODOS' ||
+          (item.item && item.item.toUpperCase().trim() === filterCierreItem.toUpperCase().trim());
 
-      const isRealizado = !!(item.estado?.toUpperCase().includes('CERRADO') || item.estado?.toUpperCase().includes('REALIZADO'));
-      const matchEstado = filterCierreEstado === 'TODOS' ||
-        (filterCierreEstado === 'REALIZADO' && isRealizado) ||
-        (filterCierreEstado === 'PENDIENTE' && !isRealizado);
+        const matchSearch = !searchTerm || 
+          item.placa.toUpperCase().includes(searchTerm.toUpperCase()) ||
+          (item.item && item.item.toUpperCase().includes(searchTerm.toUpperCase()));
 
-      return matchCentro && matchItem && matchSearch && matchEstado;
-    });
-  }, [cierreRecords, filterCentro, filterCierreItem, searchTerm, filterCierreEstado]);
+        const isRealizado = isItemRealizado(item.estado);
+        const matchEstado = filterCierreEstado === 'TODOS' ||
+          (filterCierreEstado === 'REALIZADO' && isRealizado) ||
+          (filterCierreEstado === 'PENDIENTE' && !isRealizado);
+
+        return matchCentro && matchItem && matchSearch && matchEstado;
+      })
+      .sort((a, b) => {
+        const aReal = isItemRealizado(a.estado);
+        const bReal = isItemRealizado(b.estado);
+        // REALIZADOS PRIMERO en la visualización
+        if (aReal && !bReal) return -1;
+        if (!aReal && bReal) return 1;
+        return (b.fecha || '').localeCompare(a.fecha || '');
+      });
+  }, [cierreRecords, filterCentro, filterMes, filterCierreItem, searchTerm, filterCierreEstado]);
 
   const handleExportCierreExcel = () => {
     if (filteredCierreRecords.length === 0) {
@@ -470,16 +499,41 @@ const ExecutiveAuditDashboard: React.FC = () => {
   };
 
   const closureMetrics = useMemo(() => {
-    const total = filteredCierreRecords.length;
+    // Base records for active Centro, Item, Mes and Search filters
+    const baseRecords = cierreRecords.filter(item => {
+      const itemCD = (item.cd || '').toUpperCase().trim();
+      const selCentro = filterCentro.toUpperCase().trim();
+      const selCentroNoDC = selCentro.replace('DC ', '').trim();
+      const matchCentro = filterCentro === 'TODOS' || 
+        itemCD === selCentro ||
+        itemCD.includes(selCentroNoDC);
+      
+      // Month filter
+      const itemMes = (formatMonthName(item.fecha) || '').toLowerCase().trim();
+      const selMes = (formatMonthName(filterMes) || filterMes).toLowerCase().trim();
+      const matchMes = filterMes === 'TODOS' || itemMes === selMes;
+      if (!matchMes) return false;
+
+      const matchItem = filterCierreItem === 'TODOS' ||
+        (item.item && item.item.toUpperCase().trim() === filterCierreItem.toUpperCase().trim());
+
+      const matchSearch = !searchTerm || 
+        item.placa.toUpperCase().includes(searchTerm.toUpperCase()) ||
+        (item.item && item.item.toUpperCase().includes(searchTerm.toUpperCase()));
+
+      return matchCentro && matchItem && matchSearch;
+    });
+
+    const total = baseRecords.length;
     if (total === 0) return { total: 0, closed: 0, open: 0, uniquePlates: 0, compliance: 0 };
 
-    const closed = filteredCierreRecords.filter(r => r.estado && r.estado.toUpperCase().includes('CERRADO')).length;
-    const open = filteredCierreRecords.filter(r => r.estado && !r.estado.toUpperCase().includes('CERRADO')).length;
-    const uniquePlates = new Set(filteredCierreRecords.map(r => r.placa)).size;
+    const closed = baseRecords.filter(r => isItemRealizado(r.estado)).length;
+    const open = baseRecords.filter(r => !isItemRealizado(r.estado)).length;
+    const uniquePlates = new Set(baseRecords.map(r => r.placa)).size;
     const compliance = total > 0 ? (closed / total) * 100 : 0;
 
     return { total, closed, open, uniquePlates, compliance };
-  }, [filteredCierreRecords]);
+  }, [cierreRecords, filterCentro, filterMes, filterCierreItem, searchTerm]);
 
   // Derived Metrics
   const metrics = useMemo(() => {
@@ -634,17 +688,6 @@ const ExecutiveAuditDashboard: React.FC = () => {
             Seguimiento
           </button>
         </div>
-
-        <a 
-          href={CALIDAD_SEG_SPREADSHEET_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2.5 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 transition-all group shrink-0"
-          title="Abrir hoja de cálculo de Google Sheets (ID: 1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM)"
-        >
-          <ExternalLink size={15} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-          <span>Abrir Google Sheets</span>
-        </a>
       </div>
 
       {/* Header & Filters (solo visible en Dashboard y Cierre de Novedades) */}
@@ -1235,7 +1278,11 @@ const ExecutiveAuditDashboard: React.FC = () => {
           </div>
         </div>
       ) : (
-        <FleetSeguimientoTab />
+        <FleetSeguimientoTab 
+          externalMes={filterMes}
+          onMesChange={setFilterMes}
+          externalCd={filterCentro}
+        />
       )}
       <AnimatePresence>
         {showEvidenceModal && (
