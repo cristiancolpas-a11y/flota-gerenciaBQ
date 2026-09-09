@@ -4132,17 +4132,57 @@ export const formatMonthName = (val: any): string => {
     'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
   ];
 
+  // Exact match with month names
+  const matchIdx = MONTH_NAMES.findIndex(m => m === str);
+  if (matchIdx !== -1) return MONTH_NAMES[matchIdx];
+
+  // Starts with month name (e.g., AGOSTOCOJTX435, SEPTIEMBRE_01)
+  const startsWithName = MONTH_NAMES.find(m => str.startsWith(m) && str.length >= m.length);
+  if (startsWithName) return startsWithName;
+
   // If numeric (e.g. 1..12, "1", "06", "6.0", etc.)
   const num = parseInt(str, 10);
   if (!isNaN(num) && num >= 1 && num <= 12 && (String(num) === str || str.startsWith(String(num)) || str.length <= 2 || str.endsWith('.0'))) {
     return MONTH_NAMES[num - 1];
   }
 
-  // Exact match with month names
-  const matchIdx = MONTH_NAMES.findIndex(m => m === str);
-  if (matchIdx !== -1) return MONTH_NAMES[matchIdx];
+  // Date formats: YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const m = parseInt(str.slice(5, 7), 10);
+    if (m >= 1 && m <= 12) return MONTH_NAMES[m - 1];
+  }
 
-  // Prefix match (e.g., JUN, JUL, SEP, etc.)
+  // Date formats: DD/MM or DD/MM/YYYY or MM/DD/YYYY
+  const slashParts = str.split(/[\/\-]/);
+  if (slashParts.length >= 2) {
+    if (slashParts[0].length === 4) {
+      const m = parseInt(slashParts[1], 10);
+      if (m >= 1 && m <= 12) return MONTH_NAMES[m - 1];
+    } else {
+      const p1 = parseInt(slashParts[0], 10);
+      const p2 = parseInt(slashParts[1], 10);
+      // In Spanish standard DD/MM is predominant, so p2 is month
+      if (p2 >= 1 && p2 <= 12 && (p1 > 12 || slashParts.length === 2)) {
+        return MONTH_NAMES[p2 - 1];
+      } else if (p1 >= 1 && p1 <= 12 && p2 > 12) {
+        return MONTH_NAMES[p1 - 1];
+      } else if (p2 >= 1 && p2 <= 12) {
+        return MONTH_NAMES[p2 - 1];
+      }
+    }
+  }
+
+  // Excel serial number
+  if (/^\d+$/.test(str)) {
+    const serial = parseInt(str, 10);
+    if (serial > 30000 && serial < 60000) {
+      const d = new Date((serial - 25569) * 86400 * 1000);
+      return MONTH_NAMES[d.getUTCMonth()];
+    }
+  }
+
+  // Prefix match (e.g., JUN, JUL, SEP, SET, etc.)
+  if (str.startsWith('SET')) return 'SEPTIEMBRE';
   const prefixIdx = MONTH_NAMES.findIndex(m => m.startsWith(str) && str.length >= 3);
   if (prefixIdx !== -1) return MONTH_NAMES[prefixIdx];
 
@@ -4192,11 +4232,16 @@ const processSeguimientoRows = (rows: any[][]): FleetSeguimientoRecord[] => {
     .filter(row => row && (row[idxMes] || row[idxCd] || row[idxPlaca]))
     .map((row, i): FleetSeguimientoRecord => {
       const placaRaw = cleanSheetValue(row[idxPlaca]);
+      const rawLlave = cleanSheetValue(row[idxLlave]);
+      const rawFecha = cleanSheetValue(row[idxFecha]);
+      const rawMes = cleanSheetValue(row[idxMes]);
+      const resolvedMes = formatMonthName(rawMes) || formatMonthName(rawFecha) || formatMonthName(rawLlave) || 'AGOSTO';
+
       return {
         id: `seg-${i}-${placaRaw || i}`,
-        llave: cleanSheetValue(row[idxLlave]),
-        fecha: cleanSheetValue(row[idxFecha]),
-        mes: formatMonthName(cleanSheetValue(row[idxMes])),
+        llave: rawLlave,
+        fecha: rawFecha,
+        mes: resolvedMes,
         cd: cleanSheetValue(row[idxCd]) || 'GENERAL',
         contratista: cleanSheetValue(row[idxContratista]),
         placa: normalizePlate(placaRaw),
@@ -4847,7 +4892,6 @@ export const submitSparePartInspection = async (inspection: {
   const success = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
   return !!success;
 };
-
 
 
 
