@@ -232,7 +232,10 @@ const CONTROL_TOWER_GID = '1993951123';
 
 const AUDIT_DOC_ID = '1y58Rna0-JfBNVBbh6Pt381cHqQWGTupkSVUQYsK1nxs';
 const FLEET_AVAILABILITY_DOC_ID = '1NTOAqE9fD5qepaAqQ1s_AbvilYHaQGl7f9fIPW_mq8E';
-const AUDIT_QS_DOC_ID = '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM';
+export const CALIDAD_SEG_DOC_ID = '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM';
+export const CALIDAD_SEG_SEGUIMIENTO_GID = '1828399123';
+export const CALIDAD_SEG_SPREADSHEET_URL = `https://docs.google.com/spreadsheets/d/${CALIDAD_SEG_DOC_ID}/edit?gid=${CALIDAD_SEG_SEGUIMIENTO_GID}#gid=${CALIDAD_SEG_SEGUIMIENTO_GID}`;
+const AUDIT_QS_DOC_ID = CALIDAD_SEG_DOC_ID;
 
 const getCacheBuster = () => `&t=${new Date().getTime()}`;
 
@@ -3997,8 +4000,8 @@ export const fetchSeguimientoFromSheet = async (): Promise<FleetSeguimientoRecor
     if (csvRes && csvRes.length > 0) {
       return csvRes;
     }
-    const docId = AUDIT_DOC_ID;
-    const rows = await fetchDataFromGAS(docId, 'SEGUIMIENTO', getGoogleScriptUrl());
+    const docId = getAuditQsDocId() || CALIDAD_SEG_DOC_ID;
+    const rows = await fetchDataFromGAS(docId, 'SEGUIMIENTO', AUDIT_STANDARD_SCRIPT_URL);
     if (!rows || rows.length < 2) {
       return [];
     }
@@ -4011,24 +4014,42 @@ export const fetchSeguimientoFromSheet = async (): Promise<FleetSeguimientoRecor
 
 const fetchSeguimientoFromSheetCSV = async (): Promise<FleetSeguimientoRecord[]> => {
   try {
-    const docId = AUDIT_DOC_ID;
-    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=SEGUIMIENTO${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
-    const csvText = await response.text();
-    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
+    const docId = getAuditQsDocId() || CALIDAD_SEG_DOC_ID;
+    const gid = CALIDAD_SEG_SEGUIMIENTO_GID;
+    const urls = [
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${gid}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${gid}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=SEGUIMIENTO${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=SEGUIMIENTO${getCacheBuster()}`
+    ];
 
-    return new Promise((resolve) => {
-      Papa.parse(csvText, {
-        header: false,
-        skipEmptyLines: 'greedy',
-        complete: (results) => {
-          const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          resolve(processSeguimientoRows(rows));
-        },
-        error: () => resolve([])
-      });
-    });
+    for (const url of urls) {
+      try {
+        const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+        const csvText = await response.text();
+        if (!csvText || csvText.includes("<!DOCTYPE html") || csvText.length < 30) continue;
+
+        const records = await new Promise<FleetSeguimientoRecord[]>((resolve) => {
+          Papa.parse(csvText, {
+            header: false,
+            skipEmptyLines: 'greedy',
+            complete: (results) => {
+              const rows = results.data as any[][];
+              if (!rows || rows.length < 2) { resolve([]); return; }
+              resolve(processSeguimientoRows(rows));
+            },
+            error: () => resolve([])
+          });
+        });
+
+        if (records && records.length > 0) {
+          return records;
+        }
+      } catch (err) {
+        // continue trying next URL
+      }
+    }
+    return [];
   } catch (e) { return []; }
 };
 

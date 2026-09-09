@@ -19,7 +19,8 @@ import {
   FLEET_STANDARD_SECURITY_ITEMS,
   FLEET_STANDARD_QUALITY_ITEMS,
   fetchCalidadCierreFromSheet,
-  submitCalidadCierreUpdateToSheet
+  submitCalidadCierreUpdateToSheet,
+  CALIDAD_SEG_SPREADSHEET_URL
 } from '../services/sheetService';
 import { FleetSeguimientoTab } from './FleetSeguimientoTab';
 
@@ -611,26 +612,39 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F0F4FF] text-slate-800 p-4 lg:p-8 font-sans selection:bg-blue-200 selection:text-blue-900">
-      {/* Tab Switcher */}
-      <div className="flex flex-wrap gap-4 mb-8">
-        <button 
-          onClick={() => setActiveTab('dashboard')}
-          className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+      {/* Tab Switcher & Link to Google Sheets */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+          >
+            Dashboard
+          </button>
+          <button 
+            onClick={() => setActiveTab('cierre')}
+            className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'cierre' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+          >
+            Cierre de Novedades
+          </button>
+          <button 
+            onClick={() => setActiveTab('seguimiento')}
+            className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'seguimiento' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+          >
+            Seguimiento
+          </button>
+        </div>
+
+        <a 
+          href={CALIDAD_SEG_SPREADSHEET_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2.5 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 hover:-translate-y-0.5 transition-all group shrink-0"
+          title="Abrir hoja de cálculo de Google Sheets (ID: 1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM)"
         >
-          Dashboard
-        </button>
-        <button 
-          onClick={() => setActiveTab('cierre')}
-          className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'cierre' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
-        >
-          Cierre de Novedades
-        </button>
-        <button 
-          onClick={() => setActiveTab('seguimiento')}
-          className={`px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'seguimiento' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
-        >
-          Seguimiento
-        </button>
+          <ExternalLink size={15} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+          <span>Abrir Google Sheets</span>
+        </a>
       </div>
 
       {/* Header & Filters (solo visible en Dashboard y Cierre de Novedades) */}

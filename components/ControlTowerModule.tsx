@@ -717,7 +717,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
           }`}
         >
           <CheckCircle size={14} />
-          CIERRE DE NOVEDADES
+          NOVEDADES DEL CHECK LIST
         </button>
       </div>
 

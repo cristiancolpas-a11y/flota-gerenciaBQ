@@ -785,6 +785,18 @@ export const MttrModule: React.FC = () => {
     return list.sort((a, b) => a.promedioDiasReingreso - b.promedioDiasReingreso);
   }, [filteredReingresosRecords]);
 
+  // Global MTBR stats for MTBR tab
+  const mtbrGlobalStats = useMemo(() => {
+    if (reincidenceSummaries.length === 0) {
+      return { avgMtbrDays: 0, criticalCount: 0, totalIngresos: 0 };
+    }
+    const sumDays = reincidenceSummaries.reduce((acc, s) => acc + s.promedioDiasReingreso, 0);
+    const avgMtbrDays = Math.round((sumDays / reincidenceSummaries.length) * 10) / 10;
+    const criticalCount = reincidenceSummaries.filter(s => s.criticoCount > 0 || s.promedioDiasReingreso < 7).length;
+    const totalIngresos = reincidenceSummaries.reduce((acc, s) => acc + s.totalIngresos, 0);
+    return { avgMtbrDays, criticalCount, totalIngresos };
+  }, [reincidenceSummaries]);
+
   // Global KPIs block
   const statsKPIs = useMemo(() => {
     const totalInterventions = filteredRecords.length;
@@ -1170,7 +1182,7 @@ export const MttrModule: React.FC = () => {
           <div>
             <h1 className="text-3xl font-black tracking-tight text-white flex gap-2 flex-wrap items-center">
               CENTRO DE CONTROL
-              <span className="text-[#00D4FF] text-xs font-mono uppercase bg-[#00D4FF]/10 px-2 py-0.5 rounded border border-[#00D4FF]/20">MTTR FLOTA</span>
+              <span className="text-[#00D4FF] text-xs font-mono uppercase bg-[#00D4FF]/10 px-2 py-0.5 rounded border border-[#00D4FF]/20">MTTR / MTBR FLOTA</span>
               {isLive ? (
                 <span className="text-[#00FF88] text-[9px] font-mono uppercase bg-[#00FF88]/10 px-2 py-0.5 rounded border border-[#00FF88]/20 animate-pulse">VIVO (DOCS)</span>
               ) : (
@@ -1270,14 +1282,28 @@ export const MttrModule: React.FC = () => {
           onClick={() => { setActiveTab('seguimiento'); setSelectedPlaca(null); }}
           className={`px-3 md:px-4 py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'seguimiento' && !selectedPlaca ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/30' : 'text-[#8B949E] hover:text-white hover:bg-white/5'}`}
         >
-          Seguimiento de Tiempos
+          Seguimiento de Tiempos (MTTR)
         </button>
 
         <button
           onClick={() => { setActiveTab('reincidencias'); setSelectedPlaca(null); }}
           className={`px-3 md:px-4 py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'reincidencias' && !selectedPlaca ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/30' : 'text-[#8B949E] hover:text-white hover:bg-white/5'}`}
         >
-          Reingresos
+          MTBR (Reingresos)
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('resumen'); setSelectedPlaca(null); }}
+          className={`px-3 md:px-4 py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'resumen' && !selectedPlaca ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/30' : 'text-[#8B949E] hover:text-white hover:bg-white/5'}`}
+        >
+          Resumen MTTR por CD
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('sistemas'); setSelectedPlaca(null); }}
+          className={`px-3 md:px-4 py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'sistemas' && !selectedPlaca ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/30' : 'text-[#8B949E] hover:text-white hover:bg-white/5'}`}
+        >
+          Sistemas & Talleres
         </button>
 
         {selectedPlaca && (
@@ -1297,47 +1323,84 @@ export const MttrModule: React.FC = () => {
         <div className="bg-[#111625] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-[#00FF88]/30 transition-all">
           <div className="absolute top-0 left-0 w-full h-[3px] bg-[#00FF88]" />
           <div className="space-y-2">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Placas Activas</span>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+              {activeTab === 'reincidencias' ? 'Placas Evaluadas MTBR' : 'Placas Activas'}
+            </span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-extrabold tracking-tight text-[#00FF88] leading-none">
-                {statsKPIs.activePlates}
+                {activeTab === 'reincidencias' ? reincidenceSummaries.length : statsKPIs.activePlates}
               </span>
               <span className="text-[9px] font-bold text-slate-500 uppercase font-mono">Camiones</span>
             </div>
-            <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">Base total registrada</p>
+            <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">
+              {activeTab === 'reincidencias' ? 'Total monitoreadas para reingreso' : 'Base total registrada'}
+            </p>
           </div>
         </div>
 
-        {/* Card 2: Average hours in workshop (Col F) */}
+        {/* Card 2: Average hours in workshop (Col F) or MTBR Average */}
         <div className="bg-[#111625] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-[#FFB800]/30 transition-all">
           <div className="absolute top-0 left-0 w-full h-[3px] bg-[#FFB800]" />
           <div className="space-y-2">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-bold">Promedio Horas Taller</span>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-bold">
+              {activeTab === 'reincidencias' ? 'MTBR Promedio Flota' : 'Promedio Horas Taller'}
+            </span>
             <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-4xl font-extrabold tracking-tight text-[#FFB800] leading-none">
-                {statsKPIs.avgHoursTaller}
-              </span>
-              <span className="text-[9px] font-bold text-slate-500 uppercase font-mono mr-1">Hrs</span>
-              <span className="text-[10px] text-slate-450 font-bold">
-                (~{statsKPIs.avgDaysTaller}d)
-              </span>
+              {activeTab === 'reincidencias' ? (
+                <>
+                  <span className="text-4xl font-extrabold tracking-tight text-[#FFB800] leading-none">
+                    {mtbrGlobalStats.avgMtbrDays}
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-500 uppercase font-mono mr-1">Días</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-4xl font-extrabold tracking-tight text-[#FFB800] leading-none">
+                    {statsKPIs.avgHoursTaller}
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-500 uppercase font-mono mr-1">Hrs</span>
+                  <span className="text-[10px] text-slate-450 font-bold">
+                    (~{statsKPIs.avgDaysTaller}d)
+                  </span>
+                </>
+              )}
             </div>
-            <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">MTTR extraído de Columna F (horas)</p>
+            <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">
+              {activeTab === 'reincidencias' ? 'Tiempo medio entre intervenciones (MTBR)' : 'MTTR extraído de Columna F (horas)'}
+            </p>
           </div>
         </div>
 
-        {/* Card 3: Critical System */}
+        {/* Card 3: Critical System or Reincidence Alerts */}
         <div className="bg-[#111625] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-indigo-400/30 transition-all">
           <div className="absolute top-0 left-0 w-full h-[3px] bg-indigo-500" />
           <div className="space-y-2">
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-bold">Sistema Más Intervenido</span>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-bold">
+              {activeTab === 'reincidencias' ? 'Reincidencias Críticas' : 'Sistema Más Intervenido'}
+            </span>
             <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-black text-white uppercase tracking-tight block truncate">
-                {statsKPIs.topSys}
-              </span>
-              <span className="text-[8px] text-[#00D4FF] font-black uppercase tracking-widest block font-mono">SISTEMA CONTROL</span>
+              {activeTab === 'reincidencias' ? (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-extrabold tracking-tight text-[#FF3B3B] leading-none">
+                      {mtbrGlobalStats.criticalCount}
+                    </span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase font-mono">Placas</span>
+                  </div>
+                  <span className="text-[8px] text-[#FF3B3B] font-black uppercase tracking-widest block font-mono">REINGRESO &lt; 7 DÍAS</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-black text-white uppercase tracking-tight block truncate">
+                    {statsKPIs.topSys}
+                  </span>
+                  <span className="text-[8px] text-[#00D4FF] font-black uppercase tracking-widest block font-mono">SISTEMA CONTROL</span>
+                </>
+              )}
             </div>
-            <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">Frecuencia más alta hV</p>
+            <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">
+              {activeTab === 'reincidencias' ? 'Vehículos con alertas de recurrencia' : 'Frecuencia más alta hV'}
+            </p>
           </div>
         </div>
       </div>
@@ -1810,9 +1873,9 @@ export const MttrModule: React.FC = () => {
             <div className="bg-[#FF3B3B]/5 border border-[#FF3B3B]/10 p-5 rounded-2xl flex items-start gap-4">
               <ShieldAlert className="text-[#FF3B3B] shrink-0 mt-0.5" size={20} />
               <div className="space-y-0.5">
-                <h4 className="text-xs font-black text-white uppercase tracking-wider">Interpretación de Valores Críticos</h4>
+                <h4 className="text-xs font-black text-white uppercase tracking-wider">Índice MTBR (Mean Time Between Repairs / Tiempo Medio Entre Reparaciones)</h4>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Las placas con <strong>valores negativos</strong> (ej: COVEK257, COUYY058) representan vehículos que reingresaron al taller antes de que finalizara formalmente la visita anterior, o que sufren constantes intervenciones con overlap temporal. Acceda al detalle pulsando sobre la fila correspondiente.
+                  El indicador <strong>MTBR</strong> mide el promedio de días que opera un vehículo entre su salida de taller y su siguiente reingreso. Permite identificar reincidencias prematuras (&lt; 7 días) o superposiciones en taller. Haga clic en <strong>Ver Detalle</strong> para analizar el expediente por placa.
                 </p>
               </div>
             </div>
@@ -1827,7 +1890,7 @@ export const MttrModule: React.FC = () => {
                       <th className="p-6">Empresa Contratista</th>
                       <th className="p-6">CD Base</th>
                       <th className="p-6 text-center">N° Ingresos Taller</th>
-                      <th className="p-6 text-right">Promedio Días a Reingreso</th>
+                      <th className="p-6 text-right">MTBR (Días Promedio)</th>
                       <th className="p-6 text-right">Mínimo Intervalo</th>
                       <th className="p-6 text-center">Reincidencias (&lt;7 días)</th>
                       <th className="p-6">Diagnóstico Clave</th>
@@ -1865,7 +1928,7 @@ export const MttrModule: React.FC = () => {
                           {/* Promedio tiempo libre */}
                           <td className="p-6 text-right font-mono font-black">
                             <span className={isCritical ? 'text-[#FF3B3B]' : 'text-[#00FF88]'}>
-                              {s.promedioDiasReingreso} días
+                              {s.promedioDiasReingreso} d MTBR
                             </span>
                           </td>
 

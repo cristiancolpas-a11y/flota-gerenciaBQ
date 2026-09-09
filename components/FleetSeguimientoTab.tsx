@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Filter, Download, RefreshCw, Truck, UserCheck, Calendar, 
-  Building2, ShieldCheck, CheckCircle2, Clock, User, FileText, ChevronRight
+  Building2, ShieldCheck, CheckCircle2, Clock, User, FileText, ChevronRight, ExternalLink
 } from 'lucide-react';
 import { FleetSeguimientoRecord } from '../types';
-import { fetchSeguimientoFromSheet, formatMonthName } from '../services/sheetService';
+import { fetchSeguimientoFromSheet, formatMonthName, CALIDAD_SEG_SPREADSHEET_URL } from '../services/sheetService';
 
 interface FleetSeguimientoTabProps {
   isDarkTheme?: boolean;
@@ -217,7 +217,22 @@ export const FleetSeguimientoTab: React.FC<FleetSeguimientoTabProps> = ({ isDark
           </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <a
+            href={CALIDAD_SEG_SPREADSHEET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`px-4 py-2.5 rounded-2xl border text-xs font-bold transition-all shadow-sm flex items-center gap-2 ${
+              isDarkTheme
+                ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-400 hover:bg-emerald-900/50'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+            }`}
+            title="Abrir hoja de cálculo de Google Sheets"
+          >
+            <ExternalLink size={14} />
+            <span>Abrir Google Sheets</span>
+          </a>
+
           <button
             onClick={loadData}
             disabled={loading}
@@ -544,7 +559,16 @@ export const FleetSeguimientoTab: React.FC<FleetSeguimientoTabProps> = ({ isDark
 
         <div className={`p-4 border-t ${isDarkTheme ? 'border-slate-800 text-slate-400' : 'border-slate-100 text-slate-500'} text-xs flex justify-between items-center`}>
           <span>Mostrando <strong className={isDarkTheme ? 'text-white' : 'text-slate-800'}>{filteredData.length}</strong> de <strong className={isDarkTheme ? 'text-white' : 'text-slate-800'}>{data.length}</strong> registros</span>
-          <span className="text-[10px] uppercase font-bold text-slate-400">Hoja: SEGUIMIENTO</span>
+          <a 
+            href={CALIDAD_SEG_SPREADSHEET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
+            title="Abrir hoja SEGUIMIENTO en Google Sheets"
+          >
+            <span>Hoja: SEGUIMIENTO</span>
+            <ExternalLink size={11} />
+          </a>
         </div>
       </div>
     </div>

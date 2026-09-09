@@ -142,7 +142,7 @@ const CATEGORY_CHUNKS = {
       { id: 'vehiculos', label: 'Vehículos', icon: Truck },
       { id: 'comparendos', label: 'Comparendos', icon: Gavel },
       { id: 'checklist', label: 'Check List', icon: ClipboardList },
-      { id: 'cierre_novedades', label: 'Cierre de Novedades', icon: Lock },
+      { id: 'cierre_novedades', label: 'Novedades del Check List', icon: Lock },
       { id: 'estandar_flota', label: 'ESTÁNDAR DOC-IMG', icon: ShieldCheck },
     ]
   },
@@ -155,7 +155,7 @@ const CATEGORY_CHUNKS = {
       { id: 'kilometrajes', label: 'Kilometrajes', icon: Gauge },
       { id: 'varadas', label: 'VARADAS', icon: AlertTriangle },
       { id: 'repuestos', label: 'REPUESTOS', icon: Boxes },
-      { id: 'cierre_novedades', label: 'Cierre de Novedades', icon: Lock },
+      { id: 'cierre_novedades', label: 'Novedades del Check List', icon: Lock },
       { id: 'limpieza', label: 'Limpieza 5S', icon: Sparkles },
       { id: 'visitas', label: 'Visitas a Taller', icon: Store },
       { id: 'calibraciones', label: 'Calibración', icon: Disc },
@@ -167,7 +167,7 @@ const CATEGORY_CHUNKS = {
       { id: 'disponibilidad', label: 'Disponibilidad de Flota', icon: Activity },
       { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: Fuel },
       { id: 'adherencia', label: 'ADH DE PLACAS', icon: ClipboardCheck },
-      { id: 'mttr', label: 'MTTR', icon: Wrench },
+      { id: 'mttr', label: 'MTTR / MTBR', icon: Wrench },
     ]
   },
   otros: {
@@ -190,9 +190,9 @@ const App: React.FC = () => {
   });
   const [globalSaveFeedback, setGlobalSaveFeedback] = useState('');
   
-  const [activeView, setActiveView] = useState<ActiveView>('vehiculos');
+  const [activeView, setActiveView] = useState<ActiveView>('categories_dashboard');
   const [activeCategory, setActiveCategory] = useState<'root' | 'doc' | 'gestion' | 'otros'>('root');
-  const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | 'otros' | null>('doc');
+  const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | 'otros' | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
