@@ -1,4 +1,5 @@
 
+            
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord, NoveltyReport } from './types';
 import { VaradasModule } from './components/VaradasModule';
@@ -394,7 +395,6 @@ const App: React.FC = () => {
       'GOOGLE_SPREADSHEET_MASTER_ID',
       'GOOGLE_SPREADSHEET_CORRECTIVES_ID',
       'GOOGLE_SPREADSHEET_FINES_ID',
-      'GOOGLE_SPREADSHEET_CONTROL_TOWER_ID',
       'GOOGLE_SPREADSHEET_AUDIT_ID',
       'GOOGLE_SPREADSHEET_AUDIT_QS_ID'
     ];
