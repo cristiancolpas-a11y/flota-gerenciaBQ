@@ -466,13 +466,81 @@ export const MttrModule: React.FC = () => {
     return Math.ceil(dayOfYear / 7);
   };
 
-  const getRecordMonthLower = (dateStr: string): string => {
+  const allYearMonths = [
+    'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+    'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+  ];
+
+  const monthNamesMap: Record<string, string> = {
+    '01': 'ENERO',
+    '02': 'FEBRERO',
+    '03': 'MARZO',
+    '04': 'ABRIL',
+    '05': 'MAYO',
+    '06': 'JUNIO',
+    '07': 'JULIO',
+    '08': 'AGOSTO',
+    '09': 'SEPTIEMBRE',
+    '10': 'OCTUBRE',
+    '11': 'NOVIEMBRE',
+    '12': 'DICIEMBRE'
+  };
+
+  const monthLowerMap: Record<string, string> = {
+    '01': 'enero',
+    '02': 'febrero',
+    '03': 'marzo',
+    '04': 'abril',
+    '05': 'mayo',
+    '06': 'junio',
+    '07': 'julio',
+    '08': 'agosto',
+    '09': 'septiembre',
+    '10': 'octubre',
+    '11': 'noviembre',
+    '12': 'diciembre'
+  };
+
+  const monthShortNames: Record<string, string> = {
+    'ENERO': 'Ene',
+    'FEBRERO': 'Feb',
+    'MARZO': 'Mar',
+    'ABRIL': 'Abr',
+    'MAYO': 'May',
+    'JUNIO': 'Jun',
+    'JULIO': 'Jul',
+    'AGOSTO': 'Ago',
+    'SEPTIEMBRE': 'Sep',
+    'OCTUBRE': 'Oct',
+    'NOVIEMBRE': 'Nov',
+    'DICIEMBRE': 'Dic'
+  };
+
+  const getRecordMonth = (dateStr: string): string => {
+    if (!dateStr) return 'OTROS';
     const parts = dateStr.split('-');
-    const mStr = parts[1];
-    if (mStr === '01') return 'enero';
-    if (mStr === '02') return 'febrero';
-    if (mStr === '03') return 'marzo';
-    if (mStr === '04') return 'abril';
+    if (parts.length >= 2 && monthNamesMap[parts[1]]) {
+      return monthNamesMap[parts[1]];
+    }
+    const slashParts = dateStr.split('/');
+    if (slashParts.length >= 2) {
+      const mNum = String(parseInt(slashParts[1], 10)).padStart(2, '0');
+      if (monthNamesMap[mNum]) return monthNamesMap[mNum];
+    }
+    return 'OTROS';
+  };
+
+  const getRecordMonthLower = (dateStr: string): string => {
+    if (!dateStr) return 'otros';
+    const parts = dateStr.split('-');
+    if (parts.length >= 2 && monthLowerMap[parts[1]]) {
+      return monthLowerMap[parts[1]];
+    }
+    const slashParts = dateStr.split('/');
+    if (slashParts.length >= 2) {
+      const mNum = String(parseInt(slashParts[1], 10)).padStart(2, '0');
+      if (monthLowerMap[mNum]) return monthLowerMap[mNum];
+    }
     return 'otros';
   };
   
@@ -487,18 +555,35 @@ export const MttrModule: React.FC = () => {
   const uniqueCds = useMemo(() => Array.from(new Set(masterData.map(d => d.cd))).sort(), [masterData]);
   const uniqueContractors = useMemo(() => Array.from(new Set(masterData.map(d => d.contratista))).sort(), [masterData]);
   
-  const monthsList = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL'];
-  const monthNamesMap: Record<string, string> = {
-    '01': 'ENERO',
-    '02': 'FEBRERO',
-    '03': 'MARZO',
-    '04': 'ABRIL'
+  // Dynamic months list from dataset (in calendar chronological order)
+  const monthsList = useMemo(() => {
+    const present = new Set<string>();
+    masterData.forEach(d => {
+      const m = getRecordMonth(d.fechaIngreso);
+      if (m && m !== 'OTROS') present.add(m);
+    });
+    const list = allYearMonths.filter(m => present.has(m));
+    return list.length > 0 ? list : ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL'];
+  }, [masterData]);
+
+  // Synchronized month selection handler for dropdown and chart clicks
+  const handleSelectMonth = (monthVal: string | null) => {
+    if (!monthVal || monthVal === 'all') {
+      setFilterMonth('all');
+      setChartFilterMonth(null);
+    } else {
+      const upper = monthVal.toUpperCase();
+      const lower = monthVal.toLowerCase();
+      setFilterMonth(upper);
+      setChartFilterMonth(lower);
+    }
+    // Clear dependent sub-period filters to prevent 0-record states
+    setChartFilterWeek(null);
+    setChartFilterDay(null);
   };
 
-  const getRecordMonth = (dateStr: string): string => {
-    const mStr = dateStr.split('-')[1];
-    return monthNamesMap[mStr] || 'OTROS';
-  };
+  // Synchronized active month identifier in lower-case (e.g., 'marzo' or null)
+  const effectiveMonthLower = chartFilterMonth || (filterMonth !== 'all' ? filterMonth.toLowerCase() : null);
 
   // Filtered dataset according to choices AND active interactive filters
   const filteredRecords = useMemo(() => {
@@ -507,9 +592,7 @@ export const MttrModule: React.FC = () => {
       const matchContractor = filterContractor === 'all' || d.contratista === filterContractor;
       const matchType = filterType === 'all' || d.tipoIngreso === filterType;
       
-      const recordMonth = getRecordMonth(d.fechaIngreso);
-      const matchMonth = filterMonth === 'all' || recordMonth === filterMonth;
-      
+      const matchMonth = !effectiveMonthLower || getRecordMonthLower(d.fechaIngreso) === effectiveMonthLower;
       const matchSearch = searchPlate === '' || d.placa.toLowerCase().includes(searchPlate.toLowerCase());
 
       // Interactive chart click filters
@@ -517,18 +600,17 @@ export const MttrModule: React.FC = () => {
       const matchChartSistema = !chartFilterSistema || d.sistema === chartFilterSistema;
       const matchChartProveedor = !chartFilterProveedor || d.proveedor === chartFilterProveedor;
       const matchChartCd = !chartFilterCd || d.cd === chartFilterCd;
-      const matchChartMonth = !chartFilterMonth || getRecordMonthLower(d.fechaIngreso) === chartFilterMonth;
       const matchChartWeek = !chartFilterWeek || getRecordWeekNum(d.fechaIngreso) === chartFilterWeek;
       const matchChartDay = !chartFilterDay || d.fechaIngreso === chartFilterDay;
 
       return matchCd && matchContractor && matchType && matchMonth && matchSearch && 
              matchChartPlaca && matchChartSistema && matchChartProveedor &&
-             matchChartCd && matchChartMonth && matchChartWeek && matchChartDay;
+             matchChartCd && matchChartWeek && matchChartDay;
     });
   }, [
-    masterData, filterCd, filterContractor, filterType, filterMonth, searchPlate, 
+    masterData, filterCd, filterContractor, filterType, effectiveMonthLower, searchPlate, 
     chartFilterPlaca, chartFilterSistema, chartFilterProveedor,
-    chartFilterCd, chartFilterMonth, chartFilterWeek, chartFilterDay
+    chartFilterCd, chartFilterWeek, chartFilterDay
   ]);
 
   // Non-self filtering records for Placa Chart (so it is filtered by System & Provider filters etc, to keep cross-filtering sound)
@@ -537,23 +619,21 @@ export const MttrModule: React.FC = () => {
       const matchCd = filterCd === 'all' || d.cd === filterCd;
       const matchContractor = filterContractor === 'all' || d.contratista === filterContractor;
       const matchType = filterType === 'all' || d.tipoIngreso === filterType;
-      const recordMonth = getRecordMonth(d.fechaIngreso);
-      const matchMonth = filterMonth === 'all' || recordMonth === filterMonth;
+      const matchMonth = !effectiveMonthLower || getRecordMonthLower(d.fechaIngreso) === effectiveMonthLower;
       const matchSearch = searchPlate === '' || d.placa.toLowerCase().includes(searchPlate.toLowerCase());
 
       const matchChartSistema = !chartFilterSistema || d.sistema === chartFilterSistema;
       const matchChartProveedor = !chartFilterProveedor || d.proveedor === chartFilterProveedor;
       const matchChartCd = !chartFilterCd || d.cd === chartFilterCd;
-      const matchChartMonth = !chartFilterMonth || getRecordMonthLower(d.fechaIngreso) === chartFilterMonth;
       const matchChartWeek = !chartFilterWeek || getRecordWeekNum(d.fechaIngreso) === chartFilterWeek;
       const matchChartDay = !chartFilterDay || d.fechaIngreso === chartFilterDay;
 
       return matchCd && matchContractor && matchType && matchMonth && matchSearch && 
-             matchChartSistema && matchChartProveedor && matchChartCd && matchChartMonth && matchChartWeek && matchChartDay;
+             matchChartSistema && matchChartProveedor && matchChartCd && matchChartWeek && matchChartDay;
     });
   }, [
-    masterData, filterCd, filterContractor, filterType, filterMonth, searchPlate, 
-    chartFilterSistema, chartFilterProveedor, chartFilterCd, chartFilterMonth, chartFilterWeek, chartFilterDay
+    masterData, filterCd, filterContractor, filterType, effectiveMonthLower, searchPlate, 
+    chartFilterSistema, chartFilterProveedor, chartFilterCd, chartFilterWeek, chartFilterDay
   ]);
 
   // Non-self filtering records for Sistema Chart (filtered by Placa & Provider filters etc)
@@ -562,23 +642,21 @@ export const MttrModule: React.FC = () => {
       const matchCd = filterCd === 'all' || d.cd === filterCd;
       const matchContractor = filterContractor === 'all' || d.contratista === filterContractor;
       const matchType = filterType === 'all' || d.tipoIngreso === filterType;
-      const recordMonth = getRecordMonth(d.fechaIngreso);
-      const matchMonth = filterMonth === 'all' || recordMonth === filterMonth;
+      const matchMonth = !effectiveMonthLower || getRecordMonthLower(d.fechaIngreso) === effectiveMonthLower;
       const matchSearch = searchPlate === '' || d.placa.toLowerCase().includes(searchPlate.toLowerCase());
 
       const matchChartPlaca = !chartFilterPlaca || d.placa === chartFilterPlaca;
       const matchChartProveedor = !chartFilterProveedor || d.proveedor === chartFilterProveedor;
       const matchChartCd = !chartFilterCd || d.cd === chartFilterCd;
-      const matchChartMonth = !chartFilterMonth || getRecordMonthLower(d.fechaIngreso) === chartFilterMonth;
       const matchChartWeek = !chartFilterWeek || getRecordWeekNum(d.fechaIngreso) === chartFilterWeek;
       const matchChartDay = !chartFilterDay || d.fechaIngreso === chartFilterDay;
 
       return matchCd && matchContractor && matchType && matchMonth && matchSearch && 
-             matchChartPlaca && matchChartProveedor && matchChartCd && matchChartMonth && matchChartWeek && matchChartDay;
+             matchChartPlaca && matchChartProveedor && matchChartCd && matchChartWeek && matchChartDay;
     });
   }, [
-    masterData, filterCd, filterContractor, filterType, filterMonth, searchPlate, 
-    chartFilterPlaca, chartFilterProveedor, chartFilterCd, chartFilterMonth, chartFilterWeek, chartFilterDay
+    masterData, filterCd, filterContractor, filterType, effectiveMonthLower, searchPlate, 
+    chartFilterPlaca, chartFilterProveedor, chartFilterCd, chartFilterWeek, chartFilterDay
   ]);
 
   // Non-self filtering records for Proveedor Chart (filtered by Placa & Sistema filters etc)
@@ -587,33 +665,29 @@ export const MttrModule: React.FC = () => {
       const matchCd = filterCd === 'all' || d.cd === filterCd;
       const matchContractor = filterContractor === 'all' || d.contratista === filterContractor;
       const matchType = filterType === 'all' || d.tipoIngreso === filterType;
-      const recordMonth = getRecordMonth(d.fechaIngreso);
-      const matchMonth = filterMonth === 'all' || recordMonth === filterMonth;
+      const matchMonth = !effectiveMonthLower || getRecordMonthLower(d.fechaIngreso) === effectiveMonthLower;
       const matchSearch = searchPlate === '' || d.placa.toLowerCase().includes(searchPlate.toLowerCase());
 
       const matchChartPlaca = !chartFilterPlaca || d.placa === chartFilterPlaca;
       const matchChartSistema = !chartFilterSistema || d.sistema === chartFilterSistema;
       const matchChartCd = !chartFilterCd || d.cd === chartFilterCd;
-      const matchChartMonth = !chartFilterMonth || getRecordMonthLower(d.fechaIngreso) === chartFilterMonth;
       const matchChartWeek = !chartFilterWeek || getRecordWeekNum(d.fechaIngreso) === chartFilterWeek;
       const matchChartDay = !chartFilterDay || d.fechaIngreso === chartFilterDay;
 
       return matchCd && matchContractor && matchType && matchMonth && matchSearch && 
-             matchChartPlaca && matchChartSistema && matchChartCd && matchChartMonth && matchChartWeek && matchChartDay;
+             matchChartPlaca && matchChartSistema && matchChartCd && matchChartWeek && matchChartDay;
     });
   }, [
-    masterData, filterCd, filterContractor, filterType, filterMonth, searchPlate, 
-    chartFilterPlaca, chartFilterSistema, chartFilterCd, chartFilterMonth, chartFilterWeek, chartFilterDay
+    masterData, filterCd, filterContractor, filterType, effectiveMonthLower, searchPlate, 
+    chartFilterPlaca, chartFilterSistema, chartFilterCd, chartFilterWeek, chartFilterDay
   ]);
 
-  // Non-self filtering records for Monthly / Mtd chart
+  // Non-self filtering records for Monthly / Mtd chart (preserves all months so user can compare & click)
   const recordsForMonthlyChart = useMemo(() => {
     return masterData.filter(d => {
       const matchCd = filterCd === 'all' || d.cd === filterCd;
       const matchContractor = filterContractor === 'all' || d.contratista === filterContractor;
       const matchType = filterType === 'all' || d.tipoIngreso === filterType;
-      const recordMonth = getRecordMonth(d.fechaIngreso);
-      const matchMonth = filterMonth === 'all' || recordMonth === filterMonth;
       const matchSearch = searchPlate === '' || d.placa.toLowerCase().includes(searchPlate.toLowerCase());
 
       const matchChartPlaca = !chartFilterPlaca || d.placa === chartFilterPlaca;
@@ -622,62 +696,58 @@ export const MttrModule: React.FC = () => {
       const matchChartWeek = !chartFilterWeek || getRecordWeekNum(d.fechaIngreso) === chartFilterWeek;
       const matchChartDay = !chartFilterDay || d.fechaIngreso === chartFilterDay;
 
-      return matchCd && matchContractor && matchType && matchMonth && matchSearch && 
+      return matchCd && matchContractor && matchType && matchSearch && 
              matchChartPlaca && matchChartSistema && matchChartProveedor && matchChartWeek && matchChartDay;
     });
   }, [
-    masterData, filterCd, filterContractor, filterType, filterMonth, searchPlate,
+    masterData, filterCd, filterContractor, filterType, searchPlate,
     chartFilterPlaca, chartFilterSistema, chartFilterProveedor, chartFilterWeek, chartFilterDay
   ]);
 
-  // Non-self filtering records for Weekly sequence chart
+  // Non-self filtering records for Weekly sequence chart (filtered by active month so weekly view focuses on selected month)
   const recordsForWeeklyChart = useMemo(() => {
     return masterData.filter(d => {
       const matchCd = filterCd === 'all' || d.cd === filterCd;
       const matchContractor = filterContractor === 'all' || d.contratista === filterContractor;
       const matchType = filterType === 'all' || d.tipoIngreso === filterType;
-      const recordMonth = getRecordMonth(d.fechaIngreso);
-      const matchMonth = filterMonth === 'all' || recordMonth === filterMonth;
+      const matchMonth = !effectiveMonthLower || getRecordMonthLower(d.fechaIngreso) === effectiveMonthLower;
       const matchSearch = searchPlate === '' || d.placa.toLowerCase().includes(searchPlate.toLowerCase());
 
       const matchChartPlaca = !chartFilterPlaca || d.placa === chartFilterPlaca;
       const matchChartSistema = !chartFilterSistema || d.sistema === chartFilterSistema;
       const matchChartProveedor = !chartFilterProveedor || d.proveedor === chartFilterProveedor;
       const matchChartCd = !chartFilterCd || d.cd === chartFilterCd;
-      const matchChartMonth = !chartFilterMonth || getRecordMonthLower(d.fechaIngreso) === chartFilterMonth;
       const matchChartDay = !chartFilterDay || d.fechaIngreso === chartFilterDay;
 
       return matchCd && matchContractor && matchType && matchMonth && matchSearch && 
-             matchChartPlaca && matchChartSistema && matchChartProveedor && matchChartCd && matchChartMonth && matchChartDay;
+             matchChartPlaca && matchChartSistema && matchChartProveedor && matchChartCd && matchChartDay;
     });
   }, [
-    masterData, filterCd, filterContractor, filterType, filterMonth, searchPlate,
-    chartFilterPlaca, chartFilterSistema, chartFilterProveedor, chartFilterCd, chartFilterMonth, chartFilterDay
+    masterData, filterCd, filterContractor, filterType, effectiveMonthLower, searchPlate,
+    chartFilterPlaca, chartFilterSistema, chartFilterProveedor, chartFilterCd, chartFilterDay
   ]);
 
-  // Non-self filtering records for Daily scroll chart
+  // Non-self filtering records for Daily scroll chart (filtered by active month so daily view focuses on selected month)
   const recordsForDailyChart = useMemo(() => {
     return masterData.filter(d => {
       const matchCd = filterCd === 'all' || d.cd === filterCd;
       const matchContractor = filterContractor === 'all' || d.contratista === filterContractor;
       const matchType = filterType === 'all' || d.tipoIngreso === filterType;
-      const recordMonth = getRecordMonth(d.fechaIngreso);
-      const matchMonth = filterMonth === 'all' || recordMonth === filterMonth;
+      const matchMonth = !effectiveMonthLower || getRecordMonthLower(d.fechaIngreso) === effectiveMonthLower;
       const matchSearch = searchPlate === '' || d.placa.toLowerCase().includes(searchPlate.toLowerCase());
 
       const matchChartPlaca = !chartFilterPlaca || d.placa === chartFilterPlaca;
       const matchChartSistema = !chartFilterSistema || d.sistema === chartFilterSistema;
       const matchChartProveedor = !chartFilterProveedor || d.proveedor === chartFilterProveedor;
       const matchChartCd = !chartFilterCd || d.cd === chartFilterCd;
-      const matchChartMonth = !chartFilterMonth || getRecordMonthLower(d.fechaIngreso) === chartFilterMonth;
       const matchChartWeek = !chartFilterWeek || getRecordWeekNum(d.fechaIngreso) === chartFilterWeek;
 
       return matchCd && matchContractor && matchType && matchMonth && matchSearch && 
-             matchChartPlaca && matchChartSistema && matchChartProveedor && matchChartCd && matchChartMonth && matchChartWeek;
+             matchChartPlaca && matchChartSistema && matchChartProveedor && matchChartCd && matchChartWeek;
     });
   }, [
-    masterData, filterCd, filterContractor, filterType, filterMonth, searchPlate,
-    chartFilterPlaca, chartFilterSistema, chartFilterProveedor, chartFilterCd, chartFilterMonth, chartFilterWeek
+    masterData, filterCd, filterContractor, filterType, effectiveMonthLower, searchPlate,
+    chartFilterPlaca, chartFilterSistema, chartFilterProveedor, chartFilterCd, chartFilterWeek
   ]);
 
   // Filtered reingresos dataset specifically using the BETA master source, reflecting active dynamic chart filters too
@@ -686,28 +756,24 @@ export const MttrModule: React.FC = () => {
       const matchCd = filterCd === 'all' || d.cd === filterCd;
       const matchContractor = filterContractor === 'all' || d.contratista === filterContractor;
       const matchType = filterType === 'all' || d.tipoIngreso === filterType;
-      
-      const recordMonth = getRecordMonth(d.fechaIngreso);
-      const matchMonth = filterMonth === 'all' || recordMonth === filterMonth;
-      
+      const matchMonth = !effectiveMonthLower || getRecordMonthLower(d.fechaIngreso) === effectiveMonthLower;
       const matchSearch = searchPlate === '' || d.placa.toLowerCase().includes(searchPlate.toLowerCase());
 
       const matchChartPlaca = !chartFilterPlaca || d.placa === chartFilterPlaca;
       const matchChartSistema = !chartFilterSistema || d.sistema === chartFilterSistema;
       const matchChartProveedor = !chartFilterProveedor || d.proveedor === chartFilterProveedor;
       const matchChartCd = !chartFilterCd || d.cd === chartFilterCd;
-      const matchChartMonth = !chartFilterMonth || getRecordMonthLower(d.fechaIngreso) === chartFilterMonth;
       const matchChartWeek = !chartFilterWeek || getRecordWeekNum(d.fechaIngreso) === chartFilterWeek;
       const matchChartDay = !chartFilterDay || d.fechaIngreso === chartFilterDay;
 
       return matchCd && matchContractor && matchType && matchMonth && matchSearch && 
              matchChartPlaca && matchChartSistema && matchChartProveedor &&
-             matchChartCd && matchChartMonth && matchChartWeek && matchChartDay;
+             matchChartCd && matchChartWeek && matchChartDay;
     });
   }, [
-    masterReingresosData, filterCd, filterContractor, filterType, filterMonth, searchPlate, 
+    masterReingresosData, filterCd, filterContractor, filterType, effectiveMonthLower, searchPlate, 
     chartFilterPlaca, chartFilterSistema, chartFilterProveedor,
-    chartFilterCd, chartFilterMonth, chartFilterWeek, chartFilterDay
+    chartFilterCd, chartFilterWeek, chartFilterDay
   ]);
 
   // CALCULATION ENGINE: REINCIDENCIA & TIMES BETWEEN VISITS GROUPED BY PLATE
@@ -877,14 +943,12 @@ export const MttrModule: React.FC = () => {
       .slice(0, 15); // Show top 15 systems for comprehensiveness
   }, [filteredRecords]);
 
-  // Graph 3: Monthly evolution (Ene - Apr 2026)
+  // Graph 3: Monthly evolution
   const monthlyEvolutionChartData = useMemo(() => {
-    const monthlyData: Record<string, { name: string; PREVENTIVO: number; CORRECTIVO: number }> = {
-      'ENERO': { name: 'Ene', PREVENTIVO: 0, CORRECTIVO: 0 },
-      'FEBRERO': { name: 'Feb', PREVENTIVO: 0, CORRECTIVO: 0 },
-      'MARZO': { name: 'Mar', PREVENTIVO: 0, CORRECTIVO: 0 },
-      'ABRIL': { name: 'Abr', PREVENTIVO: 0, CORRECTIVO: 0 }
-    };
+    const monthlyData: Record<string, { name: string; PREVENTIVO: number; CORRECTIVO: number }> = {};
+    monthsList.forEach(m => {
+      monthlyData[m] = { name: monthShortNames[m] || m, PREVENTIVO: 0, CORRECTIVO: 0 };
+    });
 
     filteredRecords.forEach(d => {
       const monthLabel = getRecordMonth(d.fechaIngreso);
@@ -898,7 +962,7 @@ export const MttrModule: React.FC = () => {
     });
 
     return Object.values(monthlyData);
-  }, [filteredRecords]);
+  }, [filteredRecords, monthsList]);
 
   // Graph 4: Top Proveedores (Talleres)
   const topProveedoresChartData = useMemo(() => {
@@ -945,18 +1009,18 @@ export const MttrModule: React.FC = () => {
 
   // Graph 7: Overall Monthly MTTR in Hours
   const monthlyMttrChartData = useMemo(() => {
-    const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL'];
-    return months.map(m => {
-      const records = filteredRecords.filter(d => getRecordMonth(d.fechaIngreso) === m);
+    return monthsList.map(m => {
+      const records = recordsForMonthlyChart.filter(d => getRecordMonth(d.fechaIngreso) === m);
       const totalHours = records.reduce((sum, r) => sum + r.horasTaller, 0);
       const count = records.length;
       return {
-        name: m === 'ENERO' ? 'Ene' : m === 'FEBRERO' ? 'Feb' : m === 'MARZO' ? 'Mar' : 'Abr',
+        name: monthShortNames[m] || m,
+        fullName: m,
         'MTTR Promedio (Horas)': count > 0 ? Math.round((totalHours / count) * 10) / 10 : 0,
         'Intervenciones': count
       };
     });
-  }, [filteredRecords]);
+  }, [recordsForMonthlyChart, monthsList]);
 
   // Dynamically calculate which CDs have best and worst MTTR
   const cdBestWorstStats = useMemo(() => {
@@ -1119,12 +1183,10 @@ export const MttrModule: React.FC = () => {
       byPlaca[placa].push(r);
     });
 
-    const monthStats: Record<string, { totalDays: number; count: number }> = {
-      'ENERO': { totalDays: 0, count: 0 },
-      'FEBRERO': { totalDays: 0, count: 0 },
-      'MARZO': { totalDays: 0, count: 0 },
-      'ABRIL': { totalDays: 0, count: 0 }
-    };
+    const monthStats: Record<string, { totalDays: number; count: number }> = {};
+    monthsList.forEach(m => {
+      monthStats[m] = { totalDays: 0, count: 0 };
+    });
 
     Object.values(byPlaca).forEach(visits => {
       const sorted = [...visits].sort((a, b) => {
@@ -1146,14 +1208,13 @@ export const MttrModule: React.FC = () => {
       }
     });
 
-    const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL'];
-    return months.map(m => ({
-      name: m === 'ENERO' ? 'Ene' : m === 'FEBRERO' ? 'Feb' : m === 'MARZO' ? 'Mar' : 'Abr',
+    return monthsList.map(m => ({
+      name: monthShortNames[m] || m,
       fullName: m,
-      'MTBF Promedio (Días)': monthStats[m].count > 0 ? Math.round((monthStats[m].totalDays / monthStats[m].count) * 10) / 10 : 0,
-      'Intervalos': monthStats[m].count
+      'MTBF Promedio (Días)': monthStats[m]?.count > 0 ? Math.round((monthStats[m].totalDays / monthStats[m].count) * 10) / 10 : 0,
+      'Intervalos': monthStats[m]?.count || 0
     }));
-  }, [filteredRecords, masterData]);
+  }, [filteredRecords, masterData, monthsList]);
 
   // 3. Top 10 Placas con Menor MTBF (Frecuencia más alta de fallas / atención prioritaria)
   const topWorstMtbfChartData = useMemo(() => {
@@ -1211,12 +1272,10 @@ export const MttrModule: React.FC = () => {
     const groups: Record<string, Record<string, { totalDays: number; count: number }>> = {};
     
     uniqueCds.forEach(cd => {
-      groups[cd] = {
-        'ENERO': { totalDays: 0, count: 0 },
-        'FEBRERO': { totalDays: 0, count: 0 },
-        'MARZO': { totalDays: 0, count: 0 },
-        'ABRIL': { totalDays: 0, count: 0 }
-      };
+      groups[cd] = {};
+      monthsList.forEach(m => {
+        groups[cd][m] = { totalDays: 0, count: 0 };
+      });
     });
 
     filteredRecords.forEach(d => {
@@ -1228,9 +1287,8 @@ export const MttrModule: React.FC = () => {
       }
     });
 
-    const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL'];
-    return months.map(m => {
-      const item: any = { name: m };
+    return monthsList.map(m => {
+      const item: any = { name: monthShortNames[m] || m, fullName: m };
       uniqueCds.forEach(cd => {
         const cell = groups[cd]?.[m] || { totalDays: 0, count: 0 };
         item[cd] = cell.count > 0 ? Math.round((cell.totalDays / cell.count) * 100) / 100 : 0;
@@ -1239,7 +1297,7 @@ export const MttrModule: React.FC = () => {
       });
       return item;
     });
-  }, [filteredRecords, uniqueCds]);
+  }, [filteredRecords, uniqueCds, monthsList]);
 
   // 2. Seguimiento Semanal
   const weeklyChartData = useMemo(() => {
@@ -1417,7 +1475,7 @@ export const MttrModule: React.FC = () => {
               )}
             </h1>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-0.5">
-              Operación Barranquilla <span className="text-[#00FF88]">•</span> Ene–Abr 2026
+              Operación Barranquilla <span className="text-[#00FF88]">•</span> {monthsList.length > 0 ? `${monthShortNames[monthsList[0]] || monthsList[0]}–${monthShortNames[monthsList[monthsList.length - 1]] || monthsList[monthsList.length - 1]} 2026` : '2026'}
             </p>
           </div>
         </div>
@@ -1473,7 +1531,7 @@ export const MttrModule: React.FC = () => {
           <div className="relative bg-[#111625] border border-white/5 rounded-xl px-4 py-2 flex items-center gap-2 hover:border-[#00D4FF]/30 transition-colors">
             <select
               value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
+              onChange={(e) => handleSelectMonth(e.target.value)}
               className="bg-transparent text-[10px] font-bold uppercase tracking-wider text-[#8B949E] outline-none cursor-pointer appearance-none pr-5 min-w-[90px]"
             >
               <option value="all">MESES (TODOS)</option>
@@ -1490,12 +1548,18 @@ export const MttrModule: React.FC = () => {
               setFilterCd('all');
               setFilterContractor('all');
               setFilterType('all');
-              setFilterMonth('all');
+              handleSelectMonth('all');
               setSearchPlate('');
               setSelectedPlaca(null);
+              setChartFilterPlaca(null);
+              setChartFilterSistema(null);
+              setChartFilterProveedor(null);
+              setChartFilterCd(null);
+              setChartFilterWeek(null);
+              setChartFilterDay(null);
             }}
-            className="p-2.5 bg-white/5 border border-white/5 rounded-xl text-[10px] font-black uppercase text-slate-400 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2"
-            title="Limpiar Filtros"
+            className="p-2.5 bg-white/5 border border-white/5 rounded-xl text-[10px] font-black uppercase text-slate-400 hover:text-white hover:bg-white/10 transition-all flex items-center gap-2 cursor-pointer"
+            title="Limpiar Todos los Filtros"
           >
             <RefreshCw size={12} />
             RESET
@@ -1693,7 +1757,7 @@ export const MttrModule: React.FC = () => {
                   <Calendar size={12} className="text-[#FF3B3B]" />
                   <select
                     value={filterMonth}
-                    onChange={(e) => setFilterMonth(e.target.value)}
+                    onChange={(e) => handleSelectMonth(e.target.value)}
                     className="bg-transparent text-[10px] font-bold uppercase tracking-wider text-[#8B949E] outline-none cursor-pointer appearance-none pr-5 min-w-[120px]"
                   >
                     <option value="all">TODOS LOS MESES</option>
@@ -2460,7 +2524,30 @@ export const MttrModule: React.FC = () => {
                         <XAxis dataKey="name" stroke="#8b949e" fontSize={9} />
                         <YAxis stroke="#8b949e" fontSize={10} unit="h" />
                         <Tooltip contentStyle={{ backgroundColor: '#111625', borderColor: 'rgba(255,255,255,0.1)' }} />
-                        <Bar dataKey="MTTR Promedio (Horas)" name="MTTR Horas" fill="#FFB800" radius={[4, 4, 0, 0]} />
+                        <Bar 
+                          dataKey="MTTR Promedio (Horas)" 
+                          name="MTTR Horas" 
+                          fill="#FFB800" 
+                          radius={[4, 4, 0, 0]}
+                          onClick={(entry: any) => {
+                            if (entry && entry.fullName) {
+                              const clickedLower = entry.fullName.toLowerCase();
+                              handleSelectMonth(effectiveMonthLower === clickedLower ? 'all' : entry.fullName);
+                            }
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {monthlyMttrChartData.map((entry, index) => {
+                            const isSelected = effectiveMonthLower && entry.fullName.toLowerCase() === effectiveMonthLower;
+                            return (
+                              <Cell 
+                                key={`resumen-cell-${index}`} 
+                                fill={isSelected ? '#00D4FF' : '#FFB800'} 
+                                opacity={effectiveMonthLower && !isSelected ? 0.35 : 1}
+                              />
+                            );
+                          })}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2786,23 +2873,25 @@ export const MttrModule: React.FC = () => {
               uniqueCds={uniqueCds} 
               activeCd={chartFilterCd}
               onSelectCd={setChartFilterCd}
-              activeMonth={chartFilterMonth}
-              onSelectMonth={setChartFilterMonth}
+              activeMonth={effectiveMonthLower}
+              onSelectMonth={handleSelectMonth}
             />
             <WeeklySequenceChart 
               records={recordsForWeeklyChart} 
               activeWeek={chartFilterWeek}
               onSelectWeek={setChartFilterWeek}
+              activeMonth={effectiveMonthLower}
             />
             
             <DailyScrollChart 
               records={recordsForDailyChart} 
               activeDay={chartFilterDay}
               onSelectDay={setChartFilterDay}
+              activeMonth={effectiveMonthLower}
             />
             
             {/* Interactive chart cross filters state banner */}
-            {(chartFilterPlaca || chartFilterSistema || chartFilterProveedor || chartFilterCd || chartFilterMonth || chartFilterWeek || chartFilterDay) ? (
+            {(chartFilterPlaca || chartFilterSistema || chartFilterProveedor || chartFilterCd || effectiveMonthLower || chartFilterWeek || chartFilterDay) ? (
               <div className="flex flex-wrap items-center gap-3 bg-[#111625]/85 p-4 rounded-xl border border-white/5 shadow-2xl animate-fade-in">
                 <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest flex items-center gap-1.5">
                   <Sliders className="w-3.5 h-3.5 text-blue-400" />
@@ -2845,10 +2934,10 @@ export const MttrModule: React.FC = () => {
                   </span>
                 )}
 
-                {chartFilterMonth && (
+                {effectiveMonthLower && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-emerald-500/15 text-white border border-emerald-500/30">
-                    MES: {chartFilterMonth.toUpperCase()}
-                    <button onClick={() => setChartFilterMonth(null)} className="hover:text-emerald-400 text-slate-400 focus:outline-none transition-colors ml-1 cursor-pointer">
+                    MES: {effectiveMonthLower.toUpperCase()}
+                    <button onClick={() => handleSelectMonth('all')} className="hover:text-emerald-400 text-slate-400 focus:outline-none transition-colors ml-1 cursor-pointer">
                       <X className="w-3 h-3" />
                     </button>
                   </span>
@@ -2878,7 +2967,7 @@ export const MttrModule: React.FC = () => {
                     setChartFilterSistema(null);
                     setChartFilterProveedor(null);
                     setChartFilterCd(null);
-                    setChartFilterMonth(null);
+                    handleSelectMonth('all');
                     setChartFilterWeek(null);
                     setChartFilterDay(null);
                   }}

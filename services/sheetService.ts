@@ -4065,16 +4065,23 @@ const processCalidadCierreRows = (rows: any[][]): FleetCierreRecord[] => {
 
 export const fetchSeguimientoFromSheet = async (): Promise<FleetSeguimientoRecord[]> => {
   try {
+    const docId = getAuditQsDocId() || CALIDAD_SEG_DOC_ID;
+    // Primary: Consultar vía Google Apps Script (CALIDAD_SEG_SCRIPT_URL)
+    // Esto obtiene las 600+ filas completas de la hoja SEGUIMIENTO (Junio, Julio, Agosto, Septiembre)
+    // sin el filtro/truncamiento que afecta la exportación pública CSV en Google Sheets.
+    const rows = await fetchDataFromGAS(docId, 'SEGUIMIENTO', CALIDAD_SEG_SCRIPT_URL);
+    if (rows && rows.length >= 2) {
+      const records = processSeguimientoRows(rows);
+      if (records && records.length > 0) {
+        return records;
+      }
+    }
+    // Si GAS no devuelve filas, intentar fallback CSV
     const csvRes = await fetchSeguimientoFromSheetCSV();
     if (csvRes && csvRes.length > 0) {
       return csvRes;
     }
-    const docId = getAuditQsDocId() || CALIDAD_SEG_DOC_ID;
-    const rows = await fetchDataFromGAS(docId, 'SEGUIMIENTO', AUDIT_STANDARD_SCRIPT_URL);
-    if (!rows || rows.length < 2) {
-      return [];
-    }
-    return processSeguimientoRows(rows);
+    return [];
   } catch (e) {
     console.error("Error fetching seguimiento:", e);
     return fetchSeguimientoFromSheetCSV();
@@ -4892,3 +4899,10 @@ export const submitSparePartInspection = async (inspection: {
   const success = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
   return !!success;
 };
+
+
+
+
+
+
+

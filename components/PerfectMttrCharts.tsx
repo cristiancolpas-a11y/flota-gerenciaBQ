@@ -10,16 +10,43 @@ const MONTH_NAMES: Record<string, string> = {
   'ENERO': 'enero',
   'FEBRERO': 'febrero',
   'MARZO': 'marzo',
-  'ABRIL': 'abril'
+  'ABRIL': 'abril',
+  'MAYO': 'mayo',
+  'JUNIO': 'junio',
+  'JULIO': 'julio',
+  'AGOSTO': 'agosto',
+  'SEPTIEMBRE': 'septiembre',
+  'OCTUBRE': 'octubre',
+  'NOVIEMBRE': 'noviembre',
+  'DICIEMBRE': 'diciembre'
 };
 
-const getRecordMonthLower = (dateStr: string): string => {
+export const getRecordMonthLower = (dateStr: string): string => {
+  if (!dateStr) return 'otros';
+  const clean = dateStr.trim().toLowerCase();
+  const validMonths = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  if (validMonths.includes(clean)) return clean;
+
   const parts = dateStr.split('-');
-  const mStr = parts[1];
-  if (mStr === '01') return 'enero';
-  if (mStr === '02') return 'febrero';
-  if (mStr === '03') return 'marzo';
-  if (mStr === '04') return 'abril';
+  if (parts.length >= 2) {
+    const mStr = parts[1];
+    const map: Record<string, string> = {
+      '01': 'enero', '02': 'febrero', '03': 'marzo', '04': 'abril',
+      '05': 'mayo', '06': 'junio', '07': 'julio', '08': 'agosto',
+      '09': 'septiembre', '10': 'octubre', '11': 'noviembre', '12': 'diciembre'
+    };
+    if (map[mStr]) return map[mStr];
+  }
+  const slashParts = dateStr.split('/');
+  if (slashParts.length >= 2) {
+    const mNum = String(parseInt(slashParts[1], 10)).padStart(2, '0');
+    const map: Record<string, string> = {
+      '01': 'enero', '02': 'febrero', '03': 'marzo', '04': 'abril',
+      '05': 'mayo', '06': 'junio', '07': 'julio', '08': 'agosto',
+      '09': 'septiembre', '10': 'octubre', '11': 'noviembre', '12': 'diciembre'
+    };
+    if (map[mNum]) return map[mNum];
+  }
   return 'otros';
 };
 
@@ -87,10 +114,29 @@ export const GroupedMonthlyChart: React.FC<GroupedMonthlyChartProps> = ({
     return uniqueCds.length > 0 ? uniqueCds.slice(0, 3) : ['GALAPA', 'LA ARENOSA'];
   }, [uniqueCds]);
 
+  const listMonths = useMemo(() => {
+    const allMonths = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const present = new Set<string>();
+    records.forEach(r => {
+      const m = getRecordMonthLower(r.fechaIngreso);
+      if (m && m !== 'otros') present.add(m);
+    });
+    const found = allMonths.filter(m => present.has(m));
+    return found.length > 0 ? found : ['enero', 'febrero', 'marzo', 'abril'];
+  }, [records]);
+
+  // When a month is selected, adjust the monthly view to that specific month.
+  // When no month is selected, show all available months in a compact overview.
+  const isSingleMonthAdjusted = Boolean(activeMonth && listMonths.includes(activeMonth.toLowerCase()));
+  const displayMonths = useMemo(() => {
+    if (isSingleMonthAdjusted && activeMonth) {
+      return [activeMonth.toLowerCase()];
+    }
+    return listMonths;
+  }, [isSingleMonthAdjusted, activeMonth, listMonths]);
+
   const monthlyGroupData = useMemo(() => {
-    const listMonths = ['enero', 'febrero', 'marzo', 'abril'];
-    
-    return listMonths.map(m => {
+    return displayMonths.map(m => {
       const recordsInMonth = records.filter(r => getRecordMonthLower(r.fechaIngreso) === m);
       
       const cdsData = activeCds.map(cd => {
@@ -110,12 +156,12 @@ export const GroupedMonthlyChart: React.FC<GroupedMonthlyChartProps> = ({
         cdsData
       };
     });
-  }, [records, activeCds]);
+  }, [records, activeCds, displayMonths]);
 
-  // Compute MTD (Month to Date) - latest active month (e.g. Abril) or cumulative for active filter
+  // Compute MTD (Month to Date) - selected month or latest active month
+  const currentSelectedMonth = activeMonth || listMonths[listMonths.length - 1] || 'abril';
   const mtdData = useMemo(() => {
-    const latestMonth = 'abril'; // or dynamic latest month in dataset
-    const recordsInMonth = records.filter(r => getRecordMonthLower(r.fechaIngreso) === latestMonth);
+    const recordsInMonth = records.filter(r => getRecordMonthLower(r.fechaIngreso) === currentSelectedMonth.toLowerCase());
     
     return activeCds.map(cd => {
       const cdRecs = recordsInMonth.filter(r => r.cd === cd);
@@ -128,7 +174,7 @@ export const GroupedMonthlyChart: React.FC<GroupedMonthlyChartProps> = ({
         count
       };
     });
-  }, [records, activeCds]);
+  }, [records, activeCds, currentSelectedMonth]);
 
   // Find max value overall to scale bars nicely
   const maxVal = useMemo(() => {
@@ -141,129 +187,240 @@ export const GroupedMonthlyChart: React.FC<GroupedMonthlyChartProps> = ({
     mtdData.forEach(c => {
       if (c.avgHours > currentMax) currentMax = c.avgHours;
     });
-    return currentMax * 1.15; // padding for labels
+    return currentMax * 1.18; // padding for labels
   }, [monthlyGroupData, mtdData]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 select-none">
       
       {/* 1. SEGUIMIENTO MENSUAL CARD (occupies 3 cols) */}
-      <div className={`lg:col-span-3 bg-[#111625] p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between ${
-        activeMonth || activeCd ? 'border-[#00D4FF]/40 shadow-[0_0_15px_rgba(0,212,255,0.05)]' : 'border-slate-700 shadow-2xl'
+      <div className={`lg:col-span-3 bg-[#111625] p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-2xl ${
+        activeMonth || activeCd ? 'border-[#00D4FF]/40 shadow-[0_0_15px_rgba(0,212,255,0.05)]' : 'border-slate-700'
       }`}>
         <ChartHeader 
-          title={(activeMonth || activeCd) ? `Mensual: ${[activeMonth ? `Mes ${activeMonth}` : '', activeCd ? `CD ${activeCd}` : ''].filter(Boolean).join(' • ')} (Filtrado)` : "Seguimiento Mensual"} 
-          subtitle="Métrico: Tiempo promedio en taller. Presione un mes o barra CD para filtrar." 
+          title={isSingleMonthAdjusted ? `Mensual: Mes ${activeMonth?.toUpperCase()}${activeCd ? ` • CD ${activeCd}` : ''} (Ajustado)` : "Seguimiento Mensual (Todos los Meses)"} 
+          subtitle={isSingleMonthAdjusted ? `Métrico: Tiempo promedio en taller para ${activeMonth?.toUpperCase()}. Presione una barra para filtrar CD.` : "Métrico: Tiempo promedio en taller. Presione un mes o barra CD para filtrar."} 
           showDrill={true} 
         />
         
         {/* Render actual bar columns */}
-        <div className="relative pt-6 pb-2 min-h-[220px] flex items-end justify-between w-full">
-          {monthlyGroupData.map((m, mIdx) => {
-            const isMonthSelected = activeMonth === m.month;
-            const isMonthDimmed = activeMonth && !isMonthSelected;
+        {isSingleMonthAdjusted ? (
+          /* Single month adjusted view (spacious, compact, centered, zero overflow) */
+          <div className="relative pt-6 pb-2 min-h-[220px] flex flex-col items-center justify-center w-full">
+            <div className="flex items-end justify-center gap-8 sm:gap-14 w-full max-w-xl mx-auto h-[180px]">
+              {monthlyGroupData[0]?.cdsData.map((c) => {
+                const pct = Math.max(8, (c.avgHours / maxVal) * 100);
+                const key = `${activeMonth}-${c.cdName}`;
+                const isHovered = hoveredKey === key;
+                const isCdSelected = activeCd === c.cdName;
+                const isCdDimmed = activeCd && !isCdSelected;
 
-            return (
-              <div 
-                key={m.month} 
-                className={`flex-1 flex flex-col items-center relative h-full transition-all duration-300 ${
-                  isMonthDimmed ? 'opacity-30 saturate-50' : 'opacity-100'
-                }`}
-              >
-                
-                {/* Columns inside month */}
-                <div className="flex items-end justify-center gap-5 w-full h-[180px]">
-                  {m.cdsData.map((c, cIdx) => {
-                    const pct = Math.max(8, (c.avgHours / maxVal) * 100);
-                    const key = `${m.month}-${c.cdName}`;
-                    const isHovered = hoveredKey === key;
-                    const isCdSelected = activeCd === c.cdName;
-                    const isCdDimmed = activeCd && !isCdSelected;
+                const barStyle = {
+                  background: 'linear-gradient(to top, #B45309, #FFC800)',
+                  boxShadow: isCdSelected 
+                    ? '0 0 20px rgba(250, 200, 0, 0.9)' 
+                    : `0 0 ${isHovered ? '16px' : '6px'} ${isHovered ? 'rgba(250, 200, 0, 0.75)' : 'rgba(250, 200, 0, 0.35)'}`,
+                };
 
-                    const barStyle = {
-                      background: 'linear-gradient(to top, #B45309, #FFC800)',
-                      boxShadow: isCdSelected 
-                        ? '0 0 20px rgba(250, 200, 0, 0.9)' 
-                        : `0 0 ${isHovered ? '16px' : '6px'} ${isHovered ? 'rgba(250, 200, 0, 0.75)' : 'rgba(250, 200, 0, 0.35)'}`,
-                    };
+                return (
+                  <div 
+                    key={c.cdName} 
+                    className={`flex flex-col items-center justify-end h-full w-20 sm:w-24 max-w-[80px] relative group cursor-pointer transition-all duration-200 ${
+                      isCdDimmed ? 'opacity-40 saturate-50' : 'opacity-100'
+                    }`}
+                    onMouseEnter={() => setHoveredKey(key)}
+                    onMouseLeave={() => setHoveredKey(null)}
+                    onClick={() => onSelectCd?.(isCdSelected ? null : c.cdName)}
+                  >
+                    {/* Numerical Value above the bar */}
+                    <div className={`absolute -top-7 text-xs md:text-sm font-black font-mono tracking-tight text-center w-full select-all transition-all duration-200 ${isHovered || isCdSelected ? 'text-white scale-110 -translate-y-0.5' : 'text-amber-300'}`}>
+                      {c.avgHours > 0 ? c.avgHours.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0,0'}h
+                    </div>
 
-                    return (
-                      <div 
-                        key={c.cdName} 
-                        className={`flex flex-col items-center justify-end h-full w-[45px] relative group cursor-pointer transition-all duration-200 ${
-                          isCdDimmed ? 'opacity-40 saturate-50' : 'opacity-100'
-                        }`}
-                        onMouseEnter={() => setHoveredKey(key)}
-                        onMouseLeave={() => setHoveredKey(null)}
-                        onClick={() => onSelectCd?.(isCdSelected ? null : c.cdName)}
-                      >
-                        
-                        {/* Numerical Value above the bar */}
-                        <div className={`absolute -top-7 text-[10px] md:text-[11px] font-extrabold tracking-tight text-center w-full select-all transition-all duration-200 ${isHovered || isCdSelected ? 'text-white scale-110 -translate-y-0.5' : 'text-slate-350'}`}>
-                          {c.avgHours > 0 ? c.avgHours.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0,0'}
-                        </div>
+                    {/* Solid Golden/Yellow Premium Bar */}
+                    <div 
+                      className={`w-full transition-all duration-300 rounded-t-xl shadow-lg relative ${isCdSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#111625]' : ''}`}
+                      style={{ 
+                        height: `${pct}%`,
+                        background: barStyle.background,
+                        boxShadow: barStyle.boxShadow,
+                        transform: isHovered ? 'scaleY(1.03) scaleX(1.05)' : 'none',
+                        transformOrigin: 'bottom',
+                        filter: isHovered || isCdSelected ? 'brightness(1.15)' : 'none'
+                      }}
+                    >
+                      <div className="absolute inset-0 bg-white/5 hover:bg-white/10 rounded-t-xl transition-colors" />
+                    </div>
 
-                        {/* Solid Golden/Yellow Premium Bar */}
-                        <div 
-                          className={`w-full transition-all duration-300 rounded-t-lg shadow-lg relative ${isCdSelected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#111625]' : ''}`}
-                          style={{ 
-                            height: `${pct}%`,
-                            background: barStyle.background,
-                            boxShadow: barStyle.boxShadow,
-                            transform: isHovered ? 'scaleY(1.03) scaleX(1.05)' : 'none',
-                            transformOrigin: 'bottom',
-                            filter: isHovered || isCdSelected ? 'brightness(1.15)' : 'none'
-                          }}
-                        >
-                          <div className="absolute inset-0 bg-white/5 hover:bg-white/10 rounded-t-lg transition-colors" />
-                        </div>
+                    {/* CD Code below */}
+                    <div className={`text-[10px] md:text-xs font-black text-center mt-2 truncate w-full uppercase tracking-wider block transition-colors duration-200 ${isHovered || isCdSelected ? 'text-white font-extrabold scale-105' : 'text-slate-200'}`}>
+                      {c.cdName === 'LA ARENOSA' ? 'Arenosa' : c.cdName === 'GALAPA' ? 'Galapa' : c.cdName}
+                    </div>
 
-                        {/* CD Code below */}
-                        <div className={`text-[8px] md:text-[9px] font-black text-center mt-2.5 truncate w-full uppercase tracking-wider block transition-colors duration-200 ${isHovered || isCdSelected ? 'text-white font-extrabold scale-105' : 'text-slate-350'}`}>
-                          {c.cdName === 'LA ARENOSA' ? 'Arenosa' : c.cdName === 'GALAPA' ? 'Galapa' : c.cdName}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                    {/* Events count */}
+                    <div className="text-[9px] font-mono text-slate-400 mt-0.5">
+                      {c.count} {c.count === 1 ? 'evento' : 'eventos'}
+                    </div>
 
-                {/* Sub Month Label Centered below the CD columns */}
-                <button 
-                  onClick={() => onSelectMonth?.(isMonthSelected ? null : m.month)}
-                  className={`text-[10px] font-black uppercase tracking-widest mt-3.5 italic block transition-all duration-200 py-1 px-2.5 rounded-full cursor-pointer hover:bg-white/5 ${
-                    isMonthSelected ? 'text-white bg-[#00D4FF]/20 border border-[#00D4FF]/40 scale-105 font-black' : 'text-[#00D4FF] hover:text-white'
+                    {/* Target Status pill */}
+                    <div className={`mt-1 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full border ${
+                      c.avgHours <= 24 ? 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' :
+                      c.avgHours <= 48 ? 'text-amber-400 border-amber-500/40 bg-amber-500/10' :
+                      'text-rose-400 border-rose-500/40 bg-rose-500/10'
+                    }`}>
+                      {c.avgHours <= 24 ? 'ÓPTIMO' : c.avgHours <= 48 ? 'REGULAR' : 'CRÍTICO'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* Multi-month compact layout (fitting all months cleanly without leaking outside) */
+          <div className="relative pt-6 pb-2 min-h-[220px] w-full overflow-x-auto overflow-y-hidden custom-scrollbar">
+            <div className="flex items-end justify-between w-full min-w-0 h-[180px] gap-1 px-1">
+              {monthlyGroupData.map((m, mIdx) => {
+                const isMonthSelected = activeMonth === m.month;
+                const isMonthDimmed = activeMonth && !isMonthSelected;
+
+                return (
+                  <div 
+                    key={m.month} 
+                    className={`flex-1 min-w-[50px] max-w-[85px] flex flex-col items-center relative h-full transition-all duration-300 rounded-xl py-1 px-0.5 ${
+                      isMonthSelected ? 'bg-white/[0.04] ring-1 ring-[#00D4FF]/50 shadow-[0_0_15px_rgba(0,212,255,0.12)]' : ''
+                    } ${
+                      isMonthDimmed ? 'opacity-35 saturate-50 hover:opacity-75' : 'opacity-100'
+                    }`}
+                  >
+                    {/* Columns inside month */}
+                    <div className="flex items-end justify-center gap-1 sm:gap-1.5 w-full h-[140px]">
+                      {m.cdsData.map((c) => {
+                        const pct = Math.max(8, (c.avgHours / maxVal) * 100);
+                        const key = `${m.month}-${c.cdName}`;
+                        const isHovered = hoveredKey === key;
+                        const isCdSelected = activeCd === c.cdName;
+                        const isCdDimmed = activeCd && !isCdSelected;
+
+                        const barStyle = {
+                          background: 'linear-gradient(to top, #B45309, #FFC800)',
+                          boxShadow: isCdSelected 
+                            ? '0 0 16px rgba(250, 200, 0, 0.9)' 
+                            : `0 0 ${isHovered ? '12px' : '4px'} ${isHovered ? 'rgba(250, 200, 0, 0.75)' : 'rgba(250, 200, 0, 0.35)'}`,
+                        };
+
+                        return (
+                          <div 
+                            key={c.cdName} 
+                            className={`flex flex-col items-center justify-end h-full w-full min-w-[10px] max-w-[18px] relative group cursor-pointer transition-all duration-200 ${
+                              isCdDimmed ? 'opacity-40 saturate-50' : 'opacity-100'
+                            }`}
+                            onMouseEnter={() => setHoveredKey(key)}
+                            onMouseLeave={() => setHoveredKey(null)}
+                            onClick={() => {
+                              onSelectCd?.(isCdSelected ? null : c.cdName);
+                              if (!isMonthSelected) {
+                                onSelectMonth?.(m.month);
+                              }
+                            }}
+                          >
+                            {/* Numerical Value above the bar */}
+                            <div className={`absolute -top-5 text-[8px] md:text-[9px] font-black tracking-tight text-center w-full select-all transition-all duration-200 ${isHovered || isCdSelected ? 'text-white scale-110 -translate-y-0.5' : 'text-slate-350'}`}>
+                              {c.avgHours > 0 ? c.avgHours.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0,0'}
+                            </div>
+
+                            {/* Solid Golden/Yellow Premium Bar */}
+                            <div 
+                              className={`w-full transition-all duration-300 rounded-t shadow relative ${isCdSelected ? 'ring-1 ring-white' : ''}`}
+                              style={{ 
+                                height: `${pct}%`,
+                                background: barStyle.background,
+                                boxShadow: barStyle.boxShadow,
+                                transform: isHovered ? 'scaleY(1.03) scaleX(1.05)' : 'none',
+                                transformOrigin: 'bottom',
+                                filter: isHovered || isCdSelected ? 'brightness(1.15)' : 'none'
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-white/5 hover:bg-white/10 rounded-t transition-colors" />
+                            </div>
+
+                            {/* CD Code below */}
+                            <div className={`text-[7px] md:text-[8px] font-bold text-center mt-1 truncate w-full uppercase block transition-colors duration-200 ${isHovered || isCdSelected ? 'text-white font-black' : 'text-slate-400'}`}>
+                              {c.cdName === 'LA ARENOSA' ? 'Are' : c.cdName === 'GALAPA' ? 'Gal' : c.cdName.slice(0, 3)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Sub Month Label Centered below the CD columns */}
+                    <button 
+                      onClick={() => onSelectMonth?.(isMonthSelected ? null : m.month)}
+                      className={`text-[8px] md:text-[9px] font-black uppercase tracking-wider mt-2 block transition-all duration-200 py-0.5 px-2 rounded-full cursor-pointer hover:bg-white/10 ${
+                        isMonthSelected ? 'text-white bg-[#00D4FF]/30 border border-[#00D4FF] scale-105 font-black shadow-[0_0_10px_rgba(0,212,255,0.4)]' : 'text-[#00D4FF] hover:text-white'
+                      }`}
+                      title={`Presione para ajustar gráfica a ${m.month.toUpperCase()}`}
+                    >
+                      {m.month.slice(0, 3)}
+                    </button>
+
+                    {/* Dotted border separators between monthly blocks */}
+                    {mIdx < monthlyGroupData.length - 1 && (
+                      <div className="absolute right-0 top-2 bottom-6 border-r border-dotted border-white/10" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Interactive Month Switcher strip at bottom */}
+        <div className="pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[9px] font-mono font-bold text-slate-400 uppercase mr-1">Meses:</span>
+            <button
+              onClick={() => onSelectMonth?.(null)}
+              className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer ${
+                !activeMonth ? 'bg-[#00D4FF]/20 text-[#00D4FF] border border-[#00D4FF]/40 shadow-[0_0_8px_rgba(0,212,255,0.2)]' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              Todos
+            </button>
+            {listMonths.map((m) => {
+              const isActive = activeMonth?.toLowerCase() === m;
+              return (
+                <button
+                  key={m}
+                  onClick={() => onSelectMonth?.(isActive ? null : m)}
+                  className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer ${
+                    isActive ? 'bg-[#00D4FF] text-slate-950 font-black shadow-[0_0_10px_rgba(0,212,255,0.4)]' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
                   }`}
+                  title={`Ajustar gráfica a ${m.toUpperCase()}`}
                 >
-                  {m.month}
+                  {m.slice(0, 3)}
                 </button>
+              );
+            })}
+          </div>
 
-                {/* Dotted border separators between monthly blocks */}
-                {mIdx < monthlyGroupData.length - 1 && (
-                  <div className="absolute right-0 top-2 bottom-8 border-r border-dotted border-white/10" />
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* X-axis Label "CD" */}
-        <div className="text-center text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">
-          CD {activeMonth || activeCd ? " • Presione el mes o barra para limpiar filtros" : ""}
+          <div className="text-right text-[9px] font-mono text-slate-400 uppercase">
+            {activeMonth ? `Mostrando ${activeMonth.toUpperCase()}` : "CD • Presione mes para ajustar"}
+          </div>
         </div>
       </div>
 
       {/* 2. MTD CARD (occupies 1 col) */}
-      <div className={`bg-[#111625] p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between ${
-        activeCd ? 'border-[#00D4FF]/40 shadow-[0_0_15px_rgba(0,212,255,0.05)]' : 'border-slate-700 shadow-2xl'
+      <div className={`bg-[#111625] p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between overflow-hidden shadow-2xl ${
+        activeCd ? 'border-[#00D4FF]/40 shadow-[0_0_15px_rgba(0,212,255,0.05)]' : 'border-slate-700'
       }`}>
         <ChartHeader 
           title={activeCd ? `MTD (${activeCd})` : "MTD"} 
-          subtitle="Mes de Abril. Presione barra para filtrar CD." 
+          subtitle={`Mes de ${currentSelectedMonth.toUpperCase()}. Presione barra para filtrar CD.`} 
         />
 
         {/* Render MTD statistics */}
         <div className="relative pt-6 pb-2 min-h-[220px] flex items-end justify-center w-full">
-          <div className="flex items-end justify-center gap-6 w-full h-[180px]">
+          <div className="flex items-end justify-center gap-4 sm:gap-6 w-full max-w-[260px] mx-auto h-[180px]">
             {mtdData.map((c) => {
               const pct = Math.max(8, (c.avgHours / maxVal) * 100);
               const isHovered = hoveredMtdCd === c.cdName;
@@ -280,14 +437,13 @@ export const GroupedMonthlyChart: React.FC<GroupedMonthlyChartProps> = ({
               return (
                 <div 
                   key={c.cdName} 
-                  className={`flex flex-col items-center justify-end h-full w-[45px] relative group cursor-pointer transition-all duration-200 ${
+                  className={`flex flex-col items-center justify-end h-full w-full max-w-[44px] relative group cursor-pointer transition-all duration-200 ${
                     isCdDimmed ? 'opacity-35 saturate-50' : 'opacity-100'
                   }`}
                   onMouseEnter={() => setHoveredMtdCd(c.cdName)}
                   onMouseLeave={() => setHoveredMtdCd(null)}
                   onClick={() => onSelectCd?.(isCdSelected ? null : c.cdName)}
                 >
-                  
                   {/* Numerical Value above the bar */}
                   <div className={`absolute -top-7 text-[10px] md:text-[11px] font-extrabold tracking-tight text-center w-full select-all transition-all duration-200 ${isHovered || isCdSelected ? 'text-white scale-110 -translate-y-0.5' : 'text-slate-350'}`}>
                     {c.avgHours > 0 ? c.avgHours.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0,0'}
@@ -320,7 +476,7 @@ export const GroupedMonthlyChart: React.FC<GroupedMonthlyChartProps> = ({
 
         {/* X-axis Label "CD" */}
         <div className="text-center text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">
-          CD
+          CD • {currentSelectedMonth.toUpperCase()}
         </div>
       </div>
 
@@ -334,12 +490,14 @@ interface WeeklySequenceChartProps {
   records: WorkshopActivityRecord[];
   activeWeek?: number | null;
   onSelectWeek?: (week: number | null) => void;
+  activeMonth?: string | null;
 }
 
 export const WeeklySequenceChart: React.FC<WeeklySequenceChartProps> = ({ 
   records,
   activeWeek,
-  onSelectWeek
+  onSelectWeek,
+  activeMonth
 }) => {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -347,22 +505,44 @@ export const WeeklySequenceChart: React.FC<WeeklySequenceChartProps> = ({
   // We check which records correspond to each week in 2026.
   
   const weeklyData = useMemo(() => {
-    // Generate week numbers 1 to 18
-    const totalWeeks = Array.from({ length: 18 }, (_, i) => i + 1);
-    
-    return totalWeeks.map(wkNum => {
-      // Filter records belonging to this week of year
-      const weekRecords = records.filter(r => {
-        const d = new Date(r.fechaIngreso + 'T12:00:00');
-        if (isNaN(d.getTime())) return false;
-        
-        // Simple day of year divided by 7
+    // Dynamic week numbers from records
+    const weekSet = new Set<number>();
+    records.forEach(r => {
+      const d = new Date(r.fechaIngreso + 'T12:00:00');
+      if (!isNaN(d.getTime())) {
         const start = new Date(d.getFullYear(), 0, 1);
         const diff = d.getTime() - start.getTime();
         const oneDay = 1000 * 60 * 60 * 24;
         const dayOfYear = Math.floor(diff / oneDay) + 1;
         const wk = Math.ceil(dayOfYear / 7);
-        return wk === wkNum;
+        if (wk >= 1 && wk <= 53) weekSet.add(wk);
+      }
+    });
+
+    let totalWeeks: number[] = [];
+    if (weekSet.size > 0) {
+      const minWk = Math.max(1, Math.min(...Array.from(weekSet)));
+      const maxWk = Math.min(53, Math.max(...Array.from(weekSet)));
+      for (let w = minWk; w <= maxWk; w++) {
+        totalWeeks.push(w);
+      }
+    } else {
+      totalWeeks = Array.from({ length: 18 }, (_, i) => i + 1);
+    }
+    
+    return totalWeeks.map(wkNum => {
+      // Filter records belonging to this week of year
+      const weekRecords = records.filter(r => {
+        const d = new Date(r.fechaIngreso + 'T12:00:00');
+        if (!isNaN(d.getTime())) {
+          const start = new Date(d.getFullYear(), 0, 1);
+          const diff = d.getTime() - start.getTime();
+          const oneDay = 1000 * 60 * 60 * 24;
+          const dayOfYear = Math.floor(diff / oneDay) + 1;
+          const wk = Math.ceil(dayOfYear / 7);
+          return wk === wkNum;
+        }
+        return false;
       });
 
       const totalHours = weekRecords.reduce((sum, r) => sum + r.horasTaller, 0);
@@ -384,17 +564,17 @@ export const WeeklySequenceChart: React.FC<WeeklySequenceChartProps> = ({
   }, [weeklyData]);
 
   return (
-    <div className={`bg-[#111625] p-5 rounded-2xl border transition-all duration-300 select-none ${
+    <div className={`bg-[#111625] p-5 rounded-2xl border transition-all duration-300 select-none overflow-hidden ${
       activeWeek ? 'border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.05)]' : 'border-slate-700 shadow-2xl'
     }`}>
       <ChartHeader 
-        title={activeWeek ? `Semana: ${activeWeek} (Filtrado)` : "Seguimiento Semanal"} 
-        subtitle="Métrico: Tiempo promedio en taller. Presione una barra para fijar filtro por semana." 
+        title={activeWeek ? `Semana: ${activeWeek} (Filtrado)` : activeMonth ? `Seguimiento Semanal (${activeMonth.toUpperCase()})` : "Seguimiento Semanal"} 
+        subtitle={activeMonth ? `Monitoreo secuencial para ${activeMonth.toUpperCase()}. Presione una barra para fijar semana.` : "Métrico: Tiempo promedio en taller. Presione una barra para fijar filtro por semana."} 
       />
 
-      {/* Render 18 sequential columns side by side */}
-      <div className="relative pt-6 pb-2 min-h-[220px] flex items-end justify-between w-full overflow-x-auto custom-scrollbar">
-        <div className="flex items-end justify-between w-full min-w-[700px] h-[180px] gap-2 px-2">
+      {/* Render sequential columns side by side */}
+      <div className="relative pt-6 pb-2 min-h-[220px] flex items-end justify-between w-full overflow-x-auto overflow-y-hidden custom-scrollbar">
+        <div className={`flex items-end ${weeklyData.length > 6 ? 'justify-between min-w-[650px]' : 'justify-center max-w-xl mx-auto gap-6 sm:gap-10'} w-full h-[180px] px-2`}>
           {weeklyData.map((w, idx) => {
             const pct = Math.max(5, (w.avgHours / maxVal) * 100);
             const isHovered = hoveredIdx === idx;
@@ -411,7 +591,7 @@ export const WeeklySequenceChart: React.FC<WeeklySequenceChartProps> = ({
             return (
               <div 
                 key={w.weekNum} 
-                className={`flex-1 flex flex-col items-center justify-end h-full relative group cursor-pointer transition-all duration-250 ${
+                className={`flex-1 flex flex-col items-center justify-end h-full relative group cursor-pointer max-w-[44px] transition-all duration-250 ${
                   isWeekDimmed ? 'opacity-35 saturate-50' : 'opacity-100'
                 }`}
                 onMouseEnter={() => setHoveredIdx(idx)}
@@ -463,16 +643,18 @@ interface DailyScrollChartProps {
   records: WorkshopActivityRecord[];
   activeDay?: string | null;
   onSelectDay?: (day: string | null) => void;
+  activeMonth?: string | null;
 }
 
 export const DailyScrollChart: React.FC<DailyScrollChartProps> = ({ 
   records,
   activeDay,
-  onSelectDay
+  onSelectDay,
+  activeMonth
 }) => {
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
-  // Let's find all the unique days in marzo and abril
+  // Let's find all the unique days in active records
   // We sort them chronologically and calculate average repair hours.
   
   const dailyData = useMemo(() => {
@@ -481,9 +663,9 @@ export const DailyScrollChart: React.FC<DailyScrollChartProps> = ({
     
     records.forEach(r => {
       const monthLower = getRecordMonthLower(r.fechaIngreso);
-      if (monthLower === 'marzo' || monthLower === 'abril') {
+      if (monthLower && monthLower !== 'otros') {
         const parts = r.fechaIngreso.split('-');
-        const dayLabel = parseInt(parts[2]).toString(); // '16', '17', ... without leading 0s
+        const dayLabel = parts[2] ? parseInt(parts[2], 10).toString() : r.fechaIngreso;
         
         if (!dayMap[r.fechaIngreso]) {
           dayMap[r.fechaIngreso] = {
@@ -531,17 +713,17 @@ export const DailyScrollChart: React.FC<DailyScrollChartProps> = ({
   }, [dailyData]);
 
   return (
-    <div className={`bg-[#111625] p-5 rounded-2xl border transition-all duration-300 select-none ${
+    <div className={`bg-[#111625] p-5 rounded-2xl border transition-all duration-300 select-none overflow-hidden ${
       activeDay ? 'border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.05)]' : 'border-slate-700 shadow-2xl'
     }`}>
       <ChartHeader 
-        title={activeDay ? `Día: ${activeDay} (Filtrado)` : "Seguimiento por Dia"} 
-        subtitle="Métrico: Tiempo promedio en taller. Presione una barra para fijar filtro por día." 
+        title={activeDay ? `Día: ${activeDay} (Filtrado)` : activeMonth ? `Seguimiento por Día (${activeMonth.toUpperCase()})` : "Seguimiento por Dia"} 
+        subtitle={activeMonth ? `Monitoreo diario enfocado en ${activeMonth.toUpperCase()}. Presione una barra para fijar día.` : "Métrico: Tiempo promedio en taller. Presione una barra para fijar filtro por día."} 
       />
 
       {/* Overflow Scroll Container with styled scrollbar */}
       <div className="overflow-x-auto overflow-y-hidden custom-scrollbar pb-3 pt-6 min-h-[220px]">
-        <div className="flex items-end h-[180px] min-w-[1200px] w-full px-2">
+        <div className={`flex items-end h-[180px] w-full px-2 ${dailyData.length <= 15 ? 'max-w-4xl mx-auto justify-center' : ''}`} style={{ minWidth: dailyData.length > 15 ? `${dailyData.length * 32}px` : 'auto' }}>
           {monthGroups.map((group, groupIdx) => {
             return (
               <div 
@@ -550,7 +732,7 @@ export const DailyScrollChart: React.FC<DailyScrollChartProps> = ({
                 style={{ flexGrow: group.days.length }}
               >
                 {/* Render days in this month */}
-                <div className="flex items-end justify-between w-full h-full gap-4 px-3">
+                <div className={`flex items-end ${dailyData.length <= 15 ? 'justify-center gap-3 sm:gap-4' : 'justify-between gap-3'} w-full h-full px-2`}>
                   {group.days.map((d) => {
                     const pct = Math.max(5, (d.avgHours / maxVal) * 100);
                     const isHovered = hoveredDate === d.dateStr;
