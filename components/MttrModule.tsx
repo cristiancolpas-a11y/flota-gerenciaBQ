@@ -3,7 +3,8 @@ import {
   X, Search, Wrench, Calendar, MapPin, DollarSign, User, HelpCircle, 
   Gavel, CheckCircle, AlertTriangle, ChevronDown, Award, Users,
   BarChart3, RefreshCw, Clock, ArrowRight, Shield, ShieldAlert,
-  Sliders, TrendingUp, Cpu, Landmark, Settings, Flame, LayoutGrid, ListFilter
+  Sliders, TrendingUp, Cpu, Landmark, Settings, Flame, LayoutGrid, ListFilter,
+  Gauge, Activity, CheckCircle2, Timer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -479,8 +480,8 @@ export const MttrModule: React.FC = () => {
   const [selectedPlaca, setSelectedPlaca] = useState<string | null>(null);
 
   // Active sub tab inside section
-  // 'resumen' = Executive summary, 'reincidencias' = Reincidence rank, 'sistemas' = Systems & taller metrics, 'seguimiento' = Combined monthly/weekly/daily time tracking
-  const [activeTab, setActiveTab] = useState<'resumen' | 'reincidencias' | 'sistemas' | 'seguimiento'>('seguimiento');
+  // 'resumen' = Executive summary, 'reincidencias' = Reincidence rank, 'sistemas' = Systems & taller metrics, 'seguimiento' = Combined monthly/weekly/daily time tracking, 'mtbf' = Mean Time Between Failures
+  const [activeTab, setActiveTab] = useState<'resumen' | 'reincidencias' | 'sistemas' | 'seguimiento' | 'mtbf'>('seguimiento');
 
   // List of unique values for dropdown filters
   const uniqueCds = useMemo(() => Array.from(new Set(masterData.map(d => d.cd))).sort(), [masterData]);
@@ -969,6 +970,232 @@ export const MttrModule: React.FC = () => {
     };
   }, [mttrByCdChartData]);
 
+  // =========================================================================
+  // CALCULATION ENGINE: MTBF (Mean Time Between Failures / Tiempo Medio Entre Fallas)
+  // Días transcurridos entre un ingreso a taller y el siguiente de la misma placa
+  // =========================================================================
+  const mtbfData = useMemo(() => {
+    const source = filteredRecords.length > 0 ? filteredRecords : masterData;
+    // Agrupar ingresos por placa
+    const byPlaca: Record<string, { fechas: Date[]; cd: string; contratista: string; vehiculo: string; sistemas: string[] }> = {};
+    source.forEach(r => {
+      const placa = (r.placa || '').toUpperCase().trim();
+      const fechaStr = r.fechaIngreso;
+      if (!placa || !fechaStr) return;
+      const d = fechaStr.includes('T') ? new Date(fechaStr) : new Date(fechaStr + 'T12:00:00');
+      if (isNaN(d.getTime())) return;
+      if (!byPlaca[placa]) {
+        byPlaca[placa] = {
+          fechas: [],
+          cd: r.cd || 'LA ARENOSA',
+          contratista: r.contratista || '',
+          vehiculo: r.vehiculo || '',
+          sistemas: []
+        };
+      }
+      byPlaca[placa].fechas.push(d);
+      if (r.cd) byPlaca[placa].cd = r.cd;
+      if (r.contratista) byPlaca[placa].contratista = r.contratista;
+      if (r.vehiculo) byPlaca[placa].vehiculo = r.vehiculo;
+      if (r.sistema) byPlaca[placa].sistemas.push(r.sistema);
+    });
+
+    // Para cada placa: ordenar fechas y promediar días entre ingresos consecutivos
+    const perPlaca: {
+      placa: string;
+      mtbfDias: number;
+      ingresos: number;
+      cd: string;
+      contratista: string;
+      vehiculo: string;
+      sistemaMasComun: string;
+    }[] = [];
+
+    Object.keys(byPlaca).forEach(placa => {
+      const item = byPlaca[placa];
+      const fechas = item.fechas.sort((a, b) => a.getTime() - b.getTime());
+
+      // Find top system for this plate
+      const sysCounts: Record<string, number> = {};
+      item.sistemas.forEach(s => { sysCounts[s] = (sysCounts[s] || 0) + 1; });
+      let topSys = 'GENERAL';
+      let maxC = 0;
+      Object.entries(sysCounts).forEach(([sys, cnt]) => {
+        if (cnt > maxC) {
+          maxC = cnt;
+          topSys = sys;
+        }
+      });
+
+      if (fechas.length < 2) {
+        perPlaca.push({
+          placa,
+          mtbfDias: 0,
+          ingresos: fechas.length,
+          cd: item.cd,
+          contratista: item.contratista,
+          vehiculo: item.vehiculo,
+          sistemaMasComun: topSys
+        });
+        return;
+      }
+      let totalDias = 0;
+      for (let i = 1; i < fechas.length; i++) {
+        totalDias += (fechas[i].getTime() - fechas[i - 1].getTime()) / (1000 * 60 * 60 * 24);
+      }
+      const mtbf = totalDias / (fechas.length - 1);
+      perPlaca.push({
+        placa,
+        mtbfDias: Math.round(mtbf * 10) / 10,
+        ingresos: fechas.length,
+        cd: item.cd,
+        contratista: item.contratista,
+        vehiculo: item.vehiculo,
+        sistemaMasComun: topSys
+      });
+    });
+
+    return perPlaca;
+  }, [filteredRecords, masterData]);
+
+  // Global MTBF KPIs
+  const mtbfGlobalStats = useMemo(() => {
+    const validPlates = mtbfData.filter(p => p.ingresos >= 2 && p.mtbfDias > 0);
+    if (validPlates.length === 0) {
+      return {
+        avgMtbfDays: 0,
+        evaluatedPlates: 0,
+        totalPlates: mtbfData.length,
+        bestPlate: null as { placa: string; mtbfDias: number; cd: string; contratista: string; ingresos: number } | null,
+        worstPlate: null as { placa: string; mtbfDias: number; cd: string; contratista: string; ingresos: number } | null
+      };
+    }
+    const sumMtbf = validPlates.reduce((acc, p) => acc + p.mtbfDias, 0);
+    const avgMtbfDays = Math.round((sumMtbf / validPlates.length) * 10) / 10;
+
+    // Best plate = highest MTBF (takes longest to return to workshop)
+    const sortedDesc = [...validPlates].sort((a, b) => b.mtbfDias - a.mtbfDias);
+    const bestPlate = sortedDesc[0] || null;
+
+    // Worst plate = lowest MTBF (breaks down most frequently)
+    const sortedAsc = [...validPlates].sort((a, b) => a.mtbfDias - b.mtbfDias);
+    const worstPlate = sortedAsc[0] || null;
+
+    return {
+      avgMtbfDays,
+      evaluatedPlates: validPlates.length,
+      totalPlates: mtbfData.length,
+      bestPlate,
+      worstPlate
+    };
+  }, [mtbfData]);
+
+  // 1. MTBF por CD (promedio de días entre ingresos por Centro de Distribución)
+  const mtbfByCdChartData = useMemo(() => {
+    const byCd: Record<string, { total: number; count: number; plateCount: number }> = {};
+    mtbfData.forEach(p => {
+      if (!p.cd || p.mtbfDias <= 0 || p.ingresos < 2) return;
+      if (!byCd[p.cd]) byCd[p.cd] = { total: 0, count: 0, plateCount: 0 };
+      byCd[p.cd].total += p.mtbfDias;
+      byCd[p.cd].count++;
+      byCd[p.cd].plateCount++;
+    });
+    return Object.keys(byCd).map(cd => ({
+      name: cd,
+      cd,
+      'MTBF Promedio (Días)': byCd[cd].count > 0 ? Math.round((byCd[cd].total / byCd[cd].count) * 10) / 10 : 0,
+      'Placas Evaluadas': byCd[cd].plateCount
+    })).sort((a, b) => b['MTBF Promedio (Días)'] - a['MTBF Promedio (Días)']);
+  }, [mtbfData]);
+
+  // 2. MTBF mensual (promedio de días entre ingresos consecutivos en cada mes)
+  const monthlyMtbfChartData = useMemo(() => {
+    const source = filteredRecords.length > 0 ? filteredRecords : masterData;
+    const byPlaca: Record<string, WorkshopActivityRecord[]> = {};
+    source.forEach(r => {
+      const placa = (r.placa || '').toUpperCase().trim();
+      if (!placa || !r.fechaIngreso) return;
+      if (!byPlaca[placa]) byPlaca[placa] = [];
+      byPlaca[placa].push(r);
+    });
+
+    const monthStats: Record<string, { totalDays: number; count: number }> = {
+      'ENERO': { totalDays: 0, count: 0 },
+      'FEBRERO': { totalDays: 0, count: 0 },
+      'MARZO': { totalDays: 0, count: 0 },
+      'ABRIL': { totalDays: 0, count: 0 }
+    };
+
+    Object.values(byPlaca).forEach(visits => {
+      const sorted = [...visits].sort((a, b) => {
+        const da = a.fechaIngreso.includes('T') ? new Date(a.fechaIngreso).getTime() : new Date(a.fechaIngreso + 'T12:00:00').getTime();
+        const db = b.fechaIngreso.includes('T') ? new Date(b.fechaIngreso).getTime() : new Date(b.fechaIngreso + 'T12:00:00').getTime();
+        return da - db;
+      });
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1].fechaIngreso.includes('T') ? new Date(sorted[i - 1].fechaIngreso).getTime() : new Date(sorted[i - 1].fechaIngreso + 'T12:00:00').getTime();
+        const curr = sorted[i].fechaIngreso.includes('T') ? new Date(sorted[i].fechaIngreso).getTime() : new Date(sorted[i].fechaIngreso + 'T12:00:00').getTime();
+        const diffDays = (curr - prev) / (1000 * 60 * 60 * 24);
+        if (diffDays >= 0) {
+          const m = getRecordMonth(sorted[i].fechaIngreso);
+          if (monthStats[m]) {
+            monthStats[m].totalDays += diffDays;
+            monthStats[m].count += 1;
+          }
+        }
+      }
+    });
+
+    const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL'];
+    return months.map(m => ({
+      name: m === 'ENERO' ? 'Ene' : m === 'FEBRERO' ? 'Feb' : m === 'MARZO' ? 'Mar' : 'Abr',
+      fullName: m,
+      'MTBF Promedio (Días)': monthStats[m].count > 0 ? Math.round((monthStats[m].totalDays / monthStats[m].count) * 10) / 10 : 0,
+      'Intervalos': monthStats[m].count
+    }));
+  }, [filteredRecords, masterData]);
+
+  // 3. Top 10 Placas con Menor MTBF (Frecuencia más alta de fallas / atención prioritaria)
+  const topWorstMtbfChartData = useMemo(() => {
+    return mtbfData
+      .filter(p => p.ingresos >= 2 && p.mtbfDias > 0)
+      .sort((a, b) => a.mtbfDias - b.mtbfDias)
+      .slice(0, 10)
+      .map(p => ({
+        placa: p.placa,
+        'MTBF (Días)': p.mtbfDias,
+        cd: p.cd,
+        ingresos: p.ingresos
+      }));
+  }, [mtbfData]);
+
+  // CD Best & Worst MTBF
+  const cdBestWorstMtbfStats = useMemo(() => {
+    if (mtbfByCdChartData.length === 0) return { best: 'N/A', bestVal: 0, worst: 'N/A', worstVal: 0 };
+    const sorted = [...mtbfByCdChartData].sort((a, b) => b['MTBF Promedio (Días)'] - a['MTBF Promedio (Días)']);
+    return {
+      best: sorted[0]?.name || 'N/A',
+      bestVal: sorted[0]?.['MTBF Promedio (Días)'] || 0,
+      worst: sorted[sorted.length - 1]?.name || 'N/A',
+      worstVal: sorted[sorted.length - 1]?.['MTBF Promedio (Días)'] || 0
+    };
+  }, [mtbfByCdChartData]);
+
+  // Ranking general de placas filtrado por búsqueda
+  const filteredMtbfTableData = useMemo(() => {
+    let list = [...mtbfData];
+    if (searchPlate) {
+      list = list.filter(p => p.placa.toLowerCase().includes(searchPlate.toLowerCase()));
+    }
+    // Ordenar placas con >= 2 ingresos por menor MTBF (atención a fallas frecuentes)
+    return list.sort((a, b) => {
+      if (a.ingresos >= 2 && b.ingresos < 2) return -1;
+      if (a.ingresos < 2 && b.ingresos >= 2) return 1;
+      if (a.ingresos < 2 && b.ingresos < 2) return b.ingresos - a.ingresos;
+      return a.mtbfDias - b.mtbfDias;
+    });
+  }, [mtbfData, searchPlate]);
+
   // Helper to get Monday date string
   const getMondayDateStr = (dateStr: string) => {
     const d = new Date(dateStr + 'T12:00:00');
@@ -1286,6 +1513,13 @@ export const MttrModule: React.FC = () => {
         </button>
 
         <button
+          onClick={() => { setActiveTab('mtbf'); setSelectedPlaca(null); }}
+          className={`px-3 md:px-4 py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'mtbf' && !selectedPlaca ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/30' : 'text-[#8B949E] hover:text-white hover:bg-white/5'}`}
+        >
+          MTBF (Entre Fallas)
+        </button>
+
+        <button
           onClick={() => { setActiveTab('reincidencias'); setSelectedPlaca(null); }}
           className={`px-3 md:px-4 py-2.5 rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'reincidencias' && !selectedPlaca ? 'bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/30' : 'text-[#8B949E] hover:text-white hover:bg-white/5'}`}
         >
@@ -1324,32 +1558,39 @@ export const MttrModule: React.FC = () => {
           <div className="absolute top-0 left-0 w-full h-[3px] bg-[#00FF88]" />
           <div className="space-y-2">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
-              {activeTab === 'reincidencias' ? 'Placas Evaluadas MTBR' : 'Placas Activas'}
+              {activeTab === 'reincidencias' ? 'Placas Evaluadas MTBR' : activeTab === 'mtbf' ? 'Placas Evaluadas MTBF' : 'Placas Activas'}
             </span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-extrabold tracking-tight text-[#00FF88] leading-none">
-                {activeTab === 'reincidencias' ? reincidenceSummaries.length : statsKPIs.activePlates}
+                {activeTab === 'reincidencias' ? reincidenceSummaries.length : activeTab === 'mtbf' ? mtbfGlobalStats.evaluatedPlates : statsKPIs.activePlates}
               </span>
               <span className="text-[9px] font-bold text-slate-500 uppercase font-mono">Camiones</span>
             </div>
             <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">
-              {activeTab === 'reincidencias' ? 'Total monitoreadas para reingreso' : 'Base total registrada'}
+              {activeTab === 'reincidencias' ? 'Total monitoreadas para reingreso' : activeTab === 'mtbf' ? 'Placas con ≥ 2 ingresos analizadas' : 'Base total registrada'}
             </p>
           </div>
         </div>
 
-        {/* Card 2: Average hours in workshop (Col F) or MTBR Average */}
+        {/* Card 2: Average hours in workshop (Col F) or MTBR / MTBF Average */}
         <div className="bg-[#111625] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-[#FFB800]/30 transition-all">
           <div className="absolute top-0 left-0 w-full h-[3px] bg-[#FFB800]" />
           <div className="space-y-2">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-bold">
-              {activeTab === 'reincidencias' ? 'MTBR Promedio Flota' : 'Promedio Horas Taller'}
+              {activeTab === 'reincidencias' ? 'MTBR Promedio Flota' : activeTab === 'mtbf' ? 'MTBF Promedio Flota' : 'Promedio Horas Taller'}
             </span>
             <div className="flex items-baseline gap-1.5 flex-wrap">
               {activeTab === 'reincidencias' ? (
                 <>
                   <span className="text-4xl font-extrabold tracking-tight text-[#FFB800] leading-none">
                     {mtbrGlobalStats.avgMtbrDays}
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-500 uppercase font-mono mr-1">Días</span>
+                </>
+              ) : activeTab === 'mtbf' ? (
+                <>
+                  <span className="text-4xl font-extrabold tracking-tight text-[#FFB800] leading-none">
+                    {mtbfGlobalStats.avgMtbfDays}
                   </span>
                   <span className="text-[9px] font-bold text-slate-500 uppercase font-mono mr-1">Días</span>
                 </>
@@ -1366,17 +1607,17 @@ export const MttrModule: React.FC = () => {
               )}
             </div>
             <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">
-              {activeTab === 'reincidencias' ? 'Tiempo medio entre intervenciones (MTBR)' : 'MTTR extraído de Columna F (horas)'}
+              {activeTab === 'reincidencias' ? 'Tiempo medio entre intervenciones (MTBR)' : activeTab === 'mtbf' ? 'Tiempo medio entre fallas consecutivas (MTBF)' : 'MTTR extraído de Columna F (horas)'}
             </p>
           </div>
         </div>
 
-        {/* Card 3: Critical System or Reincidence Alerts */}
+        {/* Card 3: Critical System or Reincidence / MTBF Alerts */}
         <div className="bg-[#111625] p-6 rounded-2xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-indigo-400/30 transition-all">
           <div className="absolute top-0 left-0 w-full h-[3px] bg-indigo-500" />
           <div className="space-y-2">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-bold">
-              {activeTab === 'reincidencias' ? 'Reincidencias Críticas' : 'Sistema Más Intervenido'}
+              {activeTab === 'reincidencias' ? 'Reincidencias Críticas' : activeTab === 'mtbf' ? 'Placa Menor MTBF (Frecuente)' : 'Sistema Más Intervenido'}
             </span>
             <div className="flex flex-col gap-0.5">
               {activeTab === 'reincidencias' ? (
@@ -1389,6 +1630,20 @@ export const MttrModule: React.FC = () => {
                   </div>
                   <span className="text-[8px] text-[#FF3B3B] font-black uppercase tracking-widest block font-mono">REINGRESO &lt; 7 DÍAS</span>
                 </>
+              ) : activeTab === 'mtbf' ? (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-extrabold tracking-tight text-[#FF3B3B] leading-none truncate max-w-[140px]">
+                      {mtbfGlobalStats.worstPlate ? mtbfGlobalStats.worstPlate.placa : 'N/A'}
+                    </span>
+                    {mtbfGlobalStats.worstPlate && (
+                      <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">
+                        {mtbfGlobalStats.worstPlate.mtbfDias}d
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[8px] text-[#FF3B3B] font-black uppercase tracking-widest block font-mono">MAYOR FRECUENCIA DE INGRESO</span>
+                </>
               ) : (
                 <>
                   <span className="text-sm font-black text-white uppercase tracking-tight block truncate">
@@ -1399,7 +1654,7 @@ export const MttrModule: React.FC = () => {
               )}
             </div>
             <p className="text-[8px] text-slate-500 uppercase font-bold leading-none">
-              {activeTab === 'reincidencias' ? 'Vehículos con alertas de recurrencia' : 'Frecuencia más alta hV'}
+              {activeTab === 'reincidencias' ? 'Vehículos con alertas de recurrencia' : activeTab === 'mtbf' ? 'Camión que requiere taller más seguido' : 'Frecuencia más alta hV'}
             </p>
           </div>
         </div>
@@ -1583,6 +1838,427 @@ export const MttrModule: React.FC = () => {
           </motion.div>
         )}
 
+        {/* TAB: MTBF (MEAN TIME BETWEEN FAILURES / TIEMPO MEDIO ENTRE FALLAS) */}
+        {activeTab === 'mtbf' && !selectedPlaca && (
+          <div className="space-y-8 animate-[fadeIn_0.5s_ease-out]">
+            
+            {/* KPI KEY INDICATORS HEADER ROW (MTBF) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              
+              {/* Metric 1: MTBF Promedio Flota */}
+              <div className="bg-[#111625] p-6 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-[#00D4FF]/30 transition-all">
+                <div className="absolute top-0 left-0 w-full h-[3px] bg-[#00D4FF]" />
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">MTBF Promedio Flota</span>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-extrabold text-[#00D4FF] tracking-tight">{mtbfGlobalStats.avgMtbfDays}</span>
+                      <span className="text-[10px] font-bold text-slate-500 font-mono">DÍAS</span>
+                    </div>
+                    <p className="text-[8px] text-slate-500 font-medium uppercase font-sans">Tiempo medio entre ingresos a taller</p>
+                  </div>
+                  <div className="w-9 h-9 bg-[#00D4FF]/10 rounded-xl flex items-center justify-center text-[#00D4FF]">
+                    <Timer size={16} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Metric 2: Placa Más Confiable (Mayor MTBF) */}
+              <div className="bg-[#111625] p-6 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-[#00FF88]/30 transition-all">
+                <div className="absolute top-0 left-0 w-full h-[3px] bg-[#00FF88]" />
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Placa Más Confiable (Max MTBF)</span>
+                    <div className="space-y-0.5">
+                      <div className="text-lg font-black text-white truncate max-w-[150px] uppercase">
+                        {mtbfGlobalStats.bestPlate ? mtbfGlobalStats.bestPlate.placa : 'N/A'}
+                      </div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl font-extrabold text-[#00FF88]">
+                          {mtbfGlobalStats.bestPlate ? mtbfGlobalStats.bestPlate.mtbfDias : 0}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-500 font-mono">DÍAS ENTRE INGRESOS</span>
+                      </div>
+                    </div>
+                    <p className="text-[8px] text-slate-500 font-medium uppercase font-sans truncate max-w-[160px]">
+                      CD {mtbfGlobalStats.bestPlate?.cd || 'N/A'}
+                    </p>
+                  </div>
+                  <div className="w-9 h-9 bg-[#00FF88]/10 rounded-xl flex items-center justify-center text-[#00FF88]">
+                    <CheckCircle2 size={16} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Metric 3: Placa que Más Falla (Menor MTBF) */}
+              <div className="bg-[#111625] p-6 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-[#FF3B3B]/30 transition-all">
+                <div className="absolute top-0 left-0 w-full h-[3px] bg-[#FF3B3B]" />
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Placa Menor MTBF (Frecuente)</span>
+                    <div className="space-y-0.5">
+                      <div className="text-lg font-black text-white truncate max-w-[150px] uppercase">
+                        {mtbfGlobalStats.worstPlate ? mtbfGlobalStats.worstPlate.placa : 'N/A'}
+                      </div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-xl font-extrabold text-[#FF3B3B]">
+                          {mtbfGlobalStats.worstPlate ? mtbfGlobalStats.worstPlate.mtbfDias : 0}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400 font-mono">DÍAS ENTRE INGRESOS</span>
+                      </div>
+                    </div>
+                    <p className="text-[8px] text-slate-500 font-medium uppercase font-sans truncate max-w-[160px]">
+                      CD {mtbfGlobalStats.worstPlate?.cd || 'N/A'} · {mtbfGlobalStats.worstPlate?.ingresos || 0} visitas
+                    </p>
+                  </div>
+                  <div className="w-9 h-9 bg-[#FF3B3B]/10 rounded-xl flex items-center justify-center text-[#FF3B3B]">
+                    <AlertTriangle size={16} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Metric 4: Placas Evaluadas */}
+              <div className="bg-[#111625] p-6 rounded-3xl border border-white/5 shadow-xl relative overflow-hidden group hover:border-[#FFB800]/30 transition-all">
+                <div className="absolute top-0 left-0 w-full h-[3px] bg-[#FFB800]" />
+                <div className="flex justify-between items-start">
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Placas Evaluadas MTBF</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-extrabold text-[#FFB800] tracking-tight">
+                        {mtbfGlobalStats.evaluatedPlates}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-500 font-mono">/ {mtbfGlobalStats.totalPlates} PLACAS</span>
+                    </div>
+                    <p className="text-[8px] text-slate-500 font-medium uppercase font-sans">
+                      Unidades con ≥ 2 ingresos a taller
+                    </p>
+                  </div>
+                  <div className="w-9 h-9 bg-[#FFB800]/10 rounded-xl flex items-center justify-center text-[#FFB800]">
+                    <Gauge size={16} />
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* CONCEPT BANNER */}
+            <div className="bg-gradient-to-r from-[#111625] via-[#161d31] to-[#111625] p-5 rounded-2xl border border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#00D4FF]/10 text-[#00D4FF] flex items-center justify-center shrink-0 border border-[#00D4FF]/20">
+                  <Activity size={20} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                    MTBF (Mean Time Between Failures / Tiempo Medio Entre Fallas)
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                    Para cada placa, calcula el promedio de días transcurridos entre un ingreso a taller y el siguiente ingreso de la misma unidad. A mayor MTBF, mayor disponibilidad y confiabilidad de la flota.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg bg-white/5 text-slate-300 border border-white/10 font-mono">
+                  MTBF = Σ(Días entre ingresos) / (N - 1)
+                </span>
+              </div>
+            </div>
+
+            {/* MAIN CHARTS GRID */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              
+              {/* COLUMN 1 & 2: CD BAR CHART & TOP OFFENDERS BAR CHART */}
+              <div className="lg:col-span-2 space-y-8">
+                
+                {/* 1. MTBF POR CENTRO DE DISTRIBUCION (MISMA GRAFICA DEL MTTR) */}
+                <div className="bg-[#111625] p-6 lg:p-8 rounded-[2.5rem] border border-white/5 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-black text-white uppercase tracking-wider">Promedio MTBF por Centro de Distribución (CD)</h3>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Días promedio entre ingresos por taller del CD (Mayor = Mejor Confiabilidad)</p>
+                    </div>
+                    <BarChart3 size={20} className="text-[#00D4FF]" />
+                  </div>
+
+                  <div className="h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={mtbfByCdChartData}
+                        margin={{ top: 15, right: 20, left: 0, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#161b22" />
+                        <XAxis 
+                          dataKey="name" 
+                          stroke="#8b949e" 
+                          fontSize={9} 
+                          tickFormatter={(val) => val.split(' ')[0]} 
+                        />
+                        <YAxis stroke="#8b949e" fontSize={10} unit=" d" />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#111625', borderColor: 'rgba(255,255,255,0.1)' }}
+                          labelStyle={{ fontWeight: 'black', color: '#fff', fontSize: '11px' }}
+                        />
+                        <Bar dataKey="MTBF Promedio (Días)" name="MTBF Promedio (Días)" fill="#00D4FF" radius={[5, 5, 0, 0]}>
+                          {mtbfByCdChartData.map((entry, index) => {
+                            const isBest = entry.name === cdBestWorstMtbfStats.best;
+                            const isWorst = entry.name === cdBestWorstMtbfStats.worst;
+                            const color = isBest ? '#00FF88' : isWorst ? '#FF3B3B' : '#00D4FF';
+                            return <Cell key={`cell-mtbf-cd-${index}`} fill={color} />;
+                          })}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* 2. TOP 10 PLACAS CON MENOR MTBF (FALLAS MÁS FRECUENTES) */}
+                <div className="bg-[#111625] p-6 lg:p-8 rounded-[2.5rem] border border-white/5 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-black text-white uppercase tracking-wider">Top 10 Placas con Menor MTBF (Atención Crítica)</h3>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Vehículos que regresan con mayor frecuencia a taller (Menor intervalo de días)</p>
+                    </div>
+                    <AlertTriangle size={20} className="text-[#FF3B3B]" />
+                  </div>
+
+                  <div className="h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={topWorstMtbfChartData}
+                        margin={{ top: 15, right: 20, left: 0, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#161b22" />
+                        <XAxis 
+                          dataKey="placa" 
+                          stroke="#8b949e" 
+                          fontSize={9} 
+                        />
+                        <YAxis stroke="#8b949e" fontSize={10} unit=" d" />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: '#111625', borderColor: 'rgba(255,255,255,0.1)' }}
+                          labelStyle={{ fontWeight: 'black', color: '#fff', fontSize: '11px' }}
+                        />
+                        <Bar dataKey="MTBF (Días)" name="MTBF (Días)" fill="#FF3B3B" radius={[5, 5, 0, 0]}>
+                          {topWorstMtbfChartData.map((_, index) => (
+                            <Cell key={`cell-mtbf-worst-${index}`} fill={index < 3 ? '#FF3B3B' : '#FF8800'} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* COLUMN 3: SIDEBAR WITH MONTHLY GRAPH & CD MATRIX */}
+              <div className="space-y-8">
+                
+                {/* 3. SEGUIMIENTO MENSUAL DEL MTBF (MISMA GRAFICA QUE MTTR) */}
+                <div className="bg-[#111625] p-6 lg:p-8 rounded-[2.5rem] border border-white/5 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-black text-white uppercase tracking-wider">Seguimiento Mensual MTBF</h3>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Promedio de días entre ingresos por mes</p>
+                    </div>
+                    <Calendar size={18} className="text-[#FFB800]" />
+                  </div>
+
+                  <div className="h-[180px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={monthlyMtbfChartData}
+                        margin={{ top: 10, right: 10, left: -25, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#161b22" />
+                        <XAxis dataKey="name" stroke="#8b949e" fontSize={9} />
+                        <YAxis stroke="#8b949e" fontSize={10} unit=" d" />
+                        <Tooltip contentStyle={{ backgroundColor: '#111625', borderColor: 'rgba(255,255,255,0.1)' }} />
+                        <Bar dataKey="MTBF Promedio (Días)" name="MTBF Días" fill="#FFB800" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* 4. MATRIZ DE DESEMPEÑO MTBF POR CD */}
+                <div className="bg-[#111625] p-6 lg:p-8 rounded-[2.5rem] border border-white/5 shadow-xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-black text-white uppercase tracking-wider">Desempeño MTBF por CD</h3>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Resumen de confiabilidad operativa</p>
+                    </div>
+                    <Shield size={18} className="text-[#00FF88]" />
+                  </div>
+
+                  <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                    {mtbfByCdChartData.map((cdItem, idx) => {
+                      const days = cdItem['MTBF Promedio (Días)'];
+                      const isHigh = days >= 15;
+                      const isMid = days >= 8 && days < 15;
+                      return (
+                        <div 
+                          key={`mtbf-cd-row-${idx}`}
+                          className="p-3 bg-white/[0.02] hover:bg-white/[0.05] rounded-2xl border border-white/5 flex items-center justify-between transition-all"
+                        >
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-black text-white uppercase tracking-wide block">{cdItem.name}</span>
+                            <span className="text-[9px] text-slate-400 font-bold uppercase">
+                              {cdItem['Placas Evaluadas']} Placas evaluadas
+                            </span>
+                          </div>
+                          <div className="text-right space-y-1">
+                            <div className="flex items-baseline gap-1 justify-end">
+                              <span className={`text-base font-extrabold ${isHigh ? 'text-[#00FF88]' : isMid ? 'text-[#FFB800]' : 'text-[#FF3B3B]'}`}>
+                                {days}
+                              </span>
+                              <span className="text-[9px] font-bold text-slate-500 font-mono">DÍAS</span>
+                            </div>
+                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
+                              isHigh ? 'bg-[#00FF88]/10 text-[#00FF88]' : isMid ? 'bg-[#FFB800]/10 text-[#FFB800]' : 'bg-[#FF3B3B]/10 text-[#FF3B3B]'
+                            }`}>
+                              {isHigh ? 'ÓPTIMO' : isMid ? 'REGULAR' : 'CRÍTICO'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* RANKING & TABLE DE PLACAS POR MTBF */}
+            <div className="bg-[#111625] p-6 lg:p-8 rounded-[2.5rem] border border-white/5 shadow-xl space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-black text-white uppercase tracking-wider">
+                    Ranking de Flota por MTBF (Tiempo Medio Entre Fallas)
+                  </h3>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                    Listado de vehículos ordenados por frecuencia de ingreso a taller ({filteredMtbfTableData.length} unidades encontradas)
+                  </p>
+                </div>
+
+                <div className="relative w-full md:w-72">
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    value={searchPlate}
+                    onChange={(e) => setSearchPlate(e.target.value)}
+                    placeholder="BUSCAR POR PLACA..."
+                    className="w-full bg-[#161B22] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs font-bold text-white placeholder-slate-500 focus:outline-none focus:border-[#00D4FF]/50 uppercase"
+                  />
+                  {searchPlate && (
+                    <button 
+                      onClick={() => setSearchPlate('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      <th className="py-3 px-4">Placa</th>
+                      <th className="py-3 px-4">CD Base</th>
+                      <th className="py-3 px-4">Contratista</th>
+                      <th className="py-3 px-4 text-center">Ingresos</th>
+                      <th className="py-3 px-4 text-right">MTBF Promedio</th>
+                      <th className="py-3 px-4 text-center">Diagnóstico / Confiabilidad</th>
+                      <th className="py-3 px-4 text-right">Expediente</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.03] text-xs">
+                    {filteredMtbfTableData.slice(0, 50).map((row, idx) => {
+                      const isMulti = row.ingresos >= 2;
+                      const isHigh = isMulti && row.mtbfDias >= 15;
+                      const isMid = isMulti && row.mtbfDias >= 7 && row.mtbfDias < 15;
+                      const isLow = isMulti && row.mtbfDias < 7;
+
+                      return (
+                        <tr key={`mtbf-row-${idx}`} className="hover:bg-white/[0.02] transition-colors group">
+                          <td className="py-3.5 px-4 font-mono font-black text-white">
+                            <button
+                              onClick={() => setSelectedPlaca(row.placa)}
+                              className="text-left font-mono font-black text-white hover:text-[#00D4FF] transition-colors underline decoration-dotted underline-offset-4"
+                            >
+                              {row.placa}
+                            </button>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="px-2 py-0.5 rounded-md bg-white/5 text-slate-300 text-[10px] font-bold uppercase">
+                              {row.cd}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-400 font-medium truncate max-w-[180px]">
+                            {row.contratista || '—'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-300">
+                            {row.ingresos}
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            {isMulti ? (
+                              <div className="flex items-baseline justify-end gap-1 font-mono">
+                                <span className={`font-black text-sm ${isHigh ? 'text-[#00FF88]' : isMid ? 'text-[#FFB800]' : 'text-[#FF3B3B]'}`}>
+                                  {row.mtbfDias}
+                                </span>
+                                <span className="text-[9px] font-bold text-slate-500 uppercase">DÍAS</span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">
+                                — (1 INGRESO)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            {!isMulti ? (
+                              <span className="px-2.5 py-1 rounded-full bg-slate-800/80 text-slate-400 text-[8px] font-black uppercase tracking-wider border border-white/5">
+                                REGISTRO ÚNICO (Sin reincidencia)
+                              </span>
+                            ) : isLow ? (
+                              <span className="px-2.5 py-1 rounded-full bg-[#FF3B3B]/10 text-[#FF3B3B] text-[8px] font-black uppercase tracking-wider border border-[#FF3B3B]/20">
+                                CRÍTICO (&lt; 7 DÍAS ENTRE FALLAS)
+                              </span>
+                            ) : isMid ? (
+                              <span className="px-2.5 py-1 rounded-full bg-[#FFB800]/10 text-[#FFB800] text-[8px] font-black uppercase tracking-wider border border-[#FFB800]/20">
+                                REGULAR (7 - 15 DÍAS)
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-[#00FF88]/10 text-[#00FF88] text-[8px] font-black uppercase tracking-wider border border-[#00FF88]/20">
+                                CONFIABLE (&gt; 15 DÍAS)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              onClick={() => setSelectedPlaca(row.placa)}
+                              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-[#00D4FF]/20 text-slate-300 hover:text-[#00D4FF] font-black text-[9px] uppercase tracking-wider border border-white/5 hover:border-[#00D4FF]/30 transition-all inline-flex items-center gap-1.5"
+                            >
+                              Ver Detalle
+                              <ArrowRight size={10} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {filteredMtbfTableData.length > 50 && (
+                  <div className="p-3 text-center border-t border-white/5">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold">
+                      Mostrando 50 de {filteredMtbfTableData.length} placas evaluadas. Usa el buscador superior para filtrar una placa específica.
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
 
         {/* TAB 1: CONTROL MTTR UNIFICADO */}
         {activeTab === 'resumen' && !selectedPlaca && (

@@ -4892,7 +4892,3 @@ export const submitSparePartInspection = async (inspection: {
   const success = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
   return !!success;
 };
-
-
-
-
