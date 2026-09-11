@@ -27,6 +27,9 @@ export const CALIDAD_SEG_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycb
 // Script propio del módulo Cierre de Novedades (doc 1LdneoDkFwIdYf...)
 export const CIERRE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
 
+// Script exclusivo del módulo Cierre de Novedades del Check List
+export const CIERRE_CHECKLIST_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwrEkalsgNrHXPqEx_MeihznsIM4uIG7WZH42ze_HOyB5EZTgeDZMPi0SaIo4JZMlAppQ/exec';
+
 export const sanitizeScriptUrl = (url: string): string => {
   if (!url) return '';
   let cleaned = url.trim();
@@ -3042,9 +3045,9 @@ const processControlTowerRows = (rows: any[][]): ControlTowerRecord[] => {
 export const fetchControlTowerFromSheet = async (): Promise<ControlTowerRecord[]> => {
   try {
     const docId = getControlTowerDocId();
-    console.log("[fetchControlTowerFromSheet] Iniciando lectura. DocID:", docId, "| ScriptUrl:", CIERRE_SCRIPT_URL);
+    console.log("[fetchControlTowerFromSheet] Iniciando lectura. DocID:", docId, "| ScriptUrl:", CIERRE_CHECKLIST_SCRIPT_URL);
 
-    const rows = await fetchDataFromGAS(docId, 'Cierre de Novedades', CIERRE_SCRIPT_URL);
+    const rows = await fetchDataFromGAS(docId, 'Cierre de Novedades', CIERRE_CHECKLIST_SCRIPT_URL);
     console.log("[fetchControlTowerFromSheet] Filas recibidas de fetchDataFromGAS:", rows ? rows.length : 0);
     
     if (!rows || rows.length < 2) {
@@ -3126,13 +3129,13 @@ export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolea
     }
   };
   try {
-    const result = await sendToGAS(payload, CIERRE_SCRIPT_URL, true);
+    const result = await sendToGAS(payload, CIERRE_CHECKLIST_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
   } catch (err) {
     console.warn("Cierre con CORS falló, fallback:", err);
   }
-  const ok = await sendToGAS(payload, CIERRE_SCRIPT_URL, false);
+  const ok = await sendToGAS(payload, CIERRE_CHECKLIST_SCRIPT_URL, false);
   return !!ok;
 };
 
