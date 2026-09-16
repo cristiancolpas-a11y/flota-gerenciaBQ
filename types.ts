@@ -555,6 +555,7 @@ export interface FleetCierreRecord {
   evidencia: string;    // Columna F (EVIDENCIA)
   estado: string;       // Columna G (ESTADO)
   contratista?: string;  // Derived or optional
+  rowIndex?: number;    // Fila real en Google Sheets (1-indexed)
 }
 
 export interface FleetSeguimientoRecord {

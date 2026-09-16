@@ -3857,8 +3857,9 @@ const processFleetCierreRows = (rows: any[][]): FleetCierreRecord[] => {
   }
 
   return rows.slice(1)
-    .filter(row => row && (cleanSheetValue(row[idxPlaca]) || cleanSheetValue(row[1]) || cleanSheetValue(row[2])))
-    .map((row, i): FleetCierreRecord => {
+    .map((row, i) => ({ row, rowIndex: i + 2 }))
+    .filter(({ row }) => row && (cleanSheetValue(row[idxPlaca]) || cleanSheetValue(row[1]) || cleanSheetValue(row[2])))
+    .map(({ row, rowIndex }): FleetCierreRecord => {
       let pVal = cleanSheetValue(row[idxPlaca]);
       let cdVal = cleanSheetValue(row[idxCD]);
 
@@ -3874,7 +3875,8 @@ const processFleetCierreRows = (rows: any[][]): FleetCierreRecord[] => {
       const contratistaVal = idxContratista !== -1 ? cleanSheetValue(row[idxContratista]) : 'Otros';
 
       return {
-        id: `cierre-${i}-${pVal}`,
+        id: `cierre-${rowIndex}-${pVal}`,
+        rowIndex,
         fecha: parseFlexibleDate(row[idxFecha]),
         placa: normalizePlate(pVal),
         cd: cdVal || 'GENERAL',
@@ -3895,6 +3897,9 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
   status: string;
   evidence: string | string[];
   verification?: string;
+  rowIndex?: number;
+  id?: string;
+  fecha?: string;
 }): Promise<boolean> => {
   const rawEv = data.evidence || '';
   const hasEvidence = !!(rawEv && (typeof rawEv === 'string' ? rawEv.trim().length > 0 : Array.isArray(rawEv) ? rawEv.length > 0 : true));
@@ -3906,6 +3911,7 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
     method: 'POST_CALIDAD_CIERRE_UPDATE',
     data: { 
       ...data, 
+      rowIndex: data.rowIndex,
       status: finalStatus,
       estado: finalStatus,
       docId: '1HnykQOrnSZQTwY8uYa-JUpVr_tEr2K3QyZliltI06BM',
