@@ -2123,14 +2123,18 @@ export const submitDocumentUpdateToSheet = async (data: any): Promise<void> => {
     if (result === true) {
       return;
     }
-  } catch (err) {
-    console.warn("GAS - Envío de actualización de documento con CORS falló, intentando fallback no-cors:", err);
-  }
-
-  // Fallback seguro usando modo no-cors (fire-and-forget)
-  const success = await sendToGAS({ method: 'POST_DOC_UPDATE', data: { ...data, docId } }, getGoogleScriptUrl(), false);
-  if (!success) {
-    throw new Error("Error al actualizar documento en el servidor");
+    return;
+  } catch (err: any) {
+    // Si el servidor devolvió un error de negocio, no reintentar
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("GAS - Envío de actualización de documento con CORS falló por error de red, intentando fallback no-cors:", err);
+    // Fallback seguro usando modo no-cors (fire-and-forget) SOLO en caso de excepción de red
+    const success = await sendToGAS({ method: 'POST_DOC_UPDATE', data: { ...data, docId } }, getGoogleScriptUrl(), false);
+    if (!success) {
+      throw new Error("Error al actualizar documento en el servidor");
+    }
   }
 };
 
@@ -2162,14 +2166,17 @@ export const submitReportToSheet = async (report: Report): Promise<void> => {
     if (result === true) {
       return;
     }
-  } catch (err) {
-    console.warn("GAS - Envío de novedad con CORS falló, intentando fallback no-cors:", err);
-  }
-
-  // Fallback seguro usando modo no-cors (fire-and-forget)
-  const success = await sendToGAS({ method: 'POST_REPORT', data: sanitizedReport }, WORKSHOP_SCRIPT_URL, false);
-  if (!success) {
-    throw new Error("Error al registrar novedad en el servidor");
+    return;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("GAS - Envío de novedad con CORS falló por error de red, intentando fallback no-cors:", err);
+    // Fallback seguro usando modo no-cors (fire-and-forget) SOLO en caso de excepción de red
+    const success = await sendToGAS({ method: 'POST_REPORT', data: sanitizedReport }, WORKSHOP_SCRIPT_URL, false);
+    if (!success) {
+      throw new Error("Error al registrar novedad en el servidor");
+    }
   }
 };
 
@@ -2317,14 +2324,17 @@ export const submitMileageToSheet = async (mileageData: any): Promise<void> => {
     if (result === true) {
       return;
     }
-  } catch (err) {
-    console.warn("GAS - Envío con CORS falló, intentando fallback no-cors:", err);
-  }
-
-  // Fallback seguro usando modo no-cors (fire-and-forget)
-  const success = await sendToGAS({ method: 'POST_MILEAGE', data: payloadData }, MILEAGE_SCRIPT_URL, false);
-  if (!success) {
-    throw new Error("Error al guardar en el servidor");
+    return;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("GAS - Envío con CORS falló por error de red, intentando fallback no-cors:", err);
+    // Fallback seguro usando modo no-cors (fire-and-forget) SOLO en caso de excepción de red
+    const success = await sendToGAS({ method: 'POST_MILEAGE', data: payloadData }, MILEAGE_SCRIPT_URL, false);
+    if (!success) {
+      throw new Error("Error al guardar en el servidor");
+    }
   }
 };
 export const submitCalibrationToSheet = async (calibrationDate: any): Promise<void> => { 
@@ -2343,13 +2353,16 @@ export const submitCalibrationToSheet = async (calibrationDate: any): Promise<vo
     if (result === true) {
       return;
     }
-  } catch (err) {
-    console.warn("GAS - Envío de calibración con CORS falló, intentando fallback no-cors:", err);
-  }
-
-  const success = await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }, CALIBRATIONS_SCRIPT_URL, false);
-  if (!success) {
-    throw new Error("Error al guardar la calibración en el servidor");
+    return;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("GAS - Envío de calibración con CORS falló por error de red, intentando fallback no-cors:", err);
+    const success = await sendToGAS({ method: 'POST_CALIBRATION', data: { ...calibrationDate, docId } }, CALIBRATIONS_SCRIPT_URL, false);
+    if (!success) {
+      throw new Error("Error al guardar la calibración en el servidor");
+    }
   }
 };
 
@@ -2369,13 +2382,16 @@ export const submitCalibrationUpdateToSheet = async (data: any): Promise<void> =
     if (result === true) {
       return;
     }
-  } catch (err) {
-    console.warn("GAS - Envío de actualización de calibración con CORS falló, intentando fallback no-cors:", err);
-  }
-
-  const success = await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }, CALIBRATIONS_SCRIPT_URL, false);
-  if (!success) {
-    throw new Error("Error al actualizar la calibración en el servidor");
+    return;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("GAS - Envío de actualización de calibración con CORS falló por error de red, intentando fallback no-cors:", err);
+    const success = await sendToGAS({ method: 'POST_CALIBRATION_UPDATE', data: { ...data, docId } }, CALIBRATIONS_SCRIPT_URL, false);
+    if (!success) {
+      throw new Error("Error al actualizar la calibración en el servidor");
+    }
   }
 };
 
@@ -2412,13 +2428,16 @@ export const submitWashToSheet = async (washData: any): Promise<void> => {
     if (result === true) {
       return;
     }
-  } catch (err) {
-    console.warn("GAS - Envío de lavado con CORS falló, intentando fallback no-cors:", err);
-  }
-
-  const success = await sendToGAS({ method: 'POST_WASH', data: payloadData }, WASH_SCRIPT_URL, false);
-  if (!success) {
-    throw new Error("Error al guardar el lavado en el servidor");
+    return;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("GAS - Envío de lavado con CORS falló por error de red, intentando fallback no-cors:", err);
+    const success = await sendToGAS({ method: 'POST_WASH', data: payloadData }, WASH_SCRIPT_URL, false);
+    if (!success) {
+      throw new Error("Error al guardar el lavado en el servidor");
+    }
   }
 };
 
@@ -2438,13 +2457,16 @@ export const submitCleaningToSheet = async (cleaningData: any): Promise<void> =>
     if (result === true) {
       return;
     }
-  } catch (err) {
-    console.warn("GAS - Envío de limpieza con CORS falló, intentando fallback no-cors:", err);
-  }
-
-  const success = await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }, CLEANING_5S_SCRIPT_URL, false);
-  if (!success) {
-    throw new Error("Error al guardar la limpieza en el servidor");
+    return;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("GAS - Envío de limpieza con CORS falló por error de red, intentando fallback no-cors:", err);
+    const success = await sendToGAS({ method: 'POST_CLEANING', data: { ...cleaningData, docId } }, CLEANING_5S_SCRIPT_URL, false);
+    if (!success) {
+      throw new Error("Error al guardar la limpieza en el servidor");
+    }
   }
 };
 export const submitWorkshopVisitUpdateToSheet = async (visitData: any): Promise<{success: boolean, message?: string}> => { 
@@ -3132,11 +3154,15 @@ export const submitControlTowerUpdateToSheet = async (data: any): Promise<boolea
     const result = await sendToGAS(payload, CIERRE_CHECKLIST_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
-  } catch (err) {
-    console.warn("Cierre con CORS falló, fallback:", err);
+    return true;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("Cierre con CORS falló por error de red, intentando fallback:", err);
+    const ok = await sendToGAS(payload, CIERRE_CHECKLIST_SCRIPT_URL, false);
+    return !!ok;
   }
-  const ok = await sendToGAS(payload, CIERRE_CHECKLIST_SCRIPT_URL, false);
-  return !!ok;
 };
 
 export const submitAuditUpdateToSheet = async (data: any): Promise<boolean> => {
@@ -3360,20 +3386,23 @@ export const submitCampaignToSheet = async (campaignData: {
       }
     }
     if (result === true) return true;
-  } catch (err) {
-    console.warn("GAS - Envío de campaña con CORS falló, intentando fallback no-cors:", err);
-  }
-
-  // Fallback seguro no-cors
-  const success = await sendToGAS({
-    method: 'POST_CAMPAIGN',
-    data: {
-      ...campaignData,
-      docId
+    return true;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
     }
-  }, getCampaignsScriptUrl(), false);
+    console.warn("GAS - Envío de campaña con CORS falló por error de red, intentando fallback no-cors:", err);
+    // Fallback seguro no-cors SOLO en caso de excepción de red
+    const success = await sendToGAS({
+      method: 'POST_CAMPAIGN',
+      data: {
+        ...campaignData,
+        docId
+      }
+    }, getCampaignsScriptUrl(), false);
 
-  return success;
+    return !!success;
+  }
 };
 
 export const submitRoutineToSheet = async (execution: any): Promise<boolean> => {
@@ -3402,20 +3431,23 @@ export const submitRoutineToSheet = async (execution: any): Promise<boolean> => 
       }
     }
     if (result === true) return true;
-  } catch (err) {
-    console.warn("GAS - Envío de rutina con CORS falló, intentando fallback no-cors:", err);
-  }
-
-  // Fallback seguro no-cors
-  const success = await sendToGAS({
-    method: 'POST_ROUTINE',
-    data: {
-      ...execution,
-      docId
+    return true;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
     }
-  }, scriptUrl, false);
+    console.warn("GAS - Envío de rutina con CORS falló por error de red, intentando fallback no-cors:", err);
+    // Fallback seguro no-cors SOLO en caso de excepción de red
+    const success = await sendToGAS({
+      method: 'POST_ROUTINE',
+      data: {
+        ...execution,
+        docId
+      }
+    }, scriptUrl, false);
 
-  return success;
+    return !!success;
+  }
 };
 
 export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {
@@ -3697,11 +3729,15 @@ export const submitFleetStandardAuditUpdateToSheet = async (data: any): Promise<
     const result = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
-  } catch (err) {
-    console.warn("Cierre estándar con CORS falló, intentando fallback:", err);
+    return true;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("Cierre estándar con CORS falló por error de red, intentando fallback:", err);
+    const ok = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, false);
+    return !!ok;
   }
-  const ok = await sendToGAS(payload, AUDIT_STANDARD_SCRIPT_URL, false);
-  return !!ok;
 };
 
 export const submitFleetCierreUpdateToSheet = async (data: any): Promise<boolean> => {
@@ -3729,12 +3765,15 @@ export const submitFleetCierreUpdateToSheet = async (data: any): Promise<boolean
     const result = await sendToGAS({ method: 'POST_FLEET_CIERRE_UPDATE', data: payloadData }, CIERRE_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
-  } catch (err) {
-    console.warn("Cierre con CORS falló, fallback:", err);
+    return true;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("Cierre con CORS falló por error de red, fallback:", err);
+    const ok = await sendToGAS({ method: 'POST_FLEET_CIERRE_UPDATE', data: payloadData }, CIERRE_SCRIPT_URL, false);
+    return !!ok;
   }
-
-  const ok = await sendToGAS({ method: 'POST_FLEET_CIERRE_UPDATE', data: payloadData }, CIERRE_SCRIPT_URL, false);
-  return !!ok;
 };
 
 export const fetchFleetCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
@@ -3941,11 +3980,15 @@ export const submitCalidadCierreUpdateToSheet = async (data: {
     const result = await sendToGAS(payload, CALIDAD_SEG_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
-  } catch (err) {
-    console.warn("Cierre calidad con CORS falló, intentando fallback:", err);
+    return true;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("Cierre calidad con CORS falló por error de red, intentando fallback:", err);
+    const ok = await sendToGAS(payload, CALIDAD_SEG_SCRIPT_URL, false);
+    return !!ok;
   }
-  const ok = await sendToGAS(payload, CALIDAD_SEG_SCRIPT_URL, false);
-  return !!ok;
 };
 
 export const fetchCalidadCierreFromSheet = async (): Promise<FleetCierreRecord[]> => {
@@ -4870,13 +4913,16 @@ export const submitSparePartToSheet = async (data: Partial<SparePartRecord>): Pr
       return true;
     }
     if (result === true) return true;
-  } catch (err) {
-    console.warn("GAS - Envío de repuesto con CORS falló, intentando fallback no-cors:", err);
+    return true;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("GAS - Envío de repuesto con CORS falló por error de red, intentando fallback no-cors:", err);
+    // Fallback seguro usando modo no-cors SOLO en caso de error de red
+    const success = await sendToGAS({ method: 'POST_REPUESTO', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
+    return !!success;
   }
-
-  // Fallback seguro usando modo no-cors
-  const success = await sendToGAS({ method: 'POST_REPUESTO', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
-  return !!success;
 };
 
 export const submitSparePartInspection = async (inspection: {
@@ -4896,11 +4942,15 @@ export const submitSparePartInspection = async (inspection: {
     const result = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
-  } catch (err) {
-    console.warn("GAS - Envío inspección con CORS falló, intentando fallback:", err);
+    return true;
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.warn("GAS - Envío inspección con CORS falló por error de red, intentando fallback:", err);
+    const success = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
+    return !!success;
   }
-  const success = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
-  return !!success;
 };
 
 // ==========================================
@@ -5205,12 +5255,15 @@ export const submitForkliftClosure = async (data: {
     const result = await sendToGAS(payload, MONTACARGAS_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
-  } catch (e) {
-    console.warn('Cierre montacargas CORS falló, fallback no-cors:', e);
+    return true;
+  } catch (e: any) {
+    if (e?.message && !e?.message.includes('Failed to fetch') && !e?.message.includes('NetworkError')) {
+      throw e;
+    }
+    console.warn('Cierre montacargas CORS falló por error de red, fallback no-cors:', e);
+    const ok = await sendToGAS(payload, MONTACARGAS_SCRIPT_URL, false);
+    return !!ok;
   }
-
-  const ok = await sendToGAS(payload, MONTACARGAS_SCRIPT_URL, false);
-  return !!ok;
 };
 
 // ==========================================
@@ -5296,11 +5349,15 @@ export const submitVehicleInventory = async (data: any): Promise<boolean> => {
     const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
     if (result && typeof result === 'object' && (result as any).status === 'success') return true;
     if (result === true) return true;
-  } catch (e) { 
-    console.warn('Inventario CORS falló, fallback:', e); 
+    return true;
+  } catch (e: any) { 
+    if (e?.message && !e?.message.includes('Failed to fetch') && !e?.message.includes('NetworkError')) {
+      throw e;
+    }
+    console.warn('Inventario CORS falló por error de red, fallback:', e); 
+    const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
+    return !!ok;
   }
-  const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
-  return !!ok;
 };
 
 
