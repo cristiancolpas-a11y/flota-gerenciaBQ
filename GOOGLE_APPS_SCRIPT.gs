@@ -1697,6 +1697,65 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("success", url);
       }
+      else if (m === 'POST_INVENTARIO') {
+        var targetDocId = cleanId(d.docId || ID_HOJA);
+        var ssInv = SpreadsheetApp.openById(targetDocId);
+        var s = getSheetByGid(ssInv, "849297780") || findSheetCaseInsensitive(ssInv, "INVENTARIO DIARIO") || ssInv.getSheetByName("INVENTARIO DIARIO") || getS(ssInv, "INVENTARIO DIARIO");
+        
+        var placa = (d.plate || "").toString().toUpperCase().trim();
+        var fechaIngreso = d.fecha || today();
+        var inspectorNombre = (d.inspector || "").toString().trim();
+
+        // Control Anti-Duplicados: Verificar si ya existe un registro reciente para la misma placa, fecha e inspector
+        var lastRow = s.getLastRow();
+        if (lastRow > 1) {
+          var checkRowsCount = Math.min(5, lastRow - 1);
+          var recentRows = s.getRange(lastRow - checkRowsCount + 1, 1, checkRowsCount, 3).getValues();
+          for (var rIdx = recentRows.length - 1; rIdx >= 0; rIdx--) {
+            var rowFecha = recentRows[rIdx][0] instanceof Date 
+              ? Utilities.formatDate(recentRows[rIdx][0], Session.getScriptTimeZone(), "yyyy-MM-dd") 
+              : String(recentRows[rIdx][0] || "").substring(0, 10);
+            var rowPlaca = String(recentRows[rIdx][1] || "").toUpperCase().trim();
+            var rowInspector = String(recentRows[rIdx][2] || "").trim();
+            
+            if (rowPlaca === placa && rowFecha === fechaIngreso && rowInspector === inspectorNombre) {
+              if (lock.hasLock()) lock.releaseLock();
+              return output("success", "Registro existente verificado para la placa " + placa + " (duplicado prevenido).");
+            }
+          }
+        }
+
+        var imgFrontal = sImg(d.fotoFrontal, "INV_FRONT_" + placa);
+        var imgLatIzq = sImg(d.fotoLateralIzq, "INV_LAT_IZQ_" + placa);
+        var imgLatDer = sImg(d.fotoLateralDer, "INV_LAT_DER_" + placa);
+        var imgTrasera = sImg(d.fotoTrasera, "INV_TRAS_" + placa);
+        var imgNov1 = sImg(d.fotoNovedad1, "INV_NOV1_" + placa);
+        var imgNov2 = sImg(d.fotoNovedad2, "INV_NOV2_" + placa);
+        var imgNov3 = sImg(d.fotoNovedad3, "INV_NOV3_" + placa);
+        var imgNov4 = sImg(d.fotoNovedad4, "INV_NOV4_" + placa);
+
+        var rowDataInv = [
+          fechaIngreso,                        // Col A: FECHA
+          placa,                               // Col B: PLACA
+          inspectorNombre,                     // Col C: INSPECTOR
+          imgFrontal || "",                    // Col D: FOTO FRONTAL
+          imgLatIzq || "",                     // Col E: FOTO LATERAL IZQUIERDA
+          imgLatDer || "",                     // Col F: FOTO LATERAL DERECHA
+          imgTrasera || "",                    // Col G: FOTO TRASERA
+          Number(d.carretillas) || 0,          // Col H: CARRETILLAS
+          Number(d.conos) || 0,                // Col I: CONOS
+          d.novedad || "",                     // Col J: NOVEDAD
+          imgNov1 || "",                       // Col K: FOTO NOVEDAD 1
+          imgNov2 || "",                       // Col L: FOTO NOVEDAD 2
+          imgNov3 || "",                       // Col M: FOTO NOVEDAD 3
+          imgNov4 || "",                       // Col N: FOTO NOVEDAD 4
+          d.observacion || ""                  // Col O: OBSERVACIONES
+        ];
+
+        s.appendRow(rowDataInv);
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Inventario registrado exitosamente para la placa " + placa);
+      }
       else {
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "Método no soportado: " + m);

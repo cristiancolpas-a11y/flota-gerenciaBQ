@@ -162,6 +162,7 @@ export const VehicleInventoryModule: React.FC<VehicleInventoryModuleProps> = ({ 
   // Envío del formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrorMessage('');
 
     if (!selectedPlate) {
