@@ -608,6 +608,61 @@ export interface SparePartDefinition {
   unit: string;
 }
 
+export interface ForkliftAuditRecord {
+  id: string;
+  fecha: string;
+  regional: string;
+  centro: string;
+  maquina: string;
+  // Categorías pre-calculadas (DW:EH, en porcentaje 0-100)
+  documentacion: number;
+  espejos: number;
+  marchaAtras: number;
+  controlVelocidad: number;
+  luces: number;
+  asiento: number;
+  cinturon: number;
+  cabina: number;
+  mandos: number;
+  otros: number;
+  senalizacion: number;
+  gts: number;
+  // Totales
+  cumplimientoGeneral: number;   // EI * 100
+  cumplimientoMandatorio: number; // (1s mandatorios) / 37 * 100
+  cumplimientoNoMandatorio: number; // (1s no mandatorios) / 20 * 100
+  // Detalle de ítems individuales para top fallos
+  itemFailures: Record<string, boolean>; // true si falló (valor 0)
+}
+
+export interface ForkliftClosure {
+  fecha: string;
+  cd: string;
+  placa: string;      // número de máquina
+  item: string;
+  verificacion: string; // NO
+  evidencia: string;
+  estado: string;     // PENDIENTE / REALIZADO
+}
+
+export interface VehicleInventory {
+  fecha: string;
+  plate: string;
+  inspector: string;
+  fotoFrontal: string;
+  fotoLateralIzq: string;
+  fotoLateralDer: string;
+  fotoTrasera: string;
+  carretillas: number;
+  conos: number;
+  novedad: string;
+  fotoNovedad1: string;
+  fotoNovedad2: string;
+  fotoNovedad3: string;
+  fotoNovedad4: string;
+  observacion: string;
+}
+
 
 
 

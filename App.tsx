@@ -50,6 +50,9 @@ import CorrectivesModule from './components/CorrectivesModule';
 import UnavailabilityModule from './components/UnavailabilityModule';
 import OperatorsModule from './components/OperatorsModule';
 import { ForkliftFinesModule } from './components/ForkliftFinesModule';
+import { ForkliftAuditDashboard } from './components/ForkliftAuditDashboard';
+import { ForkliftClosureModule } from './components/ForkliftClosureModule';
+import { VehicleInventoryModule } from './components/VehicleInventoryModule';
 import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
 import ExecutiveAuditDashboard from './components/ExecutiveAuditDashboard';
@@ -125,11 +128,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, Check, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame, FileSpreadsheet, Download, Boxes, Package
+  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, Check, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame, FileSpreadsheet, Download, Boxes, Package, Camera
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas' | 'campanas';
-type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'auditoria_montacargas' | 'cierre_montacargas' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
 
 const CATEGORY_CHUNKS = {
   doc: {
@@ -152,6 +155,7 @@ const CATEGORY_CHUNKS = {
     colorTheme: 'emerald',
     icon: Settings,
     items: [
+      { id: 'inventario_diario', label: 'Inventario Diario (Fotos)', icon: Camera },
       { id: 'novedades', label: 'Reporte de Novedades', icon: ClipboardList },
       { id: 'kilometrajes', label: 'Kilometrajes', icon: Gauge },
       { id: 'varadas', label: 'VARADAS', icon: AlertTriangle },
@@ -1680,6 +1684,24 @@ const App: React.FC = () => {
               <nav className="flex-grow space-y-4 overflow-y-auto custom-scrollbar pr-2">
                 {appMode === 'montacargas' ? (
                   <div className="space-y-1">
+                    <button 
+                      onClick={() => { 
+                        setActiveView('auditoria_montacargas'); 
+                        setIsSidebarOpen(false); 
+                      }} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'auditoria_montacargas' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <ShieldCheck size={18}/> AUDITORÍA ESTÁNDAR
+                    </button>
+                    <button 
+                      onClick={() => { 
+                        setActiveView('cierre_montacargas'); 
+                        setIsSidebarOpen(false); 
+                      }} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'cierre_montacargas' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <ClipboardCheck size={18}/> CIERRE DE NOVEDADES
+                    </button>
                     <button 
                       onClick={() => { 
                         setActiveView('operadores'); 
@@ -3453,6 +3475,27 @@ const App: React.FC = () => {
           {activeView === 'comparendos_montacargas' && (
             <div className="max-w-7xl mx-auto pb-20">
               <ForkliftFinesModule data={forkliftFines} onRefresh={handleSyncData} />
+            </div>
+          )}
+
+          {activeView === 'auditoria_montacargas' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <ForkliftAuditDashboard onRefreshParent={handleSyncData} />
+            </div>
+          )}
+
+          {activeView === 'cierre_montacargas' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <ForkliftClosureModule onRefreshParent={handleSyncData} />
+            </div>
+          )}
+
+          {activeView === 'inventario_diario' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <VehicleInventoryModule 
+                vehicles={vehicles} 
+                onRefreshParent={handleSyncData} 
+              />
             </div>
           )}
 

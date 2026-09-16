@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, NoveltyReport, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord } from '../types';
+import { Vehicle, Driver, Report, NoveltyReport, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord, ForkliftClosure, VehicleInventory } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
@@ -4901,6 +4901,400 @@ export const submitSparePartInspection = async (inspection: {
   }
   const success = await sendToGAS({ method: 'POST_REPUESTO_INSPECCION', data: payloadData }, SPARE_PARTS_SCRIPT_URL, false);
   return !!success;
+};
+
+// ==========================================
+// MÓDULO: AUDITORÍA DE MONTACARGAS (HOJA ESTANDAR)
+// ==========================================
+
+// Configuración de Doc ID y GID de Montacargas (Confirmados)
+let FORKLIFT_AUDIT_DOC_ID = '1YLALShwjII0BUYfRsQthGMuVw-5m9Qd-Xuk00yniNe8';
+let FORKLIFT_AUDIT_GID = '837525557';
+
+export const getForkliftAuditDocId = (): string => FORKLIFT_AUDIT_DOC_ID;
+export const getForkliftAuditGid = (): string => FORKLIFT_AUDIT_GID;
+
+export const setForkliftAuditConfig = (docId: string, gid: string) => {
+  if (docId) FORKLIFT_AUDIT_DOC_ID = docId.trim();
+  if (gid !== undefined) FORKLIFT_AUDIT_GID = gid.trim();
+};
+
+// Índices exactos 0-based confirmados por el usuario
+export const FORKLIFT_IDX_FECHA = 1;      // Columna B
+export const FORKLIFT_IDX_REGIONAL = 4;   // Columna E (o detectar de row[6]/row[7]/row[4])
+export const FORKLIFT_IDX_CENTRO = 5;     // Columna F
+export const FORKLIFT_IDX_MAQUINA = 8;    // Columna I (Número de máquina real, ej: 817, 770, 752, etc.)
+
+// Columnas MANDATORIAS (37) — índices 0-based exactos:
+export const FORKLIFT_IDX_MANDATORIAS = [
+  69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 
+  85, 86, 87, 88, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 
+  100, 101, 102, 103, 104, 105, 106, 107, 108
+];
+
+// Columnas NO MANDATORIAS (20) — índices 0-based exactos:
+export const FORKLIFT_IDX_NO_MANDATORIAS = [
+  83, 84, 89, 109, 110, 111, 112, 113, 114, 115, 116, 117, 
+  118, 119, 120, 121, 122, 123, 124, 125
+];
+
+// Columnas de RESUMEN por categoría (valor decimal 0-1 o porcentaje) — índices 0-based:
+export const FORKLIFT_CATEGORIAS_DEF = [
+  { idx: 126, key: 'documentacion', nombre: 'Documentación' },
+  { idx: 127, key: 'espejos', nombre: 'Espejos' },
+  { idx: 128, key: 'marchaAtras', nombre: 'Marcha atrás' },
+  { idx: 129, key: 'controlVelocidad', nombre: 'Control velocidad' },
+  { idx: 130, key: 'luces', nombre: 'Luces' },
+  { idx: 131, key: 'asiento', nombre: 'Asiento' },
+  { idx: 132, key: 'cinturon', nombre: 'Cinturón' },
+  { idx: 133, key: 'cabina', nombre: 'Cabina' },
+  { idx: 134, key: 'mandos', nombre: 'Mandos' },
+  { idx: 135, key: 'otros', nombre: 'Otros' },
+  { idx: 136, key: 'senalizacion', nombre: 'Señalización' },
+  { idx: 137, key: 'gts', nombre: 'GTS' },
+];
+
+export const FORKLIFT_IDX_TOTAL = 138; // % Total (columna EI), decimal 0-1 o porcentaje
+
+const toNum = (v: any): number => {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+  const n = Number(String(v).replace(',', '.').replace('%', '').trim());
+  return isNaN(n) ? 0 : n;
+};
+
+export const processForkliftAuditRows = (rows: any[][]): import('../types').ForkliftAuditRecord[] => {
+  if (!rows || rows.length < 2) return [];
+
+  // Fila de encabezados
+  const headerRow = rows[0] || [];
+  const dataRows = rows.slice(1);
+
+  const records: import('../types').ForkliftAuditRecord[] = [];
+
+  dataRows.forEach((row, rowIndex) => {
+    if (!row || row.length === 0) return;
+
+    // Identificación usando los índices exactos indicados
+    const fecha = parseFlexibleDate(row[FORKLIFT_IDX_FECHA]) || cleanSheetValue(row[FORKLIFT_IDX_FECHA]);
+    
+    // Regional y Centro: en el formulario puede venir regional en row[6] o row[4], y centro en row[7] o row[5]
+    let centro = cleanSheetValue(row[FORKLIFT_IDX_CENTRO]);
+    let regional = cleanSheetValue(row[FORKLIFT_IDX_REGIONAL]);
+    
+    // Si row[5] está vacío, revisar row[6] o row[7]
+    if (!centro && row[7]) centro = cleanSheetValue(row[7]);
+    if (!regional && row[6]) regional = cleanSheetValue(row[6]);
+    if (!regional) regional = 'Norte';
+
+    // Número de máquina REAL (row[8] o columna I / Número de máquina)
+    let maquina = cleanSheetValue(row[FORKLIFT_IDX_MAQUINA]);
+    // Si row[8] viene vacío por corrimiento, verificar columna 'Número de máquina'
+    if (!maquina && row[13]) {
+      // En algunas exportaciones sin columna de saltos
+      maquina = cleanSheetValue(row[13]);
+    }
+    maquina = String(maquina || '').trim();
+
+    // Si no hay fecha ni centro ni máquina, descartar fila vacía
+    if (!maquina && !centro && !fecha) return;
+
+    // Cálculo de MANDATORIAS (37 columnas)
+    let sumMand = 0;
+    const itemFailures: Record<string, boolean> = {};
+
+    FORKLIFT_IDX_MANDATORIAS.forEach((idx) => {
+      const val = toNum(row[idx]);
+      const itemName = headerRow[idx] ? String(headerRow[idx]).trim() : `Item Col ${idx}`;
+      if (val >= 1) {
+        sumMand += 1;
+      } else {
+        itemFailures[itemName] = true;
+      }
+    });
+    const pctMandatorio = Math.round(((sumMand / FORKLIFT_IDX_MANDATORIAS.length) * 100) * 10) / 10;
+
+    // Cálculo de NO MANDATORIAS (20 columnas)
+    let sumNoMand = 0;
+    FORKLIFT_IDX_NO_MANDATORIAS.forEach((idx) => {
+      const val = toNum(row[idx]);
+      const itemName = headerRow[idx] ? String(headerRow[idx]).trim() : `Item Col ${idx}`;
+      if (val >= 1) {
+        sumNoMand += 1;
+      } else {
+        itemFailures[itemName] = true;
+      }
+    });
+    const pctNoMandatorio = Math.round(((sumNoMand / FORKLIFT_IDX_NO_MANDATORIAS.length) * 100) * 10) / 10;
+
+    // % Total General (columna 138 / EI)
+    let rawTotal = toNum(row[FORKLIFT_IDX_TOTAL]);
+    if (rawTotal > 0 && rawTotal <= 1) {
+      rawTotal = rawTotal * 100;
+    }
+    const pctGeneral = Math.round(rawTotal * 10) / 10;
+
+    // Categorías (DW a EH)
+    const getCatPct = (idx: number): number => {
+      let v = toNum(row[idx]);
+      if (v > 0 && v <= 1) v = v * 100;
+      return Math.round(v * 10) / 10;
+    };
+
+    records.push({
+      id: `flt_${rowIndex}_${maquina || 'MAQ'}`,
+      fecha,
+      regional,
+      centro,
+      maquina,
+      documentacion: getCatPct(126),
+      espejos: getCatPct(127),
+      marchaAtras: getCatPct(128),
+      controlVelocidad: getCatPct(129),
+      luces: getCatPct(130),
+      asiento: getCatPct(131),
+      cinturon: getCatPct(132),
+      cabina: getCatPct(133),
+      mandos: getCatPct(134),
+      otros: getCatPct(135),
+      senalizacion: getCatPct(136),
+      gts: getCatPct(137),
+      cumplimientoGeneral: pctGeneral,
+      cumplimientoMandatorio: pctMandatorio,
+      cumplimientoNoMandatorio: pctNoMandatorio,
+      itemFailures
+    });
+  });
+
+  return records;
+};
+
+export const fetchForkliftAuditsFromSheet = async (): Promise<import('../types').ForkliftAuditRecord[]> => {
+  const docId = getForkliftAuditDocId();
+  const gid = getForkliftAuditGid();
+
+  // 1. Intentar lectura por Google Apps Script con sheetName 'ESTANDAR'
+  try {
+    const rows = await fetchDataFromGAS(docId, 'ESTANDAR');
+    if (rows && rows.length >= 2) {
+      return processForkliftAuditRows(rows);
+    }
+  } catch (err) {
+    console.warn("GAS fetch para hoja ESTANDAR falló, probando lectura directa por CSV:", err);
+  }
+
+  // 2. Intentar lectura directa por CSV público por GID / Sheet
+  const csvUrls = [
+    `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${gid}${getCacheBuster()}`,
+    `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=ESTANDAR${getCacheBuster()}`,
+    `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=ESTANDAR${getCacheBuster()}`
+  ];
+
+  for (const url of csvUrls) {
+    try {
+      const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+      const csvText = await response.text();
+      if (csvText && !csvText.includes("<!DOCTYPE html") && csvText.length > 50) {
+        const parsed = await new Promise<import('../types').ForkliftAuditRecord[]>((resolve) => {
+          Papa.parse(csvText, {
+            header: false,
+            skipEmptyLines: 'greedy',
+            complete: (results) => {
+              const rows = results.data as any[][];
+              if (!rows || rows.length < 2) { resolve([]); return; }
+              resolve(processForkliftAuditRows(rows));
+            },
+            error: () => resolve([])
+          });
+        });
+        if (parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      // Intentar siguiente URL
+    }
+  }
+
+  return [];
+};
+
+// ==========================================
+// MÓDULO: CIERRE DE NOVEDADES MONTACARGAS (HOJA CIERRE)
+// ==========================================
+
+export let MONTACARGAS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
+export const MONTACARGAS_DOC_ID = '1YLALShwjII0BUYfRsQthGMuVw-5m9Qd-Xuk00yniNe8';
+export let CIERRE_MONTACARGAS_GID = '1238373688';
+
+export const getMontacargasScriptUrl = (): string => MONTACARGAS_SCRIPT_URL;
+export const setMontacargasScriptUrl = (url: string): void => {
+  if (url) MONTACARGAS_SCRIPT_URL = sanitizeScriptUrl(url.trim());
+};
+
+export const getCierreMontacargasGid = (): string => CIERRE_MONTACARGAS_GID;
+export const setCierreMontacargasGid = (gid: string): void => {
+  if (gid !== undefined) CIERRE_MONTACARGAS_GID = gid.trim();
+};
+
+export const fetchForkliftClosuresFromSheet = async (): Promise<ForkliftClosure[]> => {
+  const map = (rows: any[][]): ForkliftClosure[] => {
+    if (!rows || rows.length < 2) return [];
+    return rows.slice(1)
+      .filter(r => r && (r[2] || r[3])) // tiene PLACA o ITEM
+      .map((r): ForkliftClosure => ({
+        fecha: parseFlexibleDate(r[0]) || cleanSheetValue(r[0]),
+        cd: cleanSheetValue(r[1]),
+        placa: cleanSheetValue(r[2]),
+        item: cleanSheetValue(r[3]),
+        verificacion: cleanSheetValue(r[4]) || 'NO',
+        evidencia: cleanSheetValue(r[5]),
+        estado: (cleanSheetValue(r[6]) || 'PENDIENTE').toUpperCase(),
+      }));
+  };
+
+  // 1) Lectura vía Google Apps Script (hoja CIERRE)
+  try {
+    const rows = await fetchDataFromGAS(MONTACARGAS_DOC_ID, 'CIERRE', MONTACARGAS_SCRIPT_URL);
+    if (rows && rows.length >= 2) return map(rows);
+  } catch (e) {
+    console.warn('fetchForkliftClosuresFromSheet GAS error, intentando CSV:', e);
+  }
+
+  // 2) Fallback CSV directo por gid
+  try {
+    const urls = [
+      `https://docs.google.com/spreadsheets/d/${MONTACARGAS_DOC_ID}/export?format=csv&gid=${CIERRE_MONTACARGAS_GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${MONTACARGAS_DOC_ID}/gviz/tq?tqx=out:csv&gid=${CIERRE_MONTACARGAS_GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${MONTACARGAS_DOC_ID}/export?format=csv&sheet=CIERRE${getCacheBuster()}`
+    ];
+    for (const url of urls) {
+      try {
+        const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
+        const csv = await resp.text();
+        if (csv && !csv.includes('<!DOCTYPE html') && csv.length > 20) {
+          const parsed = Papa.parse(csv, { skipEmptyLines: true });
+          const mapped = map(parsed.data as any[][]);
+          if (mapped.length > 0) return mapped;
+        }
+      } catch (err) {
+        // continuar al siguiente url
+      }
+    }
+  } catch (e) {
+    console.warn('fetchForkliftClosuresFromSheet CSV error:', e);
+  }
+
+  return [];
+};
+
+export const submitForkliftClosure = async (data: {
+  placa: string;
+  item: string;
+  evidencia: string;
+}): Promise<boolean> => {
+  const payload = {
+    method: 'POST_MONTACARGAS_CIERRE',
+    data: {
+      ...data,
+      docId: MONTACARGAS_DOC_ID,
+      sheetName: 'CIERRE',
+      estado: 'REALIZADO'
+    }
+  };
+
+  try {
+    const result = await sendToGAS(payload, MONTACARGAS_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+  } catch (e) {
+    console.warn('Cierre montacargas CORS falló, fallback no-cors:', e);
+  }
+
+  const ok = await sendToGAS(payload, MONTACARGAS_SCRIPT_URL, false);
+  return !!ok;
+};
+
+// ==========================================
+// MÓDULO: INVENTARIO DIARIO DE VEHÍCULOS (SECCIÓN GESTIÓN)
+// ==========================================
+
+export const INVENTORY_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+export const INVENTORY_GID = '849297780';
+
+export const fetchVehicleInventoryFromSheet = async (): Promise<VehicleInventory[]> => {
+  const docId = INVENTORY_DOC_ID;
+  const GID = INVENTORY_GID;
+  const map = (rows: any[][]): VehicleInventory[] =>
+    rows.slice(1)
+      .filter(r => r && (r[1] || r[0])) // tiene PLACA o FECHA
+      .map((r): VehicleInventory => ({
+        fecha: parseFlexibleDate(r[0]) || cleanSheetValue(r[0]),
+        plate: normalizePlate(cleanSheetValue(r[1])),
+        inspector: cleanSheetValue(r[2]),
+        fotoFrontal: cleanSheetValue(r[3]),
+        fotoLateralIzq: cleanSheetValue(r[4]),
+        fotoLateralDer: cleanSheetValue(r[5]),
+        fotoTrasera: cleanSheetValue(r[6]),
+        carretillas: Number(cleanSheetValue(r[7])) || 0,
+        conos: Number(cleanSheetValue(r[8])) || 0,
+        novedad: cleanSheetValue(r[9]),
+        fotoNovedad1: cleanSheetValue(r[10]),
+        fotoNovedad2: cleanSheetValue(r[11]),
+        fotoNovedad3: cleanSheetValue(r[12]),
+        fotoNovedad4: cleanSheetValue(r[13]),
+        observacion: cleanSheetValue(r[14]),
+      }));
+
+  try {
+    const rows = await fetchDataFromGAS(docId, 'INVENTARIO DIARIO', OPERATIONAL_SCRIPT_URL);
+    if (rows && rows.length >= 2) return map(rows);
+  } catch (e) {
+    console.warn('fetchVehicleInventoryFromSheet GAS error, intentando CSV:', e);
+  }
+
+  try {
+    const urls = [
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${GID}${getCacheBuster()}`,
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=INVENTARIO%20DIARIO${getCacheBuster()}`
+    ];
+    for (const url of urls) {
+      try {
+        const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
+        const csv = await resp.text();
+        if (csv && !csv.includes('<!DOCTYPE html') && csv.length > 20) {
+          const parsed = Papa.parse(csv, { skipEmptyLines: true });
+          const mapped = map(parsed.data as any[][]);
+          if (mapped.length > 0) return mapped;
+        }
+      } catch (err) {
+        // continuar al siguiente url
+      }
+    }
+  } catch (e) {
+    console.warn('fetchVehicleInventoryFromSheet CSV error:', e);
+  }
+
+  return [];
+};
+
+export const submitVehicleInventory = async (data: any): Promise<boolean> => {
+  const payload = {
+    method: 'POST_INVENTARIO',
+    data: { 
+      ...data, 
+      docId: INVENTORY_DOC_ID, 
+      sheetName: 'INVENTARIO DIARIO' 
+    }
+  };
+  try {
+    const result = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, true);
+    if (result && typeof result === 'object' && (result as any).status === 'success') return true;
+    if (result === true) return true;
+  } catch (e) { 
+    console.warn('Inventario CORS falló, fallback:', e); 
+  }
+  const ok = await sendToGAS(payload, OPERATIONAL_SCRIPT_URL, false);
+  return !!ok;
 };
 
 

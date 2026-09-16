@@ -448,54 +448,74 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
   const handleSaveCierreEvidence = async () => {
     if (!selectedCierre) return;
-    setIsUpdating(true);
-    try {
-      let finalEvidence = cierreEvidenceData.evidencia || '';
-      if (cierreFiles.length > 0) {
-        const base64 = await generateCollage(cierreFiles, 'EVIDENCIA', selectedCierre.placa);
-        finalEvidence = await uploadImageToDrive(base64, `CIERRE_QS_${selectedCierre.placa}_${Date.now()}.jpg`);
-      }
 
-      const hasEvidence = (finalEvidence && finalEvidence.trim().length > 0) || cierreFiles.length > 0;
-      const finalStatus = (hasEvidence || cierreEvidenceData.estado === 'REALIZADO' || cierreEvidenceData.estado === 'CERRADO') 
-        ? (cierreEvidenceData.estado === 'CERRADO' ? 'CERRADO' : 'REALIZADO') 
-        : (cierreEvidenceData.estado || 'REALIZADO');
+    // 1) Calcular el estado final SIN esperar la subida de imagen
+    const hasEvidence = cierreFiles.length > 0 || !!(cierreEvidenceData.evidencia && cierreEvidenceData.evidencia.trim()) || (cierreEvidenceData.estado === 'REALIZADO' || cierreEvidenceData.estado === 'CERRADO');
+    const finalStatus = (hasEvidence || cierreEvidenceData.estado === 'CERRADO')
+      ? (cierreEvidenceData.estado === 'CERRADO' ? 'CERRADO' : 'REALIZADO')
+      : (cierreEvidenceData.estado || 'REALIZADO');
 
-      // Track locally immediately to avoid Google Sheet stale cache reversion
-      const updateKey = `${selectedCierre.placa.toUpperCase().trim()}_${selectedCierre.item.toUpperCase().trim()}`;
-      localUpdatesRef.current[updateKey] = {
-        estado: finalStatus,
-        evidencia: finalEvidence,
-        verificacion: cierreEvidenceData.verificacion || 'SI'
-      };
+    const placa = selectedCierre.placa;
+    const item = selectedCierre.item;
+    const verificacion = cierreEvidenceData.verificacion || 'SI';
+    const existingEvidence = cierreEvidenceData.evidencia || '';
+    const tempEvidence = cierreFiles.length > 0 ? 'PROCESANDO' : existingEvidence;
+    const updateKey = `${placa.toUpperCase().trim()}_${item.toUpperCase().trim()}`;
 
-      setCierreRecords(prev => prev.map(c => {
-        if (c.placa === selectedCierre.placa && c.item === selectedCierre.item) {
-          return {
-            ...c,
-            estado: finalStatus,
-            evidencia: finalEvidence,
-            verificacion: cierreEvidenceData.verificacion
-          };
+    // 2) ACTUALIZACIÓN OPTIMISTA INMEDIATA (antes de subir la imagen)
+    localUpdatesRef.current[updateKey] = {
+      estado: finalStatus,
+      evidencia: tempEvidence,
+      verificacion
+    };
+
+    setCierreRecords(prev => prev.map(c =>
+      (c.placa === placa && c.item === item)
+        ? { ...c, estado: finalStatus, evidencia: tempEvidence, verificacion }
+        : c
+    ));
+
+    // Cerrar modal y liberar UI de inmediato
+    setShowCierreEvidenceModal(false);
+    setIsUpdating(false);
+
+    // Capturar copia de archivos seleccionados para el proceso en segundo plano
+    const filesToUpload = [...cierreFiles];
+
+    // 3) EN SEGUNDO PLANO: generar collage, subir imagen a Drive y sincronizar con Sheets
+    (async () => {
+      try {
+        let finalEvidence = existingEvidence;
+        if (filesToUpload.length > 0) {
+          const base64 = await generateCollage(filesToUpload, 'EVIDENCIA', placa);
+          finalEvidence = await uploadImageToDrive(base64, `CIERRE_QS_${placa}_${Date.now()}.jpg`);
         }
-        return c;
-      }));
-      setShowCierreEvidenceModal(false);
-      setIsUpdating(false);
 
-      // Submit in background
-      submitCalidadCierreUpdateToSheet({
-        plate: selectedCierre.placa,
-        item: selectedCierre.item,
-        status: finalStatus,
-        evidence: finalEvidence,
-        verification: cierreEvidenceData.verificacion
-      }).catch(err => console.error("Error background syncing calidad cierre:", err));
-    } catch (error) {
-      console.error("Error al actualizar cierre de novedad:", error);
-      alert('Error de conexión o timeout. Verifique su internet.');
-      setIsUpdating(false);
-    }
+        // Actualizar la evidencia real en el registro local
+        localUpdatesRef.current[updateKey] = {
+          estado: finalStatus,
+          evidencia: finalEvidence,
+          verificacion
+        };
+
+        setCierreRecords(prev => prev.map(c =>
+          (c.placa === placa && c.item === item)
+            ? { ...c, estado: finalStatus, evidencia: finalEvidence, verificacion }
+            : c
+        ));
+
+        // Enviar a Sheets
+        await submitCalidadCierreUpdateToSheet({
+          plate: placa,
+          item,
+          status: finalStatus,
+          evidence: finalEvidence,
+          verification: verificacion
+        });
+      } catch (err) {
+        console.error("Error subiendo evidencia o sincronizando cierre en segundo plano:", err);
+      }
+    })();
   };
 
   const closureMetrics = useMemo(() => {
@@ -1235,6 +1255,11 @@ const ExecutiveAuditDashboard: React.FC = () => {
                             >
                               <Camera size={14} />
                             </button>
+                          ) : item.evidencia === 'PROCESANDO' ? (
+                            <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-full text-[9px] font-bold animate-pulse" title="Subiendo imagen a Google Drive en segundo plano...">
+                              <span className="w-2.5 h-2.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+                              <span>Subiendo foto...</span>
+                            </div>
                           ) : (
                             <div className="flex gap-2 items-center justify-center">
                               <button 
@@ -1246,7 +1271,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
                               </button>
                               {item.evidencia.split(',').map((url, uidx) => {
                                 const cleanUrl = url.trim();
-                                if (!cleanUrl) return null;
+                                if (!cleanUrl || cleanUrl === 'PROCESANDO') return null;
                                 return (
                                   <button 
                                     key={uidx}
@@ -1626,11 +1651,11 @@ const ExecutiveAuditDashboard: React.FC = () => {
                     </div>
                   )}
 
-                  {cierreEvidenceData.evidencia && !cierreFiles.length && (
+                  {cierreEvidenceData.evidencia && cierreEvidenceData.evidencia !== 'PROCESANDO' && !cierreFiles.length && (
                     <div className="flex flex-wrap gap-3 mb-4">
                       {cierreEvidenceData.evidencia.split(',').map((url, uidx) => {
                         const cleanUrl = url.trim();
-                        if (!cleanUrl) return null;
+                        if (!cleanUrl || cleanUrl === 'PROCESANDO') return null;
                         return (
                           <div key={uidx} className="group relative w-20 h-20 rounded-xl border border-white/10 overflow-hidden bg-white/5">
                             <img src={getEmbedUrl(cleanUrl)} alt={`Evidencia ${uidx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -1646,6 +1671,13 @@ const ExecutiveAuditDashboard: React.FC = () => {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {cierreEvidenceData.evidencia === 'PROCESANDO' && !cierreFiles.length && (
+                    <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center gap-3 text-amber-400 text-xs mb-4">
+                      <span className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                      <span>Subiendo evidencia fotográfica a Google Drive en segundo plano...</span>
                     </div>
                   )}
                 </div>
