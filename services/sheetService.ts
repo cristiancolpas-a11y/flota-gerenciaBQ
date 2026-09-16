@@ -5225,7 +5225,13 @@ export const fetchVehicleInventoryFromSheet = async (): Promise<VehicleInventory
   const GID = INVENTORY_GID;
   const map = (rows: any[][]): VehicleInventory[] =>
     rows.slice(1)
-      .filter(r => r && (r[1] || r[0])) // tiene PLACA o FECHA
+      .filter(r => {
+        if (!r) return false;
+        const placa = (r[1] || '').toString().trim();
+        if (!placa) return false;                       // sin placa = fila vacía, descartar
+        if (placa.toUpperCase() === 'PLACA') return false; // descartar encabezado
+        return true;
+      })
       .map((r): VehicleInventory => ({
         fecha: parseFlexibleDate(r[0]) || cleanSheetValue(r[0]),
         plate: normalizePlate(cleanSheetValue(r[1])),
@@ -5255,7 +5261,7 @@ export const fetchVehicleInventoryFromSheet = async (): Promise<VehicleInventory
     const urls = [
       `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${GID}${getCacheBuster()}`,
       `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${GID}${getCacheBuster()}`,
-      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=INVENTARIO%20DIARIO${getCacheBuster()}`
+      `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=849297780${getCacheBuster()}`
     ];
     for (const url of urls) {
       try {
