@@ -108,7 +108,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
       // Merge with local updates to prevent Google Sheets stale API cache from reverting user changes
       const mergedCierres = cierres.map(c => {
-        const key = `${c.placa.toUpperCase().trim()}_${c.item.toUpperCase().trim()}`;
+        const key = c.id || `${c.rowIndex}` || `${(c.placa || '').toUpperCase().trim()}_${(c.item || '').toUpperCase().trim()}`;
         if (localUpdatesRef.current[key]) {
           const sheetEv = c.evidencia || '';
           const localEv = localUpdatesRef.current[key].evidencia || '';
@@ -457,10 +457,12 @@ const ExecutiveAuditDashboard: React.FC = () => {
 
     const placa = selectedCierre.placa;
     const item = selectedCierre.item;
+    const targetId = selectedCierre.id;
+    const targetRow = selectedCierre.rowIndex;
     const verificacion = cierreEvidenceData.verificacion || 'SI';
     const existingEvidence = cierreEvidenceData.evidencia || '';
     const tempEvidence = cierreFiles.length > 0 ? 'PROCESANDO' : existingEvidence;
-    const updateKey = `${placa.toUpperCase().trim()}_${item.toUpperCase().trim()}`;
+    const updateKey = selectedCierre.id || `${selectedCierre.rowIndex}` || `${placa.toUpperCase().trim()}_${item.toUpperCase().trim()}`;
 
     // 2) ACTUALIZACIÓN OPTIMISTA INMEDIATA (antes de subir la imagen)
     localUpdatesRef.current[updateKey] = {
@@ -470,7 +472,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
     };
 
     setCierreRecords(prev => prev.map(c =>
-      (c.placa === placa && c.item === item)
+      ((targetId && c.id === targetId) || (targetRow && c.rowIndex === targetRow))
         ? { ...c, estado: finalStatus, evidencia: tempEvidence, verificacion }
         : c
     ));
@@ -499,7 +501,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
         };
 
         setCierreRecords(prev => prev.map(c =>
-          (c.placa === placa && c.item === item)
+          ((targetId && c.id === targetId) || (targetRow && c.rowIndex === targetRow))
             ? { ...c, estado: finalStatus, evidencia: finalEvidence, verificacion }
             : c
         ));
@@ -510,7 +512,10 @@ const ExecutiveAuditDashboard: React.FC = () => {
           item,
           status: finalStatus,
           evidence: finalEvidence,
-          verification: verificacion
+          verification: verificacion,
+          rowIndex: targetRow,
+          id: targetId,
+          fecha: selectedCierre.fecha
         });
       } catch (err) {
         console.error("Error subiendo evidencia o sincronizando cierre en segundo plano:", err);
@@ -1218,7 +1223,7 @@ const ExecutiveAuditDashboard: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredCierreRecords.map((item, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                    <tr key={item.id || item.rowIndex || idx} className="hover:bg-slate-50 transition-colors group">
                       <td className="p-6 text-[11px] font-bold text-slate-500 whitespace-nowrap">{item.fecha || 'N/A'}</td>
                       <td className="p-6 text-[11px] font-black text-blue-600 uppercase">{item.cd}</td>
                       <td className="p-6">

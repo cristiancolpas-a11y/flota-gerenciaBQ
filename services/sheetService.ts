@@ -3874,8 +3874,10 @@ const processFleetCierreRows = (rows: any[][]): FleetCierreRecord[] => {
 
       const contratistaVal = idxContratista !== -1 ? cleanSheetValue(row[idxContratista]) : 'Otros';
 
+      const normalizedPlateVal = normalizePlate(pVal) || pVal || 'ROW';
+
       return {
-        id: `cierre-${rowIndex}-${pVal}`,
+        id: `cal-${rowIndex}-${normalizedPlateVal}`,
         rowIndex,
         fecha: parseFlexibleDate(row[idxFecha]),
         placa: normalizePlate(pVal),
