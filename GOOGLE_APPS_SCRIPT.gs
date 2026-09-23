@@ -1664,6 +1664,107 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("error", "No se encontró registro en CIERRE1 para: Placa " + plateSearch + ", Item " + itemSearch);
       }
+      else if (m === 'POST_MONTACARGAS_CIERRE' || m === 'POST_FORKLIFT_CIERRE') {
+        var targetDocId = cleanId(d.docId || "1YLALShwjII0BUYfRsQthGMuVw-5m9Qd-Xuk00yniNe8");
+        var ssFLT = null;
+        try { ssFLT = SpreadsheetApp.openById(targetDocId); } catch(e) {}
+        if (!ssFLT) ssFLT = ss;
+
+        var s = getSheetByGid(ssFLT, "1238373688") || findSheetCaseInsensitive(ssFLT, "CIERRE") || ssFLT.getSheetByName("CIERRE") || ssFLT.getSheetByName("cierre") || ssFLT.getSheets()[0];
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "Hoja CIERRE de Montacargas no encontrada en el documento " + targetDocId);
+        }
+
+        var rows = s.getDataRange().getValues();
+        var foundIdx = -1;
+        var reqRowIndex = Number(d.rowIndex);
+        var plateSearch = (d.placa || d.plate || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+        var itemSearch = (d.item || "").toString().toLowerCase().trim();
+        var fechaSearch = (d.fecha || "").toString().trim();
+
+        // 1. Si viene rowIndex explícito y es válido (fila >= 2)
+        if (reqRowIndex && reqRowIndex >= 2 && reqRowIndex <= rows.length) {
+          var checkPlate = (rows[reqRowIndex - 1][2] || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+          if (!plateSearch || checkPlate === plateSearch || checkPlate.indexOf(plateSearch) !== -1 || plateSearch.indexOf(checkPlate) !== -1) {
+            foundIdx = reqRowIndex;
+          }
+        }
+
+        // 2. Si no se encontró por rowIndex, buscar por coincidencia de Placa (Col C / idx 2) e Item (Col D / idx 3)
+        if (foundIdx === -1) {
+          for (var i = 1; i < rows.length; i++) {
+            var rowPlate = (rows[i][2] || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+            var rowItem = (rows[i][3] || "").toString().toLowerCase().trim();
+            var rowStatus = (rows[i][6] || "").toString().trim().toUpperCase();
+            var rowFecha = (rows[i][0] || "").toString().trim();
+
+            if (rowPlate === plateSearch && rowItem === itemSearch) {
+              if (fechaSearch && rowFecha && (rowFecha.indexOf(fechaSearch) !== -1 || fechaSearch.indexOf(rowFecha) !== -1)) {
+                foundIdx = i + 1;
+                if (rowStatus === "PENDIENTE") break;
+              } else if (foundIdx === -1) {
+                foundIdx = i + 1;
+                if (rowStatus === "PENDIENTE") break;
+              }
+            }
+          }
+        }
+
+        // 3. Fallback: buscar coincidencia aproximada por placa e item con estado PENDIENTE
+        if (foundIdx === -1) {
+          for (var i = 1; i < rows.length; i++) {
+            var rowPlate = (rows[i][2] || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+            var rowItem = (rows[i][3] || "").toString().toLowerCase().trim();
+            var rowStatus = (rows[i][6] || "").toString().trim().toUpperCase();
+            if (rowPlate === plateSearch && (rowItem.indexOf(itemSearch) !== -1 || itemSearch.indexOf(rowItem) !== -1)) {
+              foundIdx = i + 1;
+              if (rowStatus === "PENDIENTE") break;
+            }
+          }
+        }
+
+        if (foundIdx !== -1) {
+          // Procesar evidencia fotográfica
+          var rawEv = d.evidencia || d.evidence;
+          var evidenceUrl = "";
+          if (rawEv) {
+            if (Array.isArray(rawEv)) {
+              var links = [];
+              for (var j = 0; j < rawEv.length; j++) {
+                if (rawEv[j] && (rawEv[j].indexOf("data:image") === 0 || rawEv[j].indexOf("http") !== 0)) {
+                  links.push(sImg(rawEv[j], "CIERRE_FLT_" + plateSearch + "_" + j));
+                } else if (rawEv[j]) {
+                  links.push(rawEv[j]);
+                }
+              }
+              evidenceUrl = links.join(", ");
+            } else if (typeof rawEv === 'string' && rawEv.indexOf("data:image") === 0) {
+              evidenceUrl = sImg(rawEv, "CIERRE_FLT_" + plateSearch);
+            } else {
+              evidenceUrl = rawEv;
+            }
+            // Columna F (6): EVIDENCIA
+            s.getRange(foundIdx, 6).setValue(evidenceUrl);
+          }
+
+          // Columna E (5): VERIFICACION (actualizar a 'SI' al subsanar la novedad)
+          var verif = d.verificacion || d.verification || "SI";
+          s.getRange(foundIdx, 5).setValue(verif);
+
+          // Columna G (7): ESTADO -> REALIZADO
+          var nuevoEstadoFLT = (evidenceUrl || d.estado === "REALIZADO" || d.status === "REALIZADO" || d.status === "CERRADO") 
+            ? (d.status === "CERRADO" ? "CERRADO" : "REALIZADO") 
+            : (d.estado || d.status || "REALIZADO");
+          s.getRange(foundIdx, 7).setValue(nuevoEstadoFLT);
+
+          if (lock.hasLock()) lock.releaseLock();
+          return output("success", "Cierre de novedad de montacargas registrado exitosamente en fila " + foundIdx + " (Máquina: " + plateSearch + ")");
+        }
+
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "No se encontró registro en CIERRE de montacargas para: Máquina " + plateSearch + ", Item " + itemSearch);
+      }
       else if (m === 'POST_FLEET_STANDARD_AUDIT_UPDATE') {
         var s = findSheetCaseInsensitive(ss, "ESTRANDAR") || ss.getSheetByName("ESTRANDAR") || ss.getSheetByName("ESTANDAR") || ss.getSheets()[0];
         var rows = s.getDataRange().getValues();

@@ -2472,6 +2472,7 @@ export const uploadImageToDrive = async (base64Data: string, fileName: string): 
   };
 
   const scriptUrls = [
+    MONTACARGAS_SCRIPT_URL,
     CALIDAD_SEG_SCRIPT_URL,
     AUDIT_STANDARD_SCRIPT_URL,
     OPERATIONAL_SCRIPT_URL,
@@ -5108,13 +5109,13 @@ export const fetchForkliftAuditsFromSheet = async (): Promise<import('../types')
 // MÓDULO: CIERRE DE NOVEDADES MONTACARGAS (HOJA CIERRE)
 // ==========================================
 
-export let MONTACARGAS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4eR5xrgyMLm-dLFUeXr8_VzL9sPi387NNdfHU3tEoQ1kJ3Fazeka2uVasq9bkP6WrzA/exec';
+export let MONTACARGAS_SCRIPT_URL = 'https://script.google.com/a/macros/logisticos.co/s/AKfycbwhxUYmAuBCRowjITUR66emDVr7zMVzmSfl7hnkwlLOPkeaqIPLcdntt4y0XnIHGh1_pQ/exec';
 export const MONTACARGAS_DOC_ID = '1YLALShwjII0BUYfRsQthGMuVw-5m9Qd-Xuk00yniNe8';
 export let CIERRE_MONTACARGAS_GID = '1238373688';
 
 export const getMontacargasScriptUrl = (): string => MONTACARGAS_SCRIPT_URL;
 export const setMontacargasScriptUrl = (url: string): void => {
-  if (url) MONTACARGAS_SCRIPT_URL = sanitizeScriptUrl(url.trim());
+  if (url) MONTACARGAS_SCRIPT_URL = url.trim();
 };
 
 export const getCierreMontacargasGid = (): string => CIERRE_MONTACARGAS_GID;
@@ -5126,16 +5127,22 @@ export const fetchForkliftClosuresFromSheet = async (): Promise<ForkliftClosure[
   const map = (rows: any[][]): ForkliftClosure[] => {
     if (!rows || rows.length < 2) return [];
     return rows.slice(1)
-      .filter(r => r && (r[2] || r[3])) // tiene PLACA o ITEM
-      .map((r): ForkliftClosure => ({
-        fecha: parseFlexibleDate(r[0]) || cleanSheetValue(r[0]),
-        cd: cleanSheetValue(r[1]),
-        placa: cleanSheetValue(r[2]),
-        item: cleanSheetValue(r[3]),
-        verificacion: cleanSheetValue(r[4]) || 'NO',
-        evidencia: cleanSheetValue(r[5]),
-        estado: (cleanSheetValue(r[6]) || 'PENDIENTE').toUpperCase(),
-      }));
+      .map((r, i) => ({ r, rowIndex: i + 2 }))
+      .filter(({ r }) => r && (r[2] || r[3])) // tiene PLACA o ITEM
+      .map(({ r, rowIndex }): ForkliftClosure => {
+        const placaVal = cleanSheetValue(r[2]);
+        return {
+          id: `flt-${rowIndex}-${placaVal || 'ITEM'}`,
+          rowIndex,
+          fecha: parseFlexibleDate(r[0]) || cleanSheetValue(r[0]),
+          cd: cleanSheetValue(r[1]),
+          placa: placaVal,
+          item: cleanSheetValue(r[3]),
+          verificacion: cleanSheetValue(r[4]) || 'NO',
+          evidencia: cleanSheetValue(r[5]),
+          estado: (cleanSheetValue(r[6]) || 'PENDIENTE').toUpperCase(),
+        };
+      });
   };
 
   // 1) Lectura vía Google Apps Script (hoja CIERRE)
@@ -5177,14 +5184,23 @@ export const submitForkliftClosure = async (data: {
   placa: string;
   item: string;
   evidencia: string;
+  rowIndex?: number;
+  id?: string;
+  fecha?: string;
+  verificacion?: string;
 }): Promise<boolean> => {
   const payload = {
     method: 'POST_MONTACARGAS_CIERRE',
     data: {
       ...data,
+      plate: data.placa,
+      evidence: data.evidencia,
       docId: MONTACARGAS_DOC_ID,
       sheetName: 'CIERRE',
-      estado: 'REALIZADO'
+      gid: CIERRE_MONTACARGAS_GID,
+      verificacion: data.verificacion || 'SI',
+      estado: 'REALIZADO',
+      status: 'REALIZADO'
     }
   };
 

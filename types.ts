@@ -637,6 +637,8 @@ export interface ForkliftAuditRecord {
 }
 
 export interface ForkliftClosure {
+  id?: string;
+  rowIndex?: number;
   fecha: string;
   cd: string;
   placa: string;      // número de máquina

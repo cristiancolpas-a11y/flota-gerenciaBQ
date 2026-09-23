@@ -17,7 +17,9 @@ import {
   Check,
   Building2,
   Calendar,
-  Truck
+  Truck,
+  Code,
+  Copy
 } from 'lucide-react';
 import { ForkliftClosure } from '../types';
 import { 
@@ -93,6 +95,8 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
 
   // Modal de configuración de fuente
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
+  const [showScriptModal, setShowScriptModal] = useState<boolean>(false);
+  const [hasCopied, setHasCopied] = useState<boolean>(false);
   const [inputScriptUrl, setInputScriptUrl] = useState<string>(getMontacargasScriptUrl());
   const [inputGid, setInputGid] = useState<string>(getCierreMontacargasGid());
 
@@ -109,7 +113,7 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
       
       // Aplicar actualizaciones optimistas locales
       const merged = data.map(item => {
-        const key = `${(item.placa || '').toUpperCase().trim()}___${(item.item || '').toLowerCase().trim()}`;
+        const key = item.id || (item.rowIndex ? `row-${item.rowIndex}` : `${(item.placa || '').toUpperCase().trim()}___${(item.item || '').toLowerCase().trim()}`);
         const opt = optimisticUpdatesRef.current[key];
         if (opt) {
           return {
@@ -233,8 +237,8 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
       return;
     }
 
-    const { placa, item } = activeClosure;
-    const updateKey = `${(placa || '').toUpperCase().trim()}___${(item || '').toLowerCase().trim()}`;
+    const { placa, item, id: targetId, rowIndex: targetRow, fecha } = activeClosure;
+    const updateKey = targetId || (targetRow ? `row-${targetRow}` : `${(placa || '').toUpperCase().trim()}___${(item || '').toLowerCase().trim()}`);
     const tempEvidencia = previewImage;
 
     // 1) ACTUALIZACIÓN OPTIMISTA INMEDIATA (no bloquear la UI)
@@ -244,8 +248,10 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
     };
 
     setClosures(prev => prev.map(c => {
-      const match = (c.placa || '').toUpperCase().trim() === (placa || '').toUpperCase().trim() &&
-                    (c.item || '').toLowerCase().trim() === (item || '').toLowerCase().trim();
+      const match = (targetId && c.id === targetId) ||
+                    (targetRow && c.rowIndex === targetRow) ||
+                    ((c.placa || '').toUpperCase().trim() === (placa || '').toUpperCase().trim() &&
+                     (c.item || '').toLowerCase().trim() === (item || '').toLowerCase().trim());
       if (match) {
         return {
           ...c,
@@ -270,8 +276,10 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
             finalEvidence = driveUrl;
             optimisticUpdatesRef.current[updateKey].evidencia = finalEvidence;
             setClosures(prev => prev.map(c => {
-              const match = (c.placa || '').toUpperCase().trim() === (placa || '').toUpperCase().trim() &&
-                            (c.item || '').toLowerCase().trim() === (item || '').toLowerCase().trim();
+              const match = (targetId && c.id === targetId) ||
+                            (targetRow && c.rowIndex === targetRow) ||
+                            ((c.placa || '').toUpperCase().trim() === (placa || '').toUpperCase().trim() &&
+                             (c.item || '').toLowerCase().trim() === (item || '').toLowerCase().trim());
               return match ? { ...c, evidencia: finalEvidence } : c;
             }));
           }
@@ -283,7 +291,11 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
         await submitForkliftClosure({
           placa,
           item,
-          evidencia: finalEvidence
+          evidencia: finalEvidence,
+          rowIndex: targetRow,
+          id: targetId,
+          fecha,
+          verificacion: 'SI'
         });
 
         if (onRefreshParent) {
@@ -525,7 +537,7 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
               
               return (
                 <div 
-                  key={`${closure.placa}-${closure.item}-${idx}`}
+                  key={closure.id || (closure.rowIndex ? `flt-${closure.rowIndex}` : `${closure.placa}-${closure.item}-${idx}`)}
                   className="p-4 sm:p-5 hover:bg-slate-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
                   <div className="space-y-1.5 flex-1 min-w-0">
@@ -797,6 +809,19 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
                 <p className="text-[11px] text-slate-500 mt-1">
                   Asegúrate de que el script tenga implementado el método <code>POST_MONTACARGAS_CIERRE</code>.
                 </p>
+                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-600">
+                    ¿Necesitas el código de Google Apps Script exclusivo?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowScriptModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-black transition-all"
+                  >
+                    <Code size={14} />
+                    Ver / Copiar Script
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -813,6 +838,311 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
               >
                 Guardar y Recargar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CON EL CÓDIGO DEL SCRIPT DE MONTACARGAS */}
+      {showScriptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-start justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+                  Google Apps Script Independiente
+                </span>
+                <h3 className="text-lg font-black text-slate-900 mt-1 flex items-center gap-2">
+                  <Code size={20} className="text-emerald-600" />
+                  Script Exclusivo para Montacargas
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Archivo <code className="font-mono font-bold text-slate-700">GOOGLE_APPS_SCRIPT_MONTACARGAS.gs</code> para la hoja de cálculo de montacargas.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowScriptModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="bg-slate-900 rounded-2xl p-4 overflow-y-auto font-mono text-[11px] text-slate-200 flex-1 leading-relaxed border border-slate-800 select-all">
+              <pre className="whitespace-pre-wrap">
+{`/**
+ * GOOGLE APPS SCRIPT EXCLUSIVO: MÓDULO DE MONTACARGAS
+ * Hoja: 1YLALShwjII0BUYfRsQthGMuVw-5m9Qd-Xuk00yniNe8
+ * Hoja Cierre: "CIERRE" (GID: 1238373688)
+ */
+var ID_HOJA_MONTACARGAS = "1YLALShwjII0BUYfRsQthGMuVw-5m9Qd-Xuk00yniNe8";
+var GID_CIERRE_MONTACARGAS = "1238373688";
+var NOMBRE_CARPETA_DRIVE = "EVIDENCIAS_MONTACARGAS";
+
+function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
+  if (action === "read" || action === "getData") {
+    var ss = getSpreadsheet(ID_HOJA_MONTACARGAS);
+    var s = getSheetByGid(ss, GID_CIERRE_MONTACARGAS) || ss.getSheetByName("CIERRE") || ss.getSheets()[0];
+    return output("success", "", { data: s.getDataRange().getValues() });
+  }
+  return output("online", "Apps Script Montacargas Activo");
+}
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch(err) { return output("error", "Servidor ocupado"); }
+
+  try {
+    var payload = JSON.parse(e.postData.contents);
+    var method = (payload.method || payload.action || "").toUpperCase().trim();
+    var data = payload.data || payload;
+
+    if (method === 'POST_MONTACARGAS_CIERRE' || method === 'POST_FORKLIFT_CIERRE' || method === 'CIERRE') {
+      var ss = getSpreadsheet(data.docId || ID_HOJA_MONTACARGAS);
+      var s = getSheetByGid(ss, data.gid || GID_CIERRE_MONTACARGAS) || ss.getSheetByName("CIERRE") || ss.getSheets()[0];
+      var rows = s.getDataRange().getValues();
+      var foundIdx = -1;
+      var reqRow = Number(data.rowIndex);
+      var plateSearch = (data.placa || data.plate || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+      var itemSearch = (data.item || "").toString().toLowerCase().trim();
+
+      if (reqRow && reqRow >= 2 && reqRow <= rows.length) {
+        foundIdx = reqRow;
+      } else {
+        for (var i = 1; i < rows.length; i++) {
+          var rP = (rows[i][2] || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+          var rI = (rows[i][3] || "").toString().toLowerCase().trim();
+          var rS = (rows[i][6] || "").toString().trim().toUpperCase();
+          if (rP === plateSearch && rI === itemSearch) {
+            foundIdx = i + 1;
+            if (rS === "PENDIENTE") break;
+          }
+        }
+      }
+
+      if (foundIdx === -1) {
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "No se encontró registro para máquina " + plateSearch + " e ítem " + itemSearch);
+      }
+
+      var rawEv = data.evidencia || data.evidence;
+      var evidenceUrl = "";
+      if (rawEv) {
+        evidenceUrl = (typeof rawEv === 'string' && rawEv.indexOf("data:image") === 0)
+          ? saveImageToDrive(rawEv, "CIERRE_FLT_" + plateSearch)
+          : rawEv;
+        s.getRange(foundIdx, 6).setValue(evidenceUrl); // Col F: EVIDENCIA
+      }
+
+      s.getRange(foundIdx, 5).setValue(data.verificacion || "SI"); // Col E: VERIFICACION
+      s.getRange(foundIdx, 7).setValue("REALIZADO"); // Col G: ESTADO
+
+      if (lock.hasLock()) lock.releaseLock();
+      return output("success", "Cierre de novedad de montacargas registrado en fila " + foundIdx, { rowIndex: foundIdx });
+    }
+    
+    if (lock.hasLock()) lock.releaseLock();
+    return output("error", "Método no soportado: " + method);
+  } catch(err) {
+    if (lock.hasLock()) lock.releaseLock();
+    return output("error", err.toString());
+  }
+}
+
+function saveImageToDrive(base64Data, fileName) {
+  if (!base64Data || typeof base64Data !== 'string') return "";
+  if (base64Data.indexOf("http") === 0) return base64Data;
+  try {
+    var raw = base64Data.split(",")[1] || base64Data;
+    var blob = Utilities.newBlob(Utilities.base64Decode(raw), "image/jpeg", fileName + ".jpg");
+    var folders = DriveApp.getFoldersByName(NOMBRE_CARPETA_DRIVE);
+    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(NOMBRE_CARPETA_DRIVE);
+    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return "https://drive.google.com/uc?export=view&id=" + file.getId();
+  } catch(e) { return "Error: " + e.toString(); }
+}
+
+function getSheetByGid(spreadsheet, targetGid) {
+  var sheets = spreadsheet.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId().toString() === (targetGid || "").toString().trim()) return sheets[i];
+  }
+  return null;
+}
+
+function getSpreadsheet(docId) {
+  try { return SpreadsheetApp.openById(cleanId(docId)); } catch(e) {}
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function cleanId(raw) {
+  var m = (raw || "").toString().match(/\\/d\\/([a-zA-Z0-9-_]+)/);
+  return (m && m[1]) ? m[1] : (raw || "").toString().replace(/[^a-zA-Z0-9-_]/g, "");
+}
+
+function output(status, message, extra) {
+  var res = { status: status, message: message || "" };
+  if (extra) for (var k in extra) res[k] = extra[k];
+  return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
+}`}
+              </pre>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[11px] text-slate-500">
+                Pega este script en el editor de Apps Script de tu hoja y despliega como Aplicación Web (acceso público).
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const code = `/**
+ * GOOGLE APPS SCRIPT EXCLUSIVO: MÓDULO DE MONTACARGAS
+ * Hoja: 1YLALShwjII0BUYfRsQthGMuVw-5m9Qd-Xuk00yniNe8
+ * Hoja Cierre: "CIERRE" (GID: 1238373688)
+ */
+var ID_HOJA_MONTACARGAS = "1YLALShwjII0BUYfRsQthGMuVw-5m9Qd-Xuk00yniNe8";
+var GID_CIERRE_MONTACARGAS = "1238373688";
+var NOMBRE_CARPETA_DRIVE = "EVIDENCIAS_MONTACARGAS";
+
+function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
+  if (action === "read" || action === "getData") {
+    var ss = getSpreadsheet(ID_HOJA_MONTACARGAS);
+    var s = getSheetByGid(ss, GID_CIERRE_MONTACARGAS) || ss.getSheetByName("CIERRE") || ss.getSheets()[0];
+    return output("success", "", { data: s.getDataRange().getValues() });
+  }
+  return output("online", "Apps Script Montacargas Activo");
+}
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(30000); } catch(err) { return output("error", "Servidor ocupado"); }
+
+  try {
+    var payload = JSON.parse(e.postData.contents);
+    var method = (payload.method || payload.action || "").toUpperCase().trim();
+    var data = payload.data || payload;
+
+    if (method === 'POST_MONTACARGAS_CIERRE' || method === 'POST_FORKLIFT_CIERRE' || method === 'CIERRE') {
+      var ss = getSpreadsheet(data.docId || ID_HOJA_MONTACARGAS);
+      var s = getSheetByGid(ss, data.gid || GID_CIERRE_MONTACARGAS) || ss.getSheetByName("CIERRE") || ss.getSheets()[0];
+      var rows = s.getDataRange().getValues();
+      var foundIdx = -1;
+      var reqRow = Number(data.rowIndex);
+      var plateSearch = (data.placa || data.plate || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+      var itemSearch = (data.item || "").toString().toLowerCase().trim();
+
+      if (reqRow && reqRow >= 2 && reqRow <= rows.length) {
+        foundIdx = reqRow;
+      } else {
+        for (var i = 1; i < rows.length; i++) {
+          var rP = (rows[i][2] || "").toString().toUpperCase().trim().replace(/[^A-Z0-9]/g, "");
+          var rI = (rows[i][3] || "").toString().toLowerCase().trim();
+          var rS = (rows[i][6] || "").toString().trim().toUpperCase();
+          if (rP === plateSearch && rI === itemSearch) {
+            foundIdx = i + 1;
+            if (rS === "PENDIENTE") break;
+          }
+        }
+      }
+
+      if (foundIdx === -1) {
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "No se encontró registro para máquina " + plateSearch + " e ítem " + itemSearch);
+      }
+
+      var rawEv = data.evidencia || data.evidence;
+      var evidenceUrl = "";
+      if (rawEv) {
+        evidenceUrl = (typeof rawEv === 'string' && rawEv.indexOf("data:image") === 0)
+          ? saveImageToDrive(rawEv, "CIERRE_FLT_" + plateSearch)
+          : rawEv;
+        s.getRange(foundIdx, 6).setValue(evidenceUrl); // Col F: EVIDENCIA
+      }
+
+      s.getRange(foundIdx, 5).setValue(data.verificacion || "SI"); // Col E: VERIFICACION
+      s.getRange(foundIdx, 7).setValue("REALIZADO"); // Col G: ESTADO
+
+      if (lock.hasLock()) lock.releaseLock();
+      return output("success", "Cierre de novedad de montacargas registrado en fila " + foundIdx, { rowIndex: foundIdx });
+    }
+    
+    if (lock.hasLock()) lock.releaseLock();
+    return output("error", "Método no soportado: " + method);
+  } catch(err) {
+    if (lock.hasLock()) lock.releaseLock();
+    return output("error", err.toString());
+  }
+}
+
+function saveImageToDrive(base64Data, fileName) {
+  if (!base64Data || typeof base64Data !== 'string') return "";
+  if (base64Data.indexOf("http") === 0) return base64Data;
+  try {
+    var raw = base64Data.split(",")[1] || base64Data;
+    var blob = Utilities.newBlob(Utilities.base64Decode(raw), "image/jpeg", fileName + ".jpg");
+    var folders = DriveApp.getFoldersByName(NOMBRE_CARPETA_DRIVE);
+    var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(NOMBRE_CARPETA_DRIVE);
+    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return "https://drive.google.com/uc?export=view&id=" + file.getId();
+  } catch(e) { return "Error: " + e.toString(); }
+}
+
+function getSheetByGid(spreadsheet, targetGid) {
+  var sheets = spreadsheet.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId().toString() === (targetGid || "").toString().trim()) return sheets[i];
+  }
+  return null;
+}
+
+function getSpreadsheet(docId) {
+  try { return SpreadsheetApp.openById(cleanId(docId)); } catch(e) {}
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function cleanId(raw) {
+  var m = (raw || "").toString().match(/\\/d\\/([a-zA-Z0-9-_]+)/);
+  return (m && m[1]) ? m[1] : (raw || "").toString().replace(/[^a-zA-Z0-9-_]/g, "");
+}
+
+function output(status, message, extra) {
+  var res = { status: status, message: message || "" };
+  if (extra) for (var k in extra) res[k] = extra[k];
+  return ContentService.createTextOutput(JSON.stringify(res)).setMimeType(ContentService.MimeType.JSON);
+}`;
+                    navigator.clipboard.writeText(code);
+                    setHasCopied(true);
+                    setTimeout(() => setHasCopied(false), 3000);
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20"
+                >
+                  {hasCopied ? (
+                    <>
+                      <Check size={14} />
+                      ¡Copiado!
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} />
+                      Copiar Código
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowScriptModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
         </div>
