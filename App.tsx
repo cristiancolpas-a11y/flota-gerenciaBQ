@@ -52,6 +52,7 @@ import OperatorsModule from './components/OperatorsModule';
 import { ForkliftFinesModule } from './components/ForkliftFinesModule';
 import { ForkliftAuditDashboard } from './components/ForkliftAuditDashboard';
 import { ForkliftClosureModule } from './components/ForkliftClosureModule';
+import { ForkliftStandardModule } from './components/ForkliftStandardModule';
 import { VehicleInventoryModule } from './components/VehicleInventoryModule';
 import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
@@ -132,7 +133,7 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas' | 'campanas';
-type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'auditoria_montacargas' | 'cierre_montacargas' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'estandar_flt' | 'auditoria_montacargas' | 'cierre_montacargas' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
 
 const CATEGORY_CHUNKS = {
   doc: {
@@ -1455,7 +1456,7 @@ const App: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => { setAppMode('montacargas'); setActiveView('operadores'); handleSyncData(); }}
+              onClick={() => { setAppMode('montacargas'); setActiveView('estandar_flt'); handleSyncData(); }}
               className="group bg-white/5 hover:bg-emerald-600/20 border border-white/10 hover:border-emerald-500/50 p-4 md:p-10 rounded-2xl md:rounded-[3rem] transition-all duration-500 flex flex-row md:flex-col items-center text-left md:text-center gap-3 md:gap-6 shadow-2xl hover:-translate-y-1 md:hover:-translate-y-2"
             >
               <div className="w-12 h-12 md:w-20 md:h-20 bg-emerald-600/20 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-600/10 group-hover:scale-110 transition-transform border border-emerald-500/30 shrink-0">
@@ -1686,21 +1687,12 @@ const App: React.FC = () => {
                   <div className="space-y-1">
                     <button 
                       onClick={() => { 
-                        setActiveView('auditoria_montacargas'); 
+                        setActiveView('estandar_flt'); 
                         setIsSidebarOpen(false); 
                       }} 
-                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'auditoria_montacargas' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'estandar_flt' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                     >
-                      <ShieldCheck size={18}/> AUDITORÍA ESTÁNDAR
-                    </button>
-                    <button 
-                      onClick={() => { 
-                        setActiveView('cierre_montacargas'); 
-                        setIsSidebarOpen(false); 
-                      }} 
-                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'cierre_montacargas' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                    >
-                      <ClipboardCheck size={18}/> CIERRE DE NOVEDADES
+                      <ShieldCheck size={18}/> ESTÁNDAR DE FLT
                     </button>
                     <button 
                       onClick={() => { 
@@ -3475,6 +3467,12 @@ const App: React.FC = () => {
           {activeView === 'comparendos_montacargas' && (
             <div className="max-w-7xl mx-auto pb-20">
               <ForkliftFinesModule data={forkliftFines} onRefresh={handleSyncData} />
+            </div>
+          )}
+
+          {activeView === 'estandar_flt' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <ForkliftStandardModule onRefreshParent={handleSyncData} />
             </div>
           )}
 

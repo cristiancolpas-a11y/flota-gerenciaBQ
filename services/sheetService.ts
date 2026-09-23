@@ -5109,7 +5109,7 @@ export const fetchForkliftAuditsFromSheet = async (): Promise<import('../types')
 // MÓDULO: CIERRE DE NOVEDADES MONTACARGAS (HOJA CIERRE)
 // ==========================================
 
-export let MONTACARGAS_SCRIPT_URL = 'https://script.google.com/a/macros/logisticos.co/s/AKfycbwhxUYmAuBCRowjITUR66emDVr7zMVzmSfl7hnkwlLOPkeaqIPLcdntt4y0XnIHGh1_pQ/exec';
+export let MONTACARGAS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwO7btmTc80iPZKqukAnQgLCS2NrO6ouB1pN4nZt62gyYqZFyPjP6mqeDaeAyOsSA13/exec';
 export const MONTACARGAS_DOC_ID = '1YLALShwjII0BUYfRsQthGMuVw-5m9Qd-Xuk00yniNe8';
 export let CIERRE_MONTACARGAS_GID = '1238373688';
 
