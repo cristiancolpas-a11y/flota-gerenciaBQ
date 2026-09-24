@@ -19,7 +19,12 @@ import {
   Calendar,
   Truck,
   Code,
-  Copy
+  Copy,
+  ZoomIn,
+  Trash2,
+  Image as ImageIcon,
+  Clipboard,
+  UploadCloud
 } from 'lucide-react';
 import { ForkliftClosure } from '../types';
 import { 
@@ -37,42 +42,174 @@ interface ForkliftClosureModuleProps {
   onRefreshParent?: () => void;
 }
 
-// Función para comprimir una imagen a Data URL JPG optimizada vía HTML5 Canvas
-const compressImageFile = (file: File, maxDim = 1280, quality = 0.75): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
-        }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(e.target?.result as string);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        resolve(dataUrl);
-      };
-      img.onerror = reject;
-      img.src = e.target?.result as string;
+// Procesamiento de imagen: conserva el 100% del tamaño original sin reducir resolución, con calidad superior (0.96)
+const compressHighQuality = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      // Mantener tamaño y resolución 100% original sin modificar proporciones
+      const origW = img.naturalWidth || img.width;
+      const origH = img.naturalHeight || img.height;
+
+      // Límite de seguridad de memoria de canvas del navegador (>4500px)
+      const maxDim = 4500;
+      let targetW = origW;
+      let targetH = origH;
+      if (Math.max(origW, origH) > maxDim) {
+        const scale = maxDim / Math.max(origW, origH);
+        targetW = Math.round(origW * scale);
+        targetH = Math.round(origH * scale);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+      }
+      resolve(canvas.toDataURL('image/jpeg', 0.96)); // Calidad alta y nítida
     };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    img.onerror = reject;
+    img.src = ev.target?.result as string;
+  };
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
+
+// Generar collage adaptativo para cualquier número de fotos (>4 fotos soportadas)
+// Diseñado para no alterar el tamaño de los componentes, mantener proporciones y maximizar calidad
+const generarCollage = (imagenes: string[]): Promise<string> => new Promise((resolve, reject) => {
+  if (imagenes.length === 0) { resolve(''); return; }
+  if (imagenes.length === 1) { resolve(imagenes[0]); return; }
+
+  const imgs: HTMLImageElement[] = [];
+  let cargadas = 0;
+  imagenes.forEach((src, idx) => {
+    const im = new Image();
+    im.onload = () => {
+      imgs[idx] = im;
+      cargadas++;
+      if (cargadas === imagenes.length) dibujar();
+    };
+    im.onerror = reject;
+    im.src = src;
   });
-};
+
+  const dibujar = () => {
+    const total = imgs.length;
+
+    // Distribución inteligente de columnas según la cantidad de imágenes
+    let cols = 2;
+    if (total <= 2) {
+      cols = 2;
+    } else if (total === 3) {
+      cols = 3;
+    } else if (total === 4) {
+      cols = 2;
+    } else if (total <= 6) {
+      cols = 3;
+    } else if (total <= 8) {
+      cols = 4;
+    } else if (total === 9) {
+      cols = 3;
+    } else if (total <= 12) {
+      cols = 4;
+    } else {
+      cols = Math.min(5, Math.ceil(Math.sqrt(total)));
+    }
+    const rows = Math.ceil(total / cols);
+
+    // Dimensiones máximas nativas para no reducir ni recortar los detalles
+    const maxFotoW = Math.max(...imgs.map(i => i.naturalWidth || i.width));
+    const maxFotoH = Math.max(...imgs.map(i => i.naturalHeight || i.height));
+
+    const gap = 16;
+    const padding = 20;
+
+    // Mantener la resolución ultra alta (hasta 4400px en el canvas total para 4K limpio)
+    const rawTotalW = cols * maxFotoW + (cols - 1) * gap + (padding * 2);
+    const rawTotalH = rows * maxFotoH + (rows - 1) * gap + (padding * 2);
+    
+    const maxCanvasDim = 4400;
+    const scaleFactor = Math.min(1, maxCanvasDim / Math.max(rawTotalW, rawTotalH));
+
+    const celdaW = Math.round(maxFotoW * scaleFactor);
+    const celdaH = Math.round(maxFotoH * scaleFactor);
+    const scaledGap = Math.max(8, Math.round(gap * scaleFactor));
+    const scaledPadding = Math.max(10, Math.round(padding * scaleFactor));
+
+    const canvasW = cols * celdaW + (cols - 1) * scaledGap + (scaledPadding * 2);
+    const canvasH = rows * celdaH + (rows - 1) * scaledGap + (scaledPadding * 2);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      resolve(imagenes[0]);
+      return;
+    }
+
+    // Fondo blanco limpio
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    imgs.forEach((im, idx) => {
+      const c = idx % cols;
+      const r = Math.floor(idx / cols);
+
+      const cellX = scaledPadding + c * (celdaW + scaledGap);
+      const cellY = scaledPadding + r * (celdaH + scaledGap);
+
+      // Fondo neutro para la celda
+      ctx.fillStyle = '#F8FAFC';
+      ctx.fillRect(cellX, cellY, celdaW, celdaH);
+
+      // Dibujar imagen manteniendo proporción perfecta sin deformar
+      const imgW = im.naturalWidth || im.width;
+      const imgH = im.naturalHeight || im.height;
+      const fitRatio = Math.min(celdaW / imgW, celdaH / imgH);
+      const drawW = Math.round(imgW * fitRatio);
+      const drawH = Math.round(imgH * fitRatio);
+
+      const drawX = cellX + Math.round((celdaW - drawW) / 2);
+      const drawY = cellY + Math.round((celdaH - drawH) / 2);
+
+      ctx.drawImage(im, drawX, drawY, drawW, drawH);
+
+      // Borde sutil elegante
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = Math.max(1, Math.round(2 * scaleFactor));
+      ctx.strokeRect(cellX, cellY, celdaW, celdaH);
+
+      // Etiqueta numerada para trazabilidad de inspección
+      const badgeFontSize = Math.max(14, Math.round(20 * scaleFactor));
+      ctx.font = `bold ${badgeFontSize}px system-ui, sans-serif`;
+      const badgeText = `Foto ${idx + 1}`;
+      const textMetrics = ctx.measureText(badgeText);
+      const badgePadX = Math.round(10 * scaleFactor);
+      const badgePadY = Math.round(6 * scaleFactor);
+      const badgeW = textMetrics.width + badgePadX * 2;
+      const badgeH = badgeFontSize + badgePadY * 2;
+
+      ctx.fillStyle = 'rgba(13, 43, 78, 0.88)';
+      ctx.fillRect(cellX + 8, cellY + 8, badgeW, badgeH);
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(badgeText, cellX + 8 + badgePadX, cellY + 8 + (badgeH / 2));
+    });
+
+    // Calidad 0.96 para máxima nitidez
+    resolve(canvas.toDataURL('image/jpeg', 0.96));
+  };
+});
 
 export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ onRefreshParent }) => {
   const [closures, setClosures] = useState<ForkliftClosure[]>([]);
@@ -88,10 +225,13 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
 
   // Modal de Cierre / Evidencia
   const [activeClosure, setActiveClosure] = useState<ForkliftClosure | null>(null);
-  const [previewImage, setPreviewImage] = useState<string>('');
+  const [fotos, setFotos] = useState<string[]>([]); // Fotografías de evidencia (soporta más de 4 fotos)
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string>('');
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   // Modal de configuración de fuente
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
@@ -209,37 +349,123 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
   // Abrir modal para cerrar novedad
   const handleOpenClosureModal = (closure: ForkliftClosure) => {
     setActiveClosure(closure);
-    setPreviewImage('');
+    setFotos([]);
     setUploadError('');
+    setIsDragging(false);
   };
 
-  // Manejar selección de foto (cámara o archivo)
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Función universal para procesar imágenes (subidas, arrastradas o pegadas)
+  const processFiles = async (files: File[]) => {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (!imageFiles.length) {
+      setUploadError('Por favor selecciona, arrastra o pega archivos de imagen válidos (JPG, PNG, WEBP, etc.).');
+      return;
+    }
+    const maxFotosPermitidas = 24;
+    const disponibles = maxFotosPermitidas - fotos.length;
+    if (disponibles <= 0) {
+      setUploadError(`Has alcanzado el límite máximo de ${maxFotosPermitidas} fotos.`);
+      return;
+    }
+    const aProcesar = imageFiles.slice(0, disponibles);
     try {
-      const compressed = await compressImageFile(file, 1280, 0.75);
-      setPreviewImage(compressed);
       setUploadError('');
+      const nuevas = await Promise.all(aProcesar.map(f => compressHighQuality(f)));
+      setFotos(prev => [...prev, ...nuevas].slice(0, maxFotosPermitidas));
     } catch (err) {
-      console.error('Error al procesar la imagen:', err);
-      setUploadError('No se pudo procesar la imagen seleccionada.');
+      console.error('Error al procesar fotos:', err);
+      setUploadError('No se pudo procesar alguna foto seleccionada.');
     }
   };
 
-  // Confirmar cierre con actualización optimista
+  // Manejar selección de archivos desde inputs nativos (cámara o galería)
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) {
+      await processFiles(files);
+    }
+    if (e.target) e.target.value = '';
+  };
+
+  // Manejar Arrastrar y Soltar (Drag & Drop)
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length) {
+      await processFiles(files);
+    }
+  };
+
+  // Manejar Pegar desde el portapapeles (Ctrl+V / Clipboard) mientras el modal esté abierto
+  useEffect(() => {
+    if (!activeClosure) return;
+
+    const handleWindowPaste = async (e: ClipboardEvent) => {
+      // Ignorar si el usuario está enfocado en un campo de texto o textarea
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') && (activeEl as HTMLInputElement).type !== 'file') {
+        return;
+      }
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const pastedFiles: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.indexOf('image') !== -1) {
+          const file = item.getAsFile();
+          if (file) pastedFiles.push(file);
+        }
+      }
+
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        await processFiles(pastedFiles);
+      }
+    };
+
+    window.addEventListener('paste', handleWindowPaste);
+    return () => {
+      window.removeEventListener('paste', handleWindowPaste);
+    };
+  }, [activeClosure, fotos.length]);
+
+  // Confirmar cierre con collage de alta calidad y actualización optimista
   const handleConfirmClosure = async () => {
     if (!activeClosure) return;
 
-    if (!previewImage) {
-      setUploadError('Debes tomar o seleccionar una fotografía de evidencia para cerrar la novedad.');
+    if (fotos.length === 0) {
+      setUploadError('Debes tomar o seleccionar al menos una fotografía para cerrar la novedad.');
       return;
+    }
+
+    setIsUploading(true);
+    let collage = '';
+    try {
+      collage = await generarCollage(fotos);
+    } catch (err) {
+      console.error('Error generando collage:', err);
+      collage = fotos[0] || '';
     }
 
     const { placa, item, id: targetId, rowIndex: targetRow, fecha } = activeClosure;
     const updateKey = targetId || (targetRow ? `row-${targetRow}` : `${(placa || '').toUpperCase().trim()}___${(item || '').toLowerCase().trim()}`);
-    const tempEvidencia = previewImage;
+    const tempEvidencia = collage;
 
     // 1) ACTUALIZACIÓN OPTIMISTA INMEDIATA (no bloquear la UI)
     optimisticUpdatesRef.current[updateKey] = {
@@ -262,8 +488,10 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
       return c;
     }));
 
-    // Cerrar modal de inmediato
+    // Cerrar modal de inmediato y limpiar fotos
     setActiveClosure(null);
+    setFotos([]);
+    setIsUploading(false);
 
     // 2) EN SEGUNDO PLANO: subir foto a Drive si es posible y actualizar Google Sheets
     (async () => {
@@ -667,56 +895,159 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
 
             {/* Input para Captura de Foto o Archivo */}
             <div className="space-y-3">
-              <label className="block text-xs font-bold text-slate-700">
-                Fotografía de Evidencia (Obligatoria)
-              </label>
-
-              {previewImage ? (
-                <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 group">
-                  <img 
-                    src={previewImage} 
-                    alt="Evidencia seleccionada" 
-                    className="w-full h-56 object-contain"
-                  />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-1.5 bg-white text-slate-900 rounded-xl text-xs font-bold shadow-lg"
-                    >
-                      Cambiar Foto
-                    </button>
-                    <button
-                      onClick={() => setPreviewImage('')}
-                      className="px-3 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-bold shadow-lg"
-                    >
-                      Quitar
-                    </button>
-                  </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-xs font-black text-slate-800 uppercase tracking-wider">
+                    Fotografías de Evidencia
+                  </label>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Sube más de 4 fotos. Se organizarán en un collage de alta definición sin modificar el tamaño.
+                  </p>
                 </div>
-              ) : (
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-6 text-center cursor-pointer bg-slate-50 hover:bg-emerald-50/40 transition-all"
-                >
-                  <div className="w-12 h-12 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3">
-                    <Camera size={24} />
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    {fotos.length} {fotos.length === 1 ? 'foto' : 'fotos'}
+                  </span>
+                  {fotos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setFotos([])}
+                      className="text-[10px] font-bold text-slate-400 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-2 py-0.5 rounded-md transition-colors flex items-center gap-1"
+                      title="Quitar todas las fotos"
+                    >
+                      <Trash2 size={12} /> Limpiar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Zona de Arrastrar, Soltar, Pegar (Ctrl+V) y Botones de Cámara / Galería */}
+              <div 
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+                  isDragging 
+                    ? 'border-emerald-500 bg-emerald-100/70 scale-[1.01] shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/20' 
+                    : 'border-slate-300 hover:border-emerald-400 bg-slate-50/80 hover:bg-emerald-50/20'
+                }`}
+              >
+                {isDragging ? (
+                  <div className="py-4 space-y-2 pointer-events-none">
+                    <div className="w-12 h-12 mx-auto rounded-full bg-emerald-500 text-white flex items-center justify-center animate-bounce shadow-md">
+                      <UploadCloud size={26} />
+                    </div>
+                    <p className="text-sm font-black text-emerald-900">
+                      ¡Suelta las imágenes de evidencia aquí!
+                    </p>
+                    <p className="text-xs text-emerald-700">
+                      Se añadirán al collage automáticamente sin modificar su tamaño.
+                    </p>
                   </div>
-                  <p className="text-xs font-bold text-slate-800">
-                    Toma una foto o selecciona una imagen
-                  </p>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Usa la cámara del teléfono o sube un archivo (JPG / PNG)
-                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
+                      {/* Botón Acceso Cámara Directa */}
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all"
+                      >
+                        <Camera size={16} />
+                        Tomar con Cámara
+                      </button>
+
+                      {/* Botón Acceso Galería / Archivos */}
+                      <button
+                        type="button"
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md flex items-center justify-center gap-2 transition-all"
+                      >
+                        <ImageIcon size={16} />
+                        Elegir de Galería
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center justify-center gap-3 text-[11px] text-slate-500">
+                      <span className="flex items-center gap-1 font-medium">
+                        <UploadCloud size={14} className="text-emerald-600" />
+                        Arrastra y suelta imágenes aquí
+                      </span>
+                      <span className="text-slate-300">•</span>
+                      <span className="flex items-center gap-1 font-medium bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded-md">
+                        <Clipboard size={12} className="text-emerald-600" />
+                        Pega con Ctrl + V
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Miniaturas de todas las fotos cargadas con opción de ver o quitar */}
+              {fotos.length > 0 && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 max-h-64 overflow-y-auto p-1 bg-slate-50/70 rounded-2xl border border-slate-100">
+                    {fotos.map((f, i) => (
+                      <div 
+                        key={i} 
+                        className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-900 shadow-xs aspect-square cursor-pointer"
+                        onClick={() => setZoomImage(f)}
+                        title="Clic para ver en tamaño completo"
+                      >
+                        <img 
+                          src={f} 
+                          alt={`Evidencia ${i + 1}`} 
+                          className="w-full h-full object-cover group-hover:opacity-90 group-hover:scale-105 transition-all duration-200" 
+                        />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                          <span className="bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1 backdrop-blur-xs">
+                            <ZoomIn size={12} /> Ver HD
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFotos(prev => prev.filter((_, idx) => idx !== i));
+                          }}
+                          className="absolute top-1.5 right-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-full w-5 h-5 text-xs font-black flex items-center justify-center shadow-lg transition-transform hover:scale-110 active:scale-95 z-10"
+                          title="Eliminar foto"
+                        >
+                          ×
+                        </button>
+                        <span className="absolute bottom-1.5 left-1.5 bg-black/75 backdrop-blur-xs text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
+                          Foto {i + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="bg-emerald-50/80 border border-emerald-200/70 p-2.5 rounded-xl text-center">
+                    <p className="text-[11px] text-emerald-900 font-bold">
+                      {fotos.length === 1 
+                        ? 'Se guardará la foto en su resolución original de máxima calidad.' 
+                        : `Las ${fotos.length} fotos se organizarán automáticamente en un collage en alta resolución (HD) sin alterar su tamaño ni comprimir en exceso.`}
+                    </p>
+                  </div>
                 </div>
               )}
 
-              {/* Input nativo oculto con soporte para cámara */}
+              {/* Inputs nativos ocultos: uno para Galería (múltiples archivos) y otro para Cámara directa */}
               <input
-                ref={fileInputRef}
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleFileInputChange}
+                className="hidden"
+              />
+              <input
+                ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
-                onChange={handleFileChange}
+                onChange={handleFileInputChange}
                 className="hidden"
               />
 
@@ -1143,6 +1474,36 @@ function output(status, message, extra) {
                   Cerrar
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE VISUALIZACIÓN EN ALTA DEFINICIÓN (ZOOM LIGHTBOX) */}
+      {zoomImage && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn"
+          onClick={() => setZoomImage(null)}
+        >
+          <div 
+            className="relative max-w-5xl max-h-[90vh] w-full flex flex-col items-center justify-center p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setZoomImage(null)}
+              className="absolute -top-10 right-0 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 text-xs font-black transition-all flex items-center gap-1 backdrop-blur-sm shadow-lg"
+              title="Cerrar vista previa"
+            >
+              <X size={18} />
+            </button>
+            <img 
+              src={zoomImage} 
+              alt="Vista previa en alta resolución" 
+              className="max-h-[80vh] max-w-full object-contain rounded-2xl shadow-2xl border border-white/20"
+            />
+            <div className="mt-3 flex items-center gap-2 text-white/90 text-xs font-bold bg-black/60 px-4 py-1.5 rounded-full backdrop-blur-sm border border-white/10">
+              <ShieldCheck size={14} className="text-emerald-400" />
+              <span>Resolución original preservada al 100% • Máxima nitidez</span>
             </div>
           </div>
         </div>
