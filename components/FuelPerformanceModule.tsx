@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { FuelPerformance } from '../types';
 import { 
-  Search, Filter, Fuel, TrendingUp, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown,
-  ChevronLeft, ChevronRight, Download, RefreshCw, CheckCircle2, AlertCircle,
+  Search, Filter, Fuel, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown,
+  ChevronLeft, ChevronRight, Download, RefreshCw, AlertCircle,
   Building2, Calendar, Truck, DollarSign, Gauge, X, Layers
 } from 'lucide-react';
 import { 
@@ -22,7 +22,31 @@ export const META_RENDIMIENTO = {
   medio: 10 
 }; // km/galón
 
+/**
+ * Cálculo del promedio de rendimiento idéntico a Excel / Google Sheets:
+ * - INCLUIR solo los registros con rendimiento > 0.
+ * - EXCLUIR (ignorar) los registros con rendimiento 0, vacío o no numérico.
+ */
+export const promedioRendimiento = (registros: FuelPerformance[]): number => {
+  const conDato = registros.filter(r => r.rendimiento && r.rendimiento > 0);
+  if (conDato.length === 0) return 0;
+  const suma = conDato.reduce((acc, r) => acc + r.rendimiento, 0);
+  return suma / conDato.length;
+};
+
 export const getRendimientoStatus = (rendimiento: number) => {
+  if (!rendimiento || rendimiento <= 0) {
+    return {
+      key: 'sin_dato' as const,
+      label: 'Sin dato',
+      color: '#94A3B8',
+      bgColor: 'bg-slate-50',
+      textColor: 'text-slate-500',
+      borderColor: 'border-slate-200',
+      badgeClass: 'bg-slate-100 text-slate-500 border-slate-200 font-normal',
+      dotClass: 'bg-slate-400'
+    };
+  }
   if (rendimiento >= META_RENDIMIENTO.bueno) {
     return {
       key: 'bueno' as const,
@@ -31,7 +55,7 @@ export const getRendimientoStatus = (rendimiento: number) => {
       bgColor: 'bg-emerald-50',
       textColor: 'text-emerald-700',
       borderColor: 'border-emerald-200',
-      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold',
       dotClass: 'bg-emerald-500'
     };
   }
@@ -43,7 +67,7 @@ export const getRendimientoStatus = (rendimiento: number) => {
       bgColor: 'bg-amber-50',
       textColor: 'text-amber-700',
       borderColor: 'border-amber-200',
-      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 font-semibold',
       dotClass: 'bg-amber-500'
     };
   }
@@ -54,7 +78,7 @@ export const getRendimientoStatus = (rendimiento: number) => {
     bgColor: 'bg-rose-50',
     textColor: 'text-rose-700',
     borderColor: 'border-rose-200',
-    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 font-semibold',
+    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 font-bold',
     dotClass: 'bg-rose-500'
   };
 };
@@ -92,7 +116,7 @@ interface FuelPerformanceModuleProps {
 
 type SortField = 'rendimiento' | 'totalCostos' | 'kmRecorridos' | 'galones' | 'placa';
 type SortOrder = 'asc' | 'desc';
-type StatusFilter = 'all' | 'bajo' | 'medio' | 'bueno';
+type StatusFilter = 'all' | 'bajo' | 'medio' | 'bueno' | 'sin_dato';
 type RankingView = 'peores' | 'mejores' | 'top20';
 
 const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({ 
@@ -109,7 +133,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
 
   // Ordenamiento & Paginación
   const [sortField, setSortField] = useState<SortField>('rendimiento');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc'); // Peores arriba por defecto
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc'); // Peores reales arriba por defecto
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 15;
 
@@ -170,12 +194,27 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
     });
   }, [fuelData, selectedCd, selectedMes, selectedProveedor, statusFilter, searchTerm]);
 
-  // Datos ordenados
+  // Datos ordenados para la tabla
   const sortedData = useMemo(() => {
     return [...filteredData].sort((a, b) => {
       let comparison = 0;
       if (sortField === 'placa') {
         comparison = (a.placa || '').localeCompare(b.placa || '');
+      } else if (sortField === 'rendimiento') {
+        const valA = a.rendimiento || 0;
+        const valB = b.rendimiento || 0;
+        if (sortOrder === 'asc') {
+          // Mostrar los peores con dato real primero (ej. 8.02, 9.36), y los "Sin dato" al final
+          if (valA <= 0 && valB > 0) return 1;
+          if (valB <= 0 && valA > 0) return -1;
+          comparison = valA - valB;
+        } else {
+          // Mostrar mejores primero, y los "Sin dato" al final
+          if (valA <= 0 && valB > 0) return 1;
+          if (valB <= 0 && valA > 0) return -1;
+          comparison = valB - valA;
+        }
+        return comparison;
       } else {
         comparison = (a[sortField] || 0) - (b[sortField] || 0);
       }
@@ -195,7 +234,6 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
       setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
-      // Si se ordena por rendimiento, por defecto ascendente (peores primero); de lo contrario, descendente
       setSortOrder(field === 'rendimiento' ? 'asc' : 'desc');
     }
     setCurrentPage(1);
@@ -207,21 +245,20 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
     const totalGal = filteredData.reduce((acc, curr) => acc + (curr.galones || 0), 0);
     const totalCost = filteredData.reduce((acc, curr) => acc + (curr.totalCostos || 0), 0);
 
-    // Rendimiento ponderado de la flota = Km Totales / Galones Totales
-    const weightedKmpg = totalGal > 0 ? totalKm / totalGal : 0;
+    // Promedio de rendimiento exactamente como en Excel (ignora ceros/vacíos)
+    const avgRendimiento = promedioRendimiento(filteredData);
 
-    // Promedio simple para referencia
-    const avgRendimiento = filteredData.length > 0 
-      ? filteredData.reduce((acc, curr) => acc + (curr.rendimiento || 0), 0) / filteredData.length 
-      : 0;
+    // Registros con dato real vs sin dato
+    const conDato = filteredData.filter(d => d.rendimiento && d.rendimiento > 0);
+    const sinDatoCount = filteredData.length - conDato.length;
 
-    // Conteo por estado de semáforo
-    const bajoCount = filteredData.filter(d => d.rendimiento < META_RENDIMIENTO.medio).length;
-    const medioCount = filteredData.filter(d => d.rendimiento >= META_RENDIMIENTO.medio && d.rendimiento < META_RENDIMIENTO.bueno).length;
-    const buenoCount = filteredData.filter(d => d.rendimiento >= META_RENDIMIENTO.bueno).length;
+    // Conteo por estado de semáforo (SOLO se cuentan los vehículos con rendimiento > 0)
+    const bajoCount = conDato.filter(d => d.rendimiento < META_RENDIMIENTO.medio).length;
+    const medioCount = conDato.filter(d => d.rendimiento >= META_RENDIMIENTO.medio && d.rendimiento < META_RENDIMIENTO.bueno).length;
+    const buenoCount = conDato.filter(d => d.rendimiento >= META_RENDIMIENTO.bueno).length;
 
-    // Vehículos con bajo rendimiento críticos para alertas
-    const lowPerformanceVehicles = [...filteredData]
+    // Vehículos con bajo rendimiento críticos (excluyendo ceros/sin dato)
+    const lowPerformanceVehicles = [...conDato]
       .filter(d => d.rendimiento < META_RENDIMIENTO.medio)
       .sort((a, b) => a.rendimiento - b.rendimiento);
 
@@ -229,8 +266,9 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
       totalKm,
       totalGal,
       totalCost,
-      weightedKmpg,
       avgRendimiento,
+      conDatoCount: conDato.length,
+      sinDatoCount,
       bajoCount,
       medioCount,
       buenoCount,
@@ -238,10 +276,10 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
     };
   }, [filteredData]);
 
-  // Gráfica 1: Ranking de Vehículos
+  // Gráfica 1: Ranking de Vehículos (SOLO incluye vehículos con rendimiento > 0)
   const rankingChartData = useMemo(() => {
-    // Si hay registros con la misma placa en varios periodos/meses, agrupamos o tomamos el registro según vista
-    const sorted = [...filteredData].sort((a, b) => a.rendimiento - b.rendimiento);
+    const conDato = filteredData.filter(d => d.rendimiento && d.rendimiento > 0);
+    const sorted = [...conDato].sort((a, b) => a.rendimiento - b.rendimiento);
 
     let sliced: FuelPerformance[] = [];
     if (rankingView === 'peores') {
@@ -263,55 +301,61 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
     }));
   }, [filteredData, rankingView]);
 
-  // Gráfica 2: Rendimiento Promedio por CD
+  // Gráfica 2: Rendimiento Promedio por CD (cálculo Excel: solo rendimiento > 0)
   const cdChartData = useMemo(() => {
-    const cdGroups: Record<string, { km: number; gal: number; count: number }> = {};
+    const cdGroups: Record<string, FuelPerformance[]> = {};
     filteredData.forEach(d => {
       const cdName = d.cd?.trim() || 'Sin CD';
-      if (!cdGroups[cdName]) cdGroups[cdName] = { km: 0, gal: 0, count: 0 };
-      cdGroups[cdName].km += d.kmRecorridos || 0;
-      cdGroups[cdName].gal += d.galones || 0;
-      cdGroups[cdName].count += 1;
+      if (!cdGroups[cdName]) cdGroups[cdName] = [];
+      cdGroups[cdName].push(d);
     });
 
-    return Object.entries(cdGroups).map(([cd, data]) => {
-      const rendimiento = data.gal > 0 ? Number((data.km / data.gal).toFixed(2)) : 0;
+    return Object.entries(cdGroups).map(([cd, rows]) => {
+      const rendimiento = Number(promedioRendimiento(rows).toFixed(2));
+      const conDato = rows.filter(r => r.rendimiento && r.rendimiento > 0);
       return {
         cd,
         rendimiento,
-        km: data.km,
-        galones: data.gal,
+        vehiculosConDato: conDato.length,
+        totalVehiculos: rows.length,
         color: getRendimientoStatus(rendimiento).color
       };
     }).sort((a, b) => b.rendimiento - a.rendimiento);
   }, [filteredData]);
 
-  // Gráfica 3: Evolución Mensual
+  // Gráfica 3: Evolución Mensual (cálculo Excel: solo rendimiento > 0)
   const monthlyChartData = useMemo(() => {
     const monthOrder = [
       'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
       'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
     ];
-    const monthGroups: Record<string, { km: number; gal: number; costo: number }> = {};
+    const monthGroups: Record<string, FuelPerformance[]> = {};
 
     filteredData.forEach(d => {
       const m = d.mes?.trim().toUpperCase() || 'S/M';
-      if (!monthGroups[m]) monthGroups[m] = { km: 0, gal: 0, costo: 0 };
-      monthGroups[m].km += d.kmRecorridos || 0;
-      monthGroups[m].gal += d.galones || 0;
-      monthGroups[m].costo += d.totalCostos || 0;
+      if (!monthGroups[m]) monthGroups[m] = [];
+      monthGroups[m].push(d);
     });
 
-    return Object.entries(monthGroups).map(([mes, data]) => {
-      const rendimiento = data.gal > 0 ? Number((data.km / data.gal).toFixed(2)) : 0;
+    return Object.entries(monthGroups).map(([mes, rows]) => {
+      const rendimiento = Number(promedioRendimiento(rows).toFixed(2));
+      const conDato = rows.filter(r => r.rendimiento && r.rendimiento > 0);
+      const totalKm = rows.reduce((acc, r) => acc + (r.kmRecorridos || 0), 0);
+      const totalGal = rows.reduce((acc, r) => acc + (r.galones || 0), 0);
+      const totalCosto = rows.reduce((acc, r) => acc + (r.totalCostos || 0), 0);
+
       return {
         mes,
         rendimiento,
-        km: Math.round(data.km),
-        galones: Math.round(data.gal),
-        costo: data.costo
+        vehiculosConDato: conDato.length,
+        totalVehiculos: rows.length,
+        km: Math.round(totalKm),
+        galones: Math.round(totalGal),
+        costo: totalCosto
       };
-    }).sort((a, b) => {
+    })
+    .filter(d => d.vehiculosConDato > 0) // Omitir meses que no tengan datos cargados para no desvirtuar la línea
+    .sort((a, b) => {
       const idxA = monthOrder.indexOf(a.mes);
       const idxB = monthOrder.indexOf(b.mes);
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -360,7 +404,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
       `"${d.mes || ''}"`,
       d.kmRecorridos || 0,
       d.galones || 0,
-      (d.rendimiento || 0).toFixed(2),
+      d.rendimiento && d.rendimiento > 0 ? d.rendimiento.toFixed(2) : 'Sin dato',
       `"${getRendimientoStatus(d.rendimiento).label}"`,
       Math.round(d.totalCostos || 0)
     ]);
@@ -390,7 +434,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
                 Seguimiento de Rendimiento de Combustible
               </h1>
               <p className="text-xs md:text-sm text-slate-500 mt-0.5">
-                Control de km por galón por vehículo, análisis por centro y detección de bajo rendimiento
+                Control de km por galón por vehículo, análisis por centro y detección de bajo rendimiento (promedios con criterio Excel)
               </p>
             </div>
           </div>
@@ -412,6 +456,10 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
             <span className="inline-flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full bg-[#DC2626]"></span>
               Bajo (&lt; {META_RENDIMIENTO.medio})
+            </span>
+            <span className="inline-flex items-center gap-1 text-slate-400">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+              Sin dato (excluido de promedios)
             </span>
           </div>
 
@@ -446,7 +494,9 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
             <Filter className="w-4 h-4 text-[#0D2B4E]" />
             <span>Filtros Operativos</span>
             <span className="text-xs font-normal text-slate-500">
-              (Mostrando <strong className="text-slate-800 tabular-nums">{filteredData.length}</strong> de <span className="tabular-nums">{fuelData.length}</span> registros)
+              (Mostrando <strong className="text-slate-800 tabular-nums">{filteredData.length}</strong> registros:{' '}
+              <strong className="text-emerald-700 tabular-nums">{stats.conDatoCount}</strong> con dato,{' '}
+              <span className="text-slate-400 tabular-nums">{stats.sinDatoCount}</span> sin dato)
             </span>
           </div>
 
@@ -549,9 +599,10 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D2B4E] focus:bg-white transition font-medium"
             >
               <option value="all">Todos los Estados</option>
-              <option value="bajo">🚨 Bajo Rendimiento (&lt; {META_RENDIMIENTO.medio})</option>
+              <option value="bajo">🚨 Bajo Rendimiento (&gt; 0 y &lt; {META_RENDIMIENTO.medio})</option>
               <option value="medio">⚠️ Rendimiento Medio ({META_RENDIMIENTO.medio} - {META_RENDIMIENTO.bueno})</option>
               <option value="bueno">✅ Buen Rendimiento (≥ {META_RENDIMIENTO.bueno})</option>
+              <option value="sin_dato">⚪ Sin Dato Cargado (0 o vacío)</option>
             </select>
           </div>
         </div>
@@ -559,11 +610,11 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
 
       {/* Tarjetas Resumen (KPIs) */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Rendimiento Promedio de Flota */}
+        {/* Rendimiento Promedio de Flota (Cálculo tipo Excel: ignora ceros) */}
         <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Rendimiento Flota
+              Rendimiento Promedio Flota
             </span>
             <div className="p-2 bg-slate-100 rounded-lg text-[#0D2B4E]">
               <Gauge className="w-5 h-5 text-[#0D2B4E]" />
@@ -572,17 +623,19 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
           <div className="mt-3">
             <div className="flex items-baseline gap-2">
               <span className="text-2xl md:text-3xl font-extrabold text-[#0D2B4E] tabular-nums">
-                {stats.weightedKmpg.toFixed(2)}
+                {stats.avgRendimiento > 0 ? stats.avgRendimiento.toFixed(2) : '—'}
               </span>
               <span className="text-xs font-medium text-slate-500">km / galón</span>
             </div>
-            <div className="mt-2 flex items-center gap-2">
-              <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${getRendimientoStatus(stats.weightedKmpg).badgeClass}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${getRendimientoStatus(stats.weightedKmpg).dotClass}`}></span>
-                {getRendimientoStatus(stats.weightedKmpg).label}
-              </span>
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              {stats.avgRendimiento > 0 && (
+                <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${getRendimientoStatus(stats.avgRendimiento).badgeClass}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${getRendimientoStatus(stats.avgRendimiento).dotClass}`}></span>
+                  {getRendimientoStatus(stats.avgRendimiento).label}
+                </span>
+              )}
               <span className="text-[11px] text-slate-400">
-                Ponderado ({formatNumber(stats.totalKm)} km)
+                Sobre {stats.conDatoCount} registros reales (ignora ceros)
               </span>
             </div>
           </div>
@@ -606,7 +659,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
               <span className="text-xs font-medium text-slate-500">GL</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-2">
-              En {filteredData.length} registros analizados
+              {formatNumber(stats.totalKm)} km recorridos en total
             </p>
           </div>
         </div>
@@ -635,7 +688,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
           </div>
         </div>
 
-        {/* Vehículos en Bajo Rendimiento */}
+        {/* Vehículos en Bajo Rendimiento (solo rendimiento > 0 y < META_RENDIMIENTO.medio) */}
         <div 
           onClick={() => setStatusFilter(statusFilter === 'bajo' ? 'all' : 'bajo')}
           className={`bg-white rounded-xl p-5 border transition cursor-pointer shadow-sm flex flex-col justify-between ${
@@ -658,11 +711,11 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
                 {stats.bajoCount}
               </span>
               <span className="text-xs font-medium text-slate-500">
-                de {filteredData.length} ({filteredData.length > 0 ? ((stats.bajoCount / filteredData.length) * 100).toFixed(0) : 0}%)
+                de {stats.conDatoCount} ({stats.conDatoCount > 0 ? ((stats.bajoCount / stats.conDatoCount) * 100).toFixed(0) : 0}%)
               </span>
             </div>
             <p className="text-[11px] text-rose-600 mt-2 font-medium">
-              {statusFilter === 'bajo' ? 'Mostrando sólo alertas (clic para quitar)' : `Menor a ${META_RENDIMIENTO.medio} km/gal (clic para filtrar)`}
+              {statusFilter === 'bajo' ? 'Mostrando sólo alertas (clic para quitar)' : `Menor a ${META_RENDIMIENTO.medio} km/gal (excluye sin dato)`}
             </p>
           </div>
         </div>
@@ -678,10 +731,10 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-rose-900">
-                  Alertas de Rendimiento Crítico (&lt; {META_RENDIMIENTO.medio} km/gal)
+                  Alertas de Rendimiento Crítico (&gt; 0 y &lt; {META_RENDIMIENTO.medio} km/gal)
                 </h3>
                 <p className="text-xs text-rose-700">
-                  Se detectaron {stats.lowPerformanceVehicles.length} registros con consumo anómalo o bajo rendimiento que requieren revisión operativa.
+                  Se detectaron {stats.lowPerformanceVehicles.length} vehículos con consumo real y rendimiento bajo que requieren revisión operativa.
                 </p>
               </div>
             </div>
@@ -745,7 +798,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gráfica 1: Ranking de Vehículos por Rendimiento */}
+          {/* Gráfica 1: Ranking de Vehículos por Rendimiento (Solo rendimiento > 0) */}
           <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
@@ -754,7 +807,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
                   Ranking de Vehículos (km/gal)
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Comparativa de vehículos con etiquetas de datos y semáforo
+                  Vehículos con rendimiento real (excluye registros sin dato o 0)
                 </p>
               </div>
 
@@ -793,67 +846,73 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
               </div>
             </div>
 
-            <div className="h-[320px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={rankingChartData}
-                  layout="vertical"
-                  margin={{ top: 10, right: 35, left: 10, bottom: 10 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E2E8F0" />
-                  <XAxis 
-                    type="number" 
-                    domain={[0, (dataMax: number) => Math.max(dataMax + 2, 15)]}
-                    tick={{ fontSize: 11, fill: '#64748B' }}
-                    unit=" km/gl"
-                  />
-                  <YAxis 
-                    type="category" 
-                    dataKey="placa" 
-                    tick={{ fontSize: 11, fill: '#1E293B', fontWeight: 600 }}
-                    width={75}
-                  />
-                  <Tooltip
-                    formatter={(val: any) => [`${Number(val).toFixed(2)} km/galón`, 'Rendimiento']}
-                    labelFormatter={(label, payload) => {
-                      const item = payload?.[0]?.payload;
-                      return `${label} (${item?.cd || ''} - ${item?.mes || ''})`;
-                    }}
-                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#CBD5E1', borderRadius: '8px', fontSize: '12px' }}
-                  />
-                  <ReferenceLine 
-                    x={META_RENDIMIENTO.medio} 
-                    stroke="#F2B705" 
-                    strokeDasharray="4 4" 
-                    label={{ value: `Meta Mín: ${META_RENDIMIENTO.medio}`, position: 'top', fill: '#B45309', fontSize: 10 }} 
-                  />
-                  <ReferenceLine 
-                    x={META_RENDIMIENTO.bueno} 
-                    stroke="#16A34A" 
-                    strokeDasharray="4 4" 
-                    label={{ value: `Meta Buena: ${META_RENDIMIENTO.bueno}`, position: 'top', fill: '#15803D', fontSize: 10 }} 
-                  />
-                  <Bar dataKey="rendimiento" radius={[0, 4, 4, 0]} barSize={18}>
-                    {rankingChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                    <LabelList 
-                      dataKey="rendimiento" 
-                      position="right" 
-                      style={{ fontSize: '11px', fontWeight: 600, fill: '#334155' }}
-                      formatter={(val: any) => `${Number(val).toFixed(1)}`}
+            {rankingChartData.length === 0 ? (
+              <div className="h-[320px] flex items-center justify-center text-xs text-slate-400">
+                No hay vehículos con rendimiento &gt; 0 para mostrar en el ranking.
+              </div>
+            ) : (
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={rankingChartData}
+                    layout="vertical"
+                    margin={{ top: 10, right: 35, left: 10, bottom: 10 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E2E8F0" />
+                    <XAxis 
+                      type="number" 
+                      domain={[0, (dataMax: number) => Math.max(dataMax + 2, 16)]}
+                      tick={{ fontSize: 11, fill: '#64748B' }}
+                      unit=" km/gl"
                     />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+                    <YAxis 
+                      type="category" 
+                      dataKey="placa" 
+                      tick={{ fontSize: 11, fill: '#1E293B', fontWeight: 600 }}
+                      width={75}
+                    />
+                    <Tooltip
+                      formatter={(val: any) => [`${Number(val).toFixed(2)} km/galón`, 'Rendimiento']}
+                      labelFormatter={(label, payload) => {
+                        const item = payload?.[0]?.payload;
+                        return `${label} (${item?.cd || ''} - ${item?.mes || ''})`;
+                      }}
+                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#CBD5E1', borderRadius: '8px', fontSize: '12px' }}
+                    />
+                    <ReferenceLine 
+                      x={META_RENDIMIENTO.medio} 
+                      stroke="#F2B705" 
+                      strokeDasharray="4 4" 
+                      label={{ value: `Mín: ${META_RENDIMIENTO.medio}`, position: 'top', fill: '#B45309', fontSize: 10 }} 
+                    />
+                    <ReferenceLine 
+                      x={META_RENDIMIENTO.bueno} 
+                      stroke="#16A34A" 
+                      strokeDasharray="4 4" 
+                      label={{ value: `Meta: ${META_RENDIMIENTO.bueno}`, position: 'top', fill: '#15803D', fontSize: 10 }} 
+                    />
+                    <Bar dataKey="rendimiento" radius={[0, 4, 4, 0]} barSize={18}>
+                      {rankingChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                      <LabelList 
+                        dataKey="rendimiento" 
+                        position="right" 
+                        style={{ fontSize: '11px', fontWeight: 600, fill: '#334155' }}
+                        formatter={(val: any) => `${Number(val).toFixed(2)}`}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
             <div className="mt-2 text-[11px] text-slate-500 flex items-center justify-between border-t border-slate-100 pt-2">
               <span>* Barras coloreadas según semáforo de desempeño</span>
               <span className="font-medium text-slate-700">{rankingChartData.length} vehículos mostrados</span>
             </div>
           </div>
 
-          {/* Gráfica 2: Rendimiento Promedio por CD */}
+          {/* Gráfica 2: Rendimiento Promedio por CD (cálculo Excel: solo rendimiento > 0) */}
           <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
             <div className="mb-4">
               <h3 className="text-sm font-bold text-[#0D2B4E] flex items-center gap-2">
@@ -861,7 +920,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
                 Rendimiento Promedio por Centro de Distribución
               </h3>
               <p className="text-xs text-slate-500">
-                Km recorridos por galón consumido (promedio ponderado por CD)
+                Promedio de km/gal calculado como en Excel (solo registros con rendimiento &gt; 0)
               </p>
             </div>
 
@@ -877,19 +936,28 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
                     tick={{ fontSize: 11, fill: '#1E293B', fontWeight: 600 }}
                   />
                   <YAxis 
-                    domain={[0, (dataMax: number) => Math.max(Math.ceil(dataMax + 2), 15)]}
+                    domain={[0, (dataMax: number) => Math.max(Math.ceil(dataMax + 2), 16)]}
                     tick={{ fontSize: 11, fill: '#64748B' }}
                     unit=" km/gl"
                   />
                   <Tooltip
-                    formatter={(val: any) => [`${Number(val).toFixed(2)} km/gal`, 'Rendimiento Promedio']}
+                    formatter={(val: any, _name, item: any) => [
+                      `${Number(val).toFixed(2)} km/gal (${item?.payload?.vehiculosConDato || 0} con dato de ${item?.payload?.totalVehiculos || 0})`, 
+                      'Rendimiento Promedio'
+                    ]}
                     contentStyle={{ backgroundColor: '#ffffff', borderColor: '#CBD5E1', borderRadius: '8px', fontSize: '12px' }}
                   />
                   <ReferenceLine 
                     y={META_RENDIMIENTO.medio} 
                     stroke="#F2B705" 
                     strokeDasharray="4 4" 
-                    label={{ value: `Meta: ${META_RENDIMIENTO.medio}`, position: 'right', fill: '#B45309', fontSize: 10 }} 
+                    label={{ value: `Meta Mín: ${META_RENDIMIENTO.medio}`, position: 'right', fill: '#B45309', fontSize: 10 }} 
+                  />
+                  <ReferenceLine 
+                    y={META_RENDIMIENTO.bueno} 
+                    stroke="#16A34A" 
+                    strokeDasharray="4 4" 
+                    label={{ value: `Meta: ${META_RENDIMIENTO.bueno}`, position: 'right', fill: '#15803D', fontSize: 10 }} 
                   />
                   <Bar dataKey="rendimiento" radius={[4, 4, 0, 0]} barSize={40}>
                     {cdChartData.map((entry, index) => (
@@ -911,7 +979,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
             </div>
           </div>
 
-          {/* Gráfica 3: Evolución Mensual */}
+          {/* Gráfica 3: Evolución Mensual (cálculo Excel: solo rendimiento > 0) */}
           <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
             <div className="mb-4">
               <h3 className="text-sm font-bold text-[#0D2B4E] flex items-center gap-2">
@@ -919,59 +987,65 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
                 Evolución de Rendimiento por Mes
               </h3>
               <p className="text-xs text-slate-500">
-                Tendencia histórica del rendimiento promedio de la flota
+                Tendencia mensual del rendimiento promedio (solo meses con datos reales)
               </p>
             </div>
 
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={monthlyChartData}
-                  margin={{ top: 25, right: 30, left: 10, bottom: 10 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                  <XAxis 
-                    dataKey="mes" 
-                    tick={{ fontSize: 11, fill: '#1E293B', fontWeight: 600 }}
-                  />
-                  <YAxis 
-                    domain={[0, (dataMax: number) => Math.max(Math.ceil(dataMax + 2), 15)]}
-                    tick={{ fontSize: 11, fill: '#64748B' }}
-                    unit=" km/gl"
-                  />
-                  <Tooltip
-                    formatter={(val: any, name: string) => {
-                      if (name === 'rendimiento') return [`${Number(val).toFixed(2)} km/gal`, 'Rendimiento Promedio'];
-                      return [val, name];
-                    }}
-                    contentStyle={{ backgroundColor: '#ffffff', borderColor: '#CBD5E1', borderRadius: '8px', fontSize: '12px' }}
-                  />
-                  <ReferenceLine 
-                    y={META_RENDIMIENTO.medio} 
-                    stroke="#F2B705" 
-                    strokeDasharray="4 4" 
-                    label={{ value: `Meta: ${META_RENDIMIENTO.medio}`, position: 'right', fill: '#B45309', fontSize: 10 }} 
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="rendimiento" 
-                    stroke="#0D2B4E" 
-                    strokeWidth={3}
-                    dot={{ fill: '#F2B705', stroke: '#0D2B4E', strokeWidth: 2, r: 5 }}
-                    activeDot={{ r: 7 }}
+            {monthlyChartData.length === 0 ? (
+              <div className="h-[300px] flex items-center justify-center text-xs text-slate-400">
+                No hay meses con rendimiento &gt; 0 para graficar tendencia.
+              </div>
+            ) : (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={monthlyChartData}
+                    margin={{ top: 25, right: 30, left: 10, bottom: 10 }}
                   >
-                    <LabelList 
-                      dataKey="rendimiento" 
-                      position="top" 
-                      style={{ fontSize: '12px', fontWeight: 700, fill: '#0D2B4E' }}
-                      formatter={(val: any) => `${Number(val).toFixed(2)} km/gl`}
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                    <XAxis 
+                      dataKey="mes" 
+                      tick={{ fontSize: 11, fill: '#1E293B', fontWeight: 600 }}
                     />
-                  </Line>
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+                    <YAxis 
+                      domain={[0, (dataMax: number) => Math.max(Math.ceil(dataMax + 2), 16)]}
+                      tick={{ fontSize: 11, fill: '#64748B' }}
+                      unit=" km/gl"
+                    />
+                    <Tooltip
+                      formatter={(val: any, name: string) => {
+                        if (name === 'rendimiento') return [`${Number(val).toFixed(2)} km/gal`, 'Rendimiento Promedio'];
+                        return [val, name];
+                      }}
+                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#CBD5E1', borderRadius: '8px', fontSize: '12px' }}
+                    />
+                    <ReferenceLine 
+                      y={META_RENDIMIENTO.medio} 
+                      stroke="#F2B705" 
+                      strokeDasharray="4 4" 
+                      label={{ value: `Meta: ${META_RENDIMIENTO.medio}`, position: 'right', fill: '#B45309', fontSize: 10 }} 
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="rendimiento" 
+                      stroke="#0D2B4E" 
+                      strokeWidth={3}
+                      dot={{ fill: '#F2B705', stroke: '#0D2B4E', strokeWidth: 2, r: 5 }}
+                      activeDot={{ r: 7 }}
+                    >
+                      <LabelList 
+                        dataKey="rendimiento" 
+                        position="top" 
+                        style={{ fontSize: '12px', fontWeight: 700, fill: '#0D2B4E' }}
+                        formatter={(val: any) => `${Number(val).toFixed(2)} km/gl`}
+                      />
+                    </Line>
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
             <div className="mt-2 text-[11px] text-slate-500 border-t border-slate-100 pt-2">
-              <span>Total de periodos evaluados: {monthlyChartData.length} meses</span>
+              <span>Meses con datos reales analizados: {monthlyChartData.length}</span>
             </div>
           </div>
 
@@ -1034,13 +1108,13 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
               Detalle de Rendimiento por Vehículo
             </h2>
             <p className="text-xs text-slate-500">
-              Datos oficiales de la hoja RENDIMIENTO con semáforo y costos asociados
+              Datos de la hoja RENDIMIENTO. Filas sin carga se muestran como "Sin dato" y no alteran los promedios.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500">
-              Orden actual: <strong className="text-slate-700 capitalize">{sortField}</strong> ({sortOrder === 'asc' ? 'Ascendente' : 'Descendente'})
+              Orden actual: <strong className="text-slate-700 capitalize">{sortField}</strong> ({sortOrder === 'asc' ? 'Ascendente (peores primero)' : 'Descendente'})
             </span>
           </div>
         </div>
@@ -1130,11 +1204,14 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
                 </tr>
               ) : (
                 paginatedData.map((item, idx) => {
+                  const hasRealData = Boolean(item.rendimiento && item.rendimiento > 0);
                   const status = getRendimientoStatus(item.rendimiento);
+                  const isLow = hasRealData && item.rendimiento < META_RENDIMIENTO.medio;
+
                   return (
                     <tr 
                       key={`${item.placa}-${item.mes}-${idx}`} 
-                      className={`hover:bg-slate-50/80 transition ${item.rendimiento < META_RENDIMIENTO.medio ? 'bg-rose-50/20' : ''}`}
+                      className={`hover:bg-slate-50/80 transition ${isLow ? 'bg-rose-50/25' : ''}`}
                     >
                       {/* Placa */}
                       <td className="px-4 py-3 font-mono font-bold text-slate-900 whitespace-nowrap">
@@ -1168,24 +1245,36 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
 
                       {/* Km Recorridos */}
                       <td className="px-4 py-3 text-right font-medium text-slate-800 whitespace-nowrap tabular-nums">
-                        {formatNumber(item.kmRecorridos, 2)} km
+                        {item.kmRecorridos && item.kmRecorridos > 0 
+                          ? `${formatNumber(item.kmRecorridos, 2)} km`
+                          : <span className="text-slate-400">0 km</span>}
                       </td>
 
                       {/* Galones */}
                       <td className="px-4 py-3 text-right font-medium text-slate-800 whitespace-nowrap tabular-nums">
-                        {formatNumber(item.galones, 2)} gl
+                        {item.galones && item.galones > 0 
+                          ? `${formatNumber(item.galones, 2)} gl`
+                          : <span className="text-slate-400">0 gl</span>}
                       </td>
 
                       {/* Rendimiento (km/gal) con semáforo */}
                       <td className="px-4 py-3 text-center whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border tabular-nums ${status.badgeClass}`}>
-                          <span>{item.rendimiento.toFixed(2)} km/gl</span>
-                        </span>
+                        {hasRealData ? (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border tabular-nums ${status.badgeClass}`}>
+                            <span>{item.rendimiento.toFixed(2)} km/gl</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs border bg-slate-100 text-slate-400 border-slate-200">
+                            <span>Sin dato</span>
+                          </span>
+                        )}
                       </td>
 
                       {/* Total Costos */}
                       <td className="px-4 py-3 text-right font-semibold text-slate-900 whitespace-nowrap tabular-nums">
-                        {formatCurrency(item.totalCostos)}
+                        {item.totalCostos && item.totalCostos > 0 
+                          ? formatCurrency(item.totalCostos)
+                          : <span className="text-slate-400">$0</span>}
                       </td>
                     </tr>
                   );
