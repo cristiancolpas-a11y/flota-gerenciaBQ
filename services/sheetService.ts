@@ -1863,62 +1863,38 @@ export const saveUnavailabilityRecords = async (records: Partial<UnavailabilityR
 };
 
 export const fetchFuelPerformanceFromSheet = async (): Promise<FuelPerformance[]> => {
+  const docId = '1sJ0h-94x-1GwnggZGNPXYwXZeFaW5ZhFbKCd1EtXbEE';
+  const GID = '654048156';
+  const toNum = (v: any) => { const n = Number(String(v || '').replace(/[^0-9.\-]/g, '')); return isNaN(n) ? 0 : n; };
+  const map = (rows: any[][]): FuelPerformance[] =>
+    rows.slice(1)
+      .filter(r => r && r[2] && String(r[2]).trim() && String(r[2]).toUpperCase() !== 'PLACA / MATRÍCULA') // placa real
+      .map((r): FuelPerformance => ({
+        cd: cleanSheetValue(r[0]),
+        proveedor: cleanSheetValue(r[1]),
+        placa: cleanSheetValue(r[2]),
+        fechaInicial: cleanSheetValue(r[3]),
+        fechaFinal: cleanSheetValue(r[4]),
+        mes: cleanSheetValue(r[5]),
+        kmRecorridos: toNum(r[6]),
+        galones: toNum(r[7]),
+        rendimiento: toNum(r[8]),
+        totalCostos: toNum(r[9]),
+      }));
   try {
-    const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vTaur0xTXFcug2tg_CW5gBBHnh9QtH8psRy0nLHcYSPqoPfs3Tt2d-X3nNWuvUnxRKjxvmJIFryPnTK/pub?gid=1098828384&single=true&output=csv${getCacheBuster()}`;
-    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
-    const csvText = await response.text();
-    if (!csvText || csvText.includes("<!DOCTYPE html")) return [];
-    
-    return new Promise((resolve) => {
-      Papa.parse(csvText, {
-        header: false, skipEmptyLines: 'greedy',
-        complete: (results) => {
-          const rows = results.data as any[][];
-          if (!rows || rows.length < 2) { resolve([]); return; }
-          
-          // Indices provided by user:
-          // 0: Mes1, 1: Semana, 2: CD, 3: ID CD, 4: PLACA, 5: Distancia (Km), 6: Exceso de Velocidad, 
-          // 7: En ralentí > 5 min., 8: Tiempo en ralentí, 9: Viajes, 10: Cantidad (Gal), 
-          // 11: CD1, 12: Gerencia, 13: CANTIDAD GALONES, 14: KM RECORRIDOS, 15: CONTRATISTA
-          const records = rows.slice(1)
-            .filter(row => row && row[4]) // Placa en indice 4
-            .map((row, i): FuelPerformance => {
-              const parseNum = (val: any) => {
-                const clean = cleanSheetValue(val).replace('%', '').replace(',', '.').trim();
-                return parseFloat(clean) || 0;
-              };
-              
-              const mileage = parseNum(row[5]);
-              const gallons = parseNum(row[13]);
-              const kmpg = gallons > 0 ? mileage / gallons : 0;
-              const targetKmpg = 10; // Default target
-              
-              return {
-                id: `fuel-${i}`,
-                month: cleanSheetValue(row[0]),
-                week: cleanSheetValue(row[1]),
-                date: '', // Not explicitly in the new indices
-                plate: normalizePlate(cleanSheetValue(row[4])),
-                driver: '#N/A', // Not explicitly in the new indices
-                contractor: cleanSheetValue(row[15]),
-                cd: cleanSheetValue(row[2]),
-                mileage: mileage,
-                gallons: gallons,
-                kmpg: kmpg,
-                speeding: parseNum(row[6]),
-                idlingCount: parseNum(row[7]),
-                idlingTime: cleanSheetValue(row[8]),
-                trips: parseNum(row[9]),
-                targetKmpg: targetKmpg,
-                compliance: targetKmpg > 0 ? (kmpg / targetKmpg) * 100 : 0
-              };
-            });
-          resolve(records);
-        },
-        error: () => resolve([])
-      });
-    });
-  } catch (e) { return []; }
+    const rows = await fetchDataFromGAS(docId, 'RENDIMIENTO', OPERATIONAL_SCRIPT_URL);
+    if (rows && rows.length >= 2) return map(rows);
+  } catch (e) {}
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${GID}${getCacheBuster()}`;
+    const resp = await fetch(url);
+    const csv = await resp.text();
+    if (csv && !csv.includes('<!DOCTYPE html')) {
+      const parsed = Papa.parse(csv, { skipEmptyLines: true });
+      return map(parsed.data as any[][]);
+    }
+  } catch (e) {}
+  return [];
 };
 
 export const fetchPlateAdherenceFromSheet = async (): Promise<PlateAdherence[]> => {

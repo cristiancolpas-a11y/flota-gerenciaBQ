@@ -325,23 +325,16 @@ export interface CheckList {
 }
 
 export interface FuelPerformance {
-  id: string;
-  month: string;
-  week: string;
-  date: string;
-  plate: string;
-  driver: string;
-  contractor: string;
   cd: string;
-  mileage: number;
-  gallons: number;
-  kmpg: number;
-  speeding: number;
-  idlingCount: number;
-  idlingTime: string;
-  trips: number;
-  targetKmpg: number;
-  compliance: number;
+  proveedor: string;
+  placa: string;
+  fechaInicial: string;
+  fechaFinal: string;
+  mes: string;
+  kmRecorridos: number;
+  galones: number;
+  rendimiento: number;   // km/galón
+  totalCostos: number;   // pesos
 }
 
 export interface PlateAdherence {

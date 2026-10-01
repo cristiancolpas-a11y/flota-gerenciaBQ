@@ -2065,7 +2065,19 @@ const App: React.FC = () => {
           )}
 
           {activeView === 'rendimiento' && (
-            <FuelPerformanceModule fuelData={fuelPerformanceData} />
+            <FuelPerformanceModule 
+              fuelData={fuelPerformanceData} 
+              onRefresh={async () => {
+                setIsSyncing(true);
+                try {
+                  const data = await fetchFuelPerformanceFromSheet();
+                  setFuelPerformanceData(data);
+                } finally {
+                  setIsSyncing(false);
+                }
+              }}
+              isSyncing={isSyncing}
+            />
           )}
 
           {activeView === 'adherencia' && (
