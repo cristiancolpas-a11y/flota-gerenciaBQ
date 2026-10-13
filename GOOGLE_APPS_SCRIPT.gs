@@ -1290,6 +1290,62 @@ function doPost(e) {
         if (lock.hasLock()) lock.releaseLock();
         return output("success", "Lavado registrado correctamente (fila " + nextBlankRow + ") en " + s.getName());
       }
+      else if (m === 'POST_WASH_EVIDENCIA') {
+        var s = getS(ss, "LAVADOS");
+        if (!s) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró la pestaña LAVADOS.");
+        }
+        var rowPlate = (d.plate || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        var rowDate = (d.date || "").toString().trim();
+        var imgEvidence = sImg(d.evidenceUrl, "LAVADO_" + rowPlate);
+        
+        var washRows = s.getDataRange().getValues();
+        var foundRowIdx = -1;
+        for (var i = 1; i < washRows.length; i++) {
+          var rPlaca = (washRows[i][4] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (rPlaca !== rowPlate) continue;
+          var rDateRaw = washRows[i][3];
+          var matchDate = false;
+          if (rDateRaw instanceof Date) {
+            var searchParts = rowDate.split(/[-\/]/);
+            if (searchParts.length === 3) {
+              var sY = parseInt(searchParts[0]);
+              var sM = parseInt(searchParts[1]);
+              var sD = parseInt(searchParts[2]);
+              if (searchParts[0].length === 4) {
+                if (rDateRaw.getFullYear() === sY && (rDateRaw.getMonth() + 1) === sM && rDateRaw.getDate() === sD) {
+                  matchDate = true;
+                }
+              } else if (searchParts[2].length === 4) {
+                if (rDateRaw.getFullYear() === parseInt(searchParts[2]) && (rDateRaw.getMonth() + 1) === sM && rDateRaw.getDate() === parseInt(searchParts[0])) {
+                  matchDate = true;
+                }
+              }
+            }
+          } else if (rDateRaw) {
+            var rDateStr = rDateRaw.toString().trim();
+            if (rDateStr === rowDate || rDateStr.indexOf(rowDate) !== -1 || rowDate.indexOf(rDateStr) !== -1) {
+              matchDate = true;
+            }
+          }
+          if (matchDate) {
+            foundRowIdx = i + 1; // 1-based index de Google Sheets
+            break;
+          }
+        }
+        
+        if (foundRowIdx === -1) {
+          if (lock.hasLock()) lock.releaseLock();
+          return output("error", "No se encontró el registro para placa " + rowPlate + " en fecha " + rowDate);
+        }
+        
+        if (imgEvidence) {
+          s.getRange(foundRowIdx, 6).setValue(imgEvidence); // Col F: EVIDENCIA
+        }
+        if (lock.hasLock()) lock.releaseLock();
+        return output("success", "Evidencia de lavado actualizada en fila " + foundRowIdx, { rowIndex: foundRowIdx, evidenceUrl: imgEvidence });
+      }
       else if (m === 'POST_CALIBRATION_UPDATE') {
         var s = getSheetByGid(ss, "505557891") || getS(ss, "CALIBRACIONES");
         if (!s) {

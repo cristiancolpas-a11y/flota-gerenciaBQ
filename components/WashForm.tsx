@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import PhotoDropZone from './PhotoDropZone';
 
 interface WashFormProps {
   vehicles: Vehicle[];
@@ -799,24 +800,16 @@ const WashForm: React.FC<WashFormProps> = ({ vehicles, onClose, onSubmit, initia
               )}
 
               {photos.length === 0 ? (
-                <div 
-                  onClick={() => {
-                    if (formData.plate && photos.length < 4) {
-                      evidenceGalleryInputRef.current?.click();
-                    } else if (!formData.plate) {
+                <PhotoDropZone
+                  onFile={(file) => {
+                    if (!formData.plate) {
                       alert("Seleccione la placa primero.");
+                      return;
                     }
+                    processAndAddEvidenceFiles([file]);
                   }}
-                  className="py-8 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-center"
-                >
-                  <Camera size={28} className="text-[#6B7280]" />
-                  <p className="text-xs font-black text-[#111827] uppercase">
-                    {formData.plate ? 'Arrastra, pega (Ctrl+V) o haz clic para subir fotos' : 'Selecciona una placa para habilitar la subida'}
-                  </p>
-                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider">
-                    Se estampa automáticamente la placa, fecha y GPS en cada imagen
-                  </p>
-                </div>
+                  label={formData.plate ? 'Arrastra, pega o haz clic para subir foto de evidencia' : 'Selecciona una placa para habilitar la subida'}
+                />
               ) : (
                 <div className="grid grid-cols-2 gap-3">
                   {photos.map((p, idx) => (

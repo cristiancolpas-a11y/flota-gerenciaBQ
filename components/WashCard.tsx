@@ -1,8 +1,8 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { WashReport } from '../types';
 import { formatDate, getDriveDirectLink } from '../utils';
-import { Droplets, Calendar, Hash, MapPin, Eye } from 'lucide-react';
+import { Droplets, Calendar, Hash, MapPin, Eye, Camera, X } from 'lucide-react';
+import PhotoDropZone from './PhotoDropZone';
 
 interface WashCardProps {
   report: WashReport;
@@ -17,9 +17,10 @@ export const washNeedsEvidence = (w: WashReport): boolean => {
 
 const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc, onUploadEvidence }) => {
   const needsEvidence = washNeedsEvidence(report);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   return (
-    <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden group hover:shadow-2xl transition-all duration-500">
+    <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden group hover:shadow-2xl transition-all duration-500 relative">
       {/* Header with Plate */}
       <div className="bg-[#0f172a] p-6 flex items-center justify-between relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl"></div>
@@ -35,6 +36,7 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc, onUploadEvidence
             </div>
           </div>
         </div>
+
         <div className="flex flex-col items-end gap-2 relative z-10">
           <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${
             needsEvidence 
@@ -111,28 +113,19 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc, onUploadEvidence
               
               {/* Evidence Column F (mini preview) OR Upload button */}
               {needsEvidence ? (
-                <label className="aspect-video rounded-2xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/80 cursor-pointer flex flex-col items-center justify-center gap-1.5 p-2 transition-all group/upload text-center shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(true)}
+                  className="aspect-video rounded-2xl border-2 border-dashed border-rose-300 bg-rose-50/70 hover:bg-rose-100/90 cursor-pointer flex flex-col items-center justify-center gap-1.5 p-2 transition-all group/upload text-center shadow-xs"
+                >
                   <span className="text-base group-hover/upload:scale-110 transition-transform">📷</span>
-                  <span className="text-[8px] font-black text-indigo-700 uppercase tracking-wider leading-tight">
+                  <span className="text-[8px] font-black text-rose-700 uppercase tracking-wider leading-tight">
                     Cargar Evidencia
                   </span>
-                  <span className="text-[7px] text-indigo-500/90 font-medium">
-                    Foto / Galería
+                  <span className="text-[7px] text-rose-500 font-medium">
+                    Clic · Arrastrar · Ctrl+V
                   </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f && onUploadEvidence) {
-                        onUploadEvidence(report, f);
-                        e.target.value = '';
-                      }
-                    }}
-                  />
-                </label>
+                </button>
               ) : (
                 <div 
                   onClick={() => onViewDoc(report.evidenceUrl, `Evidencia - ${report.plate}`)}
@@ -156,6 +149,58 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc, onUploadEvidence
           </div>
         )}
       </div>
+
+      {/* Upload Evidence Modal with Drag & Drop + Paste */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div 
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
+                  <Camera size={20} />
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-slate-900 tracking-tight">Cargar Evidencia</h4>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Placa: <span className="text-slate-800">{report.plate}</span> · Fecha: <span className="text-slate-800">{formatDate(report.date)}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUploadModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <PhotoDropZone
+              autoFocus
+              label={`Cargar foto de evidencia para ${report.plate}`}
+              onFile={(file) => {
+                setShowUploadModal(false);
+                if (onUploadEvidence) {
+                  onUploadEvidence(report, file);
+                }
+              }}
+            />
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowUploadModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -116,6 +116,7 @@ import {
   fetchNovedadesFltFromSheet,
   submitVaradaToSheet,
   submitWashEvidenceUpdate,
+  updateWashEvidence,
   getWashDocId,
   setWashDocId,
   getCleaningDocId,
@@ -292,6 +293,7 @@ const App: React.FC = () => {
   const [calibrationViewMode, setCalibrationViewMode] = useState<'seguimiento' | 'calendar' | 'list' | 'visual'>('seguimiento');
   const [washViewMode, setWashViewMode] = useState<'seguimiento' | 'list' | 'calendar'>('seguimiento');
   const [washPreselectedPlate, setWashPreselectedPlate] = useState<string | null>(null);
+  const [washStatusFilter, setWashStatusFilter] = useState<'all' | 'PENDIENTE' | 'REALIZADO'>('all');
   const [cleaningViewMode, setCleaningViewMode] = useState<'list' | 'calendar'>('calendar');
 
   // Routine Sub Mode
@@ -843,16 +845,11 @@ const App: React.FC = () => {
       ));
 
       // 3) Enviar al backend Google Apps Script / Hoja LAVADOS
-      const res = await submitWashEvidenceUpdate(report, base64);
-      if (res && res.url && res.url.startsWith('http')) {
-        // Si el Apps Script retornó la URL pública de Drive, actualizar con la URL final
-        localWashEvidenceUpdatesRef.current[cacheKey] = res.url;
-        setWashReports(prev => prev.map(w =>
-          (normalizePlate(w.plate) === normalizePlate(report.plate) && w.date === report.date)
-            ? { ...w, evidenceUrl: res.url, initialEvidenceUrl: res.url, finalEvidenceUrl: res.url, status: 'CERRADO' }
-            : w
-        ));
-      }
+      await updateWashEvidence({
+        plate: report.plate,
+        date: report.date,
+        evidenceUrl: base64,
+      });
     } catch (err: any) {
       console.error("Error al cargar evidencia del lavado:", err);
       // Rollback
@@ -862,7 +859,7 @@ const App: React.FC = () => {
           ? { ...w, evidenceUrl: prevEvidence, initialEvidenceUrl: prevEvidence, finalEvidenceUrl: prevEvidence, status: prevStatus }
           : w
       ));
-      alert("No se pudo guardar la evidencia del lavado. Intenta de nuevo.");
+      alert("No se pudo cargar la evidencia. Intenta de nuevo.");
     }
   };
 
@@ -955,7 +952,12 @@ const App: React.FC = () => {
     });
   }, [fleetBase, vehicles]);
 
-  const filteredWashReports = useMemo(() => {
+  const washHasEvidence = (w: WashReport): boolean => {
+    const ev = (w.evidenceUrl || '').toString().trim();
+    return !!ev && ev.startsWith('http');
+  };
+
+  const baseFilteredWashReports = useMemo(() => {
     return washReports.filter(r => {
       const vehicle = vehicles.find(v => normalizePlate(v.plate) === normalizePlate(r.plate));
       const rMonth = normalizeStr(r.month);
@@ -979,9 +981,26 @@ const App: React.FC = () => {
     });
   }, [washReports, vehicles, selectedMonth, searchTerm, filterCd, filterContractor, selectedYear]);
 
+  const washCounts = useMemo(() => {
+    const total = baseFilteredWashReports.length;
+    const realizados = baseFilteredWashReports.filter(r => washHasEvidence(r)).length;
+    const pendientes = total - realizados;
+    return { total, realizados, pendientes };
+  }, [baseFilteredWashReports]);
+
+  const filteredWashReports = useMemo(() => {
+    return baseFilteredWashReports.filter(r => {
+      const matchStatus =
+        washStatusFilter === 'all' ||
+        (washStatusFilter === 'REALIZADO' && washHasEvidence(r)) ||
+        (washStatusFilter === 'PENDIENTE' && !washHasEvidence(r));
+      return matchStatus;
+    });
+  }, [baseFilteredWashReports, washStatusFilter]);
+
   const washStats = useMemo(() => {
     const total = filteredWashReports.length;
-    const completed = filteredWashReports.filter(r => r.status === 'CERRADO').length;
+    const completed = filteredWashReports.filter(r => washHasEvidence(r)).length;
     const pending = total - completed;
     return { total, completed, pending };
   }, [filteredWashReports]);
@@ -3047,6 +3066,74 @@ const App: React.FC = () => {
                      busqueda={filteredWashReports.length}
                      month={selectedMonth}
                    />
+
+                    {/* Filtro de estado de evidencia (TODOS / REALIZADO / PENDIENTE) */}
+                    <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider px-1">Filtrar por estado:</span>
+                        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-50 rounded-2xl border border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => setWashStatusFilter('all')}
+                            className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2.5 ${
+                              washStatusFilter === 'all'
+                                ? 'bg-[#0f172a] text-white shadow-md'
+                                : 'text-slate-500 hover:text-slate-900 hover:bg-white'
+                            }`}
+                          >
+                            <span>TODOS</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                              washStatusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                            }`}>
+                              {washCounts.total}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setWashStatusFilter('REALIZADO')}
+                            className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2.5 ${
+                              washStatusFilter === 'REALIZADO'
+                                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 ring-2 ring-emerald-500/20'
+                                : 'text-emerald-700 hover:bg-emerald-50'
+                            }`}
+                          >
+                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
+                            <span>REALIZADO</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                              washStatusFilter === 'REALIZADO' ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {washCounts.realizados}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setWashStatusFilter('PENDIENTE')}
+                            className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2.5 ${
+                              washStatusFilter === 'PENDIENTE'
+                                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20 ring-2 ring-rose-500/20'
+                                : 'text-rose-700 hover:bg-rose-50'
+                            }`}
+                          >
+                            <span className="inline-block w-2 h-2 rounded-full bg-rose-400"></span>
+                            <span>PENDIENTE</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                              washStatusFilter === 'PENDIENTE' ? 'bg-white/25 text-white' : 'bg-rose-100 text-rose-800'
+                            }`}>
+                              {washCounts.pendientes}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-400 px-2">
+                        {washStatusFilter === 'all' && `Mostrando todos (${filteredWashReports.length})`}
+                        {washStatusFilter === 'REALIZADO' && `Lavados con evidencia (${filteredWashReports.length})`}
+                        {washStatusFilter === 'PENDIENTE' && `Lavados sin evidencia (${filteredWashReports.length})`}
+                      </div>
+                    </div>
+
                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                       {filteredWashReports.map(r => (
                           <WashCard 
@@ -3364,8 +3451,8 @@ const App: React.FC = () => {
                        selectedCd={filterCd}
                        selectedContractor={filterContractor}
                      />
-                   ) : calibrationViewMode === 'list' ? (
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    ) : calibrationViewMode === 'list' ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {filteredCalibrations.map(c => (
                           <CalibrationCard 
                             key={c.id} 

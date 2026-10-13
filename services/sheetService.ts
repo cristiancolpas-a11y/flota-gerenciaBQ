@@ -2439,6 +2439,35 @@ export const submitWashEvidenceUpdate = async (
   }
 };
 
+/**
+ * Actualiza la columna EVIDENCIA de un lavado que YA existe en la hoja.
+ * NO crea fila nueva: busca por PLACA + FECHA y escribe la evidencia.
+ */
+export const updateWashEvidence = async (payload: {
+  plate: string;
+  date: string;
+  evidenceUrl: string;
+}): Promise<void> => {
+  const docId = getWashDocId();
+  const data = {
+    docId,
+    sheetName: 'LAVADOS',
+    plate: normalizePlate(payload.plate),
+    date: payload.date,
+    evidenceUrl: payload.evidenceUrl,
+  };
+  try {
+    // Intento con CORS normal
+    const result = await sendToGAS({ method: 'POST_WASH_EVIDENCIA', data }, WASH_SCRIPT_URL, true);
+    if (result && (result as any).status === 'error') {
+      throw new Error((result as any).message || 'Error al actualizar la evidencia');
+    }
+  } catch (err) {
+    // Fallback SIN cors DENTRO del catch (para no duplicar envíos)
+    await sendToGAS({ method: 'POST_WASH_EVIDENCIA', data }, WASH_SCRIPT_URL, false);
+  }
+};
+
 export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { 
   const rawDocId = getCleaningDocId();
   const docId = cleanSpreadsheetId(rawDocId);
