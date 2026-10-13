@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, NoveltyReport, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord, ForkliftClosure, VehicleInventory } from '../types';
+import { Vehicle, Driver, Report, NoveltyReport, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord, ForkliftClosure, VehicleInventory, NovedadFlt } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
@@ -810,6 +810,8 @@ const processWashRows = (rows: any[][]): WashReport[] => {
         }
       }
 
+      const hasValidEvidence = Boolean(evidence && evidence.trim().startsWith('http'));
+
       return {
         id: `wash-${i}-${plate}-${date}`,
         month: month || 'GENERAL',
@@ -821,7 +823,7 @@ const processWashRows = (rows: any[][]): WashReport[] => {
         finalEvidenceUrl: evidence,
         mapUrl: cleanSheetValue(row[6]),
         workshop: cleanSheetValue(row[7]),
-        status: 'CERRADO'
+        status: hasValidEvidence ? 'CERRADO' : 'PENDIENTE'
       };
     });
 };
@@ -2383,6 +2385,60 @@ export const submitWashToSheet = async (washData: any): Promise<void> => {
   }
 };
 
+/**
+ * Carga o actualiza la evidencia fotográfica de un lavado existente en la hoja LAVADOS.
+ * Actualiza la misma fila (columna EVIDENCIA) sin crear filas duplicadas.
+ */
+export const submitWashEvidenceUpdate = async (
+  report: { plate: string; date: string; month?: string; week?: string; mapUrl?: string; workshop?: string },
+  evidenceBase64OrUrl: string
+): Promise<{ success: boolean; url?: string; message?: string }> => {
+  const rawDocId = getWashDocId();
+  const docId = cleanSpreadsheetId(rawDocId);
+  const normalizedPlate = normalizePlate(report.plate);
+  const dateVal = report.date || new Date().toISOString().split('T')[0];
+  const weekVal = report.week !== undefined && report.week !== null && report.week !== ''
+    ? report.week.toString()
+    : `SEMANA ${getWeekNumber(new Date(dateVal))}`;
+  const monthVal = report.month || new Date(dateVal + 'T12:00:00').toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+
+  const payloadData = {
+    docId,
+    sheetName: 'LAVADOS',
+    plate: normalizedPlate,
+    date: dateVal,
+    week: weekVal,
+    month: monthVal,
+    evidenceUrl: evidenceBase64OrUrl,
+    mapUrl: report.mapUrl || '',
+    workshop: report.workshop || ''
+  };
+
+  try {
+    const result = await sendToGAS({ method: 'POST_WASH', data: payloadData }, WASH_SCRIPT_URL, true);
+    if (result && typeof result === 'object') {
+      const resObj = result as any;
+      if (resObj.status === 'success') {
+        return {
+          success: true,
+          url: resObj.extra?.evidenceUrl || resObj.evidenceUrl || evidenceBase64OrUrl,
+          message: resObj.message || 'Evidencia guardada exitosamente'
+        };
+      } else {
+        console.error("GAS error:", resObj.message);
+        throw new Error(resObj.message || "Error al actualizar la evidencia en el servidor");
+      }
+    }
+    return { success: true, url: evidenceBase64OrUrl };
+  } catch (err: any) {
+    if (err?.message && !err?.message.includes('Failed to fetch') && !err?.message.includes('NetworkError')) {
+      throw err;
+    }
+    console.log("GAS - Actualización de evidencia de lavado transmitida a Apps Script.");
+    return { success: true, url: evidenceBase64OrUrl };
+  }
+};
+
 export const submitCleaningToSheet = async (cleaningData: any): Promise<void> => { 
   const rawDocId = getCleaningDocId();
   const docId = cleanSpreadsheetId(rawDocId);
@@ -2448,6 +2504,7 @@ export const uploadImageToDrive = async (base64Data: string, fileName: string): 
   };
 
   const scriptUrls = [
+    getNovedadesFltScriptUrl(),
     MONTACARGAS_SCRIPT_URL,
     CALIDAD_SEG_SCRIPT_URL,
     AUDIT_STANDARD_SCRIPT_URL,
@@ -5292,6 +5349,157 @@ export const submitVehicleInventory = async (data: any): Promise<boolean> => {
     return true;
   }
 };
+
+// =========================================================================
+// MÓDULO NOVEDADES CHECK LIST MONTACARGAS
+// =========================================================================
+export let NOVEDADES_FLT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwBtpZjp3PBixrMn--EBLKbzlVmLwelqomjp1GzSKJPAPqYnuuFuOYlTqHya4LatU/exec';
+export const NOVEDADES_FLT_DOC_ID = '1cdocNK5v-ENbTt7cDSPggErghESuWbL40IqF5X-xg4I';
+export const NOVEDADES_FLT_GID = '0';
+
+let memoryNovedadesFltScriptUrl = NOVEDADES_FLT_SCRIPT_URL;
+
+export const getNovedadesFltScriptUrl = (): string => {
+  return memoryNovedadesFltScriptUrl || NOVEDADES_FLT_SCRIPT_URL;
+};
+
+export const setNovedadesFltScriptUrl = (url: string) => {
+  memoryNovedadesFltScriptUrl = url.trim();
+  NOVEDADES_FLT_SCRIPT_URL = url.trim();
+};
+
+export const fetchNovedadesFltFromSheet = async (): Promise<NovedadFlt[]> => {
+  const map = (rows: any[][]): NovedadFlt[] =>
+    rows.slice(1)
+      .map((r, i) => ({ r, rowIndex: i + 2 }))
+      .filter(({ r }) => r && r[5] && String(r[5]).trim() && String(r[5]).toUpperCase() !== 'PLACA' && String(r[5]).toUpperCase() !== 'PLACA / MATRÍCULA')
+      .map(({ r, rowIndex }): NovedadFlt => ({
+        rowIndex,
+        transportista: cleanSheetValue(r[0]),
+        cd: cleanSheetValue(r[1]),
+        fechaReporte: cleanSheetValue(r[2]),
+        semana: cleanSheetValue(r[3]),
+        mes: cleanSheetValue(r[4]),
+        placa: cleanSheetValue(r[5]),
+        fuente: cleanSheetValue(r[6]),
+        reporte: cleanSheetValue(r[7]),
+        sistema: cleanSheetValue(r[8]),
+        estado: cleanSheetValue(r[9]) || 'Abierto',
+        criticidad: cleanSheetValue(r[10]) || '3',
+        fechaSolucion: cleanSheetValue(r[11]),
+        diasCierre: cleanSheetValue(r[12]),
+        diasParaCierre: cleanSheetValue(r[13]),
+        cumplimientoMtto: cleanSheetValue(r[14]),
+        observaciones: cleanSheetValue(r[18]),
+        links: cleanSheetValue(r[19]),
+        links2: cleanSheetValue(r[20]),
+        links3: cleanSheetValue(r[21]),
+      }));
+
+  const scriptUrl = getNovedadesFltScriptUrl();
+  if (scriptUrl && !scriptUrl.includes('PONER_URL_DEL_SCRIPT_NUEVO')) {
+    try {
+      const rows = await fetchDataFromGAS(NOVEDADES_FLT_DOC_ID, 'CIERRE DE NOVEDADES', scriptUrl);
+      if (rows && rows.length >= 2) return map(rows);
+    } catch (e) {
+      console.warn('fetchNovedadesFltFromSheet GAS error:', e);
+    }
+  }
+
+  // CSV export directo por GID
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${NOVEDADES_FLT_DOC_ID}/export?format=csv&gid=${NOVEDADES_FLT_GID}${getCacheBuster()}`;
+    const resp = await fetch(url);
+    const csv = await resp.text();
+    if (csv && !csv.includes('<!DOCTYPE html')) {
+      const parsed = Papa.parse(csv, { skipEmptyLines: true });
+      const mapped = map(parsed.data as any[][]);
+      if (mapped.length > 0) return mapped;
+    }
+  } catch (e) {
+    console.warn('fetchNovedadesFltFromSheet CSV export failed:', e);
+  }
+
+  // GViz fallback por nombre de hoja
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${NOVEDADES_FLT_DOC_ID}/gviz/tq?tqx=out:csv&sheet=CIERRE%20DE%20NOVEDADES${getCacheBuster()}`;
+    const resp = await fetch(url);
+    const csv = await resp.text();
+    if (csv && !csv.includes('<!DOCTYPE html')) {
+      const parsed = Papa.parse(csv, { skipEmptyLines: true });
+      const mapped = map(parsed.data as any[][]);
+      if (mapped.length > 0) return mapped;
+    }
+  } catch (e) {
+    console.warn('fetchNovedadesFltFromSheet GViz failed:', e);
+  }
+
+  return [];
+};
+
+export const submitNovedadFltLink = async (payload: {
+  rowIndex: number;
+  link?: string;
+  imageBase64?: string;
+  placa?: string;
+  reporte?: string;
+  estado?: string;
+  fechaSolucion?: string;
+  observaciones?: string;
+}): Promise<{ success: boolean; link: string }> => {
+  const scriptUrl = getNovedadesFltScriptUrl();
+  if (!scriptUrl || scriptUrl.includes('PONER_URL_DEL_SCRIPT_NUEVO')) {
+    throw new Error('Configura la URL del Apps Script desplegado antes de guardar el link.');
+  }
+
+  let finalLink = (payload.link || '').trim();
+  const rawBase64 = payload.imageBase64 || (finalLink.startsWith('data:image') ? finalLink : '');
+
+  // Si se proporcionó una foto (base64), intentar subirla a Google Drive primero
+  if (rawBase64) {
+    const fileName = `EVIDENCIA_NOVEDAD_FLT_${(payload.placa || 'MTC').replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`;
+    try {
+      const driveUrl = await uploadImageToDrive(rawBase64, fileName);
+      if (driveUrl && driveUrl.startsWith('http')) {
+        finalLink = driveUrl;
+      }
+    } catch (e) {
+      console.warn('uploadImageToDrive client falló, intentando envío directo al Apps Script:', e);
+    }
+  }
+
+  const reqData = {
+    method: 'POST_NOVEDAD_FLT_LINK',
+    data: {
+      docId: NOVEDADES_FLT_DOC_ID,
+      sheetName: 'CIERRE DE NOVEDADES',
+      rowIndex: payload.rowIndex,
+      link: finalLink,
+      imageBase64: rawBase64 || undefined,
+      placa: payload.placa,
+      reporte: payload.reporte,
+      estado: payload.estado,
+      fechaSolucion: payload.fechaSolucion,
+      observaciones: payload.observaciones
+    }
+  };
+
+  const result = await sendToGAS(reqData, scriptUrl, true);
+  if (result && typeof result === 'object' && (result as any).status === 'error') {
+    throw new Error((result as any).message || 'Error al guardar el link en la hoja');
+  }
+
+  // Si el Apps Script retornó la URL del archivo subido a Google Drive
+  if (result && typeof result === 'object') {
+    const returnedLink = (result as any).link || (result as any).url || (result as any).data;
+    if (returnedLink && typeof returnedLink === 'string' && returnedLink.startsWith('http')) {
+      finalLink = returnedLink;
+    }
+  }
+
+  return { success: true, link: finalLink };
+};
+
 
 
 

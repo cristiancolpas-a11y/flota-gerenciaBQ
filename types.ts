@@ -215,7 +215,7 @@ export interface WashReport {
   finalEvidenceUrl?: string;
   mapUrl: string;
   workshop: string;
-  status?: 'ABIERTO' | 'CERRADO';
+  status?: 'ABIERTO' | 'CERRADO' | 'PENDIENTE';
   closureDate?: string;
 }
 
@@ -658,6 +658,30 @@ export interface VehicleInventory {
   fotoNovedad4: string;
   observacion: string;
 }
+
+export interface NovedadFlt {
+  rowIndex: number;      // fila real en la hoja (para actualizar)
+  transportista: string;
+  cd: string;
+  fechaReporte: string;
+  semana: string;
+  mes: string;
+  placa: string;
+  fuente: string;
+  reporte: string;
+  sistema: string;
+  estado: string;        // Abierto / Cerrado
+  criticidad: string;
+  fechaSolucion: string;
+  diasCierre?: string;
+  diasParaCierre?: string;
+  cumplimientoMtto?: string;
+  observaciones: string;
+  links: string;         // col 19
+  links2?: string;       // col 20
+  links3?: string;       // col 21
+}
+
 
 
 

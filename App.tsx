@@ -1,7 +1,7 @@
 
             
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord, NoveltyReport } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord, NoveltyReport, NovedadFlt } from './types';
 import { VaradasModule } from './components/VaradasModule';
 import { SparePartsModule } from './components/SparePartsModule';
 import DocumentCard from './components/DocumentCard';
@@ -53,6 +53,7 @@ import { ForkliftFinesModule } from './components/ForkliftFinesModule';
 import { ForkliftAuditDashboard } from './components/ForkliftAuditDashboard';
 import { ForkliftClosureModule } from './components/ForkliftClosureModule';
 import { ForkliftStandardModule } from './components/ForkliftStandardModule';
+import { ForkliftChecklistNoveltiesModule } from './components/ForkliftChecklistNoveltiesModule';
 import { VehicleInventoryModule } from './components/VehicleInventoryModule';
 import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
@@ -112,7 +113,9 @@ import {
   fetchAuditMasterListFromSheet,
   fetchFleetBaseData,
   fetchForkliftFinesFromSheet,
+  fetchNovedadesFltFromSheet,
   submitVaradaToSheet,
+  submitWashEvidenceUpdate,
   getWashDocId,
   setWashDocId,
   getCleaningDocId,
@@ -124,7 +127,7 @@ import {
 } from './services/sheetService';
 
 import Papa from 'papaparse';
-import { normalizePlate, normalizeStr, getWeekNumber, isCalibrationCompleted } from './utils';
+import { normalizePlate, normalizeStr, getWeekNumber, isCalibrationCompleted, compressImageToBase64 } from './utils';
 import { 
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
@@ -133,7 +136,7 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas' | 'campanas';
-type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'estandar_flt' | 'auditoria_montacargas' | 'cierre_montacargas' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'estandar_flt' | 'auditoria_montacargas' | 'cierre_montacargas' | 'novedades_checklist_flt' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
 
 const CATEGORY_CHUNKS = {
   doc: {
@@ -242,6 +245,7 @@ const App: React.FC = () => {
   const [unavailabilityRecords, setUnavailabilityRecords] = useState<UnavailabilityRecord[]>([]);
   const [operators, setOperators] = useState<OperatorRecord[]>([]);
   const [forkliftFines, setForkliftFines] = useState<ForkliftFine[]>([]);
+  const [novedadesFltData, setNovedadesFltData] = useState<NovedadFlt[]>([]);
   const [controlTowerRecords, setControlTowerRecords] = useState<ControlTowerRecord[]>([]);
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
   const [fleetStandardAuditRecords, setFleetStandardAuditRecords] = useState<FleetStandardAudit[]>([]);
@@ -254,6 +258,7 @@ const App: React.FC = () => {
   const localCierreUpdatesRef = useRef<Record<string, { estado: string; evidencia: string; verificacion: string }>>({});
   const localAuditUpdatesRef = useRef<Record<string, { status: string; noveltyDate: string; evidence: string; observations: string }>>({});
   const localWashSubmissionsRef = useRef<WashReport[]>([]);
+  const localWashEvidenceUpdatesRef = useRef<Record<string, string>>({});
   const localCalibrationSubmissionsRef = useRef<Calibration[]>([]);
   const localCalibrationUpdatesRef = useRef<Record<string, Partial<Calibration>>>({});
 
@@ -497,7 +502,21 @@ const App: React.FC = () => {
       }
       case 'lavados': {
         const w = await fetchWashReportsFromSheet();
-        const mergedWash = [...w];
+        let mergedWash: WashReport[] = w.map(item => {
+          const key = `${normalizePlate(item.plate)}_${item.date}`;
+          if (localWashEvidenceUpdatesRef.current[key]) {
+            const ev = localWashEvidenceUpdatesRef.current[key];
+            return {
+              ...item,
+              evidenceUrl: ev,
+              initialEvidenceUrl: ev,
+              finalEvidenceUrl: ev,
+              status: 'CERRADO' as const
+            };
+          }
+          return item;
+        });
+
         localWashSubmissionsRef.current.forEach(localWash => {
           const exists = mergedWash.some(item => 
             item.id === localWash.id || 
@@ -639,6 +658,9 @@ const App: React.FC = () => {
       }
       case 'comparendos_montacargas':
         setForkliftFines(await fetchForkliftFinesFromSheet());
+        break;
+      case 'novedades_checklist_flt':
+        setNovedadesFltData(await fetchNovedadesFltFromSheet());
         break;
       case 'varadas':
         setVaradas(await fetchVaradasFromSheet());
@@ -799,6 +821,48 @@ const App: React.FC = () => {
       setReports(prev => prev.filter(r => r.id !== newReport.id));
       console.error("Error submitting routine novelty: ", error);
       alert("No se pudo guardar la novedad. Intenta nuevamente.");
+    }
+  };
+
+  const handleUploadWashEvidence = async (report: WashReport, file: File) => {
+    // Guardamos estado anterior para posible rollback
+    const prevEvidence = report.evidenceUrl;
+    const prevStatus = report.status;
+    const cacheKey = `${normalizePlate(report.plate)}_${report.date}`;
+
+    try {
+      // 1) Comprimir la imagen a base64
+      const base64 = await compressImageToBase64(file);
+
+      // 2) OPTIMISTA: marcar la tarjeta como "con evidencia" y "CERRADO" al instante
+      localWashEvidenceUpdatesRef.current[cacheKey] = base64;
+      setWashReports(prev => prev.map(w =>
+        (normalizePlate(w.plate) === normalizePlate(report.plate) && w.date === report.date)
+          ? { ...w, evidenceUrl: base64, initialEvidenceUrl: base64, finalEvidenceUrl: base64, status: 'CERRADO' }
+          : w
+      ));
+
+      // 3) Enviar al backend Google Apps Script / Hoja LAVADOS
+      const res = await submitWashEvidenceUpdate(report, base64);
+      if (res && res.url && res.url.startsWith('http')) {
+        // Si el Apps Script retornó la URL pública de Drive, actualizar con la URL final
+        localWashEvidenceUpdatesRef.current[cacheKey] = res.url;
+        setWashReports(prev => prev.map(w =>
+          (normalizePlate(w.plate) === normalizePlate(report.plate) && w.date === report.date)
+            ? { ...w, evidenceUrl: res.url, initialEvidenceUrl: res.url, finalEvidenceUrl: res.url, status: 'CERRADO' }
+            : w
+        ));
+      }
+    } catch (err: any) {
+      console.error("Error al cargar evidencia del lavado:", err);
+      // Rollback
+      delete localWashEvidenceUpdatesRef.current[cacheKey];
+      setWashReports(prev => prev.map(w =>
+        (normalizePlate(w.plate) === normalizePlate(report.plate) && w.date === report.date)
+          ? { ...w, evidenceUrl: prevEvidence, initialEvidenceUrl: prevEvidence, finalEvidenceUrl: prevEvidence, status: prevStatus }
+          : w
+      ));
+      alert("No se pudo guardar la evidencia del lavado. Intenta de nuevo.");
     }
   };
 
@@ -1711,6 +1775,15 @@ const App: React.FC = () => {
                       className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'comparendos_montacargas' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                     >
                       <Gavel size={18}/> COMPARENDOS
+                    </button>
+                    <button 
+                      onClick={() => { 
+                        setActiveView('novedades_checklist_flt'); 
+                        setIsSidebarOpen(false); 
+                      }} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'novedades_checklist_flt' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <ClipboardList size={18}/> NOVEDADES CHECK LIST
                     </button>
                   </div>
                 ) : (
@@ -2980,6 +3053,7 @@ const App: React.FC = () => {
                             key={r.id} 
                             report={r} 
                             onViewDoc={(url, t) => setViewDoc({url, title: t})} 
+                            onUploadEvidence={handleUploadWashEvidence}
                           />
                         ))
                       }
@@ -3497,6 +3571,15 @@ const App: React.FC = () => {
           {activeView === 'cierre_montacargas' && (
             <div className="max-w-7xl mx-auto pb-20">
               <ForkliftClosureModule onRefreshParent={handleSyncData} />
+            </div>
+          )}
+
+          {activeView === 'novedades_checklist_flt' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <ForkliftChecklistNoveltiesModule 
+                data={novedadesFltData} 
+                onRefresh={handleSyncData} 
+              />
             </div>
           )}
 

@@ -209,6 +209,26 @@ export const compressImage = (base64Str: string, maxWidth = 1280): Promise<strin
   });
 };
 
+export const compressImageToBase64 = (fileOrBase64: File | string, maxWidth = 1600): Promise<string> => {
+  if (typeof fileOrBase64 === 'string') {
+    return compressImage(fileOrBase64, maxWidth);
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const raw = (e.target?.result as string) || '';
+        const compressed = await compressImage(raw, maxWidth);
+        resolve(compressed);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(fileOrBase64);
+  });
+};
+
 export const createMosaic = async (base64Array: string[], title?: string): Promise<string> => {
   if (base64Array.length === 0) return "";
   

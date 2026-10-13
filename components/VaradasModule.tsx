@@ -4,7 +4,7 @@ import { getWeekNumber } from '../utils';
 import { 
   AlertTriangle, Plus, Search, RefreshCw, Truck, Clock, 
   CheckCircle2, X, Loader2, ExternalLink, Download, Upload, 
-  Image as ImageIcon, Trash2, Camera, Link, Maximize2
+  Image as ImageIcon, Trash2, Camera, Link, Maximize2, Edit2, Building2
 } from 'lucide-react';
 import Papa from 'papaparse';
 
@@ -30,6 +30,7 @@ const SYSTEMS_LIST = [
 ];
 
 const WORKSHOPS_LIST = [
+  'ROINCOR',
   'AUTECO',
   'AUTOMUNDIAL',
   'CAMION COLOMBIA',
@@ -44,7 +45,6 @@ const WORKSHOPS_LIST = [
   'IVESUR',
   'NAVISAFT',
   'NAVITRANS',
-  'ROINCOR',
   'TECNIBENZ',
   'TODOFIBRAS',
   'TRAMICON',
@@ -115,6 +115,7 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [systemFilter, setSystemFilter] = useState('ALL');
+  const [workshopFilter, setWorkshopFilter] = useState('ALL');
   const [towedFilter, setTowedFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [weekFilter, setWeekFilter] = useState('ALL');
@@ -155,6 +156,16 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
     return weeks.sort();
   }, [varadas]);
 
+  const uniqueWorkshops = useMemo(() => {
+    const fromData = varadas.map(v => (v.workshop || '').trim().toUpperCase()).filter(Boolean);
+    const combined = Array.from(new Set(['ROINCOR', ...WORKSHOPS_LIST.filter(w => w !== 'OTROS'), ...fromData]));
+    return combined.sort();
+  }, [varadas]);
+
+  const roincorCount = useMemo(() => {
+    return varadas.filter(v => (v.workshop || '').toUpperCase().includes('ROINCOR')).length;
+  }, [varadas]);
+
   const filteredVaradas = useMemo(() => {
     return varadas.filter(item => {
       const matchesSearch = 
@@ -166,6 +177,9 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
         item.component.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesSystem = systemFilter === 'ALL' || item.system.toUpperCase().includes(systemFilter.toUpperCase());
+      const matchesWorkshop = workshopFilter === 'ALL' || 
+        (item.workshop || '').toUpperCase().trim() === workshopFilter.toUpperCase().trim() ||
+        (workshopFilter === 'ROINCOR' && (item.workshop || '').toUpperCase().includes('ROINCOR'));
       const matchesTowed = towedFilter === 'ALL' || item.towed.toUpperCase() === towedFilter.toUpperCase();
       
       const isSolved = Boolean(item.solutionDate && item.solutionDate.trim() !== '');
@@ -175,9 +189,9 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
 
       const matchesWeek = weekFilter === 'ALL' || item.week === weekFilter;
 
-      return matchesSearch && matchesSystem && matchesTowed && matchesStatus && matchesWeek;
+      return matchesSearch && matchesSystem && matchesWorkshop && matchesTowed && matchesStatus && matchesWeek;
     });
-  }, [varadas, searchTerm, systemFilter, towedFilter, statusFilter, weekFilter]);
+  }, [varadas, searchTerm, systemFilter, workshopFilter, towedFilter, statusFilter, weekFilter]);
 
   // KPI Calculations
   const totalVaradas = filteredVaradas.length;
@@ -222,6 +236,28 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
       solutionDate: val,
       hoursDown: autoHours !== '' ? autoHours : prev.hoursDown
     }));
+  };
+
+  const handleOpenEdit = (v: VaradaRecord) => {
+    setFormData({
+      week: v.week || `S${getWeekNumber(new Date())}`,
+      breakdownDate: (v.breakdownDate || '').replace(' ', 'T'),
+      plate: v.plate || '',
+      location: v.location || '',
+      system: v.system || 'MOTOR',
+      component: v.component || '',
+      description: v.description || '',
+      workshop: v.workshop || '',
+      otherWorkshop: '',
+      towed: v.towed || 'NO',
+      solutionDate: (v.solutionDate || '').replace(' ', 'T'),
+      observation: v.observation || '',
+      hoursDown: v.hoursDown !== undefined && v.hoursDown !== null ? String(v.hoursDown) : '',
+      evidence: v.evidence || ''
+    });
+    setSubmitSuccess(null);
+    setSubmitError(null);
+    setShowModal(true);
   };
 
   // Image File Handling
@@ -480,7 +516,7 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
 
       {/* Filters Toolbar */}
       <div className="bg-[#1E293B] p-4 rounded-2xl border border-slate-800 shadow-lg space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Search */}
           <div className="relative lg:col-span-2">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -503,6 +539,21 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
               <option value="ALL">Todos los Sistemas</option>
               {SYSTEMS_LIST.map(sys => (
                 <option key={sys} value={sys}>{sys}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Workshop Filter (incluye ROINCOR) */}
+          <div>
+            <select
+              value={workshopFilter}
+              onChange={e => setWorkshopFilter(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-amber-500 transition-all font-semibold"
+            >
+              <option value="ALL">Talleres: Todos</option>
+              <option value="ROINCOR">⭐ ROINCOR {roincorCount > 0 ? `(${roincorCount})` : ''}</option>
+              {uniqueWorkshops.filter(w => w !== 'ROINCOR').map(ws => (
+                <option key={ws} value={ws}>{ws}</option>
               ))}
             </select>
           </div>
@@ -534,6 +585,43 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
           </div>
         </div>
 
+        {/* Quick Workshop filter chips with ROINCOR */}
+        <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-800/60 text-xs">
+          <span className="text-slate-500 text-[11px] font-semibold">Taller rápido:</span>
+          <button
+            type="button"
+            onClick={() => setWorkshopFilter('ALL')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+              workshopFilter === 'ALL' ? 'bg-slate-700 text-white' : 'bg-slate-900 text-slate-400 hover:text-white'
+            }`}
+          >
+            Todos
+          </button>
+          <button
+            type="button"
+            onClick={() => setWorkshopFilter(workshopFilter === 'ROINCOR' ? 'ALL' : 'ROINCOR')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border ${
+              workshopFilter === 'ROINCOR'
+                ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md'
+                : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+            }`}
+          >
+            <span>ROINCOR</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-900/80 text-amber-200 font-black">
+              {roincorCount}
+            </span>
+          </button>
+          {workshopFilter !== 'ALL' && (
+            <button
+              type="button"
+              onClick={() => setWorkshopFilter('ALL')}
+              className="text-xs text-rose-400 hover:text-rose-300 ml-2"
+            >
+              × Quitar filtro de taller
+            </button>
+          )}
+        </div>
+
         <div className="flex items-center justify-between border-t border-slate-800 pt-3 text-xs text-slate-400">
           <div className="flex items-center gap-3">
             <span>Semana:</span>
@@ -549,6 +637,7 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
             </select>
             <span className="text-slate-500">
               Mostrando {filteredVaradas.length} de {varadas.length} varadas
+              {workshopFilter !== 'ALL' && ` (filtrado por taller: ${workshopFilter})`}
             </span>
           </div>
 
@@ -579,12 +668,13 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                 <th className="py-3.5 px-4">Fecha / Hora Solución</th>
                 <th className="py-3.5 px-4 text-right">Horas</th>
                 <th className="py-3.5 px-4 text-center">Evidencia</th>
+                <th className="py-3.5 px-4 text-center">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-xs text-slate-300">
               {filteredVaradas.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-500">
+                  <td colSpan={12} className="py-12 text-center text-slate-500">
                     <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-40 text-amber-400" />
                     <p className="font-medium text-slate-400">No se encontraron registros de varadas</p>
                     <p className="text-[11px] text-slate-500 mt-1">
@@ -622,7 +712,15 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                       <td className="py-3 px-4 max-w-[220px] text-slate-300 truncate" title={item.description}>
                         {item.description || '-'}
                       </td>
-                      <td className="py-3 px-4 text-slate-300">{item.workshop || '-'}</td>
+                      <td className="py-3 px-4">
+                        {(item.workshop || '').toUpperCase().includes('ROINCOR') ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                            ROINCOR
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">{item.workshop || '-'}</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-center">
                         {isTowed ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/10 text-rose-400 border border-rose-500/20">
@@ -673,6 +771,17 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                           <span className="text-slate-600">-</span>
                         )}
                       </td>
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(item)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-400 border border-slate-700 text-[11px] font-semibold transition-all whitespace-nowrap"
+                          title="Editar varada o asignar taller"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          <span>Editar</span>
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -695,8 +804,10 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                   <AlertTriangle className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black text-white">REGISTRAR NUEVA VARADA</h2>
-                  <p className="text-xs text-slate-400">Calculo automático de horas e inclusión de evidencias fotográficas</p>
+                  <h2 className="text-lg font-black text-white">
+                    {formData.plate ? `EDITAR VARADA / TALLER - ${formData.plate}` : 'REGISTRAR NUEVA VARADA'}
+                  </h2>
+                  <p className="text-xs text-slate-400">Asignación de taller (ROINCOR), horas de inoperatividad y evidencias</p>
                 </div>
               </div>
               <button
@@ -826,9 +937,18 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Taller que presta el servicio */}
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                    Taller que presta el servicio *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                      Taller que presta el servicio *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, workshop: 'ROINCOR' })}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-bold underline"
+                    >
+                      + Usar ROINCOR
+                    </button>
+                  </div>
                   <select
                     required
                     value={formData.workshop}
@@ -1080,7 +1200,7 @@ export const VaradasModule: React.FC<VaradasModuleProps> = ({
                   ) : (
                     <>
                       <Plus className="w-4 h-4 stroke-[3]" />
-                      Guardar Varada
+                      {formData.plate ? 'Actualizar Varada' : 'Guardar Varada'}
                     </>
                   )}
                 </button>

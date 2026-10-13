@@ -7,9 +7,17 @@ import { Droplets, Calendar, Hash, MapPin, Eye } from 'lucide-react';
 interface WashCardProps {
   report: WashReport;
   onViewDoc: (url: string | string[] | {url: string, label?: string}[], title: string) => void;
+  onUploadEvidence?: (report: WashReport, file: File) => void;
 }
 
-const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
+export const washNeedsEvidence = (w: WashReport): boolean => {
+  const ev = (w.evidenceUrl || '').toString().trim();
+  return !ev || !ev.startsWith('http');
+};
+
+const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc, onUploadEvidence }) => {
+  const needsEvidence = washNeedsEvidence(report);
+
   return (
     <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden group hover:shadow-2xl transition-all duration-500">
       {/* Header with Plate */}
@@ -28,8 +36,14 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
           </div>
         </div>
         <div className="flex flex-col items-end gap-2 relative z-10">
-          <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${report.status === 'CERRADO' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/20 text-rose-400 border-rose-500/20'}`}>
-            {report.status === 'CERRADO' ? 'LIMPIEZA EXITOSA' : 'LIMPIEZA PENDIENTE'}
+          <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${
+            needsEvidence 
+              ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' 
+              : report.status === 'CERRADO' 
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' 
+                : 'bg-amber-500/20 text-amber-400 border-amber-500/20'
+          }`}>
+            {needsEvidence ? 'SIN EVIDENCIA' : (report.status === 'CERRADO' ? 'LIMPIEZA EXITOSA' : 'LIMPIEZA PENDIENTE')}
           </span>
           <span className="text-white/40 text-[9px] font-black uppercase tracking-widest">SEMANA {report.week}</span>
         </div>
@@ -53,48 +67,83 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc }) => {
           <div className="flex items-center justify-between px-2">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">SOPORTE VISUAL DE LIMPIEZA</h4>
             <div className="flex gap-2">
-              <button 
-                onClick={() => onViewDoc(report.evidenceUrl, `Evidencia ${report.plate}`)}
-                className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all flex items-center gap-2"
-              >
-                <Eye size={14} /> <span className="text-[8px] font-black">VER FOTO</span>
-              </button>
-              <button 
-                onClick={() => onViewDoc(report.mapUrl, `Ubicación ${report.plate}`)}
-                className="p-2 bg-cyan-50 text-cyan-600 rounded-xl hover:bg-cyan-600 hover:text-white transition-all flex items-center gap-2"
-              >
-                <MapPin size={14} /> <span className="text-[8px] font-black">MAPA</span>
-              </button>
+              {!needsEvidence && (
+                <button 
+                  onClick={() => onViewDoc(report.evidenceUrl, `Evidencia ${report.plate}`)}
+                  className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all flex items-center gap-2"
+                >
+                  <Eye size={14} /> <span className="text-[8px] font-black">VER FOTO</span>
+                </button>
+              )}
+              {report.mapUrl && (
+                <button 
+                  onClick={() => onViewDoc(report.mapUrl, `Ubicación ${report.plate}`)}
+                  className="p-2 bg-cyan-50 text-cyan-600 rounded-xl hover:bg-cyan-600 hover:text-white transition-all flex items-center gap-2"
+                >
+                  <MapPin size={14} /> <span className="text-[8px] font-black">MAPA</span>
+                </button>
+              )}
             </div>
           </div>
           
           <div className="grid grid-cols-1 gap-3">
-            {/* Sub Grid: Map (Col G) and Evidence Preview */}
+            {/* Sub Grid: Map (Col G) and Evidence Preview / Upload button */}
             <div className="grid grid-cols-2 gap-3">
               {/* Map Column G */}
-              <div 
-                onClick={() => onViewDoc(report.mapUrl, `Ubicación GPS - ${report.plate}`)}
-                className="aspect-video rounded-2xl overflow-hidden bg-slate-50 border-2 border-slate-100 cursor-pointer relative group/mini shadow-sm"
-              >
-                <img src={getDriveDirectLink(report.mapUrl)} className="w-full h-full object-cover transition-transform duration-500 group-hover/mini:scale-110" referrerPolicy="no-referrer" />
-                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/mini:opacity-100 transition-opacity flex items-center justify-center">
-                  <MapPin size={20} className="text-white" />
+              {report.mapUrl ? (
+                <div 
+                  onClick={() => onViewDoc(report.mapUrl, `Ubicación GPS - ${report.plate}`)}
+                  className="aspect-video rounded-2xl overflow-hidden bg-slate-50 border-2 border-slate-100 cursor-pointer relative group/mini shadow-sm"
+                >
+                  <img src={getDriveDirectLink(report.mapUrl)} className="w-full h-full object-cover transition-transform duration-500 group-hover/mini:scale-110" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/mini:opacity-100 transition-opacity flex items-center justify-center">
+                    <MapPin size={20} className="text-white" />
+                  </div>
+                  <div className="absolute bottom-2 left-2">
+                    <span className="px-2 py-1 bg-cyan-500 text-white text-[7px] font-black rounded-lg uppercase tracking-widest">MAPA GPS</span>
+                  </div>
                 </div>
-                <div className="absolute bottom-2 left-2">
-                  <span className="px-2 py-1 bg-cyan-500 text-white text-[7px] font-black rounded-lg uppercase tracking-widest">MAPA GPS</span>
+              ) : (
+                <div className="aspect-video rounded-2xl bg-slate-50 border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400 text-[9px] font-bold">
+                  Sin mapa
                 </div>
-              </div>
+              )}
               
-              {/* Evidence Column F (mini preview) */}
-              <div 
-                onClick={() => onViewDoc(report.evidenceUrl, `Evidencia - ${report.plate}`)}
-                className="aspect-video rounded-2xl overflow-hidden bg-slate-50 border-2 border-slate-100 cursor-pointer relative group/mini shadow-sm"
-              >
-                <img src={getDriveDirectLink(report.evidenceUrl)} className="w-full h-full object-cover transition-transform duration-500 group-hover/mini:scale-110" referrerPolicy="no-referrer" />
-                <div className="absolute bottom-2 left-2">
-                  <span className="px-2 py-1 bg-indigo-500 text-white text-[7px] font-black rounded-lg uppercase tracking-widest">EVIDENCIA</span>
+              {/* Evidence Column F (mini preview) OR Upload button */}
+              {needsEvidence ? (
+                <label className="aspect-video rounded-2xl border-2 border-dashed border-indigo-300 bg-indigo-50/60 hover:bg-indigo-100/80 cursor-pointer flex flex-col items-center justify-center gap-1.5 p-2 transition-all group/upload text-center shadow-sm">
+                  <span className="text-base group-hover/upload:scale-110 transition-transform">📷</span>
+                  <span className="text-[8px] font-black text-indigo-700 uppercase tracking-wider leading-tight">
+                    Cargar Evidencia
+                  </span>
+                  <span className="text-[7px] text-indigo-500/90 font-medium">
+                    Foto / Galería
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f && onUploadEvidence) {
+                        onUploadEvidence(report, f);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+              ) : (
+                <div 
+                  onClick={() => onViewDoc(report.evidenceUrl, `Evidencia - ${report.plate}`)}
+                  className="aspect-video rounded-2xl overflow-hidden bg-slate-50 border-2 border-slate-100 cursor-pointer relative group/mini shadow-sm"
+                >
+                  <img src={getDriveDirectLink(report.evidenceUrl)} className="w-full h-full object-cover transition-transform duration-500 group-hover/mini:scale-110" referrerPolicy="no-referrer" />
+                  <div className="absolute bottom-2 left-2">
+                    <span className="px-2 py-1 bg-indigo-500 text-white text-[7px] font-black rounded-lg uppercase tracking-widest">EVIDENCIA</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>

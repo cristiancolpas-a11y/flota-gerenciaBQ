@@ -1217,6 +1217,63 @@ function doPost(e) {
         var imgEvidence = sImg(d.evidenceUrl, "LAVADO_" + rowPlate);
         var imgMap = sImg(d.mapUrl, "MAPA_LAVADO_" + rowPlate);
 
+        var washRows = s.getDataRange().getValues();
+        var foundRowIdx = -1;
+
+        // Buscar si ya existe un lavado para esta placa y fecha
+        var searchDateClean = rowDate.trim();
+        for (var i = 1; i < washRows.length; i++) {
+          var rPlaca = (washRows[i][4] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (rPlaca !== rowPlate) continue;
+
+          var rDateRaw = washRows[i][3];
+          var matchDate = false;
+          if (rDateRaw instanceof Date) {
+            var searchParts = searchDateClean.split(/[-\/]/);
+            if (searchParts.length === 3) {
+              var sY = parseInt(searchParts[0]);
+              var sM = parseInt(searchParts[1]);
+              var sD = parseInt(searchParts[2]);
+              // Soportar YYYY-MM-DD o DD/MM/YYYY
+              if (searchParts[0].length === 4) {
+                if (rDateRaw.getFullYear() === sY && (rDateRaw.getMonth() + 1) === sM && rDateRaw.getDate() === sD) {
+                  matchDate = true;
+                }
+              } else if (searchParts[2].length === 4) {
+                if (rDateRaw.getFullYear() === parseInt(searchParts[2]) && (rDateRaw.getMonth() + 1) === sM && rDateRaw.getDate() === parseInt(searchParts[0])) {
+                  matchDate = true;
+                }
+              }
+            }
+          } else if (rDateRaw) {
+            var rDateStr = rDateRaw.toString().trim();
+            if (rDateStr === searchDateClean || rDateStr.indexOf(searchDateClean) !== -1 || searchDateClean.indexOf(rDateStr) !== -1) {
+              matchDate = true;
+            }
+          }
+
+          if (matchDate) {
+            foundRowIdx = i + 1; // 1-based index de Google Sheets
+            break;
+          }
+        }
+
+        // Si ya existe la fila (ej. carga masiva que dejó EVIDENCIA vacía o actualizando), actualizar la misma fila
+        if (foundRowIdx !== -1) {
+          if (imgEvidence) {
+            s.getRange(foundRowIdx, 6).setValue(imgEvidence); // Col F: EVIDENCIA
+          }
+          if (imgMap && !washRows[foundRowIdx - 1][6]) {
+            s.getRange(foundRowIdx, 7).setValue(imgMap); // Col G: MAPA
+          }
+          if (d.workshop && !washRows[foundRowIdx - 1][7]) {
+            s.getRange(foundRowIdx, 8).setValue(d.workshop); // Col H: TALLER
+          }
+          if (lock.hasLock()) lock.releaseLock();
+          return output("success", "Lavado actualizado correctamente en fila " + foundRowIdx, { rowIndex: foundRowIdx, evidenceUrl: imgEvidence });
+        }
+
+        // Si no existe, crear nueva fila al final
         var rowData = [
           d.id || ("LAV-" + Date.now()),
           rowMonth,
@@ -1227,8 +1284,6 @@ function doPost(e) {
           imgMap,
           d.workshop || ""
         ];
-
-        var washRows = s.getDataRange().getValues();
         var nextBlankRow = washRows.length + 1;
         s.getRange(nextBlankRow, 1, 1, rowData.length).setValues([rowData]);
 
