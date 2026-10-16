@@ -16,6 +16,44 @@
  * 9. Copia la URL de la aplicación web obtenida para integrarla o usarla en la aplicación de flota.
  */
 
+function doGet(e) {
+  try {
+    var method = e.parameter.method;
+    var docId = cleanId(e.parameter.docId || '1HZXNev6Wbek7YPX_47sx7KXfi6H4S15f1rc6rmQ18MY');
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      ss = SpreadsheetApp.openById(docId);
+    }
+
+    if (method === 'GET_DATA') {
+      var sheetName = e.parameter.sheetName;
+      if (!sheetName) return output("error", "Falta el nombre de la hoja.");
+
+      // Busca la hoja EXACTA por nombre (case-insensitive), NUNCA la primera por defecto
+      var target = null;
+      var sheets = ss.getSheets();
+      for (var i = 0; i < sheets.length; i++) {
+        if (sheets[i].getName().toUpperCase().trim() === sheetName.toUpperCase().trim()) {
+          target = sheets[i];
+          break;
+        }
+      }
+
+      if (!target) {
+        // La hoja no existe -> NO devolver otra. Devolver vacío controlado.
+        return output("success", []);
+      }
+
+      var values = target.getDataRange().getValues();
+      return output("success", values);
+    }
+
+    return output("error", "Método no soportado.");
+  } catch (error) {
+    return output("error", "Error interno en Apps Script: " + error.toString());
+  }
+}
+
 function doPost(e) {
   var lock = LockService.getScriptLock();
   try {

@@ -185,9 +185,15 @@ export const getAuditQsDocId = (): string => {
   return clean;
 };
 
+export const CAMPAIGNS_DEFAULT_DOC_ID = '1HZXNev6Wbek7YPX_47sx7KXfi6H4S15f1rc6rmQ18MY';
+
 export const getCampaignsDocId = (): string => {
   const stored = typeof window !== 'undefined' ? localStorage.getItem('GOOGLE_SPREADSHEET_CAMPAIGNS_ID') : null;
-  return cleanSpreadsheetId(stored || getRoutinesDocId());
+  const clean = cleanSpreadsheetId(stored || '');
+  if (!clean || clean === ROUTINES_DEFAULT_DOC_ID || clean === '1IKgWuUo5r0ofd8T95bJbstDn7FXigWLJGbr_mWoaFzE') {
+    return CAMPAIGNS_DEFAULT_DOC_ID;
+  }
+  return clean;
 };
 
 export const getVaradasDocId = (): string => {
@@ -245,8 +251,11 @@ const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: st
   const tryFetch = async (targetUrl: string) => {
     try {
       const sanitizedUrl = sanitizeScriptUrl(targetUrl);
-      let url = `${sanitizedUrl}?method=GET_DATA&docId=${docId}`;
-      if (sheetName) url += `&sheetName=${encodeURIComponent(sheetName)}`;
+      let url = `${sanitizedUrl}?method=GET_DATA&action=GET_DATA&docId=${docId}`;
+      if (sheetName) {
+        const encSheet = encodeURIComponent(sheetName);
+        url += `&sheetName=${encSheet}&sheet=${encSheet}`;
+      }
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 20000); 
@@ -268,7 +277,10 @@ const fetchDataFromGAS = async (docId: string, sheetName?: string, scriptUrl: st
       }
 
       const json = JSON.parse(text);
-      if (json.status === 'success' && json.message) return json.message as any[][];
+      if (json.status === 'success') {
+        if (Array.isArray(json.data)) return json.data as any[][];
+        if (Array.isArray(json.message)) return json.message as any[][];
+      }
       return null;
     } catch {
       return null;
@@ -3326,34 +3338,51 @@ export const setCampaignsScriptUrl = (url: string): void => {
   localStorage.setItem('GOOGLE_SCRIPT_CAMPAIGNS_URL', url.trim());
 };
 
-export const getCampaignSheetRows = async (sheetName: string): Promise<any[][] | null> => {
+export const getCampaignSheetRows = async (sheetName: string, gid?: string): Promise<any[][] | null> => {
   const rawDocId = getCampaignsDocId();
   const docId = cleanSpreadsheetId(rawDocId);
   if (!docId) {
     console.warn("No Google Spreadsheet ID configured for Campaigns.");
     return null;
   }
-  // Intenta primero con el script unificado de la app
-  let rows = await fetchDataFromGAS(docId, sheetName, getGoogleScriptUrl());
-  if (!rows) {
-    // Si falla, intenta con el script de campañas específico
-    rows = await fetchDataFromGAS(docId, sheetName, getCampaignsScriptUrl());
+
+  // 1. Intento directo con el script de campañas específico
+  const scriptUrl = getCampaignsScriptUrl();
+  let rows: any[][] | null = null;
+  if (scriptUrl && !scriptUrl.includes('PONER_URL')) {
+    try {
+      rows = await fetchDataFromGAS(docId, sheetName, scriptUrl);
+    } catch (e) {
+      console.warn(`GAS fetch for campaign ${sheetName} error:`, e);
+    }
   }
-  if (!rows) {
-    // Si ambos fallan, intenta con el fallback CSV directo
-    console.warn(`GAS fetch campaigns failed for ${sheetName}, trying CSV fallback...`);
-    rows = await fetchCampaignSheetRowsCSV(docId, sheetName);
+
+  // 2. Si falla o no devuelve datos, fallback CSV usando GID exacto de la pestaña
+  if (!rows || rows.length === 0) {
+    rows = await fetchCampaignSheetRowsCSV(docId, sheetName, gid);
   }
+
+  // 3. Validación de seguridad de encabezados:
+  // Si la respuesta devuelve una hoja con datos de otro módulo (ej: "ID_EJECUCION" de Rutinas), se descarta.
+  if (rows && rows.length > 0) {
+    const firstRowStr = (rows[0] || []).join(' ').toUpperCase();
+    if (firstRowStr.includes('ID_EJECUCION')) {
+      console.warn(`[Campaigns] Encabezado no corresponde a campañas para ${sheetName} (detectado ID_EJECUCION de Rutinas). Descartando.`);
+      return [];
+    }
+  }
+
   return rows;
 };
 
-const fetchCampaignSheetRowsCSV = async (docId: string, sheetName: string): Promise<any[][] | null> => {
+const fetchCampaignSheetRowsCSV = async (docId: string, sheetName: string, gid?: string): Promise<any[][] | null> => {
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`;
+    const gidParam = gid !== undefined && gid !== null && gid !== '' ? `&gid=${gid}` : `&sheet=${encodeURIComponent(sheetName)}`;
+    const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv${gidParam}${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
     const csvText = await response.text();
     if (!csvText || csvText.includes("<!DOCTYPE html")) {
-      console.warn(`CSV Fallback for campaign ${sheetName} returned HTML/empty content. Check spreadsheet permissions.`);
+      console.warn(`CSV Fallback for campaign ${sheetName} (gid: ${gid}) returned HTML/empty content.`);
       return null;
     }
     
@@ -5382,19 +5411,32 @@ export const submitVehicleInventory = async (data: any): Promise<boolean> => {
 // =========================================================================
 // MÓDULO NOVEDADES CHECK LIST MONTACARGAS
 // =========================================================================
-export let NOVEDADES_FLT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwBtpZjp3PBixrMn--EBLKbzlVmLwelqomjp1GzSKJPAPqYnuuFuOYlTqHya4LatU/exec';
+export let NOVEDADES_FLT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgIL-2s7EsOLFsQxqICNWx6Exr93_G_tAFsyalO58YXVmvVKbzFvIJSah01nGhDKaR6A/exec';
 export const NOVEDADES_FLT_DOC_ID = '1cdocNK5v-ENbTt7cDSPggErghESuWbL40IqF5X-xg4I';
 export const NOVEDADES_FLT_GID = '0';
 
 let memoryNovedadesFltScriptUrl = NOVEDADES_FLT_SCRIPT_URL;
 
 export const getNovedadesFltScriptUrl = (): string => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const stored = localStorage.getItem('GOOGLE_SCRIPT_NOVEDADES_FLT_URL');
+    if (stored) {
+      if (stored.includes('AKfycbwwBtpZjp3')) {
+        localStorage.setItem('GOOGLE_SCRIPT_NOVEDADES_FLT_URL', NOVEDADES_FLT_SCRIPT_URL);
+        return NOVEDADES_FLT_SCRIPT_URL;
+      }
+      if (stored.startsWith('http')) return stored;
+    }
+  }
   return memoryNovedadesFltScriptUrl || NOVEDADES_FLT_SCRIPT_URL;
 };
 
 export const setNovedadesFltScriptUrl = (url: string) => {
   memoryNovedadesFltScriptUrl = url.trim();
   NOVEDADES_FLT_SCRIPT_URL = url.trim();
+  if (typeof window !== 'undefined' && window.localStorage) {
+    localStorage.setItem('GOOGLE_SCRIPT_NOVEDADES_FLT_URL', url.trim());
+  }
 };
 
 export const fetchNovedadesFltFromSheet = async (): Promise<NovedadFlt[]> => {
@@ -5475,6 +5517,7 @@ export const submitNovedadFltLink = async (payload: {
   estado?: string;
   fechaSolucion?: string;
   observaciones?: string;
+  slot?: 1 | 2 | 3;              // 1 = columna T, 2 = columna U, 3 = columna V
 }): Promise<{ success: boolean; link: string }> => {
   const scriptUrl = getNovedadesFltScriptUrl();
   if (!scriptUrl || scriptUrl.includes('PONER_URL_DEL_SCRIPT_NUEVO')) {
@@ -5509,7 +5552,8 @@ export const submitNovedadFltLink = async (payload: {
       reporte: payload.reporte,
       estado: payload.estado,
       fechaSolucion: payload.fechaSolucion,
-      observaciones: payload.observaciones
+      observaciones: payload.observaciones,
+      slot: payload.slot || 1
     }
   };
 

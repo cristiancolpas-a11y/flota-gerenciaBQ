@@ -130,6 +130,7 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
 
   // Modal de Subir Evidencia (Foto / Galería / Pegar / Enlace Drive)
   const [selectedItem, setSelectedItem] = useState<NovedadFlt | null>(null);
+  const [slotEvidencia, setSlotEvidencia] = useState<1 | 2 | 3>(1);
   const [modoEvidencia, setModoEvidencia] = useState<'foto' | 'link'>('foto');
   const [fotoBase64, setFotoBase64] = useState<string>('');
   const [fotoNombre, setFotoNombre] = useState<string>('');
@@ -246,8 +247,11 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
         if (filterEstado === 'Cerrado' && !itemEstado.includes('cerrad')) return false;
       }
 
-      if (filterEvidencia === 'CON_LINK' && (!item.links || !item.links.trim())) return false;
-      if (filterEvidencia === 'SIN_LINK' && item.links && item.links.trim()) return false;
+      const hasAnyLink = (item.links && item.links.trim().length > 0) || 
+                         (item.links2 && item.links2.trim().length > 0) || 
+                         (item.links3 && item.links3.trim().length > 0);
+      if (filterEvidencia === 'CON_LINK' && !hasAnyLink) return false;
+      if (filterEvidencia === 'SIN_LINK' && hasAnyLink) return false;
       if (filterCriticidad !== 'ALL' && String(item.criticidad) !== filterCriticidad) return false;
       if (filterSistema !== 'ALL' && item.sistema !== filterSistema) return false;
       if (filterCD !== 'ALL' && item.cd !== filterCD) return false;
@@ -283,7 +287,11 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
     const total = filteredItems.length;
     const abiertos = filteredItems.filter(i => (i.estado || '').toLowerCase().includes('abiert')).length;
     const cerrados = filteredItems.filter(i => (i.estado || '').toLowerCase().includes('cerrad')).length;
-    const conEvidencia = filteredItems.filter(i => i.links && i.links.trim().length > 0).length;
+    const conEvidencia = filteredItems.filter(i => 
+      (i.links && i.links.trim().length > 0) || 
+      (i.links2 && i.links2.trim().length > 0) || 
+      (i.links3 && i.links3.trim().length > 0)
+    ).length;
     const sinEvidencia = total - conEvidencia;
     const criticos = filteredItems.filter(i => String(i.criticidad) === '1').length;
     const pctCerrados = total > 0 ? Math.round((cerrados / total) * 100) : 0;
@@ -380,16 +388,29 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
   // -------------------------------------------------------------
   // MANEJO DE FOTOS (Cámara, Galería, Pegar, Drag & Drop)
   // -------------------------------------------------------------
-  const handleOpenUploadModal = (item: NovedadFlt) => {
+  const handleOpenUploadModal = (item: NovedadFlt, initialSlot: 1 | 2 | 3 = 1) => {
     setSelectedItem(item);
+    setSlotEvidencia(initialSlot);
     setFotoBase64('');
     setFotoNombre('');
-    setLinkInput(item.links || '');
-    setModoEvidencia(item.links ? 'link' : 'foto');
+    const currentLink = initialSlot === 3 ? (item.links3 || '') : initialSlot === 2 ? (item.links2 || '') : (item.links || '');
+    setLinkInput(currentLink);
+    setModoEvidencia(currentLink ? 'link' : 'foto');
     setEstadoInput(item.estado || 'Cerrado');
     setObsInput('');
     setSubmitFeedback(null);
     setSubmittingStep('');
+  };
+
+  const handleSelectSlot = (slot: 1 | 2 | 3) => {
+    setSlotEvidencia(slot);
+    setFotoBase64('');
+    setFotoNombre('');
+    const existing = slot === 3 ? (selectedItem?.links3 || '') : slot === 2 ? (selectedItem?.links2 || '') : (selectedItem?.links || '');
+    setLinkInput(existing);
+    if (existing) {
+      setModoEvidencia('link');
+    }
   };
 
   const handleProcessImageFile = async (file: File) => {
@@ -513,17 +534,20 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
         placa: selectedItem.placa,
         reporte: selectedItem.reporte,
         estado: estadoInput,
-        observaciones: obsInput.trim() ? obsInput.trim() : undefined
+        observaciones: obsInput.trim() ? obsInput.trim() : undefined,
+        slot: slotEvidencia
       });
 
       const finalLink = res.link || (modoEvidencia === 'link' ? linkInput.trim() : '');
 
-      // Actualización optimista inmediata en memoria
+      // Actualización optimista inmediata en memoria según slot
       setItems(prev => prev.map(item => {
         if (item.rowIndex === selectedItem.rowIndex) {
           return {
             ...item,
-            links: finalLink || item.links,
+            links:  slotEvidencia === 1 ? (finalLink || item.links)  : item.links,
+            links2: slotEvidencia === 2 ? (finalLink || item.links2) : item.links2,
+            links3: slotEvidencia === 3 ? (finalLink || item.links3) : item.links3,
             estado: estadoInput || item.estado,
             observaciones: obsInput.trim() 
               ? (item.observaciones ? `${item.observaciones} | ${obsInput.trim()}` : obsInput.trim())
@@ -533,11 +557,12 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
         return item;
       }));
 
+      const colLetra = slotEvidencia === 3 ? 'V' : (slotEvidencia === 2 ? 'U' : 'T');
       setSubmitFeedback({
         type: 'success',
         message: modoEvidencia === 'foto'
-          ? '¡Fotografía subida a Google Drive exitosamente y enlace registrado en la hoja!'
-          : '¡Enlace de evidencia guardado exitosamente en la columna LINKS!',
+          ? `¡Fotografía subida a Google Drive exitosamente y enlace registrado en Evidencia ${slotEvidencia} (columna ${colLetra})!`
+          : `¡Enlace de evidencia guardado exitosamente en Evidencia ${slotEvidencia} (columna ${colLetra})!`,
         driveUrl: finalLink
       });
 
@@ -589,7 +614,7 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
     const headers = [
       'Fila Hoja', 'Transportista', 'CD', 'Fecha Reporte', 'Semana', 'Mes', 
       'Placa', 'Fuente', 'Reporte', 'Sistema', 'Estado', 'Criticidad', 
-      'Fecha Solución', 'Observaciones', 'Links'
+      'Fecha Solución', 'Observaciones', 'Evidencia 1 (Col T)', 'Evidencia 2 (Col U)', 'Evidencia 3 (Col V)'
     ];
 
     const rows = filteredItems.map(i => [
@@ -607,7 +632,9 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
       `"${(i.criticidad || '').replace(/"/g, '""')}"`,
       `"${(i.fechaSolucion || '').replace(/"/g, '""')}"`,
       `"${(i.observaciones || '').replace(/"/g, '""')}"`,
-      `"${(i.links || '').replace(/"/g, '""')}"`
+      `"${(i.links || '').replace(/"/g, '""')}"`,
+      `"${(i.links2 || '').replace(/"/g, '""')}"`,
+      `"${(i.links3 || '').replace(/"/g, '""')}"`
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -1446,36 +1473,71 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
 
                           {/* Botón de Evidencia */}
                           <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {hasLink ? (
-                                <>
-                                  <a
-                                    href={item.links}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 transition-colors"
-                                    title={item.links}
-                                  >
-                                    <ExternalLink className="w-3.5 h-3.5" />
-                                    <span>Ver</span>
-                                  </a>
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              {/* Evidencia 1 (Columna T) */}
+                              {item.links && item.links.trim() ? (
+                                <a
+                                  href={item.links}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 transition-colors"
+                                  title={`Ver Evidencia 1 (Columna T): ${item.links}`}
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  <span>Ver Evidencia 1</span>
+                                </a>
+                              ) : null}
+
+                              {/* Evidencia 2 (Columna U) */}
+                              {item.links2 && item.links2.trim() ? (
+                                <a
+                                  href={item.links2}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors"
+                                  title={`Ver Evidencia 2 (Columna U): ${item.links2}`}
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  <span>Ver Evidencia 2</span>
+                                </a>
+                              ) : null}
+
+                              {/* Evidencia 3 (Columna V) */}
+                              {item.links3 && item.links3.trim() ? (
+                                <a
+                                  href={item.links3}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors"
+                                  title={`Ver Evidencia 3 (Columna V): ${item.links3}`}
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  <span>Ver Evidencia 3</span>
+                                </a>
+                              ) : null}
+
+                              {/* Botón de Cargar/Subir Foto */}
+                              {(() => {
+                                const nextSlot: 1 | 2 | 3 = !item.links ? 1 : !item.links2 ? 2 : 3;
+                                const hasAllThree = Boolean(item.links && item.links2 && item.links3);
+                                const hasAny = Boolean(item.links || item.links2 || item.links3);
+                                const btnLabel = hasAllThree ? 'Gestionar' : !item.links ? 'Subir' : !item.links2 ? '+ Evidencia 2' : '+ Evidencia 3';
+
+                                return (
                                   <button
-                                    onClick={() => handleOpenUploadModal(item)}
-                                    className="inline-flex items-center p-1.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-                                    title="Modificar o cargar nueva foto"
+                                    onClick={() => handleOpenUploadModal(item, nextSlot)}
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                                      hasAny
+                                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                                    }`}
+                                    title={hasAny ? 'Gestionar o subir más evidencias' : 'Subir evidencia'}
                                   >
                                     <Upload className="w-3.5 h-3.5" />
+                                    <span>{btnLabel}</span>
                                   </button>
-                                </>
-                              ) : (
-                                <button
-                                  onClick={() => handleOpenUploadModal(item)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors"
-                                >
-                                  <Camera className="w-3.5 h-3.5" />
-                                  <span>Subir Foto</span>
-                                </button>
-                              )}
+                                );
+                              })()}
                             </div>
                           </td>
                         </tr>
@@ -1573,6 +1635,34 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
               <div className="pt-1.5 border-t border-slate-200">
                 <span className="text-slate-500 block mb-0.5">Novedad Reportada:</span>
                 <p className="text-slate-900 font-medium italic">"{selectedItem.reporte}"</p>
+              </div>
+            </div>
+
+            {/* Selector de Evidencia 1 vs Evidencia 2 vs Evidencia 3 */}
+            <div className="mb-4">
+              <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
+                Destino de la Evidencia:
+              </label>
+              <div className="flex gap-2">
+                {([1, 2, 3] as const).map(n => {
+                  const yaTiene = n === 1 ? selectedItem?.links : n === 2 ? selectedItem?.links2 : selectedItem?.links3;
+                  const colLetra = n === 3 ? 'V' : (n === 2 ? 'U' : 'T');
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => handleSelectSlot(n)}
+                      className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                        slotEvidencia === n
+                          ? 'bg-[#0D2B4E] text-white border-[#0D2B4E] shadow-sm'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>Evidencia {n} ({colLetra})</span>
+                      {yaTiene && <span className="text-emerald-400 font-black">✓</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1714,7 +1804,7 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
                       <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <span>
-                          Al presionar <strong>Guardar</strong>, esta foto se subirá automáticamente a tu <strong>Google Drive</strong> y el enlace generado se registrará en la columna <strong>LINKS</strong> de la hoja.
+                          Al presionar <strong>Guardar</strong>, esta foto se subirá automáticamente a tu <strong>Google Drive</strong> y el enlace generado se registrará en la columna <strong>{slotEvidencia === 3 ? 'LINKS 3 (Columna V / 22)' : slotEvidencia === 2 ? 'LINKS 2 (Columna U / 21)' : 'LINKS (Columna T / 20)'}</strong> de la hoja.
                         </span>
                       </div>
                     </div>
@@ -1739,7 +1829,7 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
                     />
                   </div>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Se registrará directamente en la columna <strong>LINKS</strong> de la fila #{selectedItem.rowIndex}.
+                    Se registrará en la columna <strong>{slotEvidencia === 3 ? 'LINKS 3 (Columna V / 22)' : slotEvidencia === 2 ? 'LINKS 2 (Columna U / 21)' : 'LINKS (Columna T / 20)'}</strong> de la fila #{selectedItem.rowIndex}.
                   </p>
                 </div>
               )}
@@ -1915,13 +2005,13 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
                     ¿Cómo desplegar el script?
                   </h4>
                   <span className="text-[11px] text-emerald-700 font-bold">
-                    APPS_SCRIPT_NOVEDADES_FLT.gs
+                    GOOGLE_APPS_SCRIPT_NOVEDADES_FLT.gs
                   </span>
                 </div>
                 <ol className="list-decimal list-inside space-y-1 text-slate-600 text-[11px] leading-relaxed">
                   <li>Abre la hoja <strong>1cdocNK5v-ENbTt7cDSPggErghESuWbL40IqF5X-xg4I</strong>.</li>
                   <li>Ve a <strong>Extensiones &gt; Apps Script</strong>.</li>
-                  <li>Copia el código del archivo <strong>APPS_SCRIPT_NOVEDADES_FLT.gs</strong>.</li>
+                  <li>Copia el código del archivo <strong>GOOGLE_APPS_SCRIPT_NOVEDADES_FLT.gs</strong>.</li>
                   <li>Haz clic en <strong>Implementar &gt; Nueva implementación</strong> (Tipo: Aplicación web, Acceso: Cualquier persona).</li>
                   <li>Pega la URL generada aquí y haz clic en Guardar.</li>
                 </ol>

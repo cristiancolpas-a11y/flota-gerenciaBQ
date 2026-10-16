@@ -380,7 +380,7 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
 
   // Manejar selección de archivos desde inputs nativos (cámara o galería)
   const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from<File>(e.target.files ?? []);
     if (files.length) {
       await processFiles(files);
     }
@@ -404,7 +404,7 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files || []);
+    const files = Array.from<File>(e.dataTransfer.files ?? []);
     if (files.length) {
       await processFiles(files);
     }

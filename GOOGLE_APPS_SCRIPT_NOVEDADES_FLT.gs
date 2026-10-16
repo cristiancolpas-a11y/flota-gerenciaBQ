@@ -26,34 +26,31 @@ var NOMBRE_CARPETA_DRIVE = "EVIDENCIAS_NOVEDADES_FLT";
  * Manejador GET para verificación de estado y lectura
  */
 function doGet(e) {
-  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "";
-  var docId = (e && e.parameter && e.parameter.docId) ? cleanId(e.parameter.docId) : ID_HOJA_NOVEDADES;
-  var sheetName = (e && e.parameter && e.parameter.sheet) ? e.parameter.sheet : "CIERRE DE NOVEDADES";
+  var p = (e && e.parameter) ? e.parameter : {};
+  var action = p.action || p.method || "";                          // acepta action Y method
+  var docId = p.docId ? cleanId(p.docId) : ID_HOJA_NOVEDADES;
+  var sheetName = p.sheet || p.sheetName || "CIERRE DE NOVEDADES";   // acepta sheet Y sheetName
 
   if (action === "read" || action === "read_sheet" || action === "getData" || action === "GET_DATA") {
     try {
       var ss = getSpreadsheet(docId);
       var s = getSheetByGid(ss, GID_NOVEDADES) || findSheetCaseInsensitive(ss, sheetName) || ss.getSheets()[0];
       var data = s.getDataRange().getValues();
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: data }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: data, data: data }))
         .setMimeType(ContentService.MimeType.JSON);
-    } catch(err) {
+    } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
         .setMimeType(ContentService.MimeType.JSON);
     }
   }
 
-  // Respuesta de estado online
   return ContentService.createTextOutput(JSON.stringify({
     status: "online",
     service: "Apps Script - Novedades Check List Montacargas",
     timestamp: new Date().toISOString(),
     docId: ID_HOJA_NOVEDADES,
     gid: GID_NOVEDADES,
-    supportedMethods: [
-      "POST_NOVEDAD_FLT_LINK",
-      "GET_DATA"
-    ]
+    supportedMethods: ["POST_NOVEDAD_FLT_LINK", "GET_DATA"]
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -147,15 +144,56 @@ function doPost(e) {
         return output("error", "El link o evidencia no puede estar vacío");
       }
 
-      // Guardar SOLO en la columna LINKS (col 20 = índice 19 -> 1-based 20)
-      s.getRange(foundIdx, 20).setValue(linkFinal);
+      // slot 1 -> columna T (20) ; slot 2 -> columna U (21) ; slot 3 -> columna V (22)
+      var slot = Number(d.slot);
+      if (slot !== 2 && slot !== 3) slot = 1;           // por defecto 1
+      var targetCol = slot === 3 ? 22 : (slot === 2 ? 21 : 20);
+      var colLetra = slot === 3 ? "V" : (slot === 2 ? "U" : "T");
 
+      s.getRange(foundIdx, targetCol).setValue(linkFinal);
+
+      // Si se envió estado (ej. "Cerrado")
+      if (d.estado) {
+        s.getRange(foundIdx, 10).setValue(d.estado); // Columna 10 (J) = ESTADO
+      }
+
+      // Si se envió fecha de solución o si el estado es Cerrado
+      if (d.fechaSolucion) {
+        s.getRange(foundIdx, 12).setValue(d.fechaSolucion); // Columna 12 (L) = FECHA SOLUCIÓN
+      } else if (d.estado && d.estado.toString().toLowerCase().indexOf('cerrad') !== -1) {
+        var fechaHoy = Utilities.formatDate(new Date(), "GMT-5", "yyyy-MM-dd");
+        s.getRange(foundIdx, 12).setValue(fechaHoy);
+      }
+
+      // Si se enviaron observaciones adicionales
+      if (d.observaciones) {
+        var currentObs = (s.getRange(foundIdx, 19).getValue() || "").toString();
+        var newObs = currentObs ? (currentObs + " | " + d.observaciones) : d.observaciones;
+        s.getRange(foundIdx, 19).setValue(newObs); // Columna 19 (S) = OBSERVACIONES
+      }
+
+      SpreadsheetApp.flush();
       if (lock.hasLock()) lock.releaseLock();
-      return output("success", "Link guardado exitosamente en fila " + foundIdx, {
+      return output("success", "Evidencia guardada en fila " + foundIdx + " (columna " + colLetra + ")", {
         rowIndex: foundIdx,
         placa: placaSearch,
-        link: linkFinal
+        link: linkFinal,
+        slot: slot,
+        estado: d.estado || null
       });
+    }
+
+    // MÉTODO: Subir imagen Base64 directamente a Drive
+    else if (m === 'UPLOAD_IMAGE') {
+      var base64 = d.base64 || d.image || d.imageBase64;
+      var name = d.name || ("NOVEDAD_FLT_" + Date.now());
+      if (!base64) {
+        if (lock.hasLock()) lock.releaseLock();
+        return output("error", "No se recibió la imagen en base64.");
+      }
+      var driveUrl = saveImageToDrive(base64, name);
+      if (lock.hasLock()) lock.releaseLock();
+      return output("success", "Imagen subida exitosamente", { link: driveUrl, url: driveUrl });
     }
 
     if (lock.hasLock()) lock.releaseLock();

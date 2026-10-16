@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Vehicle, Driver } from '../types';
 import { 
   ChevronLeft, Sparkles, ExternalLink, Settings, Check, X,
-  Layers, Disc, Shield, Activity, Zap, AlertTriangle,
+  Layers, Disc, Shield, Activity, Zap, AlertTriangle, ClipboardCheck,
   Search, RefreshCw, Eye, Calendar, MapPin, ClipboardList, Info, Image as ImageIcon,
   CheckCircle2, AlertCircle, FileText, Clock, Trash2, Plus, Upload
 } from 'lucide-react';
@@ -28,6 +28,7 @@ interface CampaignCardInfo {
   id: string;
   name: string;
   sheetName: string;
+  gid: string;
   subtitle: string;
   description: string;
   icon: React.ComponentType<any>;
@@ -35,7 +36,7 @@ interface CampaignCardInfo {
   badgeBg: string;
   hoverBg: string;
   borderColor: string;
-  glowColor: string;
+  glowColor?: string;
 }
 
 interface CampaignRecord {
@@ -53,80 +54,116 @@ const CAMPAIGNS_LIST: CampaignCardInfo[] = [
     id: 'esteras',
     name: 'ESTERAS Y CARPAS',
     sheetName: 'ESTERAS/CARPAS',
+    gid: '0',
     subtitle: 'CAMPAÑA DE AJUSTE',
     description: 'Control de protección superior, lonas, carpas protectoras y sistemas de tensión de correas.',
     icon: Layers,
     color: 'from-blue-600/20 to-blue-500/5 text-blue-400',
     badgeBg: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
     borderColor: 'border-blue-500/30 hover:border-blue-500/60',
-    hoverBg: 'hover:bg-blue-950/10',
-    glowColor: 'group-hover:shadow-[0_0_20px_rgba(59,130,246,0.15)]'
+    hoverBg: 'hover:bg-blue-950/10'
   },
   {
     id: 'llantas',
     name: 'RECAMBIO DE LLANTAS',
     sheetName: 'RECAMBIO DE LLANTAS',
+    gid: '1334327328',
     subtitle: 'CAMPAÑA DE NEUMÁTICOS',
     description: 'Seguimiento de profundidad de labrado, presiones y control de vida útil de llantas.',
     icon: Disc,
     color: 'from-violet-600/20 to-violet-500/5 text-violet-400',
     badgeBg: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
     borderColor: 'border-violet-500/30 hover:border-violet-500/60',
-    hoverBg: 'hover:bg-violet-950/10',
-    glowColor: 'group-hover:shadow-[0_0_20px_rgba(139,92,246,0.15)]'
+    hoverBg: 'hover:bg-violet-950/10'
   },
   {
     id: 'estructuras',
     name: 'ESTRUCTURAS INTERNAS',
     sheetName: 'ESTRUCTURA',
+    gid: '1392397818',
     subtitle: 'CAMPAÑA DE SOLDADURAS',
     description: 'Inspección de soldaduras de vigas, seguros, cierres traseros y estado general de pisos de carga.',
     icon: Shield,
     color: 'from-indigo-600/20 to-indigo-500/5 text-indigo-400',
     badgeBg: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
     borderColor: 'border-indigo-500/30 hover:border-indigo-500/60',
-    hoverBg: 'hover:bg-indigo-950/10',
-    glowColor: 'group-hover:shadow-[0_0_20px_rgba(99,102,241,0.15)]'
+    hoverBg: 'hover:bg-indigo-950/10'
   },
   {
     id: 'frenos',
     name: 'SISTEMA DE FRENOS',
     sheetName: 'FRENOS',
+    gid: '498076760',
     subtitle: 'CAMPAÑA DE SEGURIDAD',
     description: 'Monitoreo de niveles de líquido de frenos, respuesta de pedal y desgaste de pastillas/zapatas.',
     icon: Activity,
     color: 'from-rose-600/20 to-rose-500/5 text-rose-400',
     badgeBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
     borderColor: 'border-rose-500/30 hover:border-rose-500/60',
-    hoverBg: 'hover:bg-rose-950/10',
-    glowColor: 'group-hover:shadow-[0_0_20px_rgba(244,63,94,0.15)]'
+    hoverBg: 'hover:bg-rose-950/10'
   },
   {
     id: 'luces',
     name: 'SISTEMA DE LUCES',
     sheetName: 'LUCES',
+    gid: '539764373',
     subtitle: 'CAMPAÑA DE ELECTRICIDAD',
     description: 'Auditoría de farolas delanteras, traseras, direccionales, luces estroboscópicas y alarmas.',
     icon: Zap,
     color: 'from-amber-600/20 to-amber-500/5 text-amber-400',
     badgeBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
     borderColor: 'border-amber-500/30 hover:border-amber-500/60',
-    hoverBg: 'hover:bg-amber-950/10',
-    glowColor: 'group-hover:shadow-[0_0_20px_rgba(245,158,11,0.15)]'
+    hoverBg: 'hover:bg-amber-950/10'
   },
   {
     id: 'portaconos',
     name: 'SOPORTES PORTACONOS',
     sheetName: 'PORTACONOS',
+    gid: '684442673',
     subtitle: 'CAMPAÑA DE SEÑALIZACIÓN',
     description: 'Verificación de soportes portaconos, pines de seguridad y dotación de cono vial.',
     icon: AlertTriangle,
     color: 'from-emerald-600/20 to-emerald-500/5 text-emerald-400',
     badgeBg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
     borderColor: 'border-emerald-500/30 hover:border-emerald-500/60',
-    hoverBg: 'hover:bg-[#064e3b]/10',
-    glowColor: 'group-hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]'
+    hoverBg: 'hover:bg-[#064e3b]/10'
+  },
+  {
+    id: 'revision_general',
+    name: 'REVISIONES GENERALES',
+    sheetName: 'REVISION GENERAL',
+    gid: '1192167362',
+    subtitle: 'CAMPAÑA DE INSPECCIÓN',
+    description: 'Revisión general del vehículo: inspección integral de estado, componentes y condiciones generales de la unidad.',
+    icon: ClipboardCheck,
+    color: 'from-cyan-600/20 to-cyan-500/5 text-cyan-400',
+    badgeBg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+    borderColor: 'border-cyan-500/30 hover:border-cyan-500/60',
+    hoverBg: 'hover:bg-cyan-950/10',
   }
+];
+
+export const TALLERES_CAMPANAS = [
+  "AUTECO",
+  "AUTOMUNDIAL",
+  "CAMION COLOMBIA",
+  "COEXITO",
+  "COUNTRY MOTORS",
+  "COUNTRY TRUCK",
+  "DIVERMOTORS",
+  "ELECTRONIC",
+  "ETM",
+  "GARCILLANTAS",
+  "GLASS LAMINADO",
+  "NAVISAFT",
+  "NAVITRANS",
+  "ROINCOR",
+  "TECNIBENZ",
+  "TODOFIBRA",
+  "TODOFIBRAS",
+  "TRAMICON",
+  "VEHIPESA",
+  "OTROS"
 ];
 
 const normalizePlate = (plate: string): string => {
@@ -204,11 +241,12 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
   const [registerError, setRegisterError] = useState<string | null>(null);
   
   const [formCampaignId, setFormCampaignId] = useState<string>('');
+  const [formBase, setFormBase] = useState<string>('');
   const [formPlate, setFormPlate] = useState<string>('');
   const [formSemana, setFormSemana] = useState<string>('');
   const [formMes, setFormMes] = useState<string>('');
   const [formFecha, setFormFecha] = useState<string>('');
-  const [formTaller, setFormTaller] = useState<string>('TALLER CENTRAL');
+  const [formTaller, setFormTaller] = useState<string>('');
   const [formObservacion, setFormObservacion] = useState<string>('');
   const [formEvidence1, setFormEvidence1] = useState<string>('');
   const [formEvidence2, setFormEvidence2] = useState<string>('');
@@ -228,26 +266,26 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
 
   const fetchAllCampaignData = async () => {
     setLoading(true);
+    setLoadingStatus('Cargando campañas...');
     const loadedData: Record<string, CampaignRecord[]> = {};
     const loadedErrors: Record<string, string> = {};
     
-    for (const camp of CAMPAIGNS_LIST) {
-      try {
-        setLoadingStatus(`Cargando campaña: ${camp.name}...`);
-        const rows = await getCampaignSheetRows(camp.sheetName);
-        if (rows) {
-          const parsed = parseCampaignRows(rows);
-          loadedData[camp.id] = parsed;
-        } else {
+    // Todas las campañas en paralelo (no una por una)
+    await Promise.all(
+      CAMPAIGNS_LIST.map(async (camp) => {
+        try {
+          const rows = await getCampaignSheetRows(camp.sheetName, camp.gid);
+          loadedData[camp.id] = rows ? parseCampaignRows(rows) : [];
+          if (!rows) {
+            loadedErrors[camp.id] = 'No se encontraron filas o la hoja está vacía.';
+          }
+        } catch (err: any) {
+          console.error(`Error loading campaign ${camp.id}:`, err);
           loadedData[camp.id] = [];
-          loadedErrors[camp.id] = `No se encontraron filas válidas o la hoja está vacía.`;
+          loadedErrors[camp.id] = err?.message || 'Error de conexión';
         }
-      } catch (err: any) {
-        console.error(`Error loading campaign ${camp.id}:`, err);
-        loadedData[camp.id] = [];
-        loadedErrors[camp.id] = err.message || 'Error de conexión';
-      }
-    }
+      })
+    );
     
     setCampaignData(loadedData);
     setErrors(loadedErrors);
@@ -372,6 +410,10 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
       setRegisterError('Por favor selecciona una campaña.');
       return;
     }
+    if (!formBase) {
+      setRegisterError('Por favor selecciona la base de flota.');
+      return;
+    }
     if (!formPlate) {
       setRegisterError('Por favor selecciona una placa.');
       return;
@@ -386,6 +428,10 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
     }
     if (!formFecha) {
       setRegisterError('Por favor especifica la fecha.');
+      return;
+    }
+    if (!formTaller) {
+      setRegisterError('Por favor selecciona el taller responsable.');
       return;
     }
 
@@ -405,8 +451,8 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
         mes: formMes,
         fecha: formFecha,
         plate: formPlate.toUpperCase().trim(),
-        taller: formTaller || 'TALLER CENTRAL',
-        observacion: formObservacion || 'Inspección rutinaria sin observaciones específicas.',
+        taller: formTaller.trim(),
+        observacion: formObservacion.trim(),
         evidence1: formEvidence1 || '',
         evidence2: formEvidence2 || '',
         evidence3: formEvidence3 || ''
@@ -415,11 +461,14 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
       if (success) {
         setShowRegisterForm(false);
         // Limpiar el formulario
+        setFormBase('');
         setFormPlate('');
+        setFormTaller('');
         setFormObservacion('');
         setFormEvidence1('');
         setFormEvidence2('');
         setFormEvidence3('');
+        setRegisterError(null);
         // Recargar los datos de las hojas para mostrar el nuevo registro de inmediato
         await fetchAllCampaignData();
         alert(`¡Inspección registrada con éxito en la pestaña "${selectedCamp.sheetName}"!`);
@@ -507,7 +556,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
           
           <div className="flex gap-2">
             <a
-              href={`https://docs.google.com/spreadsheets/d/${getCampaignsDocId()}/edit`}
+              href={`https://docs.google.com/spreadsheets/d/${getCampaignsDocId()}/edit${camp.gid ? `#gid=${camp.gid}` : ''}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all"
@@ -668,32 +717,25 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                 <tbody className="divide-y divide-white/5">
                   {filteredRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-500 text-xs uppercase font-bold tracking-widest">
+                      <td colSpan={7} className="py-12 text-center text-slate-500 text-xs font-medium tracking-normal">
                         Ningún registro coincide con la búsqueda.
                       </td>
                     </tr>
                   ) : (
                     filteredRecords.map((rec, idx) => {
-                      const veh = vehicles.find(v => normalizePlate(v.plate) === rec.plate) || {
-                        id: 'unknown',
-                        plate: rec.plate,
-                        brand: 'NO REGISTRADO',
-                        model: '',
-                        cd: 'GENERAL',
-                        contractor: 'DESCONOCIDO'
-                      } as Vehicle;
+                      const veh = vehicles.find(v => normalizePlate(v.plate) === rec.plate);
 
                       return (
                         <tr key={idx} className="hover:bg-white/[0.01] transition-colors group">
                           {/* Week / Month */}
                           <td className="py-4 px-6 text-xs text-slate-300">
-                            <span className="font-bold">W-{rec.semana || '0'}</span>
-                            <span className="text-[10px] text-slate-500 font-bold block uppercase">{rec.mes || 'N/A'}</span>
+                            <span className="font-bold">{rec.semana ? `Semana ${rec.semana}` : '—'}</span>
+                            <span className="text-xs text-slate-500 block">{rec.mes || ''}</span>
                           </td>
                           
                           {/* Date */}
                           <td className="py-4 px-4 text-xs font-mono text-slate-400">
-                            {rec.fecha || 'N/A'}
+                            {rec.fecha || '—'}
                           </td>
 
                           {/* Plate */}
@@ -702,20 +744,22 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                               <span className="font-mono text-xs font-black text-white tracking-wider bg-white/5 px-2 py-0.5 rounded border border-white/10 group-hover:border-violet-500/30 transition-all">
                                 {rec.plate}
                               </span>
-                              <span className="text-[9px] text-slate-500 font-bold block uppercase truncate max-w-[150px]">
-                                {veh.brand} {veh.model}
-                              </span>
+                              {veh && (veh.brand || veh.model) ? (
+                                <span className="text-[10px] text-slate-500 font-bold block truncate max-w-[150px]">
+                                  {`${veh.brand || ''} ${veh.model || ''}`.trim()}
+                                </span>
+                              ) : null}
                             </div>
                           </td>
 
                           {/* Taller */}
-                          <td className="py-4 px-4 text-xs font-bold text-slate-300 uppercase max-w-[180px] truncate" title={rec.taller}>
-                            {rec.taller || 'Taller General'}
+                          <td className="py-4 px-4 text-xs font-medium text-slate-300 max-w-[180px] truncate" title={rec.taller}>
+                            {rec.taller ? rec.taller : <span className="text-slate-400">—</span>}
                           </td>
 
                           {/* Observacion */}
-                          <td className="py-4 px-4 text-xs text-slate-400 max-w-[250px] truncate italic" title={rec.observacion}>
-                            "{rec.observacion || 'Sin comentarios.'}"
+                          <td className="py-4 px-4 text-xs text-slate-300 max-w-[250px] truncate" title={rec.observacion}>
+                            {rec.observacion ? rec.observacion : <span className="text-slate-400">—</span>}
                           </td>
 
                           {/* Evidences indicator */}
@@ -727,7 +771,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                                     key={imgIdx} 
                                     className="w-7 h-7 rounded-full border border-slate-900 bg-slate-800 flex items-center justify-center overflow-hidden shrink-0 shadow-md cursor-pointer"
                                     onClick={() => setSelectedRecord({
-                                      vehicle: veh,
+                                      vehicle: veh || ({ id: 'unknown', plate: rec.plate, brand: '', model: '', cd: '', contractor: '' } as Vehicle),
                                       campaignName: camp.name,
                                       record: rec
                                     })}
@@ -737,7 +781,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                                 ))}
                               </div>
                             ) : (
-                              <span className="text-slate-600 text-xs font-bold">-</span>
+                              <span className="text-slate-500 text-xs">—</span>
                             )}
                           </td>
 
@@ -745,11 +789,11 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                           <td className="py-4 px-6 text-center">
                             <button
                               onClick={() => setSelectedRecord({
-                                vehicle: veh,
+                                vehicle: veh || ({ id: 'unknown', plate: rec.plate, brand: '', model: '', cd: '', contractor: '' } as Vehicle),
                                 campaignName: camp.name,
                                 record: rec
                               })}
-                              className="px-2.5 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all"
+                              className="px-2.5 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all"
                             >
                               Ver Inspección
                             </button>
@@ -775,8 +819,8 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                 <tbody className="divide-y divide-white/5">
                   {pendingVehiclesList.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-slate-500 text-xs uppercase font-bold tracking-widest">
-                        ¡Felicidades! Todos los camiones han completado esta campaña.
+                      <td colSpan={5} className="py-12 text-center text-slate-500 text-xs font-medium tracking-normal">
+                        Todos los vehículos han completado esta campaña.
                       </td>
                     </tr>
                   ) : (
@@ -787,18 +831,20 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                             <span className="font-mono text-xs font-black text-white tracking-wider bg-white/5 px-2 py-0.5 rounded border border-white/10">
                               {veh.plate}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-bold block uppercase mt-1">
-                              {veh.brand} {veh.model}
-                            </span>
+                            {veh.brand || veh.model ? (
+                              <span className="text-[10px] text-slate-400 font-bold block uppercase mt-1">
+                                {`${veh.brand || ''} ${veh.model || ''}`.trim()}
+                              </span>
+                            ) : null}
                           </div>
                         </td>
 
                         <td className="py-4 px-4 text-xs font-bold text-slate-300 uppercase">
-                          {veh.cd || 'GALAPA'}
+                          {veh.cd || '—'}
                         </td>
 
                         <td className="py-4 px-4 text-xs font-semibold text-slate-400 uppercase">
-                          {veh.contractor || 'CONTRATISTA BQA'}
+                          {veh.contractor || '—'}
                         </td>
 
                         <td className="py-4 px-4">
@@ -811,6 +857,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                           <button
                             onClick={() => {
                               setFormCampaignId(campaignId);
+                              setFormBase(veh.cd || '');
                               setFormPlate(veh.plate);
                               const currentDate = new Date().toISOString().split('T')[0];
                               setFormFecha(currentDate);
@@ -824,7 +871,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                               const weekNum = Math.ceil(( dateNow.getDay() + 1 + numberOfDays) / 7);
                               setFormSemana(weekNum.toString());
 
-                              setFormTaller('TALLER CENTRAL');
+                              setFormTaller('');
                               setFormObservacion('');
                               setFormEvidence1('');
                               setFormEvidence2('');
@@ -837,7 +884,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                             <ImageIcon size={10} /> Registrar Aquí
                           </button>
                           <a
-                            href={`https://docs.google.com/spreadsheets/d/${getCampaignsDocId()}/edit`}
+                            href={`https://docs.google.com/spreadsheets/d/${getCampaignsDocId()}/edit${camp.gid ? `#gid=${camp.gid}` : ''}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1.5 px-2 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 rounded-lg text-[9px] transition-all"
@@ -900,8 +947,9 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                 const weekNum = Math.ceil(( dateNow.getDay() + 1 + numberOfDays) / 7);
                 setFormSemana(weekNum.toString());
 
+                setFormBase('');
                 setFormPlate('');
-                setFormTaller('TALLER CENTRAL');
+                setFormTaller('');
                 setFormObservacion('');
                 setFormEvidence1('');
                 setFormEvidence2('');
@@ -986,8 +1034,8 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
           <div className="bg-white/[0.01] border border-white/5 p-16 rounded-[2.5rem] flex flex-col items-center justify-center space-y-4">
             <RefreshCw className="text-violet-400 animate-spin" size={48} />
             <div className="space-y-1 text-center">
-              <p className="text-white font-black text-sm uppercase tracking-widest">Sincronizando Google Sheets...</p>
-              <p className="text-slate-400 font-bold text-xs uppercase tracking-wider">{loadingStatus}</p>
+              <p className="text-white font-bold text-sm tracking-normal">Cargando campañas...</p>
+              <p className="text-slate-400 font-medium text-xs">{loadingStatus}</p>
             </div>
           </div>
         ) : selectedCampaignId ? (
@@ -1006,10 +1054,9 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                     key={camp.id}
                     onClick={() => setSelectedCampaignId(camp.id)}
                     className={cn(
-                      "group bg-white/[0.02] border p-6 rounded-[2rem] transition-all duration-300 flex flex-col justify-between shadow-xl relative overflow-hidden cursor-pointer",
+                      "group bg-white/[0.02] border p-6 rounded-[2rem] transition-all duration-300 flex flex-col justify-between shadow-md hover:shadow-lg relative overflow-hidden cursor-pointer",
                       camp.borderColor,
-                      camp.hoverBg,
-                      camp.glowColor
+                      camp.hoverBg
                     )}
                   >
                     <div className="space-y-4">
@@ -1026,7 +1073,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                             HOJA: {camp.sheetName}
                           </span>
                           <a
-                            href={`https://docs.google.com/spreadsheets/d/${getCampaignsDocId()}/edit`}
+                            href={`https://docs.google.com/spreadsheets/d/${getCampaignsDocId()}/edit${camp.gid ? `#gid=${camp.gid}` : ''}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-1.5 bg-white/5 border border-white/10 text-slate-400 hover:text-white rounded-lg transition-all"
@@ -1187,7 +1234,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                   <tbody className="divide-y divide-white/5">
                     {filteredVehicles.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="py-12 text-center text-slate-500 text-xs uppercase font-bold tracking-widest">
+                        <td colSpan={10} className="py-12 text-center text-slate-500 text-xs font-medium tracking-normal">
                           No se encontraron vehículos con los filtros activos.
                         </td>
                       </tr>
@@ -1204,7 +1251,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                             record: vehicleRecord
                           };
                         });
-                        const progressPercent = Math.round((completedCampaignsCount / 6) * 100);
+                        const progressPercent = Math.round((completedCampaignsCount / CAMPAIGNS_LIST.length) * 100);
 
                         return (
                           <tr key={vehicle.id} className="hover:bg-white/[0.01] transition-colors group">
@@ -1214,21 +1261,23 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                                 <span className="font-mono text-sm font-black text-white tracking-wider bg-white/5 px-2.5 py-1 rounded-md border border-white/10 group-hover:border-violet-500/30 transition-all">
                                   {vehicle.plate}
                                 </span>
-                                <span className="text-[10px] text-slate-400 font-bold block uppercase mt-1">
-                                  {vehicle.brand || 'GENERAL'} {vehicle.model || ''}
-                                </span>
+                                {(vehicle.brand || vehicle.model) ? (
+                                  <span className="text-[10px] text-slate-400 font-bold block uppercase mt-1">
+                                    {`${vehicle.brand || ''} ${vehicle.model || ''}`.trim()}
+                                  </span>
+                                ) : null}
                               </div>
                             </td>
 
                             {/* CD */}
                             <td className="py-4 px-6">
-                              <span className="text-xs font-bold text-slate-300 uppercase">{vehicle.cd || 'GALAPA'}</span>
+                              <span className="text-xs font-bold text-slate-300 uppercase">{vehicle.cd || '—'}</span>
                             </td>
 
                             {/* Contractor */}
                             <td className="py-4 px-6">
                               <span className="text-xs font-bold text-slate-400 uppercase truncate max-w-[150px] block" title={vehicle.contractor}>
-                                {vehicle.contractor || 'CONTRATISTA'}
+                                {vehicle.contractor || '—'}
                               </span>
                             </td>
 
@@ -1305,7 +1354,17 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
               {/* Close button */}
               <button
                 type="button"
-                onClick={() => setShowRegisterForm(false)}
+                onClick={() => {
+                  setShowRegisterForm(false);
+                  setFormBase('');
+                  setFormPlate('');
+                  setFormTaller('');
+                  setFormObservacion('');
+                  setFormEvidence1('');
+                  setFormEvidence2('');
+                  setFormEvidence3('');
+                  setRegisterError(null);
+                }}
                 className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-full transition-all"
               >
                 <X size={16} />
@@ -1330,40 +1389,67 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
 
               <form onSubmit={handleSubmitCampaign} className="space-y-6">
                 
+                {/* Campaña Selector */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Seleccionar Campaña:</label>
+                  <select
+                    value={formCampaignId}
+                    onChange={(e) => setFormCampaignId(e.target.value)}
+                    required
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white font-bold uppercase tracking-wider focus:outline-none focus:border-violet-500 transition-all cursor-pointer"
+                  >
+                    <option value="" className="bg-[#0c1122] text-slate-500">-- SELECCIONE CAMPAÑA --</option>
+                    {CAMPAIGNS_LIST.map(c => (
+                      <option key={c.id} value={c.id} className="bg-[#0c1122] text-white">
+                        {c.name} ({c.sheetName})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Campaña Selector */}
+                  {/* Selector de Base de Flota (CD) */}
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Seleccionar Campaña:</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Base de Flota (CD):</label>
                     <select
-                      value={formCampaignId}
-                      onChange={(e) => setFormCampaignId(e.target.value)}
+                      value={formBase}
+                      onChange={(e) => {
+                        setFormBase(e.target.value);
+                        setFormPlate('');
+                      }}
                       required
                       className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white font-bold uppercase tracking-wider focus:outline-none focus:border-violet-500 transition-all cursor-pointer"
                     >
-                      <option value="" className="bg-[#0c1122] text-slate-500">-- SELECCIONE CAMPAÑA --</option>
-                      {CAMPAIGNS_LIST.map(c => (
-                        <option key={c.id} value={c.id} className="bg-[#0c1122] text-white">
-                          {c.name} ({c.sheetName})
-                        </option>
+                      <option value="" className="bg-[#0c1122] text-slate-500">-- SELECCIONE BASE --</option>
+                      {uniqueCds.map(cd => (
+                        <option key={cd} value={cd} className="bg-[#0c1122] text-white font-bold">{cd}</option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Vehículo Selector */}
+                  {/* Vehículo Selector (filtrado por base elegida) */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Placa del Vehículo (Flota):</label>
                     <select
                       value={formPlate}
                       onChange={(e) => setFormPlate(e.target.value)}
                       required
-                      className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white font-mono font-bold tracking-wider focus:outline-none focus:border-violet-500 transition-all cursor-pointer"
+                      disabled={!formBase}
+                      className={cn(
+                        "w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white font-mono font-bold tracking-wider focus:outline-none focus:border-violet-500 transition-all cursor-pointer",
+                        !formBase && "opacity-50 cursor-not-allowed"
+                      )}
                     >
-                      <option value="" className="bg-[#0c1122] text-slate-500">-- SELECCIONE VEHÍCULO --</option>
-                      {vehicles.map(v => (
-                        <option key={v.id} value={v.plate} className="bg-[#0c1122] text-white font-mono">
-                          {v.plate} - {v.brand} {v.model} ({v.cd})
-                        </option>
-                      ))}
+                      <option value="" className="bg-[#0c1122] text-slate-500">
+                        {!formBase ? '-- SELECCIONE BASE PRIMERO --' : '-- SELECCIONE VEHÍCULO --'}
+                      </option>
+                      {vehicles
+                        .filter(v => v.cd === formBase)
+                        .map(v => (
+                          <option key={v.id} value={v.plate} className="bg-[#0c1122] text-white font-mono">
+                            {v.plate} - {v.brand} {v.model}
+                          </option>
+                        ))}
                     </select>
                   </div>
                 </div>
@@ -1417,12 +1503,14 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                     value={formTaller}
                     onChange={(e) => setFormTaller(e.target.value)}
                     required
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white font-bold uppercase tracking-wider focus:outline-none focus:border-violet-500 transition-all cursor-pointer"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white font-bold tracking-wider focus:outline-none focus:border-violet-500 transition-all cursor-pointer"
                   >
-                    <option value="TALLER CENTRAL" className="bg-[#0c1122] text-white">TALLER CENTRAL</option>
-                    <option value="PLANTA BQA" className="bg-[#0c1122] text-white">PLANTA BQA</option>
-                    <option value="TALLER DE CARPAS" className="bg-[#0c1122] text-white">TALLER DE CARPAS</option>
-                    <option value="TALLER EXTERNO" className="bg-[#0c1122] text-white">TALLER EXTERNO</option>
+                    <option value="" className="bg-[#0c1122] text-slate-500">-- SELECCIONE TALLER --</option>
+                    {TALLERES_CAMPANAS.map(taller => (
+                      <option key={taller} value={taller} className="bg-[#0c1122] text-white">
+                        {taller}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1431,10 +1519,10 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Observaciones y Hallazgos:</label>
                   <textarea
                     rows={3}
-                    placeholder="Escribe aquí los detalles del estado físico del camión..."
+                    placeholder="Observaciones de la revisión"
                     value={formObservacion}
                     onChange={(e) => setFormObservacion(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500 transition-all uppercase"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-violet-500 transition-all"
                   />
                 </div>
 
@@ -1672,7 +1760,17 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                 <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
                   <button
                     type="button"
-                    onClick={() => setShowRegisterForm(false)}
+                    onClick={() => {
+                      setShowRegisterForm(false);
+                      setFormBase('');
+                      setFormPlate('');
+                      setFormTaller('');
+                      setFormObservacion('');
+                      setFormEvidence1('');
+                      setFormEvidence2('');
+                      setFormEvidence3('');
+                      setRegisterError(null);
+                    }}
                     disabled={registering}
                     className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50"
                   >
@@ -1722,9 +1820,11 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                   <span className="font-mono text-xs font-black text-white bg-white/5 border border-white/10 px-2 py-0.5 rounded">
                     {selectedRecord.vehicle.plate}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">
-                    {selectedRecord.vehicle.brand} {selectedRecord.vehicle.model}
-                  </span>
+                  {(selectedRecord.vehicle.brand || selectedRecord.vehicle.model) ? (
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">
+                      {`${selectedRecord.vehicle.brand || ''} ${selectedRecord.vehicle.model || ''}`.trim()}
+                    </span>
+                  ) : null}
                 </div>
               </div>
 
@@ -1734,27 +1834,27 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                   <div className="space-y-1">
                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block font-bold">Fecha de Registro</span>
                     <span className="text-white font-bold flex items-center gap-1.5 font-mono text-xs">
-                      <Calendar size={13} className="text-violet-400" /> {selectedRecord.record.fecha || 'N/A'}
+                      <Calendar size={13} className="text-violet-400" /> {selectedRecord.record.fecha || '—'}
                     </span>
                   </div>
                   <div className="space-y-1">
                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block font-bold">Semana / Mes</span>
                     <span className="text-white font-bold flex items-center gap-1.5">
-                      <ClipboardList size={13} className="text-violet-400" /> W-{selectedRecord.record.semana || '0'} ({selectedRecord.record.mes || 'N/A'})
+                      <ClipboardList size={13} className="text-violet-400" /> {selectedRecord.record.semana ? `Semana ${selectedRecord.record.semana}` : '—'} {selectedRecord.record.mes ? `(${selectedRecord.record.mes})` : ''}
                     </span>
                   </div>
                   <div className="space-y-1 col-span-2">
                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block font-bold">Taller Responsable</span>
-                    <span className="text-white font-bold flex items-center gap-1.5 uppercase">
-                      <MapPin size={13} className="text-violet-400" /> {selectedRecord.record.taller || 'Taller General / Planta BQA'}
+                    <span className="text-white font-medium flex items-center gap-1.5">
+                      <MapPin size={13} className="text-violet-400" /> {selectedRecord.record.taller || <span className="text-slate-500">—</span>}
                     </span>
                   </div>
                 </div>
 
                 <div className="border-t border-white/5 pt-3 space-y-1">
                   <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block font-bold">Observación de la Inspección</span>
-                  <p className="text-slate-300 font-bold bg-white/[0.01] border border-white/5 p-3 rounded-xl italic leading-relaxed">
-                    "{selectedRecord.record.observacion || 'Sin observaciones registradas.'}"
+                  <p className="text-slate-300 bg-white/[0.01] border border-white/5 p-3 rounded-xl leading-relaxed">
+                    {selectedRecord.record.observacion ? selectedRecord.record.observacion : <span className="text-slate-500">—</span>}
                   </p>
                 </div>
               </div>

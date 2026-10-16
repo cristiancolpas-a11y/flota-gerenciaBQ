@@ -178,7 +178,7 @@ const NoveltyReportForm: React.FC<NoveltyReportFormProps> = ({
     if (target === 1) setIsDragging1(false);
     else setIsDragging2(false);
 
-    const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
+    const files = Array.from<File>(e.dataTransfer.files ?? []).filter(f => f.type.startsWith('image/'));
     if (files.length === 0) return;
 
     handleProcessFile(files[0], target);
