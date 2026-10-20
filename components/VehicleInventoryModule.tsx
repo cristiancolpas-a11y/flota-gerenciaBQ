@@ -372,7 +372,7 @@ export const VehicleInventoryModule: React.FC<VehicleInventoryModuleProps> = ({ 
               <input
                 type="text"
                 required
-                placeholder="Ej: Juan Pérez"
+                placeholder="Nombre del inspector"
                 value={inspector}
                 onChange={(e) => setInspector(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium placeholder:text-slate-400"
@@ -723,7 +723,7 @@ export const VehicleInventoryModule: React.FC<VehicleInventoryModuleProps> = ({ 
                   </div>
 
                   <div className="text-xs text-slate-700">
-                    <span className="font-bold">Inspector:</span> {inv.inspector || 'No especificado'}
+                    <span className="font-bold">Inspector:</span> {inv.inspector || '—'}
                   </div>
 
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-800">
@@ -779,16 +779,16 @@ export const VehicleInventoryModule: React.FC<VehicleInventoryModuleProps> = ({ 
                           {inv.plate}
                         </span>
                       </td>
-                      <td className="p-3 font-semibold text-slate-800">{inv.inspector || '-'}</td>
+                      <td className="p-3 font-semibold text-slate-800">{inv.inspector || '—'}</td>
                       <td className="p-3 text-center font-black text-emerald-700">{inv.carretillas}</td>
                       <td className="p-3 text-center font-black text-amber-700">{inv.conos}</td>
-                      <td className="p-3 max-w-xs truncate text-slate-700" title={inv.novedad || 'Sin novedades'}>
+                      <td className="p-3 max-w-xs truncate text-slate-700" title={inv.novedad || '—'}>
                         {inv.novedad ? (
                           <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded-md">
                             {inv.novedad}
                           </span>
                         ) : (
-                          <span className="text-slate-400 italic">OK / Sin novedad</span>
+                          <span className="text-slate-400">OK</span>
                         )}
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>

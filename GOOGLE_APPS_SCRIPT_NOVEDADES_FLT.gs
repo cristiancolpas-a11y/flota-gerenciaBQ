@@ -103,24 +103,23 @@ function doPost(e) {
       var rowIndex = Number(d.rowIndex);
       var placaSearch = (d.placa || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
       var foundIdx = -1;
+      var rows = s.getDataRange().getValues();
 
       // Prioridad: rowIndex exacto (validando placa en col 6/idx 5)
-      if (rowIndex >= 2) {
-        var rows = s.getDataRange().getValues();
-        if (rowIndex <= rows.length) {
-          var rp = (rows[rowIndex - 1][5] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
-          if (!placaSearch || rp === placaSearch) {
-            foundIdx = rowIndex;
-          }
+      if (rowIndex >= 2 && rowIndex <= rows.length) {
+        var rp = (rows[rowIndex - 1][5] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        if (!placaSearch || rp === placaSearch) {
+          foundIdx = rowIndex;
         }
-        // fallback: buscar por placa si rowIndex no valida
-        if (foundIdx === -1 && placaSearch) {
-          for (var i = 1; i < rows.length; i++) {
-            var p = (rows[i][5] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
-            if (p === placaSearch) {
-              foundIdx = i + 1;
-              break;
-            }
+      }
+
+      // fallback: buscar por placa si rowIndex no valida o no vino
+      if (foundIdx === -1 && placaSearch) {
+        for (var i = 1; i < rows.length; i++) {
+          var p = (rows[i][5] || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (p === placaSearch) {
+            foundIdx = i + 1;
+            break;
           }
         }
       }
@@ -131,10 +130,14 @@ function doPost(e) {
       }
 
       // Subir imagen si viene base64, o usar el link tal cual
-      var raw = d.link || d.evidencia || "";
+      var raw = d.link || d.evidencia || d.imageBase64 || d.image || d.base64 || "";
       var linkFinal = "";
-      if (typeof raw === 'string' && raw.indexOf('data:image') === 0) {
-        linkFinal = saveImageToDrive(raw, "NOV_FLT_" + placaSearch);
+      if (typeof raw === 'string' && (raw.indexOf('data:image') === 0 || raw.indexOf('/9j/') === 0 || raw.length > 500)) {
+        var b64ToSave = raw;
+        if (b64ToSave.indexOf('data:image') !== 0) {
+          b64ToSave = "data:image/jpeg;base64," + b64ToSave;
+        }
+        linkFinal = saveImageToDrive(b64ToSave, "NOV_FLT_" + placaSearch);
       } else {
         linkFinal = String(raw).trim();
       }
@@ -211,8 +214,8 @@ function doPost(e) {
 function saveImageToDrive(base64Data, filenamePrefix) {
   try {
     var parts = base64Data.split(",");
-    var meta = parts[0];
-    var data = parts[1];
+    var meta = parts.length > 1 ? parts[0] : "";
+    var data = parts.length > 1 ? parts[1] : parts[0];
     var mime = "image/jpeg";
     var ext = "jpg";
 
@@ -224,17 +227,23 @@ function saveImageToDrive(base64Data, filenamePrefix) {
     var fileName = (filenamePrefix || "EVIDENCIA_FLT") + "_" + timestamp + "." + ext;
     var blob = Utilities.newBlob(decoded, mime, fileName);
 
-    var folders = DriveApp.getFoldersByName(NOMBRE_CARPETA_DRIVE);
-    var folder;
-    if (folders.hasNext()) {
-      folder = folders.next();
-    } else {
-      folder = DriveApp.createFolder(NOMBRE_CARPETA_DRIVE);
-      folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var folder = null;
+    try {
+      var folders = DriveApp.getFoldersByName(NOMBRE_CARPETA_DRIVE);
+      if (folders.hasNext()) {
+        folder = folders.next();
+      } else {
+        folder = DriveApp.createFolder(NOMBRE_CARPETA_DRIVE);
+        try { folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(shErr) {}
+      }
+    } catch(fErr) {
+      folder = DriveApp.getRootFolder();
     }
 
     var file = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch(shErr) {}
 
     // Enlace público directo
     return "https://drive.google.com/uc?export=view&id=" + file.getId();

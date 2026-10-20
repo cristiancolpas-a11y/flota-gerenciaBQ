@@ -923,11 +923,11 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
             >
               <ChevronLeft size={12} /> {selectedCampaignId ? 'Ver Todas las Campañas' : 'Volver al Menú'}
             </button>
-            <h1 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-              <Sparkles className="text-violet-400" size={32} /> CAMPAÑAS ESPECIALES
+            <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+              <Layers className="text-violet-400" size={28} /> Campañas
             </h1>
-            <p className="text-slate-400 font-bold text-xs uppercase tracking-wider">
-              Sistema de Auditoría de Recambios, Ajustes Estructurales y Cumplimiento
+            <p className="text-slate-400 font-medium text-xs">
+              Auditoría y control de componentes críticos de la flota
             </p>
           </div>
 
@@ -1102,7 +1102,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                       {/* Error State */}
                       {error && (
                         <div className="bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl text-[10px] text-rose-400 font-bold uppercase tracking-wide">
-                          ⚠️ {error}
+                          {error}
                         </div>
                       )}
                     </div>
@@ -1207,9 +1207,9 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                       className="w-full bg-white/5 border border-white/10 hover:border-white/20 rounded-xl py-2.5 px-3 text-xs font-bold uppercase tracking-wider text-white focus:outline-none focus:border-violet-500 transition-all cursor-pointer"
                     >
                       <option value="" className="bg-[#0c1122] text-slate-400">TODOS LOS ESTADOS</option>
-                      <option value="complete" className="bg-[#0c1122] text-emerald-400">✅ COMPLETO (6/6)</option>
-                      <option value="pending" className="bg-[#0c1122] text-amber-400">⚠️ PENDIENTES (1-5/6)</option>
-                      <option value="critical" className="bg-[#0c1122] text-rose-400">❌ CRÍTICO (0/6)</option>
+                      <option value="complete" className="bg-[#0c1122] text-emerald-400">COMPLETO (6/6)</option>
+                      <option value="pending" className="bg-[#0c1122] text-amber-400">PENDIENTES (1-5/6)</option>
+                      <option value="critical" className="bg-[#0c1122] text-rose-400">CRÍTICO (0/6)</option>
                     </select>
                   </div>
                 </div>
@@ -1383,7 +1383,7 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
 
               {registerError && (
                 <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl text-xs text-rose-400 font-bold uppercase tracking-wider">
-                  ⚠️ {registerError}
+                  {registerError}
                 </div>
               )}
 
@@ -1585,19 +1585,19 @@ export const CampaignsModule: React.FC<CampaignsModuleProps> = ({ onBack, vehicl
                         "text-[9px] px-2 py-1 rounded-full font-black uppercase tracking-wider border transition-all",
                         formEvidence1 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-white/5 text-slate-500 border-transparent"
                       )}>
-                        Foto 1: {formEvidence1 ? "✅ Cargada" : "VACÍA"}
+                        Foto 1: {formEvidence1 ? "Cargada" : "Sin foto"}
                       </span>
                       <span className={cn(
                         "text-[9px] px-2 py-1 rounded-full font-black uppercase tracking-wider border transition-all",
                         formEvidence2 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-white/5 text-slate-500 border-transparent"
                       )}>
-                        Foto 2: {formEvidence2 ? "✅ Cargada" : "VACÍA"}
+                        Foto 2: {formEvidence2 ? "Cargada" : "Sin foto"}
                       </span>
                       <span className={cn(
                         "text-[9px] px-2 py-1 rounded-full font-black uppercase tracking-wider border transition-all",
                         formEvidence3 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-white/5 text-slate-500 border-transparent"
                       )}>
-                        Foto 3: {formEvidence3 ? "✅ Cargada" : "VACÍA"}
+                        Foto 3: {formEvidence3 ? "Cargada" : "Sin foto"}
                       </span>
                     </div>
                   </div>

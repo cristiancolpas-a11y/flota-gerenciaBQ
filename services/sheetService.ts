@@ -2571,9 +2571,23 @@ export const uploadImageToDrive = async (base64Data: string, fileName: string): 
       try {
         const result = JSON.parse(text);
         if (result && (result.status === 'success' || result.status === 'ok')) {
-          const url = result.message || result.url || result.data;
-          if (url && typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:image'))) {
-            return url;
+          let candidate = '';
+          if (typeof result.link === 'string' && (result.link.startsWith('http') || result.link.startsWith('data:image'))) {
+            candidate = result.link;
+          } else if (typeof result.url === 'string' && (result.url.startsWith('http') || result.url.startsWith('data:image'))) {
+            candidate = result.url;
+          } else if (typeof result.data === 'string' && (result.data.startsWith('http') || result.data.startsWith('data:image'))) {
+            candidate = result.data;
+          } else if (result.data && typeof result.data === 'object') {
+            const nested = result.data.link || result.data.url;
+            if (typeof nested === 'string' && (nested.startsWith('http') || nested.startsWith('data:image'))) {
+              candidate = nested;
+            }
+          } else if (typeof result.message === 'string' && (result.message.startsWith('http') || result.message.startsWith('data:image'))) {
+            candidate = result.message;
+          }
+          if (candidate) {
+            return candidate;
           }
         }
       } catch (parseErr) {
@@ -2593,6 +2607,36 @@ export const uploadImageToDrive = async (base64Data: string, fileName: string): 
 /**
  * PREVENTIVOS (GID 2086109634)
  */
+const sanitizePreventiveCell = (val: any): string => {
+  if (val === null || val === undefined) return '';
+  const str = String(val).trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+  if (
+    str === '#REF!' || 
+    str === '#N/A' || 
+    str === '#VALUE!' || 
+    str === '#NUM!' || 
+    str.startsWith('#ERROR') || 
+    str.toLowerCase() === 'undefined' || 
+    str.toLowerCase() === 'null'
+  ) {
+    return '';
+  }
+  return str;
+};
+
+const PREVENTIVE_MONTH_NAMES_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+const PREVENTIVE_ORDEN_MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+];
+
+const normalizaMesTexto = (s: string) => (s || '').toString().trim().toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
 export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
   try {
     const docId = getPreventivesDocId();
@@ -2600,7 +2644,9 @@ export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
     if (!rows || rows.length < 2) {
       return fetchPreventivesFromSheetCSV();
     }
-    return processPreventiveRows(rows);
+    const processed = processPreventiveRows(rows);
+    if (processed.length > 0) return processed;
+    return fetchPreventivesFromSheetCSV();
   } catch (e) { 
     return fetchPreventivesFromSheetCSV(); 
   }
@@ -2609,6 +2655,22 @@ export const fetchPreventivesFromSheet = async (): Promise<Preventive[]> => {
 const fetchPreventivesFromSheetCSV = async (): Promise<Preventive[]> => {
   try {
     const docId = getPreventivesDocId();
+
+    // Intento 1: export directo por GID 2086109634
+    try {
+      const exportUrl = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=2086109634${getCacheBuster()}`;
+      const resp = await fetch(exportUrl, { mode: 'cors', credentials: 'omit' });
+      const csv = await resp.text();
+      if (csv && !csv.includes('<!DOCTYPE html')) {
+        const parsed = Papa.parse(csv, { header: false, skipEmptyLines: 'greedy' });
+        const items = processPreventiveRows(parsed.data as any[][]);
+        if (items.length > 0) return items;
+      }
+    } catch (e1) {
+      console.warn('Export CSV direct failed for PREVENTIVO:', e1);
+    }
+
+    // Intento 2: GViz por nombre de hoja PREVENTIVO
     const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=PREVENTIVO${getCacheBuster()}`;
     const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     const csvText = await response.text();
@@ -2628,40 +2690,149 @@ const fetchPreventivesFromSheetCSV = async (): Promise<Preventive[]> => {
 };
 
 const processPreventiveRows = (rows: any[][]): Preventive[] => {
+  if (!rows || rows.length <= 1) return [];
+
   return rows.slice(1)
-    .filter(row => row && row[5]) // Placa en indice 5
+    .filter(row => {
+      if (!row || !Array.isArray(row)) return false;
+      const placa = sanitizePreventiveCell(row[0]).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const fechaEjec = sanitizePreventiveCell(row[15]);
+      // Regla de oro: Filtrar filas sin PLACA o sin FECHA DE EJECUCION (preventivos ya ejecutados)
+      if (!placa || !fechaEjec) return false;
+      if (placa === 'PLACA' || fechaEjec.toLowerCase().includes('fecha')) return false;
+      return true;
+    })
     .map((row, i): Preventive => {
-      const placa = normalizePlate(cleanSheetValue(row[5]));
-      const valCumplimiento = parseInt(cleanSheetValue(row[13])) || 0;
+      const placa = sanitizePreventiveCell(row[0]).toUpperCase().replace(/[^A-Z0-9]/g, '');
       
-      let status: 'ok' | 'warning' | 'critical' = 'ok';
-      if (valCumplimiento === 0) status = 'critical';
-      else {
-        const diff = parseInt(cleanSheetValue(row[11])) || 0;
-        if (diff > 200) status = 'warning'; // Pequeña tolerancia de advertencia
+      const cdRaw = sanitizePreventiveCell(row[1]);
+      let cd = cdRaw;
+      if (cdRaw.toLowerCase().includes('galapa')) cd = 'Galapa';
+      else if (cdRaw.toLowerCase().includes('arenosa')) cd = 'La Arenosa';
+      else if (!cd) cd = '—';
+
+      const contratista = sanitizePreventiveCell(row[2]) || '—';
+      const linea = sanitizePreventiveCell(row[3]) || '—';
+      const ultimaRevision = sanitizePreventiveCell(row[4]) || '—';
+      const proximaRevision = sanitizePreventiveCell(row[5]) || '—';
+      const criterio = sanitizePreventiveCell(row[9]) || '—';
+      const ultimoContador = sanitizePreventiveCell(row[10]) || '—';
+      const semanaProgramada = sanitizePreventiveCell(row[12]) || '—';
+      const rutinaRaw = sanitizePreventiveCell(row[13]);
+      const rutina = rutinaRaw || 'Sin Dato';
+      const estado = sanitizePreventiveCell(row[14]) || 'EJECUTADO';
+      const fechaEjecucion = sanitizePreventiveCell(row[15]);
+
+      const rawSemana = sanitizePreventiveCell(row[16]);
+      const semanaEjecucionNumero = parseInt(rawSemana.replace(/\D/g, ''), 10) || 0;
+      const semanaEjecucion = rawSemana ? `Semana ${semanaEjecucionNumero || rawSemana}` : '—';
+
+      const kmEjecucion = sanitizePreventiveCell(row[17]) || '—';
+      const diferencia = sanitizePreventiveCell(row[18]) || '—';
+
+      // CUMPLIMIENTO: solo CUMPLE o NO CUMPLE exacto
+      const rawCumpl = sanitizePreventiveCell(row[19]).toUpperCase().trim();
+      let cumplimiento: 'CUMPLE' | 'NO CUMPLE' | string = '';
+      if (rawCumpl === 'CUMPLE') {
+        cumplimiento = 'CUMPLE';
+      } else if (rawCumpl === 'NO CUMPLE') {
+        cumplimiento = 'NO CUMPLE';
+      } else {
+        cumplimiento = '';
+      }
+
+      // Parsear FECHA DE EJECUCION siempre como dd/mm/yyyy (día/mes/año) a ISO YYYY-MM-DD
+      let fechaIso = '';
+      let fechaDisplay = '—';
+      let mes = 'Sin Mes';
+      let mesNumero = 0;
+      let mesClave = ''; // e.g. "2026-01"
+
+      if (fechaEjecucion) {
+        const parts = fechaEjecucion.split(/[/.-]/);
+        if (parts.length === 3) {
+          let day = 0;
+          let month = 0;
+          let year = 0;
+          if (parts[0].length === 4) {
+            // Formato YYYY-MM-DD
+            year = parseInt(parts[0], 10);
+            month = parseInt(parts[1], 10);
+            day = parseInt(parts[2], 10);
+          } else {
+            // Formato estándar latino DD/MM/YYYY
+            day = parseInt(parts[0], 10);
+            month = parseInt(parts[1], 10);
+            year = parseInt(parts[2], 10);
+          }
+          if (year > 2000 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            const yStr = String(year);
+            const mStr = String(month).padStart(2, '0');
+            const dStr = String(day).padStart(2, '0');
+            fechaIso = `${yStr}-${mStr}-${dStr}`;
+            fechaDisplay = `${dStr}/${mStr}/${yStr}`;
+            mesNumero = month;
+            mes = PREVENTIVE_MONTH_NAMES_ES[month - 1];
+            mesClave = `${yStr}-${mStr}`;
+          }
+        }
+      }
+      if (!fechaDisplay || fechaDisplay === '—') {
+        fechaDisplay = fechaEjecucion || '—';
+      }
+
+      // Agrupar por la columna MES = columna V (índice 21), que contiene el nombre del mes en texto ("enero", "febrero"...)
+      const rawMesColV = sanitizePreventiveCell(row[21]);
+      if (rawMesColV) {
+        const norm = normalizaMesTexto(rawMesColV);
+        const idx = PREVENTIVE_ORDEN_MESES.indexOf(norm);
+        if (idx !== -1) {
+          mesNumero = idx + 1;
+          mes = PREVENTIVE_MONTH_NAMES_ES[idx];
+          mesClave = `2026-${String(mesNumero).padStart(2, '0')}`;
+        } else if (rawMesColV !== '—') {
+          mes = rawMesColV;
+        }
       }
 
       return {
-        id: `prev-${placa}-${i}`,
-        semProgramado: cleanSheetValue(row[0]),
-        fechaProgramada: parseFlexibleDate(row[1]),
-        semEjecucion: cleanSheetValue(row[2]),
-        mes: cleanSheetValue(row[3]),
-        fechaEjecucion: parseFlexibleDate(row[4]),
-        placa: placa,
-        frecuencia: parseInt(cleanSheetValue(row[6])) || 0,
-        ultimoKm: parseInt(cleanSheetValue(row[7])) || 0,
-        proximoKm: parseInt(cleanSheetValue(row[8])) || 0,
-        kmRegistrado: parseInt(cleanSheetValue(row[9])) || 0,
-        tipo: cleanSheetValue(row[10]),
-        diferencia: parseInt(cleanSheetValue(row[11])) || 0,
-        cumplimientoRango: cleanSheetValue(row[12]),
-        validaccionCumplimiento: valCumplimiento,
-        cumplimientoProgramacion: parseInt(cleanSheetValue(row[14])) || 0,
-        evidenceUrl: cleanSheetValue(row[18]),
-        cd: cleanSheetValue(row[16]) || 'GENERAL',
-        linea: cleanSheetValue(row[17]),
-        status
+        id: `prev-${placa}-${(fechaIso || fechaEjecucion).replace(/[^a-zA-Z0-9]/g, '')}-${i}`,
+        placa,
+        cd,
+        contratista,
+        linea,
+        marca: linea,
+        ultimaRevision,
+        proximaRevision,
+        criterio,
+        ultimoContador,
+        semanaProgramada,
+        rutina,
+        estado,
+        fechaEjecucion: fechaDisplay,
+        fechaEjecucionIso: fechaIso || undefined,
+        mesClave: mesClave || undefined,
+        mes,
+        mesNumero,
+        semanaEjecucion,
+        semanaEjecucionNumero,
+        kmEjecucion,
+        diferencia,
+        cumplimiento,
+        // Backward compatibility
+        semProgramado: semanaProgramada,
+        fechaProgramada: '—',
+        semEjecucion: semanaEjecucion,
+        frecuencia: 0,
+        ultimoKm: parseInt(ultimaRevision.replace(/[^\d]/g, ''), 10) || 0,
+        proximoKm: parseInt(proximaRevision.replace(/[^\d]/g, ''), 10) || 0,
+        kmRegistrado: parseInt(kmEjecucion.replace(/[^\d]/g, ''), 10) || 0,
+        tipo: criterio,
+        cumplimientoRango: cumplimiento,
+        validaccionCumplimiento: cumplimiento === 'CUMPLE' ? 1 : 0,
+        cumplimientoProgramacion: 1,
+        evidenceUrl: sanitizePreventiveCell(row[20]) || undefined,
+        status: cumplimiento === 'CUMPLE' ? 'ok' : 'critical'
       };
     });
 };
@@ -5540,6 +5711,11 @@ export const submitNovedadFltLink = async (payload: {
     }
   }
 
+  // Si finalLink aún no es URL http y tenemos base64, pasamos la foto para que el script de Apps Script la cree en Drive directamente
+  if (!finalLink && rawBase64) {
+    finalLink = rawBase64;
+  }
+
   const reqData = {
     method: 'POST_NOVEDAD_FLT_LINK',
     data: {
@@ -5547,6 +5723,7 @@ export const submitNovedadFltLink = async (payload: {
       sheetName: 'CIERRE DE NOVEDADES',
       rowIndex: payload.rowIndex,
       link: finalLink,
+      evidencia: finalLink,
       imageBase64: rawBase64 || undefined,
       placa: payload.placa,
       reporte: payload.reporte,
@@ -5565,8 +5742,12 @@ export const submitNovedadFltLink = async (payload: {
   // Si el Apps Script retornó la URL del archivo subido a Google Drive
   if (result && typeof result === 'object') {
     const returnedLink = (result as any).link || (result as any).url || (result as any).data;
-    if (returnedLink && typeof returnedLink === 'string' && returnedLink.startsWith('http')) {
-      finalLink = returnedLink;
+    if (returnedLink && typeof returnedLink === 'string') {
+      if (returnedLink.startsWith('Error_Drive:')) {
+        console.warn('Advertencia en Apps Script (Drive):', returnedLink);
+      } else if (returnedLink.startsWith('http')) {
+        finalLink = returnedLink;
+      }
     }
   }
 

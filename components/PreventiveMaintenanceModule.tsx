@@ -2,1070 +2,1769 @@ import React, { useMemo, useState } from 'react';
 import { Preventive } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  LineChart, Line, Cell, PieChart, Pie, Legend, AreaChart, Area, LabelList
+  Line, ComposedChart, Legend, Cell, LabelList
 } from 'recharts';
 import { 
-  Zap, CheckCircle2, AlertCircle, XCircle, Clock, 
-  Search, Download, ArrowUpRight, 
-  ArrowDownRight, Truck, Activity, Shield, Cpu,
-  Globe, Server, BarChart3, Radio, Camera, ImagePlus, Loader2, Image as ImageIcon,
-  ChevronLeft, ChevronRight, X, Settings, AlertTriangle, Check
+  CheckCircle2, XCircle, Search, Filter, RotateCcw, 
+  Truck, Calendar, Hash, Wrench, ShieldCheck, 
+  Building2, Layers, ChevronLeft, ChevronRight,
+  TrendingUp, ArrowUpDown, FileSpreadsheet, ExternalLink,
+  SlidersHorizontal, Check, X, Info
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { submitPreventiveUpdateToSheet, getPreventivesDocId, setPreventivesDocId } from '../services/sheetService';
+import { getPreventivesDocId, setPreventivesDocId } from '../services/sheetService';
 
 interface Props {
   data: Preventive[];
   onUpdate?: (plate: string, date: string, evidence: string) => void;
 }
 
-const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate }) => {
+const MONTH_NAMES_ORDER = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+const ORDEN_MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+];
+
+const normalizaMes = (s: string) => (s || '').toString().trim().toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/** Formato corto latino dd/mm/yyyy para evitar desfase de zona horaria o valores erróneos */
+const formatFechaCorta = (fechaVal?: string, isoVal?: string): string => {
+  const val = isoVal || fechaVal;
+  if (!val || val === '—' || val === 'No disponible' || val === 'Invalid Date') return '—';
+  // Si ya es formato dd/mm/yyyy
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) return val;
+  // Si es ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(val)) {
+    const parts = val.slice(0, 10).split('-');
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  const d = new Date(val + 'T12:00:00'); // mediodía evita desfase de zona horaria
+  if (isNaN(d.getTime())) return val || '—';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = d.getFullYear();
+  return `${dd}/${mm}/${yy}`;
+};
+
+export const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate }) => {
+  // ---------------------------------------------------------------------------
+  // ESTADOS DE FILTRO (Multifiltro)
+  // ---------------------------------------------------------------------------
   const [filterCd, setFilterCd] = useState<string>('TODOS');
-  const [filterMonth, setFilterMonth] = useState<string>('TODOS');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedItem, setSelectedItem] = useState<Preventive | null>(null);
-  const [viewingEvidence, setViewingEvidence] = useState<Preventive | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [capturedImages, setCapturedImages] = useState<string[]>([]);
-  const [showSettings, setShowSettings] = useState(false);
-  const [sheetIdInput, setSheetIdInput] = useState(() => getPreventivesDocId());
-  const [saveFeedback, setSaveFeedback] = useState('');
-  
-  const [currentPage, setCurrentPage] = useState(1);
+  const [filterMes, setFilterMes] = useState<string>('TODOS');
+  const [filterSemana, setFilterSemana] = useState<string>('TODOS');
+  const [filterRutina, setFilterRutina] = useState<string>('TODOS');
+  const [filterMarca, setFilterMarca] = useState<string>('TODOS');
+  const [filterContratista, setFilterContratista] = useState<string>('TODOS');
+  const [filterCumplimiento, setFilterCumplimiento] = useState<string>('TODOS');
+  const [searchPlaca, setSearchPlaca] = useState<string>('');
+
+  // Vista de top placas
+  const [topPlacasLimit, setTopPlacasLimit] = useState<number>(15);
+
+  // Paginación de la tabla de detalle
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 15;
 
-  // Auto reset page when search or filters change
-  const [lastFilters, setLastFilters] = useState({ filterCd, filterMonth, searchTerm });
-  if (lastFilters.filterCd !== filterCd || lastFilters.filterMonth !== filterMonth || lastFilters.searchTerm !== searchTerm) {
+
+  // ---------------------------------------------------------------------------
+  // EXTRACCIÓN DE VALORES REALES ÚNICOS PARA SELECTORES
+  // ---------------------------------------------------------------------------
+  const availableOptions = useMemo(() => {
+    const cds = new Set<string>();
+    const meses = new Set<string>();
+    const semanasMap = new Map<string, number>(); // semana string -> orden numérico
+    const rutinas = new Set<string>();
+    const marcas = new Set<string>();
+    const contratistas = new Set<string>();
+
+    data.forEach(item => {
+      if (item.cd && item.cd !== '—') cds.add(item.cd);
+      if (item.mes && item.mes !== 'Sin Mes' && item.mes !== '—') meses.add(item.mes);
+      if (item.semanaEjecucion && item.semanaEjecucion !== '—') {
+        semanasMap.set(item.semanaEjecucion, item.semanaEjecucionNumero || 0);
+      }
+      if (item.rutina && item.rutina !== '—') rutinas.add(item.rutina);
+      if (item.linea && item.linea !== '—') {
+        const cleanMarca = item.linea.replace(/\s+/g, ' ').trim().toUpperCase();
+        if (cleanMarca) marcas.add(cleanMarca);
+      }
+      if (item.contratista && item.contratista !== '—') contratistas.add(item.contratista);
+    });
+
+    // Orden cronológico de meses (enero a diciembre)
+    const sortedMeses = Array.from(meses).sort((a, b) => {
+      const idxA = ORDEN_MESES.indexOf(normalizaMes(a));
+      const idxB = ORDEN_MESES.indexOf(normalizaMes(b));
+      return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+    });
+
+    // Orden numérico de semanas
+    const sortedSemanas = Array.from(semanasMap.entries())
+      .sort((a, b) => a[1] - b[1])
+      .map(entry => entry[0]);
+
+    // Orden alfabético
+    const sortedRutinas = Array.from(rutinas).sort();
+    const sortedMarcas = Array.from(marcas).sort();
+    const sortedContratistas = Array.from(contratistas).sort();
+    const sortedCds = Array.from(cds).sort();
+
+    return {
+      cds: sortedCds,
+      meses: sortedMeses,
+      semanas: sortedSemanas,
+      rutinas: sortedRutinas,
+      marcas: sortedMarcas,
+      contratistas: sortedContratistas
+    };
+  }, [data]);
+
+  // Indicador de filtros activos
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (filterCd !== 'TODOS') count++;
+    if (filterMes !== 'TODOS') count++;
+    if (filterSemana !== 'TODOS') count++;
+    if (filterRutina !== 'TODOS') count++;
+    if (filterMarca !== 'TODOS') count++;
+    if (filterContratista !== 'TODOS') count++;
+    if (filterCumplimiento !== 'TODOS') count++;
+    if (searchPlaca.trim() !== '') count++;
+    return count;
+  }, [filterCd, filterMes, filterSemana, filterRutina, filterMarca, filterContratista, filterCumplimiento, searchPlaca]);
+
+  const handleResetFilters = () => {
+    setFilterCd('TODOS');
+    setFilterMes('TODOS');
+    setFilterSemana('TODOS');
+    setFilterRutina('TODOS');
+    setFilterMarca('TODOS');
+    setFilterContratista('TODOS');
+    setFilterCumplimiento('TODOS');
+    setSearchPlaca('');
     setCurrentPage(1);
-    setLastFilters({ filterCd, filterMonth, searchTerm });
-  }
-
-  const getDirectImageUrl = (url: string) => {
-    if (!url) return '';
-    const trimmed = url.trim();
-    if (trimmed.startsWith('data:image')) return trimmed;
-
-    // Google Drive matching (supports open?id=, file/d/, uc?id=, etc)
-    const driveMatch = trimmed.match(/(?:id=|\/d\/|preview\/|uc\?id=)([a-zA-Z0-9_-]{25,})/);
-    if (driveMatch && driveMatch[1]) {
-      // thumbnail is the most reliable way to bypass most cookie/auth redirect blocks for <img> tags
-      return `https://drive.google.com/thumbnail?id=${driveMatch[1]}&sz=s4000`;
-    }
-    return trimmed;
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      const remainingSlots = 6 - capturedImages.length;
-      const filesToProcess = Array.from(files).slice(0, remainingSlots);
-      
-      filesToProcess.forEach((file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setCapturedImages(prev => [...prev, reader.result as string].slice(0, 6));
-        };
-        reader.readAsDataURL(file);
-      });
+  // Helper para filtros interactivos cruzados al hacer clic en gráficas
+  const handleToggleFilter = (type: 'cd' | 'mes' | 'semana' | 'rutina' | 'marca' | 'placa', value: string) => {
+    setCurrentPage(1);
+    switch (type) {
+      case 'cd':
+        setFilterCd(prev => prev === value ? 'TODOS' : value);
+        break;
+      case 'mes':
+        setFilterMes(prev => prev === value ? 'TODOS' : value);
+        break;
+      case 'semana':
+        setFilterSemana(prev => prev === value ? 'TODOS' : value);
+        break;
+      case 'rutina':
+        setFilterRutina(prev => prev === value ? 'TODOS' : value);
+        break;
+      case 'marca':
+        setFilterMarca(prev => prev === value ? 'TODOS' : value);
+        break;
+      case 'placa':
+        setSearchPlaca(prev => prev.toUpperCase() === value.toUpperCase() ? '' : value);
+        break;
     }
   };
 
-  const createCollage = async (images: string[]): Promise<string> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return resolve(images[0]);
-
-      // Determine dimensions based on count
-      const count = images.length;
-      let cols = 2;
-      let rows = 2;
-
-      if (count === 1) { cols = 1; rows = 1; }
-      else if (count <= 2) { cols = 2; rows = 1; }
-      else if (count <= 4) { cols = 2; rows = 2; }
-      else if (count <= 6) { cols = 3; rows = 2; }
-
-      const padding = 10;
-      const slotW = 800;
-      const slotH = 600;
-
-      canvas.width = cols * slotW + (cols + 1) * padding;
-      canvas.height = rows * slotH + (rows + 1) * padding;
-
-      const loadedImages: HTMLImageElement[] = [];
-      let loadedCount = 0;
-
-      images.forEach((src, idx) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => {
-          loadedImages[idx] = img;
-          loadedCount++;
-          if (loadedCount === images.length) {
-            ctx.fillStyle = "#ffffff"; // White background for the collage base
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            loadedImages.forEach((image, i) => {
-              const r = i % cols;
-              const c = Math.floor(i / cols);
-              
-              const x = r * slotW + (r + 1) * padding;
-              const y = c * slotH + (c + 1) * padding;
-
-              // Fit logic instead of Cover (DO NOT CROP!)
-              const scale = Math.min(slotW / image.width, slotH / image.height);
-              const w = image.width * scale;
-              const h = image.height * scale;
-              const offsetX = x + (slotW - w) / 2;
-              const offsetY = y + (slotH - h) / 2;
-
-              ctx.drawImage(image, offsetX, offsetY, w, h);
-            });
-
-            resolve(canvas.toDataURL('image/jpeg', 0.85));
-          }
-        };
-        img.src = src;
-      });
-    });
-  };
-
-  const handleUpdateSubmission = async () => {
-    if (!selectedItem || capturedImages.length === 0) {
-      alert('Por favor cargue al menos una evidencia.');
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const finalImage = capturedImages.length > 1 ? await createCollage(capturedImages) : capturedImages[0];
-      
-      const success = await submitPreventiveUpdateToSheet({
-        plate: selectedItem.placa,
-        //@ts-ignore
-        date: new Date().toISOString().split('T')[0],
-        evidence: finalImage
-      });
-
-      if (success) {
-        if (onUpdate) {
-          onUpdate(selectedItem.placa, new Date().toISOString().split('T')[0], finalImage);
-        }
-        alert('Ejecución registrada exitosamente.');
-        setSelectedItem(null);
-        setCapturedImages([]);
-      } else {
-        alert('Error al registrar. Verifique la conexión.');
-      }
-    } catch (error) {
-      console.error('Error subiendo evidencia:', error);
-      alert('Error en el envío.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const months = useMemo(() => ['TODOS', ...Array.from(new Set(data.map(d => d.mes))).filter(Boolean)], [data]);
-  const cds = useMemo(() => ['TODOS', ...Array.from(new Set(data.map(d => d.cd))).filter(Boolean)], [data]);
-
+  // ---------------------------------------------------------------------------
+  // APLICACIÓN DEL MULTIFILTRO
+  // ---------------------------------------------------------------------------
   const filteredData = useMemo(() => {
-    return data.filter(d => {
-      const matchCd = filterCd === 'TODOS' || d.cd === filterCd;
-      const matchMonth = filterMonth === 'TODOS' || d.mes === filterMonth;
-      const matchSearch = !searchTerm || d.placa.toLowerCase().includes(searchTerm.toLowerCase()) || d.linea.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchCd && matchMonth && matchSearch;
+    const cleanSearch = searchPlaca.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    return data.filter(item => {
+      // Búsqueda por placa
+      if (cleanSearch && !item.placa.toUpperCase().includes(cleanSearch)) {
+        return false;
+      }
+      // Filtro CD
+      if (filterCd !== 'TODOS' && item.cd !== filterCd) {
+        return false;
+      }
+      // Filtro Mes
+      if (filterMes !== 'TODOS' && item.mes !== filterMes) {
+        return false;
+      }
+      // Filtro Semana de ejecución
+      if (filterSemana !== 'TODOS' && item.semanaEjecucion !== filterSemana) {
+        return false;
+      }
+      // Filtro Rutina
+      if (filterRutina !== 'TODOS' && item.rutina !== filterRutina) {
+        return false;
+      }
+      // Filtro Marca / Línea (normalizada)
+      if (filterMarca !== 'TODOS') {
+        const itemMarca = (item.linea || '').replace(/\s+/g, ' ').trim().toUpperCase();
+        if (itemMarca !== filterMarca) {
+          return false;
+        }
+      }
+      // Filtro Contratista
+      if (filterContratista !== 'TODOS' && item.contratista !== filterContratista) {
+        return false;
+      }
+      // Filtro Cumplimiento
+      if (filterCumplimiento !== 'TODOS' && item.cumplimiento !== filterCumplimiento) {
+        return false;
+      }
+      return true;
     });
-  }, [data, filterCd, filterMonth, searchTerm]);
+  }, [data, filterCd, filterMes, filterSemana, filterRutina, filterMarca, filterContratista, filterCumplimiento, searchPlaca]);
 
-  const stats = useMemo(() => {
+  // ---------------------------------------------------------------------------
+  // CÁLCULOS KPI (SOLO COLUMNA CUMPLIMIENTO CUMPLE vs NO CUMPLE)
+  // ---------------------------------------------------------------------------
+  const kpis = useMemo(() => {
     const total = filteredData.length;
-    const compliant = filteredData.filter(d => d.validaccionCumplimiento === 1).length;
-    const complianceRate = total > 0 ? (compliant / total) * 100 : 0;
-    const avgDiff = total > 0 
-      ? filteredData.reduce((acc, curr) => acc + curr.diferencia, 0) / total 
-      : 0;
-    return { total, compliant, complianceRate, avgDiff };
+    let cumple = 0;
+    let noCumple = 0;
+
+    filteredData.forEach(item => {
+      if (item.cumplimiento === 'CUMPLE') cumple++;
+      else if (item.cumplimiento === 'NO CUMPLE') noCumple++;
+    });
+
+    const totalClasificado = cumple + noCumple;
+    const porcentaje = totalClasificado > 0 ? (cumple / totalClasificado) * 100 : 0;
+
+    return {
+      total,
+      cumple,
+      noCumple,
+      porcentaje,
+      sinClasificar: total - totalClasificado
+    };
   }, [filteredData]);
 
+  // ---------------------------------------------------------------------------
+  // 3.2 GRÁFICA MENSUAL (Agrupación por columna MES Col V en orden cronológico)
+  // ---------------------------------------------------------------------------
+  const monthlyData = useMemo(() => {
+    const map = new Map<string, { clave: string; mes: string; mesNumero: number; cumple: number; noCumple: number; total: number }>();
+
+    filteredData.forEach(item => {
+      const rawMes = item.mes || '';
+      const norm = normalizaMes(rawMes);
+      const idxMes = ORDEN_MESES.indexOf(norm);
+      const mesNum = idxMes !== -1 ? idxMes + 1 : (item.mesNumero || 99);
+      const clave = String(mesNum).padStart(2, '0');
+      // Nombre legible con mayúscula inicial
+      const mesLabel = idxMes !== -1 
+        ? (norm.charAt(0).toUpperCase() + norm.slice(1)) 
+        : (item.mes && item.mes !== 'Sin Mes' && item.mes !== '—' ? item.mes : '—');
+
+      if (!map.has(clave)) {
+        map.set(clave, { clave, mes: mesLabel, mesNumero: mesNum, cumple: 0, noCumple: 0, total: 0 });
+      }
+      const entry = map.get(clave)!;
+      entry.total++;
+      if (item.cumplimiento === 'CUMPLE') entry.cumple++;
+      else if (item.cumplimiento === 'NO CUMPLE') entry.noCumple++;
+    });
+
+    return Array.from(map.values())
+      .sort((a, b) => a.mesNumero - b.mesNumero)
+      .map(entry => {
+        const totalCumpl = entry.cumple + entry.noCumple;
+        const pct = totalCumpl > 0 ? Math.round((entry.cumple / totalCumpl) * 100) : 0;
+        return {
+          ...entry,
+          porcentaje: pct
+        };
+      });
+  }, [filteredData]);
+
+  // ---------------------------------------------------------------------------
+  // 3.3 GRÁFICA SEMANAL (Por Semana de Ejecución, orden numérico)
+  // ---------------------------------------------------------------------------
+  const weeklyData = useMemo(() => {
+    const map = new Map<string, { semana: string; num: number; cumple: number; noCumple: number; total: number }>();
+
+    filteredData.forEach(item => {
+      const semLabel = item.semanaEjecucion && item.semanaEjecucion !== '—' ? item.semanaEjecucion : '—';
+      const semNum = item.semanaEjecucionNumero || parseInt(semLabel.replace(/\D/g, ''), 10) || 0;
+
+      if (!map.has(semLabel)) {
+        map.set(semLabel, { semana: semLabel, num: semNum, cumple: 0, noCumple: 0, total: 0 });
+      }
+      const entry = map.get(semLabel)!;
+      entry.total++;
+      if (item.cumplimiento === 'CUMPLE') entry.cumple++;
+      else if (item.cumplimiento === 'NO CUMPLE') entry.noCumple++;
+    });
+
+    return Array.from(map.values())
+      .sort((a, b) => a.num - b.num)
+      .map(entry => {
+        const totalCumpl = entry.cumple + entry.noCumple;
+        const pct = totalCumpl > 0 ? Math.round((entry.cumple / totalCumpl) * 100) : 0;
+        return {
+          ...entry,
+          porcentaje: pct
+        };
+      });
+  }, [filteredData]);
+
+  // ---------------------------------------------------------------------------
+  // 3.4 REFERENCIA POR CD (Galapa vs La Arenosa)
+  // ---------------------------------------------------------------------------
+  const cdData = useMemo(() => {
+    const map = new Map<string, { cd: string; cumple: number; noCumple: number; total: number }>();
+
+    filteredData.forEach(item => {
+      const cdName = item.cd || '—';
+      if (!map.has(cdName)) {
+        map.set(cdName, { cd: cdName, cumple: 0, noCumple: 0, total: 0 });
+      }
+      const entry = map.get(cdName)!;
+      entry.total++;
+      if (item.cumplimiento === 'CUMPLE') entry.cumple++;
+      else if (item.cumplimiento === 'NO CUMPLE') entry.noCumple++;
+    });
+
+    return Array.from(map.values())
+      .sort((a, b) => b.total - a.total)
+      .map(entry => {
+        const totalCumpl = entry.cumple + entry.noCumple;
+        const pct = totalCumpl > 0 ? Number(((entry.cumple / totalCumpl) * 100).toFixed(1)) : 0;
+        return {
+          ...entry,
+          porcentaje: pct
+        };
+      });
+  }, [filteredData]);
+
+  // ---------------------------------------------------------------------------
+  // 3.5 GRÁFICA POR RUTINAS (Rutina 1, 2, 3, 4, Sin Dato)
+  // ---------------------------------------------------------------------------
+  const routineData = useMemo(() => {
+    const map = new Map<string, { rutina: string; cumple: number; noCumple: number; total: number }>();
+
+    filteredData.forEach(item => {
+      const rutName = item.rutina || 'Sin Dato';
+      if (!map.has(rutName)) {
+        map.set(rutName, { rutina: rutName, cumple: 0, noCumple: 0, total: 0 });
+      }
+      const entry = map.get(rutName)!;
+      entry.total++;
+      if (item.cumplimiento === 'CUMPLE') entry.cumple++;
+      else if (item.cumplimiento === 'NO CUMPLE') entry.noCumple++;
+    });
+
+    return Array.from(map.values())
+      .sort((a, b) => a.rutina.localeCompare(b.rutina))
+      .map(entry => {
+        const totalCumpl = entry.cumple + entry.noCumple;
+        const pct = totalCumpl > 0 ? Number(((entry.cumple / totalCumpl) * 100).toFixed(1)) : 0;
+        return {
+          ...entry,
+          porcentaje: pct
+        };
+      });
+  }, [filteredData]);
+
+  // ---------------------------------------------------------------------------
+  // 3.6 GRÁFICA POR MARCA / LÍNEA (Normalizada, ordenada de mayor a menor)
+  // ---------------------------------------------------------------------------
+  const brandData = useMemo(() => {
+    const map = new Map<string, { marca: string; cumple: number; noCumple: number; total: number }>();
+
+    filteredData.forEach(item => {
+      const raw = (item.linea || '').replace(/\s+/g, ' ').trim();
+      const normMarca = raw && raw !== '—' ? raw.toUpperCase() : 'Sin Marca / Línea';
+
+      if (!map.has(normMarca)) {
+        map.set(normMarca, { marca: normMarca, cumple: 0, noCumple: 0, total: 0 });
+      }
+      const entry = map.get(normMarca)!;
+      entry.total++;
+      if (item.cumplimiento === 'CUMPLE') entry.cumple++;
+      else if (item.cumplimiento === 'NO CUMPLE') entry.noCumple++;
+    });
+
+    return Array.from(map.values())
+      .sort((a, b) => b.total - a.total)
+      .map(entry => {
+        const totalCumpl = entry.cumple + entry.noCumple;
+        const pct = totalCumpl > 0 ? Math.round((entry.cumple / totalCumpl) * 100) : 0;
+        return {
+          ...entry,
+          porcentaje: pct
+        };
+      });
+  }, [filteredData]);
+
+  // ---------------------------------------------------------------------------
+  // 3.7 FRECUENCIA DE INGRESO POR PLACA (Columnas VERTICALES ordenadas)
+  // ---------------------------------------------------------------------------
+  const platesData = useMemo(() => {
+    const map = new Map<string, { placa: string; count: number; cd: string; cumple: number; noCumple: number }>();
+
+    filteredData.forEach(item => {
+      const p = item.placa;
+      if (!p) return;
+      if (!map.has(p)) {
+        map.set(p, { placa: p, count: 0, cd: item.cd || '—', cumple: 0, noCumple: 0 });
+      }
+      const entry = map.get(p)!;
+      entry.count++;
+      if (item.cumplimiento === 'CUMPLE') entry.cumple++;
+      else if (item.cumplimiento === 'NO CUMPLE') entry.noCumple++;
+    });
+
+    const sorted = Array.from(map.values()).sort((a, b) => b.count - a.count);
+    return sorted;
+  }, [filteredData]);
+
+  const displayedPlatesData = useMemo(() => {
+    if (topPlacasLimit === 0) return platesData;
+    return platesData.slice(0, topPlacasLimit);
+  }, [platesData, topPlacasLimit]);
+
+  // ---------------------------------------------------------------------------
+  // TABLA DE DETALLE CON PAGINACIÓN
+  // ---------------------------------------------------------------------------
   const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
-
   const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredData.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredData, currentPage, itemsPerPage]);
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(start, start + itemsPerPage);
+  }, [filteredData, currentPage]);
 
-  const pageNumbers = useMemo(() => {
-    const pages: (number | string)[] = [];
-    const maxVisible = 5;
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (currentPage <= 3) {
-        pages.push(1, 2, 3, 4, '...', totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-      } else {
-        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-      }
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
     }
-    return pages;
-  }, [totalPages, currentPage]);
+  };
 
-  const trendData = useMemo(() => {
-    const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-    const groups = filteredData.reduce((acc: any, curr) => {
-      const m = curr.mes?.toUpperCase() || 'N/A';
-      if (!acc[m]) acc[m] = { month: m, compliant: 0, total: 0 };
-      acc[m].total++;
-      if (curr.validaccionCumplimiento === 1) acc[m].compliant++;
-      return acc;
-    }, {});
-    return Object.values(groups)
-      .map((g: any) => ({ ...g, rate: Math.round((g.compliant / g.total) * 100) }))
-      .sort((a: any, b: any) => monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month));
-  }, [filteredData]);
 
-  const weeklyTrendData = useMemo(() => {
-    const groups = filteredData.reduce((acc: any, curr) => {
-      const w = curr.semEjecucion ? `S${curr.semEjecucion}` : 'N/A';
-      if (!acc[w]) acc[w] = { week: w, compliant: 0, total: 0 };
-      acc[w].total++;
-      if (curr.validaccionCumplimiento === 1) acc[w].compliant++;
-      return acc;
-    }, {});
-    return Object.values(groups)
-      .map((g: any) => ({ ...g, rate: Math.round((g.compliant / g.total) * 100) }))
-      .sort((a: any, b: any) => {
-        const wA = parseInt(a.week.replace('S', '')) || 0;
-        const wB = parseInt(b.week.replace('S', '')) || 0;
-        return wA - wB;
-      }).slice(-12); // Últimas 12 semanas
-  }, [filteredData]);
-
-  const complianceRangeData = useMemo(() => {
-    const counts = filteredData.reduce((acc: any, curr) => {
-      const r = curr.cumplimientoRango?.trim();
-      if (!r) return acc;
-      
-      const lowerR = r.toLowerCase();
-      if (lowerR.includes('cumpli') && !lowerR.includes('no')) {
-        acc['Cumplió'] = (acc['Cumplió'] || 0) + 1;
-      } else if (lowerR.includes('no cumpli')) {
-        acc['No cumplió'] = (acc['No cumplió'] || 0) + 1;
-      }
-      return acc;
-    }, {});
-
-    const total = Object.values(counts).reduce((a: any, b: any) => a + (b as number), 0) as number;
-    
-    return Object.entries(counts).map(([range, count]) => ({
-      range,
-      count,
-      percentage: total > 0 ? Math.round((count as number / total) * 100) : 0
-    })).sort((a: any, b: any) => b.count - a.count);
-  }, [filteredData]);
-
-  const modelData = useMemo(() => {
-    const groups = filteredData.reduce((acc: any, curr) => {
-      const l = curr.linea || 'N/A';
-      if (!acc[l]) acc[l] = { model: l, compliant: 0, total: 0 };
-      acc[l].total++;
-      if (curr.validaccionCumplimiento === 1) acc[l].compliant++;
-      return acc;
-    }, {});
-    return Object.values(groups)
-      .map((g: any) => ({ ...g, rate: Math.round((g.compliant / g.total) * 100) }))
-      .sort((a: any, b: any) => b.total - a.total).slice(0, 8);
-  }, [filteredData]);
-
-  const maintenanceTypeData = useMemo(() => {
-    const groups = filteredData.reduce((acc: any, curr) => {
-      const type = curr.tipo || 'SIN TIPO';
-      if (!acc[type]) acc[type] = { name: type, count: 0 };
-      acc[type].count++;
-      return acc;
-    }, {});
-    
-    const total = filteredData.length;
-    return Object.values(groups).map((g: any) => ({
-      ...g,
-      percentage: total > 0 ? Math.round((g.count / total) * 100) : 0
-    })).sort((a: any, b: any) => b.count - a.count);
-  }, [filteredData]);
-
-  const NEON = {
-    green: '#10F9AC',
-    cyan: '#00D1FF',
-    blue: '#3B82F6',
-    amber: '#F59E0B',
-    red: '#FF4D4D',
-    bg: '#0F172A',
-    panel: '#1E293B'
+  // Descarga CSV de los datos filtrados actuales
+  const handleExportCSV = () => {
+    if (filteredData.length === 0) return;
+    const headers = [
+      'PLACA', 'CD', 'CONTRATISTA', 'MARCA_LINEA', 'RUTINA', 
+      'FECHA_EJECUCION', 'SEMANA_EJECUCION', 'MES', 
+      'KM_EJECUCION', 'DIFERENCIA', 'CUMPLIMIENTO'
+    ];
+    const rows = filteredData.map(p => [
+      p.placa, p.cd, p.contratista, p.linea, p.rutina,
+      formatFechaCorta(p.fechaEjecucion, p.fechaEjecucionIso), p.semanaEjecucion, p.mes,
+      p.kmEjecucion, p.diferencia, p.cumplimiento
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + 
+      [headers.join(','), ...rows.map(e => e.map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Mantenimientos_Preventivos_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
-    <div className="min-h-screen bg-[#0F172A] text-slate-300 p-4 lg:p-8 space-y-8 font-sans">
-      {/* Panel de Encabezado */}
-      <header className="relative overflow-hidden bg-[#1E293B]/40 backdrop-blur-xl border border-white/5 rounded-[2.5rem] p-8 shadow-2xl group">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#00D1FF]/5 blur-[100px] -mr-48 -mt-48 pointer-events-none transition-all duration-700 group-hover:bg-[#00D1FF]/10"></div>
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 z-10 relative">
-          <div>
-            <h1 className="text-4xl lg:text-6xl font-black tracking-tighter text-white uppercase italic">
-              MTTO <span className="text-[#10F9AC] not-italic">PREVENTIVO</span>
-            </h1>
+    <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B] p-4 md:p-8 space-y-6">
+
+      {/* --------------------------------------------------------------------- */}
+      {/* HEADER PRINCIPAL                                                      */}
+      {/* --------------------------------------------------------------------- */}
+      <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-[#1E293B] tracking-tight">
+            Mantenimientos Preventivos
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-2.5 self-start md:self-center shrink-0">
+          <button
+            onClick={handleExportCSV}
+            disabled={filteredData.length === 0}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-[#E2E8F0] text-[#1E293B] hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+            title="Exportar registros filtrados a CSV"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-[#16A34A]" />
+            <span>Exportar CSV</span>
+          </button>
+        </div>
+      </div>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* 4. BARRA DE MULTIFILTRO                                              */}
+      {/* --------------------------------------------------------------------- */}
+      <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-[#2563EB]" />
+            <h2 className="text-sm font-bold text-[#1E293B]">
+              Filtros de Análisis
+            </h2>
+            {activeFiltersCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-[#2563EB]">
+                {activeFiltersCount} activo{activeFiltersCount > 1 ? 's' : ''}
+              </span>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[#64748B]">
+              Mostrando <strong className="text-[#1E293B]">{filteredData.length}</strong> de <strong className="text-[#1E293B]">{data.length}</strong> preventivos ejecutados
+            </span>
+
+            {activeFiltersCount > 0 && (
+              <button
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#DC2626] bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Limpiar filtros</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Rejilla de Filtros */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+
+          {/* Búsqueda por placa */}
+          <div className="lg:col-span-1">
+            <label className="block text-[11px] font-semibold text-[#64748B] mb-1 uppercase tracking-wider">
+              Placa
+            </label>
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-              <input 
-                type="text" 
-                placeholder="BUSCAR PLACA / LÍNEA..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-12 pr-10 py-4 bg-white/5 border border-white/10 rounded-2xl text-[11px] font-black focus:border-[#00D1FF]/40 focus:bg-white/10 outline-none transition-all w-72 uppercase tracking-widest text-white placeholder:text-slate-600"
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchPlaca}
+                onChange={(e) => {
+                  setSearchPlaca(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Buscar placa..."
+                className="w-full pl-8 pr-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors uppercase"
               />
-              {searchTerm && (
-                <button 
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-            <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/10 backdrop-blur-md">
-              <select 
-                value={filterCd}
-                onChange={(e) => setFilterCd(e.target.value)}
-                className="bg-transparent border-none text-[10px] font-black uppercase px-4 py-2.5 outline-none text-[#00D1FF] cursor-pointer hover:bg-white/5 rounded-xl transition-all"
-              >
-                {cds.map(c => <option key={c} value={c} className="bg-[#1E293B] text-white">{c === 'TODOS' ? 'TODOS LOS CD' : c}</option>)}
-              </select>
-              <div className="w-px h-6 bg-white/10"></div>
-              <select 
-                value={filterMonth}
-                onChange={(e) => setFilterMonth(e.target.value)}
-                className="bg-transparent border-none text-[10px] font-black uppercase px-4 py-2.5 outline-none text-[#10F9AC] cursor-pointer hover:bg-white/5 rounded-xl transition-all"
-              >
-                {months.map(m => <option key={m} value={m} className="bg-[#1E293B] text-white">{m === 'TODOS' ? 'CRONOGRAMA: TODOS' : m}</option>)}
-              </select>
-            </div>
-
-            <button 
-              onClick={() => setShowSettings(!showSettings)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                showSettings 
-                  ? 'bg-amber-600 border border-amber-500 text-white hover:bg-amber-700' 
-                  : 'bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10'
-              }`}
-            >
-              <Settings size={14} className={showSettings ? 'animate-spin' : ''} />
-              Configurar Hoja
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {showSettings && (
-        <div className="bg-amber-950/40 border border-amber-500/20 backdrop-blur-xl rounded-[2rem] p-6 space-y-4 animate-in slide-in-from-top-4 duration-300">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={24} />
-            <div>
-              <h3 className="font-black text-xs uppercase tracking-wider text-amber-200">ID de Google Spreadsheet para MANTENIMIENTO PREVENTIVO</h3>
-              <p className="text-[11px] text-amber-300 leading-normal uppercase font-bold">
-                Por defecto, utiliza la misma hoja de Rutinas. Si creaste un archivo de Google Sheets separado exclusivo para Mantenimiento Preventivo, pega su ID aquí abajo. El sistema buscará la pestaña llamada "PREVENTIVO" en este nuevo archivo.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="text"
-              value={sheetIdInput}
-              onChange={(e) => setSheetIdInput(e.target.value)}
-              placeholder="Ej: 1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU"
-              className="flex-1 p-3 border border-white/10 bg-white/5 rounded-xl text-xs font-bold outline-none text-white font-mono placeholder:text-slate-600"
-            />
-            <button
-              onClick={() => {
-                setPreventivesDocId(sheetIdInput);
-                setSaveFeedback('¡ID de hoja de Preventivos guardado correctamente!');
-                setTimeout(() => setSaveFeedback(''), 4000);
-                window.location.reload();
-              }}
-              className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-            >
-              Guardar Configuración
-            </button>
-          </div>
-          {saveFeedback && (
-            <p className="text-[10px] font-bold text-emerald-400 flex items-center gap-1 uppercase tracking-wider">
-              <Check size={12} /> {saveFeedback}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Tarjetas KPI */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          { label: 'Índice de Cumplimiento', val: `${stats.complianceRate.toFixed(1)}%`, color: NEON.green, icon: Shield, desc: 'Ratio de Éxito Operativo', data: trendData.map(t => t.rate) },
-          { label: 'PLACAS PROGRAMADAS', val: stats.total, color: NEON.cyan, icon: Cpu, desc: 'Mantenimientos en Flota Activa', data: trendData.map(t => t.total) },
-          { label: 'Desviación Media', val: `${Math.round(stats.avgDiff)} KM`, color: stats.avgDiff > 500 ? NEON.red : NEON.amber, icon: Activity, desc: 'Varianza Predictiva', data: trendData.slice(-6).map(t => t.total) },
-          { label: 'Nodos Tácticos', val: Array.from(new Set(filteredData.map(d => d.placa))).length, color: NEON.blue, icon: Server, desc: 'Puntos de Distribución', data: trendData.map(t => t.compliant) }
-        ].map((kpi, idx) => (
-          <motion.div 
-            key={idx}
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.1 }}
-            className="relative bg-[#1E293B]/30 backdrop-blur-lg border border-white/5 rounded-[2rem] p-7 shadow-xl group hover:bg-[#1E293B]/50 transition-all duration-500 overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-30 group-hover:scale-110 transition-all duration-500" style={{ color: kpi.color }}>
-              <kpi.icon size={32} strokeWidth={1.5} />
-            </div>
-            <div className="relative z-10">
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-2 group-hover:text-slate-400 transition-colors">{kpi.label}</p>
-              <h3 className="text-4xl font-black tracking-tighter text-white drop-shadow-2xl" style={{ textShadow: `0 0 30px ${kpi.color}40` }}>{kpi.val}</h3>
-              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-2">{kpi.desc}</p>
-              
-              <div className="h-14 w-full mt-8 opacity-40 group-hover:opacity-100 transition-opacity duration-700">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={kpi.data.map((v, i) => ({ v }))}>
-                    <defs>
-                      <linearGradient id={`grad-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={kpi.color} stopOpacity={0.4}/>
-                        <stop offset="95%" stopColor={kpi.color} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <Area type="monotone" dataKey="v" stroke={kpi.color} strokeWidth={2.5} fill={`url(#grad-${idx})`} dot={false} isAnimationActive={true} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Grilla Principal de Control */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="lg:col-span-12 bg-[#111827]/60 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-10 shadow-3xl overflow-hidden relative"
-        >
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6 relative z-10">
-            <div>
-              <h3 className="text-2xl font-black text-white italic uppercase tracking-tight">Evolución de <span className="not-italic text-slate-400">Cumplimiento Mensual</span></h3>
-            </div>
-            <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-2xl border border-white/5">
-              <div className="w-3 h-3 rounded-full bg-[#10F9AC] shadow-[0_0_10px_#10F9AC]"></div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Meta: 85%</span>
             </div>
           </div>
 
-          <div className="h-[420px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData}>
-                <defs>
-                  <linearGradient id="mainGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10F9AC" stopOpacity={0.25}/>
-                    <stop offset="95%" stopColor="#10F9AC" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1E293B" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 900 }} dy={15} />
-                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 900 }} dx={-10} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1E293B', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', padding: '20px', fontSize: '11px', fontWeight: 900 }}
-                  itemStyle={{ color: '#10F9AC' }}
-                  cursor={{ stroke: '#10F9AC', strokeWidth: 1 }}
-                />
-                <Area type="monotone" dataKey="rate" stroke="#10F9AC" strokeWidth={5} fillOpacity={1} fill="url(#mainGrad)" dot={{ r: 6, fill: '#10F9AC', strokeWidth: 3, stroke: '#0F172A' }} activeDot={{ r: 10 }}>
-                  <LabelList dataKey="rate" position="top" offset={15} fill="#FFFFFF" style={{ fontSize: '10px', fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
-                </Area>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-          className="lg:col-span-8 bg-[#111827]/60 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-10 shadow-3xl"
-        >
-          <div className="mb-12">
-            <h4 className="text-[10px] font-black text-[#10F9AC] uppercase tracking-[0.3em] mb-2">Análisis de Desempeño Semanal</h4>
-            <h3 className="text-xl font-black text-white italic uppercase tracking-tight">Cumplimiento <span className="text-slate-400 not-italic">por Semana (Ejecución)</span></h3>
-          </div>
-          <div className="h-[380px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyTrendData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1E293B" />
-                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 900 }} dy={10} />
-                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 900 }} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1E293B', borderRadius: '16px', border: 'none', fontSize: '11px', fontWeight: 900 }}
-                  cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                />
-                <Bar dataKey="rate" radius={[10, 10, 0, 0]} barSize={40}>
-                   {weeklyTrendData.map((entry: any, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.rate === 100 ? NEON.green : NEON.red} />
-                  ))}
-                  <LabelList dataKey="rate" position="top" fill="#FFFFFF" style={{ fontSize: '10px', fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.4 }}
-          className="lg:col-span-4 bg-[#111827]/60 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-10 shadow-3xl text-center"
-        >
-          <div className="mb-12">
-            <h4 className="text-[10px] font-black text-[#10F9AC] uppercase tracking-[0.3em] mb-2">Métricas de Columna M</h4>
-            <h3 className="text-xl font-black text-white italic uppercase tracking-tight">Cumplimiento <span className="text-slate-400 not-italic">por Rango</span></h3>
-          </div>
-          
-          <div className="h-[380px] w-full relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={complianceRangeData}
-                  innerRadius={90}
-                  outerRadius={125}
-                  paddingAngle={10}
-                  dataKey="count"
-                  nameKey="range"
-                  animationDuration={2000}
-                >
-                  {complianceRangeData.map((entry: any, index) => {
-                    const isCompliant = entry.range === 'Cumplió';
-                    return (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={isCompliant ? NEON.green : NEON.red} 
-                        stroke="none"
-                        className="outline-none"
-                      />
-                    );
-                  })}
-                  <LabelList dataKey="percentage" position="outside" fill="#FFFFFF" style={{ fontSize: '11px', fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#1E293B', borderRadius: '16px', border: 'none', fontSize: '11px', fontWeight: 900 }} />
-                <Legend verticalAlign="bottom" height={36} formatter={(value) => <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-4">{value}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-[-20px]">
-              <span className="text-[11px] font-black text-slate-600 uppercase tracking-[0.4em]">Total</span>
-              <span className="text-5xl font-black text-white tracking-widest mt-2">{filteredData.length}</span>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <motion.div 
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="lg:col-span-8 bg-[#111827]/60 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-10 shadow-3xl"
-        >
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
-            <div>
-              <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em] mb-2">Análisis de Infraestructura</h4>
-              <h3 className="text-xl font-black text-white italic uppercase tracking-tight">Eficiencia de Activos <span className="text-slate-400 not-italic">por Modelo</span></h3>
-            </div>
-          </div>
-          <div className="h-[380px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={modelData} layout="vertical" margin={{ left: 50 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#1E293B" />
-                <XAxis type="number" hide />
-                <YAxis dataKey="model" type="category" axisLine={false} tickLine={false} width={130} tick={{ fill: '#64748b', fontSize: 9, fontWeight: 900 }} />
-                <Tooltip cursor={{ fill: 'rgba(255,255,255,0.02)' }} contentStyle={{ backgroundColor: '#1E293B', borderRadius: '16px', border: 'none', fontSize: '11px', fontWeight: 900 }} />
-                <Bar dataKey="rate" radius={[0, 15, 15, 0]} barSize={26}>
-                  {modelData.map((entry: any, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.rate === 100 ? NEON.green : NEON.red} style={{ filter: `drop-shadow(0 0 15px ${entry.rate === 100 ? NEON.green : NEON.red}40)` }} />
-                  ))}
-                  <LabelList dataKey="rate" position="right" offset={10} fill="#FFFFFF" style={{ fontSize: '9px', fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="lg:col-span-4 bg-[#111827]/60 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-10 shadow-3xl text-center"
-        >
-          <div className="mb-12">
-            <h4 className="text-[10px] font-black text-[#00D1FF] uppercase tracking-[0.3em] mb-2">Distribución Logística</h4>
-            <h3 className="text-xl font-black text-white italic uppercase tracking-tight">Carga <span className="text-slate-400 not-italic">por CD</span></h3>
-          </div>
-          <div className="h-[380px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={cds.filter(c => c !== 'TODOS').map(c => ({
-                    name: c,
-                    value: data.filter(d => d.cd === c).length
-                  }))}
-                  innerRadius={80}
-                  outerRadius={110}
-                  paddingAngle={8}
-                  dataKey="value"
-                  nameKey="name"
-                >
-                  <Cell fill={NEON.cyan} stroke="none" className="outline-none" />
-                  <Cell fill={NEON.blue} stroke="none" className="outline-none" />
-                  <Cell fill={NEON.green} stroke="none" className="outline-none" />
-                  <LabelList dataKey="value" position="outside" fill="#FFFFFF" style={{ fontSize: '11px', fontWeight: 900 }} />
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#1E293B', borderRadius: '16px', border: 'none', fontSize: '11px', fontWeight: 900 }} />
-                <Legend verticalAlign="bottom" align="center" iconType="circle" />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <motion.div 
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8 }}
-          className="lg:col-span-12 bg-[#111827]/60 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-10 shadow-3xl"
-        >
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
-            <div>
-              <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-[0.3em] mb-2">Clasificación Operativa</h4>
-              <h3 className="text-xl font-black text-white italic uppercase tracking-tight">Distribución por <span className="text-slate-400 not-italic">Tipo de Preventivo</span></h3>
-            </div>
-          </div>
-          <div className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={maintenanceTypeData} barGap={20}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1E293B" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 900 }} dy={10} />
-                <YAxis hide />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1E293B', borderRadius: '16px', border: 'none', fontSize: '11px', fontWeight: 900 }}
-                  cursor={{ fill: 'rgba(255,255,255,0.02)' }}
-                />
-                <Bar dataKey="count" radius={[15, 15, 15, 15]} barSize={60}>
-                  {maintenanceTypeData.map((entry: any, index) => (
-                    <Cell key={`cell-${index}`} fill={[NEON.green, NEON.cyan, NEON.blue, NEON.amber, NEON.red][index % 5]} />
-                  ))}
-                  <LabelList dataKey="percentage" position="top" offset={10} fill="#FFFFFF" style={{ fontSize: '12px', fontWeight: 900 }} formatter={(v: any) => `${v}%`} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Registro de Control - Grilla de Datos */}
-      <motion.section 
-        initial={{ opacity: 0, y: 60 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-[#111827]/60 backdrop-blur-3xl rounded-[4rem] border border-white/5 overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.5)] border-t border-t-white/10"
-      >
-        <div className="p-12 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#00D1FF]/5 blur-[80px] -mr-32 -mt-32"></div>
+          {/* Filtro CD */}
           <div>
-            <div className="flex items-center gap-3 mb-3">
-              <BarChart3 size={18} className="text-[#10F9AC]" />
-              <h4 className="text-[11px] font-black text-[#10F9AC] uppercase tracking-[0.4em]">Libro de Operaciones v2.10</h4>
-            </div>
-            <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">Torre de Control <span className="text-slate-400 not-italic">en Tiempo Real</span></h3>
-          </div>
-          <div className="flex items-center gap-4">
-             <div className="px-6 py-3 bg-[#FF4D4D]/10 text-[#FF4D4D] border border-[#FF4D4D]/20 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 shadow-[0_0_20px_rgba(255,77,77,0.1)]">
-                <AlertCircle size={16} className="animate-pulse" /> Monitoreo de Integridad de Activos Activo
-             </div>
-          </div>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-white/5 border-b border-white/5">
-                <th className="p-10 text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">Nodo / Clase</th>
-                <th className="p-10 text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">Sector (CD)</th>
-                <th className="p-10 text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">Frecuencia</th>
-                <th className="p-10 text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">Buffer de Ejecución</th>
-                <th className="p-10 text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">Métricas de Log</th>
-                <th className="p-10 text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">Deriva (KM)</th>
-                <th className="p-10 text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">Estado</th>
-                <th className="p-10 text-[11px] font-black text-slate-500 uppercase tracking-[0.3em]">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              <AnimatePresence>
-                {paginatedData.map((item) => (
-                  <motion.tr 
-                    key={item.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="group hover:bg-white/10 transition-all duration-500 cursor-pointer border-l-2 border-transparent hover:border-l-[#10F9AC]"
-                  >
-                    <td className="p-10">
-                      <div className="flex flex-col">
-                        <span className="text-base font-black text-white group-hover:text-[#00D1FF] transition-all tracking-wider">{item.placa}</span>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-2 border-l border-white/10 pl-3">{item.linea}</span>
-                      </div>
-                    </td>
-                    <td className="p-10">
-                      <span className="text-[11px] font-black text-[#00D1FF] uppercase tracking-[0.3em] transition-colors">{item.cd}</span>
-                    </td>
-                    <td className="p-10">
-                      <div className="flex items-center gap-4">
-                        <div className="p-3.5 bg-slate-800 rounded-2xl text-[#3B82F6] border border-blue-500/20 shadow-xl group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
-                          <Truck size={14} />
-                        </div>
-                        <span className="text-[11px] font-black text-slate-300 tracking-widest">{item.frecuencia} KM CICLO</span>
-                      </div>
-                    </td>
-                    <td className="p-10">
-                      <div className="flex flex-col">
-                        <span className="text-[11px] font-black text-[#10F9AC] uppercase tracking-[0.3em]">{item.mes}</span>
-                        <span className="text-[10px] font-black text-slate-600 mt-2 flex items-center gap-2"><Clock size={12} /> {item.fechaEjecucion}</span>
-                      </div>
-                    </td>
-                    <td className="p-10">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-3">
-                          <span className="text-[11px] font-black text-white">{item.kmRegistrado} <span className="text-slate-600 font-bold ml-1">ACTUAL</span></span>
-                        </div>
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className="text-[10px] font-black text-slate-600 tracking-[0.2em]">PRÓX: {item.proximoKm}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-10">
-                      <div className="text-[12px] font-black flex items-center gap-3 px-4 py-2 rounded-2xl border border-white/5 bg-white/5 text-slate-300">
-                        <Activity size={16} className="opacity-50" />
-                        {Math.abs(item.diferencia)} KM
-                      </div>
-                    </td>
-                    <td className="p-10">
-                      {item.validaccionCumplimiento === 1 ? (
-                        <div className="flex items-center gap-3 text-[#10F9AC] font-black text-[11px] uppercase tracking-[0.3em] bg-[#10F9AC]/5 px-6 py-3 rounded-2xl border border-[#10F9AC]/20 shadow-[0_0_30px_rgba(16,249,172,0.1)] group-hover:shadow-[0_0_40px_rgba(16,249,172,0.2)] transition-all">
-                          <div className="w-2 h-2 rounded-full bg-[#10F9AC] shadow-[0_0_10px_#10F9AC]"></div> Cumplió
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3 text-[#FF4D4D] font-black text-[11px] uppercase tracking-[0.3em] bg-[#FF4D4D]/5 px-6 py-3 rounded-2xl border border-[#FF4D4D]/20 shadow-[0_0_30px_rgba(255,77,77,0.1)] group-hover:shadow-[0_0_40px_rgba(255,77,77,0.2)] transition-all">
-                           <div className="w-2 h-2 rounded-full bg-[#FF4D4D] shadow-[0_0_10px_#FF4D4D] animate-pulse"></div> No cumplió
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-10 text-center">
-                      {!item.evidenceUrl ? (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedItem(item);
-                          }}
-                          className="p-4 bg-[#00D1FF]/10 text-[#00D1FF] border border-[#00D1FF]/20 rounded-2xl hover:bg-[#00D1FF]/20 hover:scale-110 transition-all group/btn flex items-center gap-3 mx-auto"
-                        >
-                          <Camera size={18} className="group-hover/btn:rotate-12" />
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-[#00D1FF] text-black px-2 py-0.5 rounded ml-1">REG</span>
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setViewingEvidence(item);
-                          }}
-                          className="p-4 bg-[#10F9AC]/10 text-[#10F9AC] border border-[#10F9AC]/20 rounded-2xl hover:bg-[#10F9AC]/20 hover:scale-110 transition-all group/btn flex items-center gap-3 mx-auto"
-                        >
-                          <ImageIcon size={18} className="group-hover/btn:scale-110" />
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-[#10F9AC] text-black px-2 py-0.5 rounded ml-1">VER</span>
-                        </button>
-                      )}
-                    </td>
-                  </motion.tr>
-                ))}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
-
-        {/* Control de Pagina / Enrutamiento */}
-        {totalPages > 1 && (
-          <div className="p-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-6 bg-white/[0.01]">
-            <div className="text-[11px] font-black uppercase text-slate-500 tracking-[0.2em] text-center sm:text-left">
-              Mostrando <span className="text-[#00D1FF]">{filteredData.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> a <span className="text-[#00D1FF]">{Math.min(filteredData.length, currentPage * itemsPerPage)}</span> de <span className="text-[#10F9AC]">{filteredData.length}</span> registros
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap justify-center">
-              {/* Botón Anterior */}
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className={`p-3 rounded-xl border border-white/5 transition-all flex items-center justify-center ${currentPage === 1 ? 'opacity-35 cursor-not-allowed text-slate-600 bg-transparent' : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white active:scale-95'}`}
-                title="Página Anterior"
-              >
-                <ChevronLeft size={16} />
-              </button>
-
-              {/* Números de Página */}
-              {pageNumbers.map((p, idx) => {
-                if (typeof p === 'number') {
-                  const isActive = p === currentPage;
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => setCurrentPage(p)}
-                      className={`min-w-[40px] h-[40px] rounded-xl text-[11px] font-black tracking-widest transition-all ${isActive ? 'bg-[#10F9AC] text-black shadow-[0_0_20px_rgba(16,249,172,0.3)]' : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/5'}`}
-                    >
-                      {String(p).padStart(2, '0')}
-                    </button>
-                  );
-                } else {
-                  return (
-                    <span key={idx} className="px-2 text-slate-600 text-xs font-black tracking-widest">
-                      {p}
-                    </span>
-                  );
-                }
-              })}
-
-              {/* Botón Siguiente */}
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className={`p-3 rounded-xl border border-white/5 transition-all flex items-center justify-center ${currentPage === totalPages ? 'opacity-35 cursor-not-allowed text-slate-600 bg-transparent' : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white active:scale-95'}`}
-                title="Siguiente Página"
-              >
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-      </motion.section>
-
-      {/* Modal de Registro de Evidencia */}
-      <AnimatePresence>
-        {selectedItem && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-[#1E293B] border border-white/10 rounded-[3rem] w-full max-w-xl overflow-hidden shadow-4xl"
+            <label className="block text-[11px] font-semibold text-[#64748B] mb-1 uppercase tracking-wider">
+              Centro (CD)
+            </label>
+            <select
+              value={filterCd}
+              onChange={(e) => {
+                setFilterCd(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-medium focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors"
             >
-              <div className="p-8 border-b border-white/5 flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-black text-white italic uppercase tracking-tight">REGISTRAR <span className="text-[#10F9AC]">EJECUCIÓN</span></h3>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Placa: {selectedItem.placa}</p>
-                </div>
-                <button onClick={() => setSelectedItem(null)} className="p-3 bg-white/5 rounded-full hover:bg-white/10 text-slate-400">
-                  <XCircle size={20} />
-                </button>
-              </div>
+              <option value="TODOS">Todos los CD</option>
+              {availableOptions.cds.map(cd => (
+                <option key={cd} value={cd}>{cd}</option>
+              ))}
+            </select>
+          </div>
 
-              <div className="p-8 space-y-8">
+          {/* Filtro Mes */}
+          <div>
+            <label className="block text-[11px] font-semibold text-[#64748B] mb-1 uppercase tracking-wider">
+              Mes Ejecución
+            </label>
+            <select
+              value={filterMes}
+              onChange={(e) => {
+                setFilterMes(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-medium focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors"
+            >
+              <option value="TODOS">Todos los Meses</option>
+              {availableOptions.meses.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro Semana */}
+          <div>
+            <label className="block text-[11px] font-semibold text-[#64748B] mb-1 uppercase tracking-wider">
+              Semana Ejec.
+            </label>
+            <select
+              value={filterSemana}
+              onChange={(e) => {
+                setFilterSemana(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-medium focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors"
+            >
+              <option value="TODOS">Todas las Semanas</option>
+              {availableOptions.semanas.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro Rutina */}
+          <div>
+            <label className="block text-[11px] font-semibold text-[#64748B] mb-1 uppercase tracking-wider">
+              Rutina
+            </label>
+            <select
+              value={filterRutina}
+              onChange={(e) => {
+                setFilterRutina(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-medium focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors"
+            >
+              <option value="TODOS">Todas las Rutinas</option>
+              {availableOptions.rutinas.map(r => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro Marca / Línea */}
+          <div>
+            <label className="block text-[11px] font-semibold text-[#64748B] mb-1 uppercase tracking-wider">
+              Marca / Línea
+            </label>
+            <select
+              value={filterMarca}
+              onChange={(e) => {
+                setFilterMarca(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-medium focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors truncate"
+            >
+              <option value="TODOS">Todas las Marcas</option>
+              {availableOptions.marcas.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro Contratista */}
+          <div>
+            <label className="block text-[11px] font-semibold text-[#64748B] mb-1 uppercase tracking-wider">
+              Contratista
+            </label>
+            <select
+              value={filterContratista}
+              onChange={(e) => {
+                setFilterContratista(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-medium focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors truncate"
+            >
+              <option value="TODOS">Todos los Contratistas</option>
+              {availableOptions.contratistas.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filtro Cumplimiento */}
+          <div>
+            <label className="block text-[11px] font-semibold text-[#64748B] mb-1 uppercase tracking-wider">
+              Cumplimiento
+            </label>
+            <select
+              value={filterCumplimiento}
+              onChange={(e) => {
+                setFilterCumplimiento(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-medium focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors"
+            >
+              <option value="TODOS">Todos</option>
+              <option value="CUMPLE">CUMPLE</option>
+              <option value="NO CUMPLE">NO CUMPLE</option>
+            </select>
+          </div>
+
+        </div>
+      </div>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* 3.1 TARJETAS KPI (ARRIBA)                                             */}
+      {/* --------------------------------------------------------------------- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        {/* 1. Preventivos CUMPLIDOS */}
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
+              Preventivos Cumplidos
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#16A34A] flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-[#16A34A]">
+              {kpis.cumple}
+            </span>
+            <span className="text-xs text-[#64748B]">
+              ejecuciones
+            </span>
+          </div>
+          <p className="text-xs text-[#64748B] mt-2">
+            {kpis.total > 0 ? ((kpis.cumple / kpis.total) * 100).toFixed(1) : 0}% de los preventivos filtrados
+          </p>
+          <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div 
+              className="bg-[#16A34A] h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${kpis.total > 0 ? (kpis.cumple / kpis.total) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 2. Preventivos NO CUMPLIDOS */}
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
+              Preventivos No Cumplidos
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-[#DC2626] flex items-center justify-center">
+              <XCircle className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-[#DC2626]">
+              {kpis.noCumple}
+            </span>
+            <span className="text-xs text-[#64748B]">
+              desviaciones
+            </span>
+          </div>
+          <p className="text-xs text-[#64748B] mt-2">
+            {kpis.total > 0 ? ((kpis.noCumple / kpis.total) * 100).toFixed(1) : 0}% con desvío en rango/criterio
+          </p>
+          <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div 
+              className="bg-[#DC2626] h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${kpis.total > 0 ? (kpis.noCumple / kpis.total) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 3. % DE CUMPLIMIENTO */}
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
+              % Cumplimiento Global
+            </span>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              kpis.porcentaje >= 80 ? 'bg-emerald-50 text-[#16A34A]' : 'bg-amber-50 text-[#F59E0B]'
+            }`}>
+              <TrendingUp className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className={`text-3xl font-black ${
+              kpis.porcentaje >= 80 ? 'text-[#16A34A]' : (kpis.porcentaje >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]')
+            }`}>
+              {kpis.porcentaje.toFixed(1)}%
+            </span>
+            <span className="text-xs text-[#64748B]">
+              efectividad
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs text-[#64748B] mt-2">
+            <span>{kpis.cumple} de {kpis.cumple + kpis.noCumple} válidos</span>
+            <span className="font-semibold text-slate-500">Meta: ≥ 85%</span>
+          </div>
+          <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div 
+              className={`h-1.5 rounded-full transition-all duration-500 ${
+                kpis.porcentaje >= 80 ? 'bg-[#16A34A]' : (kpis.porcentaje >= 60 ? 'bg-[#F59E0B]' : 'bg-[#DC2626]')
+              }`}
+              style={{ width: `${Math.min(100, kpis.porcentaje)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* 4. TOTAL EJECUTADOS */}
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
+              Total Preventivos Ejecutados
+            </span>
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#2563EB] flex items-center justify-center">
+              <Truck className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black text-[#1E293B]">
+              {kpis.total}
+            </span>
+            <span className="text-xs text-[#64748B]">
+              registros
+            </span>
+          </div>
+          <p className="text-xs text-[#64748B] mt-2">
+            Con fecha de ejecución registrada en la hoja
+          </p>
+          <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div 
+              className="bg-[#2563EB] h-1.5 rounded-full"
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+
+      </div>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* ESTADO VACÍO (Si tras filtros no hay registros)                       */}
+      {/* --------------------------------------------------------------------- */}
+      {filteredData.length === 0 ? (
+        <div className="bg-white border border-[#E2E8F0] rounded-2xl p-12 text-center shadow-sm max-w-xl mx-auto my-8">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 text-[#64748B] flex items-center justify-center mx-auto mb-4">
+            <Search className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-bold text-[#1E293B] mb-1">
+            No hay mantenimientos preventivos para los filtros seleccionados
+          </h3>
+          <p className="text-xs text-[#64748B] mb-6">
+            Intenta seleccionar otro centro de distribución, mes, rutina o limpiar la búsqueda por placa.
+          </p>
+          <button
+            onClick={handleResetFilters}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#2563EB] hover:bg-blue-700 text-white transition-colors cursor-pointer shadow-sm"
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Restablecer todos los filtros</span>
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* ----------------------------------------------------------------- */}
+          {/* 3.2 & 3.3 GRÁFICA MENSUAL Y SEMANAL                               */}
+          {/* ----------------------------------------------------------------- */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            {/* GRÁFICA MENSUAL */}
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Evidencias Fotográficas ({capturedImages.length}/6)</label>
-                    {capturedImages.length > 0 && (
-                      <button 
-                        onClick={() => setCapturedImages([])}
-                        className="text-[9px] font-black text-rose-500 uppercase tracking-widest hover:underline"
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-[#1E293B]">
+                      Cumplimiento Mensual
+                    </h3>
+                    {filterMes !== 'TODOS' && (
+                      <button
+                        onClick={() => handleToggleFilter('mes', filterMes)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                        title="Clic para remover filtro"
                       >
-                        Limpiar todos
+                        <span>Mes: {filterMes}</span>
+                        <X className="w-3 h-3" />
                       </button>
                     )}
                   </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                    {capturedImages.map((img, idx) => (
-                      <div key={idx} className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 bg-black/20 group">
-                        <img src={img} className="w-full h-full object-cover" alt={`Preview ${idx + 1}`} />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <button 
-                            onClick={() => setCapturedImages(prev => prev.filter((_, i) => i !== idx))}
-                            className="p-2 bg-rose-500 text-white rounded-full hover:scale-110 transition-transform"
-                          >
-                            <XCircle size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    
-                    {capturedImages.length < 6 && (
-                      <label className="aspect-video rounded-2xl border-2 border-dashed border-white/10 bg-white/5 hover:bg-white/10 hover:border-[#10F9AC]/40 transition-all flex flex-col items-center justify-center cursor-pointer group">
-                        <input 
-                          type="file" 
-                          accept="image/*"
-                          capture="environment"
-                          multiple
-                          onChange={handleFileChange}
-                          className="hidden"
+                  <p className="text-xs text-[#64748B]">
+                    % de cumplimiento mes a mes (orden cronológico por fecha de ejecución)
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-3 h-3 rounded-sm bg-[#16A34A]" /> Cumple
+                  </span>
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-3 h-3 rounded-sm bg-[#DC2626]" /> No Cumple
+                  </span>
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-3 h-1 bg-[#2563EB]" /> %
+                  </span>
+                </div>
+              </div>
+
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={monthlyData}
+                    margin={{ top: 20, right: 25, left: -15, bottom: 20 }}
+                    onClick={(e: any) => {
+                      if (e && e.activePayload && e.activePayload[0]) {
+                        const payload = e.activePayload[0].payload;
+                        if (payload?.mes) handleToggleFilter('mes', payload.mes);
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis 
+                      dataKey="mes" 
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={{ stroke: '#E2E8F0' }}
+                      tickLine={false}
+                      angle={-20}
+                      textAnchor="end"
+                    />
+                    <YAxis 
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <YAxis 
+                      yAxisId="right"
+                      orientation="right"
+                      domain={[0, 100]}
+                      unit="%"
+                      tick={{ fill: '#64748B', fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip 
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const item = payload[0].payload;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
+                              <p className="font-bold text-[#1E293B] border-b border-slate-100 pb-1">{label}</p>
+                              <p className="text-[#16A34A] font-semibold">Cumple: {item.cumple}</p>
+                              <p className="text-[#DC2626] font-semibold">No Cumple: {item.noCumple}</p>
+                              <p className="text-slate-500 font-medium">Total: {item.total}</p>
+                              <p className="text-[#2563EB] font-bold pt-1 border-t border-slate-100">
+                                Cumplimiento: {item.porcentaje}%
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: 8, fontSize: '11px' }} />
+                    <Bar dataKey="cumple" name="Cumple" fill="#16A34A" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="cumple" position="top" fill="#15803D" fontSize={10} fontWeight={700} formatter={(v: number) => v > 0 ? v : ''} />
+                      {monthlyData.map((entry, index) => (
+                        <Cell
+                          key={`m-cumple-${index}`}
+                          cursor="pointer"
+                          fill="#16A34A"
+                          opacity={filterMes !== 'TODOS' && filterMes !== entry.mes ? 0.35 : 1}
+                          stroke={filterMes === entry.mes ? '#14532D' : undefined}
+                          strokeWidth={filterMes === entry.mes ? 2 : 0}
+                          onClick={() => handleToggleFilter('mes', entry.mes)}
                         />
-                        <ImagePlus size={24} className="text-[#10F9AC] mb-2 group-hover:scale-110 transition-transform" />
-                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Añadir Foto</span>
-                      </label>
+                      ))}
+                    </Bar>
+                    <Bar dataKey="noCumple" name="No Cumple" fill="#DC2626" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="noCumple" position="top" fill="#B91C1C" fontSize={10} fontWeight={700} formatter={(v: number) => v > 0 ? v : ''} />
+                      {monthlyData.map((entry, index) => (
+                        <Cell
+                          key={`m-nocumple-${index}`}
+                          cursor="pointer"
+                          fill="#DC2626"
+                          opacity={filterMes !== 'TODOS' && filterMes !== entry.mes ? 0.35 : 1}
+                          stroke={filterMes === entry.mes ? '#7F1D1D' : undefined}
+                          strokeWidth={filterMes === entry.mes ? 2 : 0}
+                          onClick={() => handleToggleFilter('mes', entry.mes)}
+                        />
+                      ))}
+                    </Bar>
+                    <Line 
+                      yAxisId="right"
+                      type="monotone" 
+                      dataKey="porcentaje" 
+                      name="% Cumplimiento" 
+                      stroke="#2563EB" 
+                      strokeWidth={2.5} 
+                      dot={{ r: 4, fill: '#2563EB', strokeWidth: 2, stroke: '#FFFFFF' }}
+                      activeDot={{ r: 6 }}
+                    >
+                      <LabelList dataKey="porcentaje" position="top" offset={10} fill="#1D4ED8" fontSize={10} fontWeight={800} formatter={(v: number) => `${v}%`} />
+                    </Line>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* GRÁFICA SEMANAL */}
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-[#1E293B]">
+                      Cumplimiento por Semana de Ejecución
+                    </h3>
+                    {filterSemana !== 'TODOS' && (
+                      <button
+                        onClick={() => handleToggleFilter('semana', filterSemana)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                        title="Clic para remover filtro"
+                      >
+                        <span>{filterSemana}</span>
+                        <X className="w-3 h-3" />
+                      </button>
                     )}
                   </div>
+                  <p className="text-xs text-[#64748B]">
+                    Distribución de ejecuciones y efectividad por semana
+                  </p>
                 </div>
-
-                <div className="flex gap-4 pt-4">
-                  <button 
-                    disabled={uploading}
-                    onClick={handleUpdateSubmission}
-                    className="flex-1 bg-[#10F9AC] hover:bg-[#0fd996] disabled:bg-slate-700 disabled:cursor-not-allowed text-black font-black uppercase py-4 rounded-2xl tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(16,249,172,0.3)]"
-                  >
-                    {uploading ? (
-                      <>
-                        <Loader2 className="animate-spin" size={18} />
-                        Sincronizando...
-                      </>
-                    ) : (
-                      <>
-                        <Zap size={18} />
-                        REGISTRAR EN HOJA
-                      </>
-                    )}
-                  </button>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-3 h-3 rounded-sm bg-[#16A34A]" /> Cumple
+                  </span>
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-3 h-3 rounded-sm bg-[#DC2626]" /> No Cumple
+                  </span>
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-3 h-1 bg-[#2563EB]" /> %
+                  </span>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      
-      {/* Modal de Visualización de Evidencia */}
-      <AnimatePresence>
-        {viewingEvidence && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
-          >
-            <motion.div 
-              initial={{ scale: 0.9 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.9 }}
-              className="bg-[#1E293B] border border-white/10 rounded-[3rem] w-full max-w-4xl overflow-hidden shadow-4xl max-h-[90vh] flex flex-col"
-            >
-              <div className="p-8 border-b border-white/5 flex items-center justify-between flex-shrink-0">
+
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={weeklyData}
+                    margin={{ top: 20, right: 25, left: -15, bottom: 20 }}
+                    onClick={(e: any) => {
+                      if (e && e.activePayload && e.activePayload[0]) {
+                        const payload = e.activePayload[0].payload;
+                        if (payload?.semana) handleToggleFilter('semana', payload.semana);
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis 
+                      dataKey="semana" 
+                      tick={{ fill: '#64748B', fontSize: 10 }}
+                      axisLine={{ stroke: '#E2E8F0' }}
+                      tickLine={false}
+                      angle={-35}
+                      textAnchor="end"
+                      height={45}
+                    />
+                    <YAxis 
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <YAxis 
+                      yAxisId="right"
+                      orientation="right"
+                      domain={[0, 100]}
+                      unit="%"
+                      tick={{ fill: '#64748B', fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip 
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const item = payload[0].payload;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
+                              <p className="font-bold text-[#1E293B] border-b border-slate-100 pb-1">{label}</p>
+                              <p className="text-[#16A34A] font-semibold">Cumple: {item.cumple}</p>
+                              <p className="text-[#DC2626] font-semibold">No Cumple: {item.noCumple}</p>
+                              <p className="text-slate-500 font-medium">Total: {item.total}</p>
+                              <p className="text-[#2563EB] font-bold pt-1 border-t border-slate-100">
+                                Cumplimiento: {item.porcentaje}%
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: 8, fontSize: '11px' }} />
+                    <Bar dataKey="cumple" name="Cumple" fill="#16A34A" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="cumple" position="top" fill="#15803D" fontSize={9} fontWeight={600} formatter={(v: number) => v > 0 ? v : ''} />
+                      {weeklyData.map((entry, index) => (
+                        <Cell
+                          key={`w-cumple-${index}`}
+                          cursor="pointer"
+                          fill="#16A34A"
+                          opacity={filterSemana !== 'TODOS' && filterSemana !== entry.semana ? 0.35 : 1}
+                          stroke={filterSemana === entry.semana ? '#14532D' : undefined}
+                          strokeWidth={filterSemana === entry.semana ? 2 : 0}
+                          onClick={() => handleToggleFilter('semana', entry.semana)}
+                        />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="noCumple" name="No Cumple" fill="#DC2626" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="noCumple" position="top" fill="#B91C1C" fontSize={9} fontWeight={600} formatter={(v: number) => v > 0 ? v : ''} />
+                      {weeklyData.map((entry, index) => (
+                        <Cell
+                          key={`w-nocumple-${index}`}
+                          cursor="pointer"
+                          fill="#DC2626"
+                          opacity={filterSemana !== 'TODOS' && filterSemana !== entry.semana ? 0.35 : 1}
+                          stroke={filterSemana === entry.semana ? '#7F1D1D' : undefined}
+                          strokeWidth={filterSemana === entry.semana ? 2 : 0}
+                          onClick={() => handleToggleFilter('semana', entry.semana)}
+                        />
+                      ))}
+                    </Bar>
+                    <Line 
+                      yAxisId="right"
+                      type="monotone" 
+                      dataKey="porcentaje" 
+                      name="% Cumplimiento" 
+                      stroke="#2563EB" 
+                      strokeWidth={2} 
+                      dot={{ r: 3, fill: '#2563EB' }}
+                    >
+                      <LabelList dataKey="porcentaje" position="top" offset={8} fill="#1D4ED8" fontSize={9} fontWeight={700} formatter={(v: number) => `${v}%`} />
+                    </Line>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+          </div>
+
+          {/* ----------------------------------------------------------------- */}
+          {/* 3.4 & 3.5 REFERENCIA POR CD Y RUTINAS                             */}
+          {/* ----------------------------------------------------------------- */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            {/* REFERENCIA POR CD (Galapa vs La Arenosa) */}
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-xl font-black text-white italic uppercase tracking-tight">VISUALIZAR <span className="text-[#00D1FF]">EVIDENCIAS</span></h3>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Placa: {viewingEvidence.placa}</p>
+                  <h3 className="text-base font-bold text-[#1E293B]">
+                    Comparativa por Centro (CD)
+                  </h3>
+                  <p className="text-xs text-[#64748B]">
+                    Galapa vs La Arenosa — volumen y tasa de cumplimiento
+                  </p>
                 </div>
-                <button onClick={() => setViewingEvidence(null)} className="p-3 bg-white/5 rounded-full hover:bg-white/10 text-slate-400">
-                  <XCircle size={24} />
+                <Building2 className="w-5 h-5 text-[#2563EB]" />
+              </div>
+
+              {/* Tarjetas resumen por CD */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                {cdData.map(c => {
+                  const isActive = filterCd === c.cd;
+                  return (
+                    <div 
+                      key={c.cd} 
+                      onClick={() => handleToggleFilter('cd', c.cd)}
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                        isActive 
+                          ? 'bg-blue-50/80 border-[#2563EB] shadow-xs ring-2 ring-[#2563EB]/30' 
+                          : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-[#1E293B] flex items-center gap-1.5">
+                          {c.cd}
+                          {isActive && (
+                            <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-[#2563EB] text-white">Activo</span>
+                          )}
+                        </span>
+                        <span className={`text-xs font-black ${
+                          c.porcentaje >= 80 ? 'text-[#16A34A]' : 'text-[#F59E0B]'
+                        }`}>
+                          {c.porcentaje}%
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-lg font-extrabold text-[#1E293B]">{c.total}</span>
+                        <span className="text-[11px] text-[#64748B]">
+                          ({c.cumple} cumplen / {c.noCumple} no)
+                        </span>
+                      </div>
+                      <div className="mt-2 w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                        <div 
+                          className={`h-1.5 rounded-full ${c.porcentaje >= 80 ? 'bg-[#16A34A]' : 'bg-[#F59E0B]'}`}
+                          style={{ width: `${c.porcentaje}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="h-56 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={cdData} 
+                    margin={{ top: 15, right: 10, left: -20, bottom: 0 }}
+                    onClick={(e: any) => {
+                      if (e && e.activePayload && e.activePayload[0]) {
+                        const payload = e.activePayload[0].payload;
+                        if (payload?.cd) handleToggleFilter('cd', payload.cd);
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis 
+                      dataKey="cd" 
+                      tick={{ fill: '#1E293B', fontSize: 12, fontWeight: 600 }}
+                      axisLine={{ stroke: '#E2E8F0' }}
+                      tickLine={false}
+                    />
+                    <YAxis 
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip 
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const item = payload[0].payload;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
+                              <p className="font-bold text-[#1E293B] border-b border-slate-100 pb-1">{label}</p>
+                              <p className="text-[#16A34A] font-semibold">Cumplen: {item.cumple}</p>
+                              <p className="text-[#DC2626] font-semibold">No Cumplen: {item.noCumple}</p>
+                              <p className="text-slate-500 font-medium">Total: {item.total}</p>
+                              <p className="text-[#2563EB] font-bold pt-1 border-t border-slate-100">
+                                Cumplimiento: {item.porcentaje}%
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: 8, fontSize: '11px' }} />
+                    <Bar dataKey="cumple" name="Cumple" fill="#16A34A" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="cumple" position="top" fill="#15803D" fontSize={11} fontWeight={700} formatter={(v: number) => v > 0 ? v : ''} />
+                      {cdData.map((entry, index) => (
+                        <Cell
+                          key={`cd-cumple-${index}`}
+                          cursor="pointer"
+                          fill="#16A34A"
+                          opacity={filterCd !== 'TODOS' && filterCd !== entry.cd ? 0.35 : 1}
+                          stroke={filterCd === entry.cd ? '#14532D' : undefined}
+                          strokeWidth={filterCd === entry.cd ? 2 : 0}
+                          onClick={() => handleToggleFilter('cd', entry.cd)}
+                        />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="noCumple" name="No Cumple" fill="#DC2626" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="noCumple" position="top" fill="#B91C1C" fontSize={11} fontWeight={700} formatter={(v: number) => v > 0 ? v : ''} />
+                      {cdData.map((entry, index) => (
+                        <Cell
+                          key={`cd-nocumple-${index}`}
+                          cursor="pointer"
+                          fill="#DC2626"
+                          opacity={filterCd !== 'TODOS' && filterCd !== entry.cd ? 0.35 : 1}
+                          stroke={filterCd === entry.cd ? '#7F1D1D' : undefined}
+                          strokeWidth={filterCd === entry.cd ? 2 : 0}
+                          onClick={() => handleToggleFilter('cd', entry.cd)}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* GRÁFICA POR RUTINAS */}
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-[#1E293B]">
+                    Distribución por Rutinas
+                  </h3>
+                  <p className="text-xs text-[#64748B]">
+                    Rutina 1, 2, 3, 4 y Sin Dato con desglose de cumplimiento
+                  </p>
+                </div>
+                <Layers className="w-5 h-5 text-[#2563EB]" />
+              </div>
+
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={routineData} 
+                    margin={{ top: 15, right: 10, left: -20, bottom: 20 }}
+                    onClick={(e: any) => {
+                      if (e && e.activePayload && e.activePayload[0]) {
+                        const payload = e.activePayload[0].payload;
+                        if (payload?.rutina) handleToggleFilter('rutina', payload.rutina);
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis 
+                      dataKey="rutina" 
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={{ stroke: '#E2E8F0' }}
+                      tickLine={false}
+                      angle={-15}
+                      textAnchor="end"
+                    />
+                    <YAxis 
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip 
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const item = payload[0].payload;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
+                              <p className="font-bold text-[#1E293B] border-b border-slate-100 pb-1">{label}</p>
+                              <p className="text-[#16A34A] font-semibold">Cumplen: {item.cumple}</p>
+                              <p className="text-[#DC2626] font-semibold">No Cumplen: {item.noCumple}</p>
+                              <p className="text-slate-500 font-medium">Total: {item.total}</p>
+                              <p className="text-[#2563EB] font-bold pt-1 border-t border-slate-100">
+                                Cumplimiento: {item.porcentaje}%
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: 8, fontSize: '11px' }} />
+                    <Bar dataKey="cumple" name="Cumple" fill="#16A34A" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="cumple" position="top" fill="#15803D" fontSize={10} fontWeight={600} formatter={(v: number) => v > 0 ? v : ''} />
+                      {routineData.map((entry, index) => (
+                        <Cell
+                          key={`rut-cumple-${index}`}
+                          cursor="pointer"
+                          fill="#16A34A"
+                          opacity={filterRutina !== 'TODOS' && filterRutina !== entry.rutina ? 0.35 : 1}
+                          stroke={filterRutina === entry.rutina ? '#14532D' : undefined}
+                          strokeWidth={filterRutina === entry.rutina ? 2 : 0}
+                          onClick={() => handleToggleFilter('rutina', entry.rutina)}
+                        />
+                      ))}
+                    </Bar>
+                    <Bar dataKey="noCumple" name="No Cumple" fill="#DC2626" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="noCumple" position="top" fill="#B91C1C" fontSize={10} fontWeight={600} formatter={(v: number) => v > 0 ? v : ''} />
+                      {routineData.map((entry, index) => (
+                        <Cell
+                          key={`rut-nocumple-${index}`}
+                          cursor="pointer"
+                          fill="#DC2626"
+                          opacity={filterRutina !== 'TODOS' && filterRutina !== entry.rutina ? 0.35 : 1}
+                          stroke={filterRutina === entry.rutina ? '#7F1D1D' : undefined}
+                          strokeWidth={filterRutina === entry.rutina ? 2 : 0}
+                          onClick={() => handleToggleFilter('rutina', entry.rutina)}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+          </div>
+
+          {/* ----------------------------------------------------------------- */}
+          {/* 3.6 GRÁFICA POR MARCA / LÍNEA (NUEVA)                             */}
+          {/* ----------------------------------------------------------------- */}
+          <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-[#1E293B]">
+                  Cumplimiento por Marca / Línea
+                </h3>
+                <p className="text-xs text-[#64748B]">
+                  Cantidad de preventivos ejecutados y porcentaje de cumplimiento por línea vehicular (ordenado de mayor a menor volumen)
+                </p>
+              </div>
+              <ShieldCheck className="w-5 h-5 text-[#2563EB]" />
+            </div>
+
+            <div className="h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart 
+                  data={brandData} 
+                  margin={{ top: 20, right: 25, left: -15, bottom: 50 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload[0]) {
+                      const payload = e.activePayload[0].payload;
+                      if (payload?.marca) handleToggleFilter('marca', payload.marca);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                  <XAxis 
+                    dataKey="marca" 
+                    tick={{ fill: '#64748B', fontSize: 10, fontWeight: 600 }}
+                    axisLine={{ stroke: '#E2E8F0' }}
+                    tickLine={false}
+                    angle={-30}
+                    textAnchor="end"
+                    interval={0}
+                  />
+                  <YAxis 
+                    tick={{ fill: '#64748B', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <YAxis 
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, 100]}
+                    unit="%"
+                    tick={{ fill: '#64748B', fontSize: 10 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip 
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        const item = payload[0].payload;
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
+                            <p className="font-bold text-[#1E293B] border-b border-slate-100 pb-1">{label}</p>
+                            <p className="text-[#16A34A] font-semibold">Cumplen: {item.cumple}</p>
+                            <p className="text-[#DC2626] font-semibold">No Cumplen: {item.noCumple}</p>
+                            <p className="text-slate-500 font-medium">Total: {item.total}</p>
+                            <p className="text-[#2563EB] font-bold pt-1 border-t border-slate-100">
+                              Cumplimiento: {item.porcentaje}%
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: 8, fontSize: '11px' }} />
+                  <Bar dataKey="cumple" name="Cumple" fill="#16A34A" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="cumple" position="top" fill="#15803D" fontSize={10} fontWeight={700} formatter={(v: number) => v > 0 ? v : ''} />
+                    {brandData.map((entry, index) => (
+                      <Cell
+                        key={`b-cumple-${index}`}
+                        cursor="pointer"
+                        fill="#16A34A"
+                        opacity={filterMarca !== 'TODOS' && filterMarca !== entry.marca ? 0.35 : 1}
+                        stroke={filterMarca === entry.marca ? '#14532D' : undefined}
+                        strokeWidth={filterMarca === entry.marca ? 2 : 0}
+                        onClick={() => handleToggleFilter('marca', entry.marca)}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="noCumple" name="No Cumple" fill="#DC2626" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="noCumple" position="top" fill="#B91C1C" fontSize={10} fontWeight={700} formatter={(v: number) => v > 0 ? v : ''} />
+                    {brandData.map((entry, index) => (
+                      <Cell
+                        key={`b-nocumple-${index}`}
+                        cursor="pointer"
+                        fill="#DC2626"
+                        opacity={filterMarca !== 'TODOS' && filterMarca !== entry.marca ? 0.35 : 1}
+                        stroke={filterMarca === entry.marca ? '#7F1D1D' : undefined}
+                        strokeWidth={filterMarca === entry.marca ? 2 : 0}
+                        onClick={() => handleToggleFilter('marca', entry.marca)}
+                      />
+                    ))}
+                  </Bar>
+                  <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="porcentaje" 
+                    name="% Cumplimiento" 
+                    stroke="#2563EB" 
+                    strokeWidth={2} 
+                    dot={{ r: 3, fill: '#2563EB' }}
+                  >
+                    <LabelList dataKey="porcentaje" position="top" offset={8} fill="#1D4ED8" fontSize={9} fontWeight={700} formatter={(v: number) => `${v}%`} />
+                  </Line>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* ----------------------------------------------------------------- */}
+          {/* 3.7 FRECUENCIA DE INGRESO POR PLACA (Columnas VERTICALES)         */}
+          {/* ----------------------------------------------------------------- */}
+          <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-[#1E293B]">
+                  Frecuencia de Ingresos por Placa
+                </h3>
+                <p className="text-xs text-[#64748B]">
+                  Cantidad de preventivos ejecutados / veces que ingresó cada vehículo (barras verticales ordenadas de mayor a menor)
+                </p>
+              </div>
+
+              {/* Botones de selección de Top */}
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-start sm:self-center">
+                <span className="text-[11px] font-semibold text-slate-500 px-2">Ver:</span>
+                {[10, 15, 20, 0].map(lim => (
+                  <button
+                    key={lim}
+                    onClick={() => setTopPlacasLimit(lim)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      topPlacasLimit === lim 
+                        ? 'bg-white text-[#2563EB] shadow-xs' 
+                        : 'text-[#64748B] hover:text-[#1E293B]'
+                    }`}
+                  >
+                    {lim === 0 ? 'Todas' : `Top ${lim}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={displayedPlatesData}
+                  margin={{ top: 20, right: 15, left: -15, bottom: 45 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload[0]) {
+                      const payload = e.activePayload[0].payload;
+                      if (payload?.placa) handleToggleFilter('placa', payload.placa);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                  <XAxis 
+                    dataKey="placa" 
+                    tick={{ fill: '#1E293B', fontSize: 10, fontWeight: 700 }}
+                    axisLine={{ stroke: '#E2E8F0' }}
+                    tickLine={false}
+                    angle={-45}
+                    textAnchor="end"
+                    interval={0}
+                  />
+                  <YAxis 
+                    tick={{ fill: '#64748B', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const item = payload[0].payload;
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
+                            <p className="font-extrabold text-[#1E293B] border-b border-slate-100 pb-1">
+                              Placa: {item.placa}
+                            </p>
+                            <p className="text-slate-600">CD: <strong className="text-slate-800">{item.cd}</strong></p>
+                            <p className="text-[#2563EB] font-bold">Total Ingresos: {item.count}</p>
+                            <p className="text-[#16A34A] font-semibold">Cumplen: {item.cumple}</p>
+                            <p className="text-[#DC2626] font-semibold">No Cumplen: {item.noCumple}</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="count" name="Ingresos" fill="#2563EB" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="count" position="top" fill="#1E293B" fontSize={11} fontWeight={700} offset={6} />
+                    {displayedPlatesData.map((entry, index) => {
+                      const isActive = searchPlaca.trim() && searchPlaca.toUpperCase() === entry.placa.toUpperCase();
+                      const hasSearch = !!searchPlaca.trim();
+                      return (
+                        <Cell 
+                          key={`plate-cell-${index}`} 
+                          cursor="pointer"
+                          fill={isActive ? '#1D4ED8' : (entry.count >= 4 ? '#2563EB' : (entry.count >= 3 ? '#3B82F6' : '#60A5FA'))}
+                          opacity={hasSearch && !isActive ? 0.35 : 1}
+                          stroke={isActive ? '#1E293B' : undefined}
+                          strokeWidth={isActive ? 2 : 0}
+                          onClick={() => handleToggleFilter('placa', entry.placa)}
+                        />
+                      );
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* ----------------------------------------------------------------- */}
+          {/* TABLA DE DETALLE DE PREVENTIVOS EJECUTADOS (REGISTROS REALES)     */}
+          {/* ----------------------------------------------------------------- */}
+          <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-[#1E293B]">
+                  Registro Detallado de Preventivos Ejecutados
+                </h3>
+                <p className="text-xs text-[#64748B]">
+                  Mostrando {paginatedData.length} de {filteredData.length} registros según filtros aplicados
+                </p>
+              </div>
+
+              {/* Controles de paginación resumidos */}
+              <div className="flex items-center gap-2 self-start sm:self-center">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  className="p-1.5 rounded-lg border border-[#E2E8F0] hover:bg-slate-50 disabled:opacity-40 text-slate-600 transition-colors cursor-pointer"
+                  title="Página anterior"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-xs font-semibold text-slate-700 px-2">
+                  Página {currentPage} de {totalPages}
+                </span>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  className="p-1.5 rounded-lg border border-[#E2E8F0] hover:bg-slate-50 disabled:opacity-40 text-slate-600 transition-colors cursor-pointer"
+                  title="Página siguiente"
+                >
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+            </div>
 
-              <div className="p-8 overflow-y-auto flex-1 custom-scrollbar">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {viewingEvidence.evidenceUrl?.split(',').map((url, idx) => {
-                    const directUrl = getDirectImageUrl(url);
-                    const originalUrl = url.trim();
-                    const isError = originalUrl === 'Error Archivo';
-                    
-                    return (
-                      <div key={idx} className="relative aspect-video bg-black/40 rounded-3xl overflow-hidden border border-white/10 group shadow-2xl flex flex-col">
-                        {isError ? (
-                          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-                            <XCircle size={48} className="text-rose-500 mb-4" />
-                            <span className="text-[12px] font-black text-rose-500 uppercase tracking-widest">Error al cargar archivo en el servidor</span>
-                          </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-[#64748B] font-bold uppercase tracking-wider text-[11px]">
+                    <th className="py-3 px-4">Placa</th>
+                    <th className="py-3 px-4">CD</th>
+                    <th className="py-3 px-4">Contratista</th>
+                    <th className="py-3 px-4">Marca / Línea</th>
+                    <th className="py-3 px-4">Rutina</th>
+                    <th className="py-3 px-4">Fecha Ejecución</th>
+                    <th className="py-3 px-4">Semana</th>
+                    <th className="py-3 px-4">Km Ejecución</th>
+                    <th className="py-3 px-4">Diferencia</th>
+                    <th className="py-3 px-4 text-center">Cumplimiento</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedData.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-[#1E293B]">
+                        {row.placa || '—'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold text-[11px] ${
+                          row.cd === 'Galapa' 
+                            ? 'bg-blue-50 text-blue-700 border border-blue-100' 
+                            : (row.cd === 'La Arenosa' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-slate-100 text-slate-700')
+                        }`}>
+                          {row.cd || '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-[#1E293B] font-medium max-w-[180px] truncate" title={String(row.contratista)}>
+                        {row.contratista || '—'}
+                      </td>
+                      <td className="py-3 px-4 text-[#64748B] max-w-[160px] truncate" title={String(row.linea)}>
+                        {row.linea || '—'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="font-semibold text-slate-700">
+                          {row.rutina || '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[#1E293B]">
+                        {formatFechaCorta(row.fechaEjecucion, row.fechaEjecucionIso)}
+                      </td>
+                      <td className="py-3 px-4 text-[#64748B]">
+                        {row.semanaEjecucion || '—'}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[#1E293B]">
+                        {row.kmEjecucion ? Number(row.kmEjecucion).toLocaleString('es-CO') : '—'}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-600">
+                        {row.diferencia !== undefined && row.diferencia !== '' ? row.diferencia : '—'}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        {row.cumplimiento === 'CUMPLE' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-50 text-[#16A34A] border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3" />
+                            CUMPLE
+                          </span>
+                        ) : row.cumplimiento === 'NO CUMPLE' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-50 text-[#DC2626] border border-rose-200">
+                            <XCircle className="w-3 h-3" />
+                            NO CUMPLE
+                          </span>
                         ) : (
-                          <>
-                            <img 
-                              src={directUrl} 
-                              className="w-full h-full object-contain" 
-                              alt={`Evidencia ${idx + 1}`}
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                // If thumbnail fails, try direct URL as fallback
-                                if (e.currentTarget.src !== originalUrl) {
-                                  e.currentTarget.src = originalUrl;
-                                }
-                              }}
-                            />
-                            <div className="absolute top-4 left-4 p-3 bg-black/60 rounded-xl backdrop-blur-md border border-white/10 text-[10px] font-black text-white uppercase tracking-widest">
-                              Imagen {idx + 1}
-                            </div>
-                            <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <a 
-                                href={originalUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="p-3 bg-[#00D1FF] text-black rounded-xl hover:scale-110 transition-transform shadow-xl"
-                                title="Abrir original"
-                              >
-                                <Globe size={16} />
-                              </a>
-                            </div>
-                          </>
+                          <span className="text-slate-400 font-mono">—</span>
                         )}
-                      </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Paginador completo al pie */}
+            <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#64748B]">
+              <span>
+                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, filteredData.length)} de {filteredData.length} preventivos
+              </span>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handlePageChange(1)}
+                  disabled={currentPage <= 1}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 font-semibold cursor-pointer"
+                >
+                  Primero
+                </button>
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  className="p-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                {/* Botones de páginas numéricas (máx 5) */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                  .map((p, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    return (
+                      <React.Fragment key={p}>
+                        {prev && p - prev > 1 && <span className="px-1 text-slate-400">...</span>}
+                        <button
+                          onClick={() => handlePageChange(p)}
+                          className={`w-7 h-7 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
+                            currentPage === p 
+                              ? 'bg-[#2563EB] text-white shadow-xs' 
+                              : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      </React.Fragment>
                     );
                   })}
-                </div>
-              </div>
-              
-              <div className="p-8 border-t border-white/5 bg-black/20 flex-shrink-0 flex justify-end gap-4">
-                 <button 
-                   onClick={() => setViewingEvidence(null)}
-                   className="px-10 py-4 bg-white/5 hover:bg-white/10 text-slate-300 font-black uppercase text-[10px] tracking-[0.2em] rounded-2xl transition-all"
-                 >
-                   Cerrar Vista
-                 </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      <footer className="flex items-center justify-center p-12 border-t border-white/5 mt-12 bg-gradient-to-t from-black/20 to-transparent">
-        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
-          Gerencia de Flota • Barranquilla
-        </div>
-      </footer>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                  className="p-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={currentPage >= totalPages}
+                  className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 font-semibold cursor-pointer"
+                >
+                  Último
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes shimmer {
-          100% { transform: translateX(200%); }
-        }
-        .custom-scrollbar::-webkit-scrollbar {
-          height: 6px;
-          background: rgba(255,255,255,0.02);
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(16, 249, 172, 0.2);
-          border-radius: 10px;
-        }
-        .shadow-3xl {
-          box-shadow: 0 50px 100px -20px rgba(0,0,0,0.5);
-        }
-        .shadow-4xl {
-          box-shadow: 0 70px 150px -30px rgba(0,0,0,0.7);
-        }
-      `}} />
     </div>
   );
 };

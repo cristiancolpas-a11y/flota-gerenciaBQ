@@ -314,7 +314,7 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
   const chartSistemasData = useMemo(() => {
     const counts: Record<string, { sistema: string; cantidad: number; abiertos: number; cerrados: number }> = {};
     filteredItems.forEach(i => {
-      const sis = (i.sistema || 'Sin Clasificar').trim();
+      const sis = (i.sistema || '—').trim();
       if (!counts[sis]) {
         counts[sis] = { sistema: sis, cantidad: 0, abiertos: 0, cerrados: 0 };
       }
@@ -362,7 +362,7 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
 
     const counts: Record<string, { mes: string; cantidad: number; abiertos: number; cerrados: number }> = {};
     filteredItems.forEach(i => {
-      const m = (i.mes || 'Sin Mes').trim();
+      const m = (i.mes || '—').trim();
       if (!counts[m]) {
         counts[m] = { mes: m, cantidad: 0, abiertos: 0, cerrados: 0 };
       }
@@ -1461,7 +1461,7 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
 
                           <td className="py-3.5 px-4">
                             <div className="text-[11px] text-slate-700 line-clamp-2" title={item.observaciones || ''}>
-                              {item.observaciones || <span className="text-slate-400 italic">Sin observaciones</span>}
+                              {item.observaciones || '—'}
                             </div>
                             {item.fechaSolucion && (
                               <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
@@ -1630,11 +1630,11 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Sistema:</span>
-                <span className="font-semibold text-slate-800">{selectedItem.sistema || 'General'}</span>
+                <span className="font-semibold text-slate-800">{selectedItem.sistema || '—'}</span>
               </div>
               <div className="pt-1.5 border-t border-slate-200">
                 <span className="text-slate-500 block mb-0.5">Novedad Reportada:</span>
-                <p className="text-slate-900 font-medium italic">"{selectedItem.reporte}"</p>
+                <p className="text-slate-900 font-medium">{selectedItem.reporte || '—'}</p>
               </div>
             </div>
 

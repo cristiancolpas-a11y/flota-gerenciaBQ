@@ -1815,23 +1815,23 @@ const App: React.FC = () => {
                         <div className="space-y-2 pt-2">
                           <button
                             onClick={() => { setActiveCategory('doc'); setActiveView('categories_dashboard'); }}
-                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-indigo-600/25 border border-indigo-500/20 hover:border-indigo-500/40 rounded-xl text-[10px] font-black text-indigo-300 uppercase tracking-widest transition-all text-left"
+                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-indigo-600/25 border border-indigo-500/20 hover:border-indigo-500/40 rounded-xl text-[10px] font-black text-indigo-300 uppercase tracking-wider transition-all text-left"
                           >
-                            <span>📘 DOCUMENTACIÓN</span>
+                            <span>DOCUMENTACIÓN</span>
                             <ChevronDown size={12} />
                           </button>
                           <button
                             onClick={() => { setActiveCategory('gestion'); setActiveView('categories_dashboard'); }}
-                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-emerald-600/25 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-[10px] font-black text-emerald-300 uppercase tracking-widest transition-all text-left"
+                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-emerald-600/25 border border-emerald-500/20 hover:border-emerald-500/40 rounded-xl text-[10px] font-black text-emerald-300 uppercase tracking-wider transition-all text-left"
                           >
-                            <span>⚙️ GESTIÓN</span>
+                            <span>GESTIÓN</span>
                             <ChevronDown size={12} />
                           </button>
                           <button
                             onClick={() => { setActiveCategory('otros'); setActiveView('categories_dashboard'); }}
-                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-purple-600/25 border border-purple-500/20 hover:border-purple-500/40 rounded-xl text-[10px] font-black text-purple-300 uppercase tracking-widest transition-all text-left"
+                            className="w-full flex items-center justify-between px-5 py-3.5 bg-white/5 hover:bg-purple-600/25 border border-purple-500/20 hover:border-purple-500/40 rounded-xl text-[10px] font-black text-purple-300 uppercase tracking-wider transition-all text-left"
                           >
-                            <span>🔍 OTROS</span>
+                            <span>OTROS</span>
                             <ChevronDown size={12} />
                           </button>
                         </div>
@@ -1843,20 +1843,20 @@ const App: React.FC = () => {
                             setActiveCategory('root');
                             setActiveView('categories_dashboard');
                           }}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-[10px] font-black uppercase tracking-widest transition-all mb-4"
+                          className="w-full flex items-center gap-2 px-4 py-2.5 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-xl text-slate-300 text-[10px] font-black uppercase tracking-wider transition-all mb-4"
                         >
                           <ChevronLeft size={14} /> VOLVER A CATEGORÍAS
                         </button>
 
                         <div className="space-y-1">
-                          <p className={`text-[10px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-md ${
+                          <p className={`text-[10px] font-black uppercase tracking-wider px-4 py-1.5 rounded-md ${
                             activeCategory === 'doc' ? 'text-indigo-400 bg-indigo-500/5' :
                             activeCategory === 'gestion' ? 'text-emerald-400 bg-emerald-500/5' :
                             'text-purple-400 bg-purple-500/5'
                           }`}>
-                            {activeCategory === 'doc' ? '📘 DOCUMENTACIÓN' :
-                             activeCategory === 'gestion' ? '⚙️ GESTIÓN' :
-                             '🔍 OTROS'}
+                            {activeCategory === 'doc' ? 'DOCUMENTACIÓN' :
+                             activeCategory === 'gestion' ? 'GESTIÓN' :
+                             'OTROS'}
                           </p>
 
                           <div className="space-y-1 pt-2 animate-in fade-in duration-300">

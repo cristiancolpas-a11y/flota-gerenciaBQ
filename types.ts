@@ -221,25 +221,43 @@ export interface WashReport {
 
 export interface Preventive {
   id: string;
-  semProgramado: string;       // Index 0
-  fechaProgramada: string;     // Index 1
-  semEjecucion: string;        // Index 2
-  mes: string;                 // Index 3
-  fechaEjecucion: string;      // Index 4
-  placa: string;               // Index 5
-  frecuencia: number;          // Index 6
-  ultimoKm: number;            // Index 7
-  proximoKm: number;           // Index 8
-  kmRegistrado: number;        // Index 9
-  tipo: string;                // Index 10
-  diferencia: number;          // Index 11
-  cumplimientoRango: string;   // Index 12
-  validaccionCumplimiento: number; // Index 13 (1 o 0)
-  cumplimientoProgramacion: number; // Index 14 (1 o 0)
-  cd: string;                  // Index 16
-  linea: string;               // Index 17
-  evidenceUrl?: string;        // Index 15
-  status: 'ok' | 'warning' | 'critical'; // Derived
+  placa: string;                    // Idx 0: PLACA
+  cd: string;                       // Idx 1: CD (Galapa / La Arenosa)
+  contratista: string;              // Idx 2: CONTRATISTA
+  linea: string;                    // Idx 3: MARCA/LINEA
+  marca?: string;                   // Alias marca/linea
+  ultimaRevision?: string | number; // Idx 4: ULTIMA REVISION
+  proximaRevision?: string | number;// Idx 5: PROXIMA REVISION
+  criterio?: string;                // Idx 9: CRITERIO DE ACTIVACION
+  ultimoContador?: string | number; // Idx 10: ULTIMO CONTADOR
+  semanaProgramada?: string;        // Idx 12: SEMANA PROGRAMADA
+  rutina: string;                   // Idx 13: RUTINA (Rutina 1/2/3/4 / Sin Dato)
+  estado: string;                   // Idx 14: ESTADO (EJECUTADO)
+  fechaEjecucion: string;           // Idx 15: FECHA DE EJECUCION (dd/mm/yyyy)
+  fechaEjecucionIso?: string;        // Formato ISO interno (YYYY-MM-DD)
+  mesClave?: string;                // YYYY-MM para agrupación cronológica
+  mes: string;                      // Derivado de fecha de ejecución (Enero, Febrero, etc.)
+  mesNumero: number;                // 1 a 12 para orden cronológico
+  semanaEjecucion: string;          // Idx 16: SEMANA DE EJECUCION
+  semanaEjecucionNumero: number;    // Número de semana para orden ascendente
+  kmEjecucion?: string | number;    // Idx 17: KILOMETRAJE DE EJECUCION
+  diferencia?: string | number;     // Idx 18: Diferencia de ejecucion
+  cumplimiento: 'CUMPLE' | 'NO CUMPLE' | string; // Idx 19: CUMPLIMIENTO ("CUMPLE" / "NO CUMPLE")
+
+  // Campos de compatibilidad y auxiliares
+  evidenceUrl?: string;
+  semProgramado?: string;
+  fechaProgramada?: string;
+  semEjecucion?: string;
+  frecuencia?: number;
+  ultimoKm?: number;
+  proximoKm?: number;
+  kmRegistrado?: number;
+  tipo?: string;
+  cumplimientoRango?: string;
+  validaccionCumplimiento?: number;
+  cumplimientoProgramacion?: number;
+  status?: 'ok' | 'warning' | 'critical';
 }
 
 export interface FleetComposition {

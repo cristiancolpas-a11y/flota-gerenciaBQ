@@ -691,8 +691,8 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
               className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
             >
               <option value="TODOS">Todos los Estados</option>
-              <option value="PENDIENTE">🔴 Solo Pendientes</option>
-              <option value="REALIZADO">🟢 Solo Realizados</option>
+              <option value="PENDIENTE">Solo Pendientes</option>
+              <option value="REALIZADO">Solo Realizados</option>
             </select>
           </div>
 
@@ -724,7 +724,7 @@ export const ForkliftClosureModule: React.FC<ForkliftClosureModuleProps> = ({ on
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Ej: espejo, llantas, luz..."
+                placeholder="Buscar por componente o falla..."
                 className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl pl-9 pr-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium placeholder:text-slate-400"
               />
             </div>
