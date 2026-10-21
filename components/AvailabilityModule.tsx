@@ -13,13 +13,14 @@ import {
   Search,
   Building2,
   Briefcase,
-  Store,
   Layers,
   ArrowUpDown,
   Download,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Clock,
+  ShieldAlert
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -45,37 +46,48 @@ interface AvailabilityDashboardProps {
   loading?: boolean;
 }
 
-const BRAND = {
-  azulPrincipal: '#0D2B4E',
-  azulSecundario: '#3E5A78',
-  dorado: '#F2B705',
-  positivo: '#16A34A',
-  negativo: '#DC2626',
-  textoPrincipal: '#111827',
-  textoSecundario: '#6B7280',
-  fondoLineas: '#F1F3F5',
-  fondo: '#FFFFFF',
+// Brand Colors (Limpios, corporativos, suaves, sin neones)
+const PALETTE = {
+  azulOscuro: '#0D2B4E',
+  azulMedio: '#1E3A5F',
+  azulClaro: '#3E5A78',
+  dorado: '#E0A800',
+  doradoActivo: '#F59E0B',
+  verde: '#15803D',
+  verdeBg: '#DCFCE7',
+  rojo: '#DC2626',
+  rojoBg: '#FEE2E2',
+  grisTexto: '#64748B',
+  grisOscuro: '#0F172A',
+  bordeSuave: '#E2E8F0',
+  fondoGris: '#F8FAFC',
+  blanco: '#FFFFFF',
 };
 
 const CD_COLORS: Record<string, string> = {
-  'GALAPA': '#0D2B4E',       // Azul principal
-  'LA ARENOSA': '#F2B705',   // Dorado
-  'ARENOSA': '#F2B705',
-  'BARRANQUILLA': '#3E5A78', // Azul secundario
-  'SANTA MARTA': '#16A34A',  // Verde
-  'CARTAGENA': '#DC2626',    // Rojo
-  'VALLEDUPAR': '#6B7280',   // Gris
-  'MONTERIA': '#3E5A78',
-  'TOTAL': '#0D2B4E'
+  'GALAPA': '#0D2B4E',
+  'LA ARENOSA': '#3E5A78',
+  'ARENOSA': '#3E5A78',
+  'OTRO': '#64748B'
 };
 
-const getCdColor = (cdName: string, idx: number): string => {
-  const upper = (cdName || '').toUpperCase().trim();
-  if (CD_COLORS[upper]) return CD_COLORS[upper];
-  // Paleta de marca para CD no listados:
-  const palette = ['#0D2B4E', '#F2B705', '#3E5A78', '#16A34A', '#DC2626', '#6B7280'];
-  return palette[idx % palette.length];
+const getCdColor = (cdName: string): string => {
+  const norm = (cdName || '').toUpperCase().trim();
+  if (norm.includes('GALAPA')) return CD_COLORS['GALAPA'];
+  if (norm.includes('ARENOSA')) return CD_COLORS['LA ARENOSA'];
+  return CD_COLORS['OTRO'];
 };
+
+interface FilterState {
+  cd: string;            // 'all' | 'GALAPA' | 'LA ARENOSA'
+  mes: string;           // 'all' | 'ENERO' ...
+  semana: string;        // 'all' | 'S1' ...
+  dia: string;           // 'all' | 'YYYY-MM-DD'
+  contratista: string;   // 'all' | string
+  sistema: string;       // 'all' | string
+  placa: string;         // 'all' | string
+  excluirFinRentin: boolean; // default true
+}
 
 export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   availability = [],
@@ -83,23 +95,71 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   onRefresh,
   loading = false
 }) => {
-  // Multi-filter states
-  const [selectedCds, setSelectedCds] = useState<string[]>([]);
-  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
-  const [selectedWeeks, setSelectedWeeks] = useState<string[]>([]);
-  const [selectedContractors, setSelectedContractors] = useState<string[]>([]);
-  
-  // Section 1 Chart mode
-  const [chartTimeframe, setChartTimeframe] = useState<'semanal' | 'mensual' | 'diaria'>('semanal');
-  const [breakdownByCd, setBreakdownByCd] = useState<boolean>(true);
+  // -------------------------------------------------------------
+  // 1. UNIFIED FILTER STATE (Supports Top Bar + Cross-Filtering)
+  // -------------------------------------------------------------
+  const [filters, setFilters] = useState<FilterState>({
+    cd: 'all',
+    mes: 'all',
+    semana: 'all',
+    dia: 'all',
+    contratista: 'all',
+    sistema: 'all',
+    placa: 'all',
+    excluirFinRentin: true,
+  });
 
-  // Section 3 Table states
+  // Table internal state
   const [tableSearchPlate, setTableSearchPlate] = useState<string>('');
   const [tableSortDesc, setTableSortDesc] = useState<boolean>(true);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(15);
 
-  // Extract unique filter options from data
+  // Helper: Detect FIN RENTIN
+  const isFinRentin = (c?: string) => {
+    if (!c) return false;
+    const norm = c.toUpperCase().trim();
+    return norm.startsWith('FIN RENTIN');
+  };
+
+  // Helper to toggle any filter (Clicking again deselects to 'all')
+  const toggleFilter = (key: keyof Omit<FilterState, 'excluirFinRentin'>, value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      [key]: prev[key] === value ? 'all' : value
+    }));
+    setCurrentPage(1);
+  };
+
+  const clearAllFilters = () => {
+    setFilters({
+      cd: 'all',
+      mes: 'all',
+      semana: 'all',
+      dia: 'all',
+      contratista: 'all',
+      sistema: 'all',
+      placa: 'all',
+      excluirFinRentin: true,
+    });
+    setTableSearchPlate('');
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters = 
+    filters.cd !== 'all' || 
+    filters.mes !== 'all' || 
+    filters.semana !== 'all' || 
+    filters.dia !== 'all' || 
+    filters.contratista !== 'all' || 
+    filters.sistema !== 'all' || 
+    filters.placa !== 'all' || 
+    !filters.excluirFinRentin ||
+    !!tableSearchPlate;
+
+  // -------------------------------------------------------------
+  // 2. EXTRACT FILTER OPTIONS (from real data)
+  // -------------------------------------------------------------
   const availableCds = useMemo(() => {
     const set = new Set<string>();
     availabilityPct.forEach(r => { if (r.cd) set.add(r.cd.toUpperCase().trim()); });
@@ -108,8 +168,8 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   }, [availabilityPct, availability]);
 
   const availableMonths = useMemo(() => {
-    const set = new Set<string>();
     const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+    const set = new Set<string>();
     availabilityPct.forEach(r => { if (r.mes) set.add(r.mes.toUpperCase().trim()); });
     availability.forEach(r => { if (r.mes) set.add(r.mes.toUpperCase().trim()); });
     return Array.from(set).filter(Boolean).sort((a, b) => {
@@ -135,328 +195,393 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     const set = new Set<string>();
     availabilityPct.forEach(r => {
       const c = r.contratista || (r as any).contractor;
-      if (c) set.add(c.toUpperCase().trim());
+      if (c && (!filters.excluirFinRentin || !isFinRentin(c))) {
+        set.add(c.trim());
+      }
     });
     availability.forEach(r => {
       const c = r.contratista || (r as any).contractor;
-      if (c) set.add(c.toUpperCase().trim());
+      if (c && (!filters.excluirFinRentin || !isFinRentin(c))) {
+        set.add(c.trim());
+      }
     });
     return Array.from(set).filter(Boolean).sort();
-  }, [availabilityPct, availability]);
+  }, [availabilityPct, availability, filters.excluirFinRentin]);
 
-  // Multi-select toggle helpers
-  const toggleCd = (cd: string) => {
-    setCurrentPage(1);
-    setSelectedCds(prev => 
-      prev.includes(cd) ? prev.filter(c => c !== cd) : [...prev, cd]
-    );
-  };
-
-  const toggleMonth = (m: string) => {
-    setCurrentPage(1);
-    setSelectedMonths(prev => 
-      prev.includes(m) ? prev.filter(item => item !== m) : [...prev, m]
-    );
-  };
-
-  const toggleWeek = (w: string) => {
-    setCurrentPage(1);
-    setSelectedWeeks(prev => 
-      prev.includes(w) ? prev.filter(item => item !== w) : [...prev, w]
-    );
-  };
-
-  const toggleContractor = (c: string) => {
-    setCurrentPage(1);
-    setSelectedContractors(prev => 
-      prev.includes(c) ? prev.filter(item => item !== c) : [...prev, c]
-    );
-  };
-
-  const clearAllFilters = () => {
-    setSelectedCds([]);
-    setSelectedMonths([]);
-    setSelectedWeeks([]);
-    setSelectedContractors([]);
-    setTableSearchPlate('');
-    setCurrentPage(1);
-  };
-
-  const hasActiveFilters = selectedCds.length > 0 || selectedMonths.length > 0 || selectedWeeks.length > 0 || selectedContractors.length > 0 || !!tableSearchPlate;
-
-  // Cumulative filtered % Disponibilidad dataset (Section 1)
-  const filteredPctRecords = useMemo(() => {
-    return availabilityPct.filter(r => {
-      if (selectedCds.length > 0 && !selectedCds.includes(r.cd.toUpperCase().trim())) return false;
-      if (selectedMonths.length > 0 && r.mes && !selectedMonths.includes(r.mes.toUpperCase().trim())) return false;
-      if (selectedWeeks.length > 0 && r.semana && !selectedWeeks.includes(r.semana.toUpperCase().trim())) return false;
-      const cVal = (r.contratista || (r as any).contractor || '').toUpperCase().trim();
-      if (selectedContractors.length > 0 && (!cVal || !selectedContractors.includes(cVal))) return false;
-      return true;
-    });
-  }, [availabilityPct, selectedCds, selectedMonths, selectedWeeks, selectedContractors]);
-
-  // Cumulative filtered Intervenciones dataset (Section 2 & 3)
-  const filteredInterventions = useMemo(() => {
-    return availability.filter(r => {
-      if (selectedCds.length > 0 && !selectedCds.includes(r.cd.toUpperCase().trim())) return false;
-      if (selectedMonths.length > 0 && r.mes && !selectedMonths.includes(r.mes.toUpperCase().trim())) return false;
-      if (selectedWeeks.length > 0 && r.semana && !selectedWeeks.includes(r.semana.toUpperCase().trim())) return false;
-      const cVal = (r.contratista || (r as any).contractor || '').toUpperCase().trim();
-      if (selectedContractors.length > 0 && (!cVal || !selectedContractors.includes(cVal))) return false;
-      return true;
-    });
-  }, [availability, selectedCds, selectedMonths, selectedWeeks, selectedContractors]);
+  const availableSystems = useMemo(() => {
+    const set = new Set<string>();
+    availability.forEach(r => { if (r.sistema) set.add(r.sistema.toUpperCase().trim()); });
+    return Array.from(set).filter(Boolean).sort();
+  }, [availability]);
 
   // -------------------------------------------------------------
-  // SECTION 1 CALCULATIONS: KPI Metrics & Aggregations
+  // 3. FILTERED DATASETS (Derived with Unified Filter State)
+  // -------------------------------------------------------------
+  // A) Intervenciones crudas (DISPONILIDAD)
+  const filteredInterventions = useMemo(() => {
+    return availability.filter(r => {
+      if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
+      if (filters.cd !== 'all' && r.cd.toUpperCase().trim() !== filters.cd.toUpperCase().trim()) return false;
+      if (filters.mes !== 'all' && r.mes && r.mes.toUpperCase().trim() !== filters.mes.toUpperCase().trim()) return false;
+      if (filters.semana !== 'all' && r.semana && r.semana.toUpperCase().trim() !== filters.semana.toUpperCase().trim()) return false;
+      if (filters.dia !== 'all' && r.fecha !== filters.dia) return false;
+      if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
+      if (filters.sistema !== 'all' && (r.sistema || '').toUpperCase().trim() !== filters.sistema.toUpperCase().trim()) return false;
+      if (filters.placa !== 'all') {
+        const pUpper = filters.placa.toUpperCase().trim();
+        const rPlaca = (r.placa || r.placasKey || '').toUpperCase().trim();
+        if (rPlaca !== pUpper) return false;
+      }
+      return true;
+    });
+  }, [availability, filters]);
+
+  // B) Resumen % Disponibilidad (%DISPONIBILIDAD)
+  const filteredPctRecords = useMemo(() => {
+    return availabilityPct.filter(r => {
+      if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
+      if (filters.cd !== 'all' && r.cd.toUpperCase().trim() !== filters.cd.toUpperCase().trim()) return false;
+      if (filters.mes !== 'all' && r.mes && r.mes.toUpperCase().trim() !== filters.mes.toUpperCase().trim()) return false;
+      if (filters.semana !== 'all' && r.semana && r.semana.toUpperCase().trim() !== filters.semana.toUpperCase().trim()) return false;
+      if (filters.dia !== 'all' && r.fecha !== filters.dia) return false;
+      if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
+      
+      // If filtered by a specific plate or system, filter to days where that plate/system had an intervention
+      if (filters.placa !== 'all' || filters.sistema !== 'all') {
+        const matchesIntervention = filteredInterventions.some(inv => 
+          inv.fecha === r.fecha && inv.cd.toUpperCase().trim() === r.cd.toUpperCase().trim()
+        );
+        if (!matchesIntervention) return false;
+      }
+      return true;
+    });
+  }, [availabilityPct, filters, filteredInterventions]);
+
+  // -------------------------------------------------------------
+  // 4. KPIS CALCULATIONS (GROUP BY DAY, NEVER ROW-BY-ROW)
   // -------------------------------------------------------------
   const kpiStats = useMemo(() => {
     if (filteredPctRecords.length === 0) {
-      return { avgPromedio: 0, totalFleet: 0, avgDisponibles: 0, avgIndisponibles: 0, totalRecords: 0 };
+      return {
+        tasaOperativa: 0,
+        tasaIndisponibilidad: 0,
+        avgFlotaTotal: 0,
+        avgDisponibles: 0,
+        avgIndisponibles: 0,
+        lastActiveFleet: 0,
+        totalDias: 0,
+        totalIntervenciones: filteredInterventions.length
+      };
     }
 
-    const totalSum = filteredPctRecords.reduce((acc, r) => acc + (r.total || 0), 0);
-    const dispSum = filteredPctRecords.reduce((acc, r) => acc + (r.disponibles || 0), 0);
-    const indispSum = filteredPctRecords.reduce((acc, r) => acc + (r.indisponibles || 0), 0);
-    
-    // Calculate true weighted percentage if totals exist, else arithmetic mean of promedio
-    let calculatedAvg = 0;
-    if (totalSum > 0) {
-      calculatedAvg = (dispSum / totalSum) * 100;
-    } else {
-      const validPromedios = filteredPctRecords.map(r => r.promedio).filter(p => p > 0);
-      calculatedAvg = validPromedios.length > 0 ? (validPromedios.reduce((a, b) => a + b, 0) / validPromedios.length) : 0;
-    }
-
-    const count = filteredPctRecords.length;
-    return {
-      avgPromedio: Number(calculatedAvg.toFixed(1)),
-      totalFleet: Math.round(totalSum / count),
-      avgDisponibles: Math.round(dispSum / count),
-      avgIndisponibles: Math.round(indispSum / count),
-      totalRecords: count
-    };
-  }, [filteredPctRecords]);
-
-  // Chart Data Preparation: Diaria, Semanal, Mensual
-  const chartData = useMemo(() => {
-    if (filteredPctRecords.length === 0) return [];
-
-    if (chartTimeframe === 'diaria') {
-      const groupedByDate: Record<string, { total: number; disp: number; indisp: number; proms: number[]; byCd: Record<string, { total: number; disp: number; proms: number[] }> }> = {};
-
-      filteredPctRecords.forEach(r => {
-        if (!r.fecha) return;
-        if (!groupedByDate[r.fecha]) {
-          groupedByDate[r.fecha] = { total: 0, disp: 0, indisp: 0, proms: [], byCd: {} };
-        }
-        groupedByDate[r.fecha].total += r.total || 0;
-        groupedByDate[r.fecha].disp += r.disponibles || 0;
-        groupedByDate[r.fecha].indisp += r.indisponibles || 0;
-        if (r.promedio > 0) groupedByDate[r.fecha].proms.push(r.promedio);
-
-        const cdKey = r.cd || 'GENERAL';
-        if (!groupedByDate[r.fecha].byCd[cdKey]) {
-          groupedByDate[r.fecha].byCd[cdKey] = { total: 0, disp: 0, proms: [] };
-        }
-        groupedByDate[r.fecha].byCd[cdKey].total += r.total || 0;
-        groupedByDate[r.fecha].byCd[cdKey].disp += r.disponibles || 0;
-        if (r.promedio > 0) groupedByDate[r.fecha].byCd[cdKey].proms.push(r.promedio);
-      });
-
-      return Object.keys(groupedByDate).sort().map(fecha => {
-        const item = groupedByDate[fecha];
-        const val = item.total > 0 ? (item.disp / item.total) * 100 : (item.proms.length > 0 ? item.proms.reduce((a, b) => a + b, 0) / item.proms.length : 0);
-        
-        const row: any = {
-          name: fecha,
-          label: fecha.substring(5), // MM-DD
-          promedio: Number(val.toFixed(1)),
-          total: item.total,
-          disponibles: item.disp,
-          indisponibles: item.indisp
-        };
-
-        Object.keys(item.byCd).forEach(cdKey => {
-          const cdData = item.byCd[cdKey];
-          const cdVal = cdData.total > 0 ? (cdData.disp / cdData.total) * 100 : (cdData.proms.length > 0 ? cdData.proms.reduce((a, b) => a + b, 0) / cdData.proms.length : 0);
-          row[`cd_${cdKey}`] = Number(cdVal.toFixed(1));
-        });
-
-        return row;
-      }).filter(row => (row.total > 0) || (row.promedio > 0));
-    }
-
-    if (chartTimeframe === 'semanal') {
-      const groupedByWeek: Record<string, { total: number; disp: number; indisp: number; proms: number[]; byCd: Record<string, { total: number; disp: number; proms: number[] }> }> = {};
-
-      filteredPctRecords.forEach(r => {
-        const weekKey = r.semana || 'S1';
-        if (!groupedByWeek[weekKey]) {
-          groupedByWeek[weekKey] = { total: 0, disp: 0, indisp: 0, proms: [], byCd: {} };
-        }
-        groupedByWeek[weekKey].total += r.total || 0;
-        groupedByWeek[weekKey].disp += r.disponibles || 0;
-        groupedByWeek[weekKey].indisp += r.indisponibles || 0;
-        if (r.promedio > 0) groupedByWeek[weekKey].proms.push(r.promedio);
-
-        const cdKey = r.cd || 'GENERAL';
-        if (!groupedByWeek[weekKey].byCd[cdKey]) {
-          groupedByWeek[weekKey].byCd[cdKey] = { total: 0, disp: 0, proms: [] };
-        }
-        groupedByWeek[weekKey].byCd[cdKey].total += r.total || 0;
-        groupedByWeek[weekKey].byCd[cdKey].disp += r.disponibles || 0;
-        if (r.promedio > 0) groupedByWeek[weekKey].byCd[cdKey].proms.push(r.promedio);
-      });
-
-      return Object.keys(groupedByWeek).sort((a, b) => {
-        const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
-        const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
-        return numA - numB;
-      }).map(weekKey => {
-        const item = groupedByWeek[weekKey];
-        const val = item.total > 0 ? (item.disp / item.total) * 100 : (item.proms.length > 0 ? item.proms.reduce((a, b) => a + b, 0) / item.proms.length : 0);
-        
-        const row: any = {
-          name: weekKey,
-          label: weekKey,
-          promedio: Number(val.toFixed(1)),
-          total: item.total,
-          disponibles: item.disp,
-          indisponibles: item.indisp
-        };
-
-        Object.keys(item.byCd).forEach(cdKey => {
-          const cdData = item.byCd[cdKey];
-          const cdVal = cdData.total > 0 ? (cdData.disp / cdData.total) * 100 : (cdData.proms.length > 0 ? cdData.proms.reduce((a, b) => a + b, 0) / cdData.proms.length : 0);
-          row[`cd_${cdKey}`] = Number(cdVal.toFixed(1));
-        });
-
-        return row;
-      }).filter(row => (row.total > 0) || (row.promedio > 0));
-    }
-
-    // Mensual
-    const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-    const groupedByMonth: Record<string, { total: number; disp: number; indisp: number; proms: number[]; byCd: Record<string, { total: number; disp: number; proms: number[] }> }> = {};
+    const dailyMap: Record<string, { total: number; disp: number; indisp: number }> = {};
+    let sumTotalAll = 0;
+    let sumDispAll = 0;
+    let sumIndispAll = 0;
 
     filteredPctRecords.forEach(r => {
-      const monthKey = r.mes || 'GENERAL';
-      if (!groupedByMonth[monthKey]) {
-        groupedByMonth[monthKey] = { total: 0, disp: 0, indisp: 0, proms: [], byCd: {} };
+      if (!r.fecha) return;
+      if (!dailyMap[r.fecha]) {
+        dailyMap[r.fecha] = { total: 0, disp: 0, indisp: 0 };
       }
-      groupedByMonth[monthKey].total += r.total || 0;
-      groupedByMonth[monthKey].disp += r.disponibles || 0;
-      groupedByMonth[monthKey].indisp += r.indisponibles || 0;
-      if (r.promedio > 0) groupedByMonth[monthKey].proms.push(r.promedio);
-
-      const cdKey = r.cd || 'GENERAL';
-      if (!groupedByMonth[monthKey].byCd[cdKey]) {
-        groupedByMonth[monthKey].byCd[cdKey] = { total: 0, disp: 0, proms: [] };
-      }
-      groupedByMonth[monthKey].byCd[cdKey].total += r.total || 0;
-      groupedByMonth[monthKey].byCd[cdKey].disp += r.disponibles || 0;
-      if (r.promedio > 0) groupedByMonth[monthKey].byCd[cdKey].proms.push(r.promedio);
+      const t = r.total || 0;
+      const d = r.disponibles || 0;
+      const ind = r.indisponibles || 0;
+      dailyMap[r.fecha].total += t;
+      dailyMap[r.fecha].disp += d;
+      dailyMap[r.fecha].indisp += ind;
+      sumTotalAll += t;
+      sumDispAll += d;
+      sumIndispAll += ind;
     });
 
-    return Object.keys(groupedByMonth).sort((a, b) => {
+    const dayKeys = Object.keys(dailyMap).sort();
+    const activeDayKeys = dayKeys.filter(k => dailyMap[k].total > 0);
+    const numActiveDays = activeDayKeys.length > 0 ? activeDayKeys.length : Math.max(1, dayKeys.length);
+
+    const avgFlotaTotal = Math.round(activeDayKeys.reduce((acc, k) => acc + dailyMap[k].total, 0) / numActiveDays);
+    const avgDisponibles = Math.round(activeDayKeys.reduce((acc, k) => acc + dailyMap[k].disp, 0) / numActiveDays);
+    const avgIndisponibles = Math.round(activeDayKeys.reduce((acc, k) => acc + dailyMap[k].indisp, 0) / numActiveDays);
+
+    const tasaOperativa = sumTotalAll > 0 ? Number(((sumDispAll / sumTotalAll) * 100).toFixed(1)) : 0;
+    const tasaIndisponibilidad = Number((100 - tasaOperativa).toFixed(1));
+
+    const lastActiveDay = activeDayKeys[activeDayKeys.length - 1];
+    const lastActiveFleet = lastActiveDay ? dailyMap[lastActiveDay].total : 0;
+
+    return {
+      tasaOperativa,
+      tasaIndisponibilidad,
+      avgFlotaTotal,
+      avgDisponibles,
+      avgIndisponibles,
+      lastActiveFleet,
+      totalDias: dayKeys.length,
+      totalIntervenciones: filteredInterventions.length
+    };
+  }, [filteredPctRecords, filteredInterventions]);
+
+  // -------------------------------------------------------------
+  // 5. CHART DATA PREPARATIONS
+  // -------------------------------------------------------------
+
+  // A) Mensual (Fila dedicada independiente)
+  const monthlyData = useMemo(() => {
+    const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+    const map: Record<string, { total: number; disp: number }> = {};
+
+    filteredPctRecords.forEach(r => {
+      const m = r.mes || 'OTRO';
+      if (!map[m]) map[m] = { total: 0, disp: 0 };
+      map[m].total += r.total || 0;
+      map[m].disp += r.disponibles || 0;
+    });
+
+    return Object.keys(map).sort((a, b) => {
       const idxA = monthOrder.indexOf(a);
       const idxB = monthOrder.indexOf(b);
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
       return a.localeCompare(b);
-    }).map(monthKey => {
-      const item = groupedByMonth[monthKey];
-      const val = item.total > 0 ? (item.disp / item.total) * 100 : (item.proms.length > 0 ? item.proms.reduce((a, b) => a + b, 0) / item.proms.length : 0);
-      
-      const row: any = {
-        name: monthKey,
-        label: monthKey,
-        promedio: Number(val.toFixed(1)),
+    }).map(m => {
+      const item = map[m];
+      const pct = item.total > 0 ? Number(((item.disp / item.total) * 100).toFixed(1)) : 0;
+      return {
+        name: m,
+        label: m,
+        disponibilidad: pct,
         total: item.total,
-        disponibles: item.disp,
-        indisponibles: item.indisp
+        disponibles: item.disp
       };
-
-      Object.keys(item.byCd).forEach(cdKey => {
-        const cdData = item.byCd[cdKey];
-        const cdVal = cdData.total > 0 ? (cdData.disp / cdData.total) * 100 : (cdData.proms.length > 0 ? cdData.proms.reduce((a, b) => a + b, 0) / cdData.proms.length : 0);
-        row[`cd_${cdKey}`] = Number(cdVal.toFixed(1));
-      });
-
-      return row;
-    }).filter(row => (row.total > 0) || (row.promedio > 0));
-  }, [filteredPctRecords, chartTimeframe]);
-
-  // Active CDs in current filtered data for series breakdown
-  const activeCdList = useMemo(() => {
-    const set = new Set<string>();
-    filteredPctRecords.forEach(r => { if (r.cd) set.add(r.cd.toUpperCase().trim()); });
-    return Array.from(set).sort();
+    });
   }, [filteredPctRecords]);
 
-  // -------------------------------------------------------------
-  // SECTION 2 CALCULATIONS: Top Sistemas, Placas, Talleres
-  // -------------------------------------------------------------
-  const interventionRankings = useMemo(() => {
-    const totalCount = filteredInterventions.length;
-    const sistemasMap: Record<string, number> = {};
-    const placasMap: Record<string, { count: number; cd: string; contractor: string }> = {};
-    const talleresMap: Record<string, number> = {};
+  // B) Semanal
+  const weeklyData = useMemo(() => {
+    const map: Record<string, { total: number; disp: number }> = {};
 
-    filteredInterventions.forEach(r => {
-      // Sistema
-      const sis = (r.sistema || 'SIN ESPECIFICAR').trim();
-      sistemasMap[sis] = (sistemasMap[sis] || 0) + 1;
-
-      // Placa
-      const plk = (r.placa || r.placasKey || 'DESC').trim();
-      if (plk && plk !== 'DESC') {
-        if (!placasMap[plk]) {
-          placasMap[plk] = { count: 0, cd: r.cd, contractor: r.contratista };
-        }
-        placasMap[plk].count += 1;
-      }
-
-      // Taller
-      const tal = (r.taller || 'SIN ASIGNAR').trim();
-      talleresMap[tal] = (talleresMap[tal] || 0) + 1;
+    filteredPctRecords.forEach(r => {
+      const w = r.semana || 'S1';
+      if (!map[w]) map[w] = { total: 0, disp: 0 };
+      map[w].total += r.total || 0;
+      map[w].disp += r.disponibles || 0;
     });
 
-    const topSistemas = Object.entries(sistemasMap)
-      .map(([name, count]) => ({ name, count, pct: totalCount > 0 ? Number(((count / totalCount) * 100).toFixed(1)) : 0 }))
-      .sort((a, b) => b.count - a.count);
+    return Object.keys(map).sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    }).map(w => {
+      const item = map[w];
+      const pct = item.total > 0 ? Number(((item.disp / item.total) * 100).toFixed(1)) : 0;
+      return {
+        name: w,
+        label: w,
+        disponibilidad: pct,
+        total: item.total,
+        disponibles: item.disp
+      };
+    });
+  }, [filteredPctRecords]);
 
-    const topPlacas = Object.entries(placasMap)
-      .map(([placa, info]) => ({ placa, count: info.count, cd: info.cd, contractor: info.contractor, pct: totalCount > 0 ? Number(((info.count / totalCount) * 100).toFixed(1)) : 0 }))
-      .sort((a, b) => b.count - a.count);
+  // C) Diaria
+  const dailyData = useMemo(() => {
+    const map: Record<string, { total: number; disp: number }> = {};
 
-    const topTalleres = Object.entries(talleresMap)
-      .map(([name, count]) => ({ name, count, pct: totalCount > 0 ? Number(((count / totalCount) * 100).toFixed(1)) : 0 }))
-      .sort((a, b) => b.count - a.count);
+    filteredPctRecords.forEach(r => {
+      if (!r.fecha) return;
+      if (!map[r.fecha]) map[r.fecha] = { total: 0, disp: 0 };
+      map[r.fecha].total += r.total || 0;
+      map[r.fecha].disp += r.disponibles || 0;
+    });
+
+    const dates = Object.keys(map).sort();
+    // Tomar los últimos 35 días para mantener legibilidad visual
+    const displayDates = dates.length > 35 ? dates.slice(-35) : dates;
+
+    return displayDates.map(f => {
+      const item = map[f];
+      const pct = item.total > 0 ? Number(((item.disp / item.total) * 100).toFixed(1)) : 0;
+      return {
+        name: f,
+        label: f.substring(5), // MM-DD
+        fecha: f,
+        disponibilidad: pct,
+        total: item.total,
+        disponibles: item.disp
+      };
+    });
+  }, [filteredPctRecords]);
+
+  // D) Centro de Distribución (GALAPA vs LA ARENOSA)
+  const cdData = useMemo(() => {
+    const map: Record<string, { total: number; disp: number; dailyTotals: Record<string, number> }> = {};
+
+    filteredPctRecords.forEach(r => {
+      const cd = (r.cd || 'OTRO').toUpperCase().trim();
+      if (!map[cd]) map[cd] = { total: 0, disp: 0, dailyTotals: {} };
+      map[cd].total += r.total || 0;
+      map[cd].disp += r.disponibles || 0;
+      if (r.fecha) {
+        map[cd].dailyTotals[r.fecha] = (map[cd].dailyTotals[r.fecha] || 0) + (r.total || 0);
+      }
+    });
+
+    return Object.keys(map).sort().map(cd => {
+      const item = map[cd];
+      const pct = item.total > 0 ? Number(((item.disp / item.total) * 100).toFixed(1)) : 0;
+      const daysCount = Object.keys(item.dailyTotals).length || 1;
+      const avgFlotaCd = Math.round(item.total / daysCount);
+      return {
+        name: cd,
+        cd,
+        disponibilidad: pct,
+        avgFlota: avgFlotaCd,
+        total: item.total,
+        disponibles: item.disp
+      };
+    });
+  }, [filteredPctRecords]);
+
+  // E) Por Contratista
+  const contractorData = useMemo(() => {
+    const map: Record<string, { total: number; disp: number; indisp: number }> = {};
+
+    filteredPctRecords.forEach(r => {
+      const c = (r.contratista || 'SIN ESPECIFICAR').trim();
+      if (!map[c]) map[c] = { total: 0, disp: 0, indisp: 0 };
+      map[c].total += r.total || 0;
+      map[c].disp += r.disponibles || 0;
+      map[c].indisp += r.indisponibles || 0;
+    });
+
+    return Object.keys(map).map(c => {
+      const item = map[c];
+      const pct = item.total > 0 ? Number(((item.disp / item.total) * 100).toFixed(1)) : 0;
+      return {
+        name: c,
+        contratista: c,
+        disponibilidad: pct,
+        indisponibles: item.indisp,
+        total: item.total
+      };
+    }).sort((a, b) => b.disponibilidad - a.disponibilidad);
+  }, [filteredPctRecords]);
+
+  // F) Días Indisponibles (Salida - Ingreso de taller, sin negativos)
+  const daysInShopStats = useMemo(() => {
+    const cdDaysMap: Record<string, { totalDays: number; count: number }> = {};
+    const plateDaysMap: Record<string, { totalDays: number; count: number; cd: string }> = {};
+
+    filteredInterventions.forEach(r => {
+      let dias = 0;
+      if (r.fechaIngreso && r.fechaEstimadaSalida) {
+        const dIn = new Date(r.fechaIngreso.includes('T') ? r.fechaIngreso : r.fechaIngreso + 'T12:00:00');
+        const dOut = new Date(r.fechaEstimadaSalida.includes('T') ? r.fechaEstimadaSalida : r.fechaEstimadaSalida + 'T12:00:00');
+        if (!isNaN(dIn.getTime()) && !isNaN(dOut.getTime())) {
+          const diff = Math.round((dOut.getTime() - dIn.getTime()) / (1000 * 3600 * 24));
+          dias = diff >= 0 ? diff : 0;
+        }
+      } else if (typeof r.diasIndisponible === 'number' && r.diasIndisponible >= 0) {
+        dias = r.diasIndisponible;
+      }
+
+      // Por CD
+      const cd = (r.cd || 'OTRO').toUpperCase().trim();
+      if (!cdDaysMap[cd]) cdDaysMap[cd] = { totalDays: 0, count: 0 };
+      cdDaysMap[cd].totalDays += dias;
+      cdDaysMap[cd].count += 1;
+
+      // Por Placa
+      const pl = (r.placa || r.placasKey || '').toUpperCase().trim();
+      if (pl) {
+        if (!plateDaysMap[pl]) plateDaysMap[pl] = { totalDays: 0, count: 0, cd: r.cd };
+        plateDaysMap[pl].totalDays += dias;
+        plateDaysMap[pl].count += 1;
+      }
+    });
+
+    const cdDaysList = Object.keys(cdDaysMap).sort().map(cd => {
+      const item = cdDaysMap[cd];
+      const avg = item.count > 0 ? Number((item.totalDays / item.count).toFixed(1)) : 0;
+      return {
+        name: cd,
+        cd,
+        promedioDias: avg,
+        totalDias: item.totalDays,
+        intervenciones: item.count
+      };
+    });
+
+    const topPlatesDaysList = Object.keys(plateDaysMap)
+      .map(pl => ({
+        placa: pl,
+        name: pl,
+        diasAcumulados: plateDaysMap[pl].totalDays,
+        intervenciones: plateDaysMap[pl].count,
+        cd: plateDaysMap[pl].cd
+      }))
+      .sort((a, b) => b.diasAcumulados - a.diasAcumulados)
+      .slice(0, 10);
 
     return {
-      totalInterventions: totalCount,
-      topSistemas,
-      topPlacas,
-      topTalleres,
-      chartSistemas: topSistemas.slice(0, 7)
+      cdDaysList,
+      topPlatesDaysList
     };
   }, [filteredInterventions]);
 
+  // G) Sistema Más Intervenido
+  const systemInterventionsData = useMemo(() => {
+    const map: Record<string, number> = {};
+
+    filteredInterventions.forEach(r => {
+      const s = (r.sistema || 'SIN ESPECIFICAR').toUpperCase().trim();
+      map[s] = (map[s] || 0) + 1;
+    });
+
+    return Object.entries(map)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [filteredInterventions]);
+
+  // H) Placa Más Intervenida (Vertical / Top 15-20)
+  const plateInterventionsData = useMemo(() => {
+    const map: Record<string, { count: number; cd: string }> = {};
+
+    filteredInterventions.forEach(r => {
+      const pl = (r.placa || r.placasKey || '').toUpperCase().trim();
+      if (!pl) return;
+      if (!map[pl]) map[pl] = { count: 0, cd: r.cd };
+      map[pl].count += 1;
+    });
+
+    return Object.entries(map)
+      .map(([placa, info]) => ({
+        placa,
+        name: placa,
+        count: info.count,
+        cd: info.cd
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
+  }, [filteredInterventions]);
+
   // -------------------------------------------------------------
-  // SECTION 3: Detailed Table Processing (8 Columns + Search + Sort)
+  // 6. DETAILED TABLE WITH SEARCH & PAGINATION
   // -------------------------------------------------------------
   const tableRecords = useMemo(() => {
     let list = [...filteredInterventions];
 
-    // Plate search filter
     if (tableSearchPlate.trim()) {
       const q = tableSearchPlate.toUpperCase().trim();
-      list = list.filter(r => (r.placa || '').toUpperCase().includes(q) || (r.placasKey || '').toUpperCase().includes(q));
+      list = list.filter(r => 
+        (r.placa || '').toUpperCase().includes(q) || 
+        (r.placasKey || '').toUpperCase().includes(q) ||
+        (r.detalle || '').toUpperCase().includes(q) ||
+        (r.taller || '').toUpperCase().includes(q)
+      );
     }
 
-    // Sort by Date
     list.sort((a, b) => {
       const dateA = a.fecha || '';
       const dateB = b.fecha || '';
@@ -466,7 +591,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     return list;
   }, [filteredInterventions, tableSearchPlate, tableSortDesc]);
 
-  // Pagination
   const totalPages = Math.max(1, Math.ceil(tableRecords.length / itemsPerPage));
   const paginatedRecords = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -475,44 +599,47 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
 
   const exportTableToCSV = () => {
     if (tableRecords.length === 0) return;
-    const headers = ['Fecha', 'Centro de Distribucion', 'Sistema', 'Detalle', 'Placa', 'Taller', 'Fecha Ingreso Taller', 'Fecha Estimada Salida'];
+    const headers = ['Fecha', 'Centro de Distribución', 'Sistema', 'Detalle', 'Placa', 'Taller', 'Ingreso Taller', 'Salida Estimada', 'Contratista'];
     const rows = tableRecords.map(r => [
-      `"${r.fecha || ''}"`,
-      `"${r.cd || ''}"`,
-      `"${r.sistema || ''}"`,
-      `"${(r.detalle || '').replace(/"/g, '""')}"`,
-      `"${r.placa || ''}"`,
-      `"${r.taller || ''}"`,
-      `"${r.fechaIngreso || ''}"`,
-      `"${r.fechaEstimadaSalida || ''}"`
+      `"${r.fecha || '—'}"`,
+      `"${r.cd || '—'}"`,
+      `"${r.sistema || '—'}"`,
+      `"${(r.detalle || '—').replace(/"/g, '""')}"`,
+      `"${r.placa || r.placasKey || '—'}"`,
+      `"${r.taller || '—'}"`,
+      `"${r.fechaIngreso || '—'}"`,
+      `"${r.fechaEstimadaSalida || '—'}"`,
+      `"${r.contratista || '—'}"`
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `reporte_intervenciones_disponibilidad_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `disponibilidad_flota_intervenciones_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div id="availability-dashboard-root" className="space-y-8 max-w-7xl mx-auto px-2 sm:px-4 py-6 font-sans">
+    <div id="availability-dashboard-root" className="space-y-6 max-w-7xl mx-auto px-2 sm:px-4 py-6 font-sans text-slate-800">
       
-      {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-3xl border border-[#F1F3F5] shadow-sm">
+      {/* ============================================================== */}
+      {/* 1. HEADER                                                      */}
+      {/* ============================================================== */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-[#F1F3F5] text-[#0D2B4E] rounded-2xl border border-slate-200 shadow-inner">
-              <Activity size={28} />
+            <div className="p-3 bg-slate-100 text-[#0D2B4E] rounded-xl border border-slate-200">
+              <Activity size={24} />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-black text-[#111827] uppercase tracking-tight">
-                Tablero de Disponibilidad de Flota
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Disponibilidad de Flota
               </h1>
-              <p className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">
-                Consolidado Operativo • % de Disponibilidad e Intervenciones de Taller
+              <p className="text-xs font-semibold text-slate-500">
+                Consolidado operativo de flota activa, novedades de taller e intervenciones
               </p>
             </div>
           </div>
@@ -523,728 +650,666 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             <button
               onClick={() => onRefresh()}
               disabled={loading}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0D2B4E] hover:bg-[#3E5A78] text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 disabled:opacity-50"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0D2B4E] hover:bg-[#1E3A5F] text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50"
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              <span>{loading ? 'Actualizando...' : 'Actualizar'}</span>
+              <span>{loading ? 'Sincronizando...' : 'Actualizar datos'}</span>
             </button>
           )}
         </div>
       </div>
 
       {/* ============================================================== */}
-      {/* MULTI-FILTER BAR (CD, Mes, Semana, Contratista)               */}
+      {/* 2. MULTIFILTER BAR (Visible, Cruzada con las Gráficas)         */}
       {/* ============================================================== */}
-      <div id="availability-filters-card" className="bg-white p-5 rounded-3xl border border-[#F1F3F5] shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-[#F1F3F5] pb-3">
-          <div className="flex items-center gap-2 text-xs font-black text-[#111827] uppercase tracking-wider">
-            <Filter size={16} className="text-[#0D2B4E]" />
-            <span>Filtros Múltiples Acumulativos</span>
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+            <Filter size={15} className="text-[#0D2B4E]" />
+            <span>Filtros y filtros cruzados interactivos</span>
+            <span className="text-[11px] font-normal text-slate-400">
+              (Hacer clic en cualquier gráfica para filtrar)
+            </span>
           </div>
 
-          {hasActiveFilters && (
-            <button
-              onClick={clearAllFilters}
-              className="flex items-center gap-1 text-[11px] font-black text-[#DC2626] hover:text-red-700 uppercase tracking-wider transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
+          <div className="flex items-center gap-4">
+            {/* Checkbox: Excluir FIN RENTIN */}
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={filters.excluirFinRentin}
+                onChange={e => {
+                  setFilters(prev => ({ ...prev, excluirFinRentin: e.target.checked }));
+                  setCurrentPage(1);
+                }}
+                className="w-4 h-4 rounded border-slate-300 text-[#0D2B4E] focus:ring-[#0D2B4E]"
+              />
+              <span>Excluir FIN RENTIN</span>
+            </label>
+
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700 px-2.5 py-1 rounded-lg hover:bg-red-50 transition-colors"
+              >
+                <X size={13} />
+                <span>Limpiar filtros</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Dropdowns / Selectors */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          
+          {/* CD */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Centro (CD)</label>
+            <select
+              value={filters.cd}
+              onChange={e => toggleFilter('cd', e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
             >
-              <X size={13} />
-              <span>Limpiar Filtros</span>
-            </button>
+              <option value="all">Todos los CD</option>
+              {availableCds.map(cd => (
+                <option key={cd} value={cd}>{cd}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Mes */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Mes</label>
+            <select
+              value={filters.mes}
+              onChange={e => toggleFilter('mes', e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
+            >
+              <option value="all">Todos los meses</option>
+              {availableMonths.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Semana */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Semana</label>
+            <select
+              value={filters.semana}
+              onChange={e => toggleFilter('semana', e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
+            >
+              <option value="all">Todas las semanas</option>
+              {availableWeeks.map(w => (
+                <option key={w} value={w}>{w}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Contratista */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Contratista</label>
+            <select
+              value={filters.contratista}
+              onChange={e => toggleFilter('contratista', e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
+            >
+              <option value="all">Todos los contratistas</option>
+              {availableContractors.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sistema */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sistema</label>
+            <select
+              value={filters.sistema}
+              onChange={e => toggleFilter('sistema', e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
+            >
+              <option value="all">Todos los sistemas</option>
+              {availableSystems.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Placa */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Placa específica</label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder={filters.placa === 'all' ? "Escribir placa..." : filters.placa}
+                value={filters.placa === 'all' ? '' : filters.placa}
+                onChange={e => toggleFilter('placa', e.target.value ? e.target.value.toUpperCase() : 'all')}
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none uppercase"
+              />
+              {filters.placa !== 'all' && (
+                <button
+                  onClick={() => toggleFilter('placa', 'all')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Active Filter Chips / Status */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-slate-400">Filtros aplicados:</span>
+            {filters.cd !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
+                CD: {filters.cd}
+                <button onClick={() => toggleFilter('cd', 'all')}><X size={11} /></button>
+              </span>
+            )}
+            {filters.mes !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
+                Mes: {filters.mes}
+                <button onClick={() => toggleFilter('mes', 'all')}><X size={11} /></button>
+              </span>
+            )}
+            {filters.semana !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
+                Semana: {filters.semana}
+                <button onClick={() => toggleFilter('semana', 'all')}><X size={11} /></button>
+              </span>
+            )}
+            {filters.dia !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
+                Día: {filters.dia}
+                <button onClick={() => toggleFilter('dia', 'all')}><X size={11} /></button>
+              </span>
+            )}
+            {filters.contratista !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
+                Contratista: {filters.contratista}
+                <button onClick={() => toggleFilter('contratista', 'all')}><X size={11} /></button>
+              </span>
+            )}
+            {filters.sistema !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 text-xs font-semibold border border-amber-200">
+                Sistema: {filters.sistema}
+                <button onClick={() => toggleFilter('sistema', 'all')}><X size={11} /></button>
+              </span>
+            )}
+            {filters.placa !== 'all' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-900 font-mono text-xs font-semibold border border-blue-200">
+                Placa: {filters.placa}
+                <button onClick={() => toggleFilter('placa', 'all')}><X size={11} /></button>
+              </span>
+            )}
+            {!hasActiveFilters && (
+              <span className="text-slate-400 text-xs">Sin filtros (Mostrando consolidado general)</span>
+            )}
+          </div>
+
+          <div className="text-[11px] font-medium text-slate-500">
+            Mostrando {kpiStats.totalDias} días analizados • {kpiStats.totalIntervenciones} intervenciones
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* 3. TARJETAS KPI (CORREGIDAS: AGRUPACIÓN DIARIA, ~100-160 FLOTA)*/}
+      {/* ============================================================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* KPI 1: % Disponibilidad Ponderado */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                % Disponibilidad promedio
+              </p>
+              <h3 className="text-3xl font-extrabold text-slate-900 mt-1 font-mono">
+                {kpiStats.tasaOperativa}%
+              </h3>
+            </div>
+            <div className={`p-2.5 rounded-xl ${
+              kpiStats.tasaOperativa >= 95 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+              kpiStats.tasaOperativa >= 90 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
+              'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              <TrendingUp size={20} />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between pt-3 border-t border-slate-100 text-[11px]">
+            <span className="text-slate-500 font-medium">Meta operativa: &ge; 95.0%</span>
+            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${
+              kpiStats.tasaOperativa >= 95 ? 'bg-emerald-100 text-emerald-800' :
+              kpiStats.tasaOperativa >= 90 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+            }`}>
+              {kpiStats.tasaOperativa >= 95 ? 'Cumple meta' : 'En seguimiento'}
+            </span>
+          </div>
+        </div>
+
+        {/* KPI 2: Flota Promedio Total */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Flota promedio total
+              </p>
+              <h3 className="text-3xl font-extrabold text-[#0D2B4E] mt-1 font-mono">
+                {kpiStats.avgFlotaTotal}
+              </h3>
+            </div>
+            <div className="p-2.5 bg-slate-100 text-[#0D2B4E] rounded-xl border border-slate-200">
+              <Truck size={20} />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+            <span>Último registro activo</span>
+            <span className="font-mono font-bold text-slate-800">{kpiStats.lastActiveFleet} vehíc.</span>
+          </div>
+        </div>
+
+        {/* KPI 3: Vehículos Disponibles (Promedio) */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Vehículos disponibles (prom.)
+              </p>
+              <h3 className="text-3xl font-extrabold text-emerald-700 mt-1 font-mono">
+                {kpiStats.avgDisponibles}
+              </h3>
+            </div>
+            <div className="p-2.5 bg-emerald-50 text-emerald-700 rounded-xl border border-emerald-200">
+              <CheckCircle2 size={20} />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+            <span>Tasa operativa ponderada</span>
+            <span className="font-mono font-bold text-emerald-700">{kpiStats.tasaOperativa}%</span>
+          </div>
+        </div>
+
+        {/* KPI 4: Vehículos Indisponibles (Promedio) */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Vehículos indisponibles (prom.)
+              </p>
+              <h3 className="text-3xl font-extrabold text-red-600 mt-1 font-mono">
+                {kpiStats.avgIndisponibles}
+              </h3>
+            </div>
+            <div className="p-2.5 bg-red-50 text-red-600 rounded-xl border border-red-200">
+              <AlertTriangle size={20} />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center justify-between pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+            <span>Tasa de indisponibilidad</span>
+            <span className="font-mono font-bold text-red-600">{kpiStats.tasaIndisponibilidad}%</span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ============================================================== */}
+      {/* 4. GRÁFICA MENSUAL (APARTE, EN SU PROPIA SECCIÓN)              */}
+      {/* ============================================================== */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Calendar size={18} className="text-[#0D2B4E]" />
+              Evolución mensual de % disponibilidad
+            </h3>
+            <p className="text-xs text-slate-500">
+              Consolidado mes a mes. Haz clic en una barra para filtrar el dashboard por ese mes.
+            </p>
+          </div>
+          {filters.mes !== 'all' && (
+            <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200">
+              Mes seleccionado: {filters.mes}
+            </span>
           )}
         </div>
 
-        {/* Filters Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-          
-          {/* 1. Centro de Distribución (CD) */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-black text-[#6B7280] uppercase tracking-wider">
-              <span className="flex items-center gap-1.5">
-                <Building2 size={13} className="text-[#0D2B4E]" /> Centro de Distribución:
-              </span>
-              <button
-                onClick={() => setSelectedCds(selectedCds.length === availableCds.length ? [] : [...availableCds])}
-                className="text-[10px] font-black text-[#0D2B4E] hover:underline"
-              >
-                {selectedCds.length === availableCds.length ? 'Desmarcar Todos' : 'Marcar Todos'}
-              </button>
+        <div className="h-[280px] w-full pt-2">
+          {monthlyData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+              No hay datos para el rango o filtros seleccionados
             </div>
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-[#F1F3F5] rounded-2xl border border-slate-200">
-              <button
-                onClick={() => setSelectedCds([])}
-                className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider ${
-                  selectedCds.length === 0
-                    ? 'bg-[#0D2B4E] text-white shadow-sm'
-                    : 'bg-white text-[#6B7280] border border-slate-200 hover:bg-slate-100'
-                }`}
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={monthlyData} 
+                margin={{ top: 25, right: 20, left: 0, bottom: 15 }}
+                onClick={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const item = e.activePayload[0].payload;
+                    toggleFilter('mes', item.name);
+                  }
+                }}
               >
-                TODOS
-              </button>
-              {availableCds.map(cd => {
-                const isSelected = selectedCds.includes(cd);
-                return (
-                  <button
-                    key={cd}
-                    onClick={() => toggleCd(cd)}
-                    className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider ${
-                      isSelected
-                        ? 'bg-[#0D2B4E] text-white shadow-sm'
-                        : 'bg-white text-[#6B7280] border border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {cd}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 2. Mes */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-black text-[#6B7280] uppercase tracking-wider">
-              <span className="flex items-center gap-1.5">
-                <Calendar size={13} className="text-[#0D2B4E]" /> Mes:
-              </span>
-              <button
-                onClick={() => setSelectedMonths(selectedMonths.length === availableMonths.length ? [] : [...availableMonths])}
-                className="text-[10px] font-black text-[#0D2B4E] hover:underline"
-              >
-                {selectedMonths.length === availableMonths.length ? 'Desmarcar Todos' : 'Marcar Todos'}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-[#F1F3F5] rounded-2xl border border-slate-200">
-              <button
-                onClick={() => setSelectedMonths([])}
-                className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider ${
-                  selectedMonths.length === 0
-                    ? 'bg-[#0D2B4E] text-white shadow-sm'
-                    : 'bg-white text-[#6B7280] border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                TODOS
-              </button>
-              {availableMonths.map(m => {
-                const isSelected = selectedMonths.includes(m);
-                return (
-                  <button
-                    key={m}
-                    onClick={() => toggleMonth(m)}
-                    className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider ${
-                      isSelected
-                        ? 'bg-[#0D2B4E] text-white shadow-sm'
-                        : 'bg-white text-[#6B7280] border border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {m}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 3. Semana */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-black text-[#6B7280] uppercase tracking-wider">
-              <span className="flex items-center gap-1.5">
-                <Layers size={13} className="text-[#0D2B4E]" /> Semana:
-              </span>
-              <button
-                onClick={() => setSelectedWeeks(selectedWeeks.length === availableWeeks.length ? [] : [...availableWeeks])}
-                className="text-[10px] font-black text-[#0D2B4E] hover:underline"
-              >
-                {selectedWeeks.length === availableWeeks.length ? 'Desmarcar Todas' : 'Marcar Todas'}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-[#F1F3F5] rounded-2xl border border-slate-200">
-              <button
-                onClick={() => setSelectedWeeks([])}
-                className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider ${
-                  selectedWeeks.length === 0
-                    ? 'bg-[#0D2B4E] text-white shadow-sm'
-                    : 'bg-white text-[#6B7280] border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                TODAS
-              </button>
-              {availableWeeks.map(w => {
-                const isSelected = selectedWeeks.includes(w);
-                return (
-                  <button
-                    key={w}
-                    onClick={() => toggleWeek(w)}
-                    className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider ${
-                      isSelected
-                        ? 'bg-[#0D2B4E] text-white shadow-sm'
-                        : 'bg-white text-[#6B7280] border border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {w}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 4. Contratista */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-black text-[#6B7280] uppercase tracking-wider">
-              <span className="flex items-center gap-1.5">
-                <Briefcase size={13} className="text-[#0D2B4E]" /> Contratista:
-              </span>
-              <button
-                onClick={() => setSelectedContractors(selectedContractors.length === availableContractors.length ? [] : [...availableContractors])}
-                className="text-[10px] font-black text-[#0D2B4E] hover:underline"
-              >
-                {selectedContractors.length === availableContractors.length ? 'Desmarcar Todos' : 'Marcar Todos'}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1.5 bg-[#F1F3F5] rounded-2xl border border-slate-200">
-              <button
-                onClick={() => setSelectedContractors([])}
-                className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider ${
-                  selectedContractors.length === 0
-                    ? 'bg-[#0D2B4E] text-white shadow-sm'
-                    : 'bg-white text-[#6B7280] border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                TODOS
-              </button>
-              {availableContractors.map(c => {
-                const isSelected = selectedContractors.includes(c);
-                return (
-                  <button
-                    key={c}
-                    onClick={() => toggleContractor(c)}
-                    className={`px-3 py-1 rounded-xl text-[10px] font-black uppercase transition-all tracking-wider ${
-                      isSelected
-                        ? 'bg-[#0D2B4E] text-white shadow-sm'
-                        : 'bg-white text-[#6B7280] border border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                <XAxis 
+                  dataKey="label" 
+                  tick={{ fontSize: 11, fill: PALETTE.grisTexto, fontWeight: 600 }}
+                  axisLine={{ stroke: PALETTE.bordeSuave }}
+                />
+                <YAxis 
+                  domain={[70, 100]} 
+                  tick={{ fontSize: 10, fill: PALETTE.grisTexto }}
+                  unit="%"
+                  axisLine={{ stroke: PALETTE.bordeSuave }}
+                />
+                <Tooltip 
+                  formatter={(val: any) => [`${val}%`, '% Disponibilidad']}
+                  labelFormatter={(l) => `Mes: ${l}`}
+                  contentStyle={{ backgroundColor: '#0F172A', borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                />
+                <ReferenceLine 
+                  y={95} 
+                  stroke={PALETTE.verde} 
+                  strokeDasharray="4 4" 
+                  strokeWidth={2} 
+                  label={{ value: 'Meta: 95%', position: 'right', fill: PALETTE.verde, fontSize: 10, fontWeight: 'bold' }} 
+                />
+                <Bar 
+                  dataKey="disponibilidad" 
+                  name="% Disponibilidad"
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={48}
+                  cursor="pointer"
+                >
+                  <LabelList 
+                    dataKey="disponibilidad" 
+                    position="top" 
+                    formatter={(v: any) => `${v}%`}
+                    style={{ fontSize: '11px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                  />
+                  {monthlyData.map((entry, index) => {
+                    const isSelected = filters.mes === entry.name;
+                    return (
+                      <Cell 
+                        key={`cell-month-${index}`} 
+                        fill={isSelected ? PALETTE.doradoActivo : PALETTE.azulOscuro} 
+                      />
+                    );
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
+      </div>
 
-        {/* Selected active tags indicator */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#F1F3F5]">
-            <span className="text-[10px] font-black text-[#6B7280] uppercase tracking-wider">Filtros Activos:</span>
-            {selectedCds.map(cd => (
-              <span key={`tag-${cd}`} className="inline-flex items-center gap-1 bg-[#0D2B4E]/10 text-[#0D2B4E] px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border border-[#0D2B4E]/20">
-                CD: {cd}
-                <button onClick={() => toggleCd(cd)} className="hover:text-black"><X size={11} /></button>
-              </span>
-            ))}
-            {selectedMonths.map(m => (
-              <span key={`tag-${m}`} className="inline-flex items-center gap-1 bg-[#3E5A78]/10 text-[#3E5A78] px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border border-[#3E5A78]/20">
-                Mes: {m}
-                <button onClick={() => toggleMonth(m)} className="hover:text-black"><X size={11} /></button>
-              </span>
-            ))}
-            {selectedWeeks.map(w => (
-              <span key={`tag-${w}`} className="inline-flex items-center gap-1 bg-[#F2B705]/15 text-amber-950 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border border-[#F2B705]/40">
-                Semana: {w}
-                <button onClick={() => toggleWeek(w)} className="hover:text-black"><X size={11} /></button>
-              </span>
-            ))}
-            {selectedContractors.map(c => (
-              <span key={`tag-${c}`} className="inline-flex items-center gap-1 bg-[#0D2B4E]/10 text-[#0D2B4E] px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border border-[#0D2B4E]/20">
-                Contratista: {c}
-                <button onClick={() => toggleContractor(c)} className="hover:text-black"><X size={11} /></button>
-              </span>
-            ))}
-            {tableSearchPlate && (
-              <span className="inline-flex items-center gap-1 bg-[#16A34A]/10 text-[#16A34A] px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border border-[#16A34A]/20">
-                Placa: {tableSearchPlate}
-                <button onClick={() => setTableSearchPlate('')} className="hover:text-black"><X size={11} /></button>
+      {/* ============================================================== */}
+      {/* 5. GRÁFICAS TEMPORALES: SEMANAL Y DIARIA JUNTAS (2 COLUMNAS)   */}
+      {/* ============================================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Gráfica Semanal */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Layers size={16} className="text-[#0D2B4E]" />
+                Disponibilidad semanal
+              </h3>
+              <p className="text-[11px] text-slate-500">Haz clic en una semana para filtrar</p>
+            </div>
+            {filters.semana !== 'all' && (
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
+                {filters.semana}
               </span>
             )}
           </div>
-        )}
-      </div>
 
-      {/* ============================================================== */}
-      {/* SECCIÓN 1: % DE DISPONIBILIDAD (Hoja %DISPONIBILIDAD)          */}
-      {/* ============================================================== */}
-      <div id="availability-section-1" className="space-y-6">
-        
-        {/* Section Title */}
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-7 bg-[#0D2B4E] rounded-full"></div>
-          <div>
-            <h2 className="text-xl font-black text-[#111827] uppercase tracking-tight">
-              1. Indicadores de % Disponibilidad
-            </h2>
-            <p className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">
-              Cálculo acumulado de disponibilidad y flota activa según filtros seleccionados
-            </p>
-          </div>
-        </div>
-
-        {/* 4 KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          {/* Card 1: % Promedio */}
-          <div className="bg-white p-5 rounded-3xl border border-[#F1F3F5] shadow-sm relative overflow-hidden group hover:border-[#3E5A78]/40 transition-all">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280]">
-                  % Disponibilidad Promedio
-                </p>
-                <h3 className="text-3xl font-black text-[#111827] mt-2 font-mono">
-                  {kpiStats.avgPromedio}%
-                </h3>
+          <div className="h-[250px] w-full pt-2">
+            {weeklyData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+                Sin datos para este corte semanal
               </div>
-              <div className={`p-3 rounded-2xl ${
-                kpiStats.avgPromedio >= 95 ? 'bg-[#16A34A]/10 text-[#16A34A]' :
-                kpiStats.avgPromedio >= 90 ? 'bg-[#F2B705]/20 text-[#D97706]' : 'bg-[#DC2626]/10 text-[#DC2626]'
-              }`}>
-                <TrendingUp size={22} />
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between pt-3 border-t border-[#F1F3F5] text-[10px] font-black uppercase">
-              <span className="text-[#6B7280]">Meta: &ge; 95.0%</span>
-              <span className={`px-2 py-0.5 rounded-full ${
-                kpiStats.avgPromedio >= 95 ? 'bg-[#16A34A]/15 text-[#16A34A]' :
-                kpiStats.avgPromedio >= 90 ? 'bg-[#F2B705]/20 text-[#B45309]' : 'bg-[#DC2626]/15 text-[#DC2626]'
-              }`}>
-                {kpiStats.avgPromedio >= 95 ? 'CUMPLE' : 'EN RIESGO'}
-              </span>
-            </div>
-          </div>
-
-          {/* Card 2: Total Vehículos */}
-          <div className="bg-white p-5 rounded-3xl border border-[#F1F3F5] shadow-sm relative overflow-hidden group hover:border-[#3E5A78]/40 transition-all">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280]">
-                  Flota Promedio Total
-                </p>
-                <h3 className="text-3xl font-black text-[#0D2B4E] mt-2 font-mono">
-                  {kpiStats.totalFleet}
-                </h3>
-              </div>
-              <div className="p-3 bg-[#F1F3F5] text-[#3E5A78] rounded-2xl">
-                <Truck size={22} />
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between pt-3 border-t border-[#F1F3F5] text-[10px] font-black uppercase text-[#6B7280]">
-              <span>Registros analizados</span>
-              <span className="font-mono text-[#111827]">{kpiStats.totalRecords}</span>
-            </div>
-          </div>
-
-          {/* Card 3: Vehículos Disponibles */}
-          <div className="bg-white p-5 rounded-3xl border border-[#F1F3F5] shadow-sm relative overflow-hidden group hover:border-[#16A34A]/40 transition-all">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280]">
-                  Vehículos Disponibles (Prom.)
-                </p>
-                <h3 className="text-3xl font-black text-[#16A34A] mt-2 font-mono">
-                  {kpiStats.avgDisponibles}
-                </h3>
-              </div>
-              <div className="p-3 bg-[#16A34A]/10 text-[#16A34A] rounded-2xl">
-                <CheckCircle2 size={22} />
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between pt-3 border-t border-[#F1F3F5] text-[10px] font-black uppercase text-[#6B7280]">
-              <span>Tasa operativa</span>
-              <span className="font-mono text-[#16A34A]">
-                {kpiStats.totalFleet > 0 ? ((kpiStats.avgDisponibles / kpiStats.totalFleet) * 100).toFixed(1) : 0}%
-              </span>
-            </div>
-          </div>
-
-          {/* Card 4: Vehículos Indisponibles */}
-          <div className="bg-white p-5 rounded-3xl border border-[#F1F3F5] shadow-sm relative overflow-hidden group hover:border-[#DC2626]/40 transition-all">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280]">
-                  Vehículos Indisponibles (Prom.)
-                </p>
-                <h3 className="text-3xl font-black text-[#DC2626] mt-2 font-mono">
-                  {kpiStats.avgIndisponibles}
-                </h3>
-              </div>
-              <div className="p-3 bg-[#DC2626]/10 text-[#DC2626] rounded-2xl">
-                <AlertTriangle size={22} />
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between pt-3 border-t border-[#F1F3F5] text-[10px] font-black uppercase text-[#6B7280]">
-              <span>Tasa indisponibilidad</span>
-              <span className="font-mono text-[#DC2626]">
-                {kpiStats.totalFleet > 0 ? ((kpiStats.avgIndisponibles / kpiStats.totalFleet) * 100).toFixed(1) : 0}%
-              </span>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Charts Container with Visible Data Labels */}
-        <div className="bg-white p-6 rounded-3xl border border-[#F1F3F5] shadow-sm space-y-6">
-          
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#F1F3F5] pb-4">
-            <div>
-              <h3 className="text-base font-black text-[#111827] uppercase tracking-tight flex items-center gap-2">
-                <TrendingUp size={18} className="text-[#3E5A78]" />
-                Evolución de % Disponibilidad Promedio
-              </h3>
-              <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">
-                Visualización con etiquetas numéricas visibles en cada punto y comparativo de meta (95%)
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Breakdown Toggle */}
-              {activeCdList.length > 1 && (
-                <button
-                  onClick={() => setBreakdownByCd(!breakdownByCd)}
-                  className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
-                    breakdownByCd 
-                      ? 'bg-[#0D2B4E] text-white border-[#0D2B4E] shadow-sm' 
-                      : 'bg-white text-[#6B7280] border-slate-200 hover:bg-[#F1F3F5]'
-                  }`}
-                >
-                  {breakdownByCd ? '✓ Desglose por CD' : 'Desglosar por CD'}
-                </button>
-              )}
-
-              {/* Timeframe Selectors */}
-              <div className="flex bg-[#F1F3F5] p-1 rounded-xl">
-                <button
-                  onClick={() => setChartTimeframe('semanal')}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                    chartTimeframe === 'semanal' ? 'bg-[#0D2B4E] text-white shadow-sm' : 'text-[#6B7280] hover:text-[#111827]'
-                  }`}
-                >
-                  Semanal
-                </button>
-                <button
-                  onClick={() => setChartTimeframe('mensual')}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                    chartTimeframe === 'mensual' ? 'bg-[#0D2B4E] text-white shadow-sm' : 'text-[#6B7280] hover:text-[#111827]'
-                  }`}
-                >
-                  Mensual
-                </button>
-                <button
-                  onClick={() => setChartTimeframe('diaria')}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
-                    chartTimeframe === 'diaria' ? 'bg-[#0D2B4E] text-white shadow-sm' : 'text-[#6B7280] hover:text-[#111827]'
-                  }`}
-                >
-                  Diaria
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Chart Rendering with Visible Data Labels */}
-          <div className="h-[360px] w-full pt-2">
-            {chartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-[#6B7280] text-xs font-bold uppercase tracking-wider border-2 border-dashed border-slate-200 rounded-2xl">
-                No hay datos disponibles para los filtros seleccionados
-              </div>
-            ) : chartTimeframe === 'diaria' && !breakdownByCd ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 25, right: 30, left: 10, bottom: 25 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={BRAND.fondoLineas} />
-                  <XAxis 
-                    dataKey="label" 
-                    tick={{ fontSize: 10, fill: BRAND.textoSecundario, fontWeight: 700 }}
-                    axisLine={{ stroke: '#cbd5e1' }}
-                  />
-                  <YAxis 
-                    domain={[60, 100]} 
-                    tick={{ fontSize: 10, fill: BRAND.textoSecundario, fontWeight: 700 }}
-                    unit="%"
-                    axisLine={{ stroke: '#cbd5e1' }}
-                  />
-                  <Tooltip 
-                    formatter={(val: any) => [`${val}%`, '% Disponibilidad']}
-                    labelFormatter={(l) => `Fecha: ${l}`}
-                    contentStyle={{ backgroundColor: BRAND.azulPrincipal, borderColor: BRAND.azulSecundario, borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
-                  />
-                  <ReferenceLine y={95} stroke={BRAND.positivo} strokeDasharray="4 4" strokeWidth={2} label={{ value: 'Meta: 95%', position: 'right', fill: BRAND.positivo, fontSize: 10, fontWeight: 'bold' }} />
-                  <Line 
-                    type="monotone" 
-                    dataKey="promedio" 
-                    name="% Disponibilidad"
-                    stroke={BRAND.azulSecundario} 
-                    strokeWidth={3} 
-                    dot={{ fill: BRAND.dorado, r: 5, strokeWidth: 2, stroke: BRAND.azulPrincipal }}
-                    activeDot={{ r: 7 }}
-                  >
-                    <LabelList 
-                      dataKey="promedio" 
-                      position="top" 
-                      formatter={(v: any) => `${v}%`}
-                      style={{ fontSize: '10px', fontWeight: '900', fill: BRAND.textoPrincipal }} 
-                    />
-                  </Line>
-                </LineChart>
-              </ResponsiveContainer>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 25, right: 30, left: 10, bottom: 25 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={BRAND.fondoLineas} />
-                  <XAxis 
-                    dataKey="label" 
-                    tick={{ fontSize: 11, fill: BRAND.textoSecundario, fontWeight: 800 }}
-                    axisLine={{ stroke: '#cbd5e1' }}
-                  />
-                  <YAxis 
-                    domain={[60, 100]} 
-                    tick={{ fontSize: 10, fill: BRAND.textoSecundario, fontWeight: 700 }}
-                    unit="%"
-                    axisLine={{ stroke: '#cbd5e1' }}
-                  />
+                <BarChart 
+                  data={weeklyData} 
+                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload.length > 0) {
+                      const item = e.activePayload[0].payload;
+                      toggleFilter('semana', item.name);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: PALETTE.grisTexto }} />
+                  <YAxis domain={[75, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
                   <Tooltip 
-                    formatter={(val: any, name: any) => [`${val}%`, name]}
-                    contentStyle={{ backgroundColor: BRAND.azulPrincipal, borderColor: BRAND.azulSecundario, borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                    formatter={(val: any) => [`${val}%`, '% Disponibilidad']}
+                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                   />
-                  <Legend wrapperStyle={{ paddingTop: '15px', fontSize: '11px', fontWeight: 'bold' }} />
-                  <ReferenceLine y={95} stroke={BRAND.positivo} strokeDasharray="4 4" strokeWidth={2} label={{ value: 'Meta: 95%', position: 'right', fill: BRAND.positivo, fontSize: 10, fontWeight: 'bold' }} />
-                  
-                  {breakdownByCd ? (
-                    activeCdList.map((cdName, idx) => (
-                      <Bar 
-                        key={cdName}
-                        dataKey={`cd_${cdName}`} 
-                        name={cdName}
-                        fill={getCdColor(cdName, idx)} 
-                        radius={[6, 6, 0, 0]}
-                        maxBarSize={38}
-                      >
-                        <LabelList 
-                          dataKey={`cd_${cdName}`} 
-                          position="top" 
-                          formatter={(v: any) => v > 0 ? `${v}%` : ''}
-                          style={{ fontSize: '9px', fontWeight: '900', fill: BRAND.textoPrincipal }} 
-                        />
-                      </Bar>
-                    ))
-                  ) : (
-                    <Bar 
-                      dataKey="promedio" 
-                      name="% Promedio General"
-                      fill={BRAND.azulSecundario} 
-                      radius={[8, 8, 0, 0]}
-                      maxBarSize={60}
-                    >
-                      <LabelList 
-                        dataKey="promedio" 
-                        position="top" 
-                        formatter={(v: any) => `${v}%`}
-                        style={{ fontSize: '11px', fontWeight: '900', fill: BRAND.textoPrincipal }} 
+                  <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
+                  <Bar dataKey="disponibilidad" radius={[5, 5, 0, 0]} maxBarSize={30} cursor="pointer">
+                    <LabelList 
+                      dataKey="disponibilidad" 
+                      position="top" 
+                      formatter={(v: any) => `${v}%`}
+                      style={{ fontSize: '9px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                    />
+                    {weeklyData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-week-${index}`} 
+                        fill={filters.semana === entry.name ? PALETTE.doradoActivo : PALETTE.azulClaro} 
                       />
-                      {chartData.map((entry: any, index: number) => {
-                        const maxVal = Math.max(...chartData.map((d: any) => d.promedio || 0));
-                        const isTop = chartData.length > 0 && entry.promedio === maxVal && maxVal > 0;
-                        return (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={isTop ? BRAND.dorado : BRAND.azulSecundario} 
-                          />
-                        );
-                      })}
-                    </Bar>
-                  )}
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
-      </div>
-
-      {/* ============================================================== */}
-      {/* SECCIÓN 2: ANÁLISIS DE INTERVENCIONES (Hoja DISPONILIDAD)     */}
-      {/* ============================================================== */}
-      <div id="availability-section-2" className="space-y-6">
-        
-        {/* Section Title */}
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-7 bg-[#3E5A78] rounded-full"></div>
-          <div>
-            <h2 className="text-xl font-black text-[#111827] uppercase tracking-tight">
-              2. Análisis de Intervenciones en Taller
-            </h2>
-            <p className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">
-              Sistemas más intervenidos, placas críticas y talleres con mayor carga ({interventionRankings.totalInterventions} registros)
-            </p>
-          </div>
-        </div>
-
-        {/* 3 Top Ranking Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          
-          {/* Ranking 1: Sistema más intervenido */}
-          <div className="bg-white p-5 rounded-3xl border border-[#F1F3F5] shadow-sm flex flex-col justify-between space-y-4">
+        {/* Gráfica Diaria */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
             <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#6B7280] flex items-center gap-1.5">
-                  <Wrench size={13} className="text-[#0D2B4E]" /> Sistema Más Intervenido
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#F2B705]/20 text-amber-950 text-[9px] font-black uppercase border border-[#F2B705]/40">
-                  Top 1
-                </span>
-              </div>
-              <h4 className="text-lg font-black text-[#111827] mt-2 uppercase truncate">
-                {interventionRankings.topSistemas[0]?.name || 'N/A'}
-              </h4>
-              <p className="text-xs font-bold text-[#6B7280] mt-0.5">
-                {interventionRankings.topSistemas[0]?.count || 0} intervenciones ({interventionRankings.topSistemas[0]?.pct || 0}%)
-              </p>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Clock size={16} className="text-[#0D2B4E]" />
+                Disponibilidad diaria (últimos 35 días)
+              </h3>
+              <p className="text-[11px] text-slate-500">Haz clic en un día para ver detalle de ese día</p>
             </div>
-
-            {/* Mini list top 5 */}
-            <div className="space-y-2 pt-3 border-t border-[#F1F3F5]">
-              <p className="text-[9px] font-black text-[#6B7280] uppercase tracking-wider">Top 5 Sistemas:</p>
-              <div className="space-y-1.5">
-                {interventionRankings.topSistemas.slice(0, 5).map((sis, idx) => (
-                  <div key={sis.name} className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-[#111827] truncate max-w-[150px]">
-                      {idx + 1}. {sis.name}
-                    </span>
-                    <span className="font-mono font-black text-[#0D2B4E] bg-[#F1F3F5] px-2 py-0.5 rounded-md text-[10px]">
-                      {sis.count}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {filters.dia !== 'all' && (
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
+                {filters.dia}
+              </span>
+            )}
           </div>
 
-          {/* Ranking 2: Placa más intervenida */}
-          <div className="bg-white p-5 rounded-3xl border border-[#F1F3F5] shadow-sm flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#6B7280] flex items-center gap-1.5">
-                  <Truck size={13} className="text-[#DC2626]" /> Placa Más Intervenida
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#DC2626]/10 text-[#DC2626] text-[9px] font-black uppercase border border-[#DC2626]/20">
-                  Crítica
-                </span>
-              </div>
-              <h4 className="text-xl font-black text-[#111827] mt-2 font-mono uppercase tracking-tight">
-                {interventionRankings.topPlacas[0]?.placa || 'N/A'}
-              </h4>
-              <p className="text-xs font-bold text-[#6B7280] mt-0.5">
-                {interventionRankings.topPlacas[0]?.count || 0} ingresos • {interventionRankings.topPlacas[0]?.cd || ''}
-              </p>
-            </div>
-
-            {/* Mini list top 5 */}
-            <div className="space-y-2 pt-3 border-t border-[#F1F3F5]">
-              <p className="text-[9px] font-black text-[#6B7280] uppercase tracking-wider">Top 5 Placas:</p>
-              <div className="space-y-1.5">
-                {interventionRankings.topPlacas.slice(0, 5).map((p, idx) => (
-                  <div key={p.placa} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-black text-[#6B7280] text-[10px]">{idx + 1}.</span>
-                      <span className="font-mono font-black text-white bg-[#0D2B4E] px-1.5 py-0.5 rounded text-[10px]">
-                        {p.placa}
-                      </span>
-                      <span className="text-[10px] font-bold text-[#6B7280] truncate max-w-[70px]">{p.cd}</span>
-                    </div>
-                    <span className="font-mono font-black text-[#0D2B4E] bg-[#F1F3F5] px-2 py-0.5 rounded-md text-[10px]">
-                      {p.count} ing.
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Ranking 3: Taller con más ingresos */}
-          <div className="bg-white p-5 rounded-3xl border border-[#F1F3F5] shadow-sm flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#6B7280] flex items-center gap-1.5">
-                  <Store size={13} className="text-[#3E5A78]" /> Taller Con Más Ingresos
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#3E5A78]/10 text-[#3E5A78] text-[9px] font-black uppercase border border-[#3E5A78]/20">
-                  Mayor Carga
-                </span>
-              </div>
-              <h4 className="text-lg font-black text-[#111827] mt-2 uppercase truncate">
-                {interventionRankings.topTalleres[0]?.name || 'N/A'}
-              </h4>
-              <p className="text-xs font-bold text-[#6B7280] mt-0.5">
-                {interventionRankings.topTalleres[0]?.count || 0} intervenciones ({interventionRankings.topTalleres[0]?.pct || 0}%)
-              </p>
-            </div>
-
-            {/* Mini list top 5 */}
-            <div className="space-y-2 pt-3 border-t border-[#F1F3F5]">
-              <p className="text-[9px] font-black text-[#6B7280] uppercase tracking-wider">Top 5 Talleres:</p>
-              <div className="space-y-1.5">
-                {interventionRankings.topTalleres.slice(0, 5).map((tal, idx) => (
-                  <div key={tal.name} className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-[#111827] truncate max-w-[150px]">
-                      {idx + 1}. {tal.name}
-                    </span>
-                    <span className="font-mono font-black text-[#0D2B4E] bg-[#F1F3F5] px-2 py-0.5 rounded-md text-[10px]">
-                      {tal.count}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Chart: Intervenciones por Sistema with Visible Data Labels */}
-        <div className="bg-white p-6 rounded-3xl border border-[#F1F3F5] shadow-sm space-y-4">
-          <div>
-            <h3 className="text-base font-black text-[#111827] uppercase tracking-tight flex items-center gap-2">
-              <Wrench size={18} className="text-[#3E5A78]" />
-              Distribución de Intervenciones por Sistema
-            </h3>
-            <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider">
-              Cantidad de ingresos a taller clasificados por componente/sistema
-            </p>
-          </div>
-
-          <div className="h-[280px] w-full pt-2">
-            {interventionRankings.chartSistemas.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-[#6B7280] text-xs font-bold uppercase tracking-wider border-2 border-dashed border-slate-200 rounded-2xl">
-                No hay intervenciones registradas para los filtros aplicados
+          <div className="h-[250px] w-full pt-2">
+            {dailyData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+                Sin datos diarios para este corte
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={interventionRankings.chartSistemas} layout="vertical" margin={{ top: 10, right: 35, left: 50, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={BRAND.fondoLineas} />
-                  <XAxis type="number" tick={{ fontSize: 10, fill: BRAND.textoSecundario, fontWeight: 700 }} />
+                <LineChart 
+                  data={dailyData} 
+                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload.length > 0) {
+                      const item = e.activePayload[0].payload;
+                      toggleFilter('dia', item.fecha);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
+                  <YAxis domain={[75, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
+                  <Tooltip 
+                    formatter={(val: any) => [`${val}%`, '% Disponibilidad']}
+                    labelFormatter={(l) => `Fecha: ${l}`}
+                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                  />
+                  <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
+                  <Line 
+                    type="monotone" 
+                    dataKey="disponibilidad" 
+                    stroke={PALETTE.azulMedio} 
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: PALETTE.dorado }}
+                    activeDot={{ r: 6 }}
+                    cursor="pointer"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* ============================================================== */}
+      {/* 6. GRÁFICAS: POR CD Y POR CONTRATISTA (2 COLUMNAS)             */}
+      {/* ============================================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Comparativa por Centro de Distribución (CD) */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Building2 size={16} className="text-[#0D2B4E]" />
+                Disponibilidad por Centro de Distribución (CD)
+              </h3>
+              <p className="text-[11px] text-slate-500">Comparativa GALAPA vs LA ARENOSA</p>
+            </div>
+            {filters.cd !== 'all' && (
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
+                {filters.cd}
+              </span>
+            )}
+          </div>
+
+          <div className="h-[240px] w-full pt-2">
+            {cdData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+                Sin datos por CD
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={cdData} 
+                  margin={{ top: 20, right: 30, left: 0, bottom: 10 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload.length > 0) {
+                      const item = e.activePayload[0].payload;
+                      toggleFilter('cd', item.name);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: PALETTE.grisOscuro, fontWeight: 700 }} />
+                  <YAxis domain={[80, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
+                  <Tooltip 
+                    formatter={(val: any, _: any, p: any) => [
+                      `${val}% (Flota prom: ${p.payload.avgFlota} vehíc.)`, 
+                      '% Disponibilidad'
+                    ]}
+                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                  />
+                  <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
+                  <Bar dataKey="disponibilidad" radius={[6, 6, 0, 0]} maxBarSize={55} cursor="pointer">
+                    <LabelList 
+                      dataKey="disponibilidad" 
+                      position="top" 
+                      formatter={(v: any) => `${v}%`}
+                      style={{ fontSize: '11px', fontWeight: '800', fill: PALETTE.grisOscuro }} 
+                    />
+                    {cdData.map((entry, index) => {
+                      const isSelected = filters.cd === entry.name;
+                      return (
+                        <Cell 
+                          key={`cell-cd-${index}`} 
+                          fill={isSelected ? PALETTE.doradoActivo : getCdColor(entry.name)} 
+                        />
+                      );
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Disponibilidad por Contratista */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Briefcase size={16} className="text-[#0D2B4E]" />
+                Disponibilidad por contratista
+              </h3>
+              <p className="text-[11px] text-slate-500">% Operativo y vehículos indisponibles</p>
+            </div>
+            {filters.contratista !== 'all' && (
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
+                {filters.contratista}
+              </span>
+            )}
+          </div>
+
+          <div className="h-[240px] w-full pt-2">
+            {contractorData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+                Sin datos de contratistas
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={contractorData} 
+                  layout="vertical" 
+                  margin={{ top: 10, right: 35, left: 60, bottom: 10 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload.length > 0) {
+                      const item = e.activePayload[0].payload;
+                      toggleFilter('contratista', item.name);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={PALETTE.fondoGris} />
+                  <XAxis type="number" domain={[85, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
                   <YAxis 
                     dataKey="name" 
                     type="category" 
-                    tick={{ fontSize: 10, fill: BRAND.textoPrincipal, fontWeight: 800 }}
+                    tick={{ fontSize: 10, fill: PALETTE.grisOscuro, fontWeight: 600 }}
                     width={110}
                   />
                   <Tooltip 
-                    formatter={(val: any) => [`${val} intervenciones`, 'Cantidad']}
-                    contentStyle={{ backgroundColor: BRAND.azulPrincipal, borderColor: BRAND.azulSecundario, borderRadius: '12px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                    formatter={(val: any, _: any, p: any) => [
+                      `${val}% (Indisponibles acum: ${p.payload.indisponibles})`, 
+                      '% Disponibilidad'
+                    ]}
+                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                   />
-                  <Bar dataKey="count" fill={BRAND.azulSecundario} radius={[0, 8, 8, 0]} maxBarSize={28}>
+                  <Bar dataKey="disponibilidad" radius={[0, 6, 6, 0]} maxBarSize={24} cursor="pointer">
                     <LabelList 
-                      dataKey="count" 
+                      dataKey="disponibilidad" 
                       position="right" 
-                      style={{ fontSize: '10px', fontWeight: '900', fill: BRAND.textoPrincipal }} 
+                      formatter={(v: any) => `${v}%`}
+                      style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                     />
-                    {interventionRankings.chartSistemas.map((_, index) => (
+                    {contractorData.map((entry, index) => (
                       <Cell 
-                        key={`cell-sis-${index}`} 
-                        fill={index === 0 ? BRAND.dorado : BRAND.azulSecundario} 
+                        key={`cell-cont-${index}`} 
+                        fill={filters.contratista === entry.name ? PALETTE.doradoActivo : PALETTE.azulClaro} 
                       />
                     ))}
                   </Bar>
@@ -1257,63 +1322,321 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* SECCIÓN 3: TABLA DETALLADA (8 Columnas, Buscador, Paginación)  */}
+      {/* 7. DÍAS INDISPONIBLES EN TALLER (SALIDA - INGRESO)              */}
       {/* ============================================================== */}
-      <div id="availability-section-3" className="space-y-4">
-        
-        {/* Section Title & Controls */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-5 rounded-3xl border border-[#F1F3F5] shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-2 h-7 bg-[#0D2B4E] rounded-full"></div>
-            <div>
-              <h2 className="text-xl font-black text-[#111827] uppercase tracking-tight">
-                3. Tabla Detallada de Intervenciones
-              </h2>
-              <p className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">
-                Total de registros filtrados: {tableRecords.length}
-              </p>
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Clock size={16} className="text-[#0D2B4E]" />
+              Permanencia y días indisponibles en taller
+            </h3>
+            <p className="text-xs text-slate-500">
+              Calculado como (Fecha estimada de salida) − (Fecha de ingreso), excluyendo valores negativos
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+          
+          {/* Promedio de días por CD */}
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Días promedio de permanencia por CD
+            </h4>
+            <div className="h-[220px] w-full">
+              {daysInShopStats.cdDaysList.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+                  Sin datos de permanencia
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={daysInShopStats.cdDaysList} margin={{ top: 20, right: 30, left: -10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: PALETTE.grisOscuro, fontWeight: 700 }} />
+                    <YAxis tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit=" d" />
+                    <Tooltip 
+                      formatter={(val: any, _: any, p: any) => [
+                        `${val} días prom. (${p.payload.totalDias} días en ${p.payload.intervenciones} intervenciones)`, 
+                        'Permanencia'
+                      ]}
+                      contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                    />
+                    <Bar dataKey="promedioDias" fill={PALETTE.azulOscuro} radius={[6, 6, 0, 0]} maxBarSize={45}>
+                      <LabelList 
+                        dataKey="promedioDias" 
+                        position="top" 
+                        formatter={(v: any) => `${v} días`}
+                        style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                      />
+                      {daysInShopStats.cdDaysList.map((entry, index) => (
+                        <Cell 
+                          key={`cell-cddays-${index}`} 
+                          fill={filters.cd === entry.name ? PALETTE.doradoActivo : getCdColor(entry.name)} 
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            {/* Search by plate */}
-            <div className="relative flex-grow sm:flex-grow-0 sm:w-64">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6B7280]" />
+          {/* Top Placas con más días acumulados */}
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Top 10 placas con más días acumulados en taller
+            </h4>
+            <div className="h-[220px] w-full">
+              {daysInShopStats.topPlatesDaysList.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+                  Sin datos de placas
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={daysInShopStats.topPlatesDaysList} 
+                    layout="vertical" 
+                    margin={{ top: 5, right: 40, left: 35, bottom: 5 }}
+                    onClick={(e: any) => {
+                      if (e && e.activePayload && e.activePayload.length > 0) {
+                        const item = e.activePayload[0].payload;
+                        toggleFilter('placa', item.placa);
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={PALETTE.fondoGris} />
+                    <XAxis type="number" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} unit=" d" />
+                    <YAxis 
+                      dataKey="placa" 
+                      type="category" 
+                      tick={{ fontSize: 10, fill: PALETTE.grisOscuro, fontWeight: 700, fontFamily: 'monospace' }}
+                      width={60}
+                    />
+                    <Tooltip 
+                      formatter={(val: any, _: any, p: any) => [
+                        `${val} días acumulados (${p.payload.intervenciones} ingresos • ${p.payload.cd})`, 
+                        'Días en taller'
+                      ]}
+                      contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                    />
+                    <Bar dataKey="diasAcumulados" radius={[0, 6, 6, 0]} maxBarSize={18} cursor="pointer">
+                      <LabelList 
+                        dataKey="diasAcumulados" 
+                        position="right" 
+                        formatter={(v: any) => `${v} d`}
+                        style={{ fontSize: '9px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                      />
+                      {daysInShopStats.topPlatesDaysList.map((entry, index) => (
+                        <Cell 
+                          key={`cell-topdays-${index}`} 
+                          fill={filters.placa === entry.placa ? PALETTE.doradoActivo : PALETTE.azulClaro} 
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* 8. ANÁLISIS DE INTERVENCIONES: SISTEMA Y PLACAS (2 COLUMNAS)   */}
+      {/* ============================================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Sistema Más Intervenido */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Wrench size={16} className="text-[#0D2B4E]" />
+                Sistemas más intervenidos
+              </h3>
+              <p className="text-[11px] text-slate-500">Cantidad de novedades por componente / sistema</p>
+            </div>
+            {filters.sistema !== 'all' && (
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
+                {filters.sistema}
+              </span>
+            )}
+          </div>
+
+          <div className="h-[250px] w-full pt-2">
+            {systemInterventionsData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+                Sin datos de sistemas
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={systemInterventionsData} 
+                  layout="vertical" 
+                  margin={{ top: 5, right: 35, left: 60, bottom: 5 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload.length > 0) {
+                      const item = e.activePayload[0].payload;
+                      toggleFilter('sistema', item.name);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={PALETTE.fondoGris} />
+                  <XAxis type="number" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    tick={{ fontSize: 10, fill: PALETTE.grisOscuro, fontWeight: 700 }}
+                    width={100}
+                  />
+                  <Tooltip 
+                    formatter={(val: any) => [`${val} intervenciones`, 'Cantidad']}
+                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                  />
+                  <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={22} cursor="pointer">
+                    <LabelList 
+                      dataKey="count" 
+                      position="right" 
+                      style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                    />
+                    {systemInterventionsData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-sys-${index}`} 
+                        fill={filters.sistema === entry.name ? PALETTE.doradoActivo : PALETTE.azulOscuro} 
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Placas Más Intervenidas (Barras VERTICALES como solicitado) */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Truck size={16} className="text-[#0D2B4E]" />
+                Placas más intervenidas (Top 15)
+              </h3>
+              <p className="text-[11px] text-slate-500">Vehículos con mayor recurrencia de ingresos a taller</p>
+            </div>
+            {filters.placa !== 'all' && (
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200 font-mono">
+                {filters.placa}
+              </span>
+            )}
+          </div>
+
+          <div className="h-[250px] w-full pt-2">
+            {plateInterventionsData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+                Sin datos de placas
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={plateInterventionsData} 
+                  margin={{ top: 20, right: 10, left: -15, bottom: 25 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload.length > 0) {
+                      const item = e.activePayload[0].payload;
+                      toggleFilter('placa', item.placa);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                  <XAxis 
+                    dataKey="placa" 
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    tick={{ fontSize: 9, fill: PALETTE.grisOscuro, fontWeight: 700, fontFamily: 'monospace' }}
+                    height={40}
+                  />
+                  <YAxis tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
+                  <Tooltip 
+                    formatter={(val: any, _: any, p: any) => [`${val} ingresos (${p.payload.cd})`, 'Intervenciones']}
+                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                  />
+                  <Bar dataKey="count" radius={[5, 5, 0, 0]} maxBarSize={28} cursor="pointer">
+                    <LabelList 
+                      dataKey="count" 
+                      position="top" 
+                      style={{ fontSize: '9px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                    />
+                    {plateInterventionsData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-plate-${index}`} 
+                        fill={filters.placa === entry.placa ? PALETTE.doradoActivo : PALETTE.azulClaro} 
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* ============================================================== */}
+      {/* 9. TABLA DETALLADA DE INTERVENCIONES                           */}
+      {/* ============================================================== */}
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        
+        {/* Table Header and Controls */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">
+              Detalle de intervenciones en taller
+            </h3>
+            <p className="text-xs text-slate-500">
+              {tableRecords.length} registros filtrados • Página {currentPage} de {totalPages}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+            {/* Search Input */}
+            <div className="relative flex-grow sm:flex-grow-0 sm:w-60">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar por placa..."
+                placeholder="Buscar placa o detalle..."
                 value={tableSearchPlate}
                 onChange={e => {
                   setTableSearchPlate(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full pl-9 pr-3 py-2 bg-[#F1F3F5] border border-slate-200 rounded-xl text-xs font-bold text-[#111827] placeholder-[#6B7280] uppercase outline-none focus:border-[#0D2B4E] focus:bg-white transition-all"
+                className="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#0D2B4E] outline-none"
               />
               {tableSearchPlate && (
                 <button
                   onClick={() => setTableSearchPlate('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#111827]"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
-                  <X size={13} />
+                  <X size={12} />
                 </button>
               )}
             </div>
 
-            {/* Sort Date Toggle */}
+            {/* Sort Toggle */}
             <button
               onClick={() => setTableSortDesc(!tableSortDesc)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-[#F1F3F5] hover:bg-slate-200 border border-slate-200 rounded-xl text-xs font-black uppercase text-[#111827] transition-colors"
-              title="Cambiar orden de fecha"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 transition-colors"
             >
               <ArrowUpDown size={13} />
-              <span>{tableSortDesc ? 'Más Reciente' : 'Más Antiguo'}</span>
+              <span>{tableSortDesc ? 'Más reciente' : 'Más antiguo'}</span>
             </button>
 
-            {/* Export Button */}
+            {/* Export CSV */}
             <button
               onClick={exportTableToCSV}
               disabled={tableRecords.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#16A34A]/10 hover:bg-[#16A34A]/20 text-[#16A34A] border border-[#16A34A]/30 rounded-xl text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-semibold transition-colors disabled:opacity-40"
             >
               <Download size={13} />
               <span>Exportar CSV</span>
@@ -1321,130 +1644,109 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           </div>
         </div>
 
-        {/* 8-Column Table */}
-        <div className="bg-white rounded-3xl border border-[#F1F3F5] shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#0D2B4E] text-white text-[9px] uppercase font-black tracking-wider">
-                  <th className="p-3.5 pl-5">1. Fecha</th>
-                  <th className="p-3.5">2. Centro Distribución</th>
-                  <th className="p-3.5">3. Sistema</th>
-                  <th className="p-3.5">4. Detalle</th>
-                  <th className="p-3.5">5. Placa</th>
-                  <th className="p-3.5">6. Taller</th>
-                  <th className="p-3.5">7. Ingreso Taller</th>
-                  <th className="p-3.5 pr-5">8. Salida Estimada</th>
+        {/* 8 Columns Table */}
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-[#0D2B4E] text-white text-[10px] uppercase font-bold tracking-wider">
+                <th className="p-3 pl-4">Fecha</th>
+                <th className="p-3">Centro</th>
+                <th className="p-3">Sistema</th>
+                <th className="p-3">Detalle de falla</th>
+                <th className="p-3">Placa</th>
+                <th className="p-3">Taller</th>
+                <th className="p-3">Ingreso</th>
+                <th className="p-3 pr-4">Salida est.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+              {paginatedRecords.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">
+                    No se encontraron registros de intervenciones con los filtros actuales
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="text-xs font-medium text-[#111827]">
-                {paginatedRecords.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="p-12 text-center text-[#6B7280] font-bold uppercase tracking-wider">
-                      No se encontraron registros de intervenciones con los filtros actuales
+              ) : (
+                paginatedRecords.map((r, idx) => (
+                  <tr 
+                    key={r.id ? `${r.id}-${idx}` : `row-${idx}`} 
+                    className={`hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
+                  >
+                    <td className="p-3 pl-4 font-mono whitespace-nowrap text-slate-800">
+                      {r.fecha || '—'}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 text-[10px] font-bold">
+                        {r.cd || '—'}
+                      </span>
+                    </td>
+                    <td className="p-3 font-semibold text-slate-900 whitespace-nowrap">
+                      {r.sistema || '—'}
+                    </td>
+                    <td className="p-3 max-w-xs truncate text-slate-600" title={r.detalle || ''}>
+                      {r.detalle || '—'}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono font-bold text-[11px]">
+                        {r.placa || r.placasKey || '—'}
+                      </span>
+                    </td>
+                    <td className="p-3 whitespace-nowrap text-slate-600">
+                      {r.taller || '—'}
+                    </td>
+                    <td className="p-3 font-mono text-slate-500 whitespace-nowrap">
+                      {r.fechaIngreso || '—'}
+                    </td>
+                    <td className="p-3 pr-4 font-mono text-slate-500 whitespace-nowrap">
+                      {r.fechaEstimadaSalida || '—'}
                     </td>
                   </tr>
-                ) : (
-                  paginatedRecords.map((r, idx) => (
-                    <tr 
-                      key={r.id ? `${r.id}-${idx}` : `interv-row-${idx}`} 
-                      className={`border-b border-[#F1F3F5] transition-colors ${
-                        idx % 2 === 0 ? 'bg-white' : 'bg-[#F1F3F5]/40'
-                      } hover:bg-[#0D2B4E]/5`}
-                    >
-                      {/* 1. Fecha */}
-                      <td className="p-3.5 pl-5 font-mono font-bold text-[#111827] whitespace-nowrap">
-                        {r.fecha || '-'}
-                      </td>
-
-                      {/* 2. Centro de Distribución */}
-                      <td className="p-3.5 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-md bg-[#F1F3F5] text-[#0D2B4E] font-black text-[10px] uppercase border border-slate-200">
-                          {r.cd || '-'}
-                        </span>
-                      </td>
-
-                      {/* 3. Sistema */}
-                      <td className="p-3.5 font-black uppercase text-[#111827] whitespace-nowrap">
-                        {r.sistema || '-'}
-                      </td>
-
-                      {/* 4. Detalle */}
-                      <td className="p-3.5 text-[#6B7280] max-w-xs truncate" title={r.detalle || ''}>
-                        {r.detalle || '-'}
-                      </td>
-
-                      {/* 5. Placa */}
-                      <td className="p-3.5 whitespace-nowrap">
-                        <span className="px-2 py-1 rounded bg-[#0D2B4E] text-white font-mono font-black text-[11px] tracking-tighter">
-                          {r.placa || r.placasKey || '-'}
-                        </span>
-                      </td>
-
-                      {/* 6. Taller */}
-                      <td className="p-3.5 font-bold uppercase text-[#3E5A78] whitespace-nowrap">
-                        {r.taller || '-'}
-                      </td>
-
-                      {/* 7. Fecha Ingreso */}
-                      <td className="p-3.5 font-mono text-[#6B7280] whitespace-nowrap">
-                        {r.fechaIngreso || '-'}
-                      </td>
-
-                      {/* 8. Fecha Estimada Salida */}
-                      <td className="p-3.5 pr-5 font-mono text-[#6B7280] whitespace-nowrap">
-                        {r.fechaEstimadaSalida || '-'}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Table Footer with Pagination */}
-          {tableRecords.length > 0 && (
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 p-4 bg-[#F1F3F5]/60 border-t border-[#F1F3F5] text-xs font-bold text-[#6B7280]">
-              <div className="flex items-center gap-2">
-                <span>Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, tableRecords.length)} de {tableRecords.length}</span>
-                <span className="text-slate-300">•</span>
-                <select
-                  value={itemsPerPage}
-                  onChange={e => {
-                    setItemsPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-black text-[#111827] outline-none"
-                >
-                  <option value={15}>15 por pág.</option>
-                  <option value={25}>25 por pág.</option>
-                  <option value={50}>50 por pág.</option>
-                  <option value={100}>100 por pág.</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-[#F1F3F5] disabled:opacity-40 disabled:hover:bg-white text-[#111827] transition-colors"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="px-3 py-1 bg-white border border-slate-200 rounded-lg font-mono font-bold text-[#111827] text-xs">
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-[#F1F3F5] disabled:opacity-40 disabled:hover:bg-white text-[#111827] transition-colors"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
+
+        {/* Pagination Bar */}
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-2 text-xs">
+            <div className="flex items-center gap-2 text-slate-500">
+              <span>Registros por página:</span>
+              <select
+                value={itemsPerPage}
+                onChange={e => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 outline-none"
+              >
+                <option value={15}>15</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-slate-700 transition-colors"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="px-3 py-1 bg-white border border-slate-200 rounded-lg font-mono font-bold text-slate-800 text-xs">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-slate-700 transition-colors"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
 

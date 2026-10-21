@@ -303,7 +303,8 @@ const cleanSheetValue = (val: any): string => {
 
 const parseFlexibleDate = (dateStr: any): string => {
   if (dateStr instanceof Date) {
-    const y = dateStr.getFullYear();
+    let y = dateStr.getFullYear();
+    if (y < 100) y += 2000;
     const m = String(dateStr.getMonth() + 1).padStart(2, '0');
     const d = String(dateStr.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
@@ -317,7 +318,8 @@ const parseFlexibleDate = (dateStr: any): string => {
     if (serial > 30000 && serial < 60000) {
       const dateObj = new Date((serial - 25569) * 86400 * 1000);
       if (!isNaN(dateObj.getTime())) {
-        const y = dateObj.getFullYear();
+        let y = dateObj.getFullYear();
+        if (y < 100) y += 2000;
         const m = String(dateObj.getMonth() + 1).padStart(2, '0');
         const d = String(dateObj.getDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
@@ -339,6 +341,10 @@ const parseFlexibleDate = (dateStr: any): string => {
       } else { 
         day = parseInt(parts[0]); month = parseInt(parts[1]) - 1; year = parseInt(parts[2]);
       }
+      // Si el año viene de 2 dígitos (ej. 26), convertir a 20xx
+      if (year < 100) {
+        year += 2000; // 26 -> 2026, 25 -> 2025
+      }
       const d2 = new Date(year, month, day);
       if (!isNaN(d2.getTime())) {
         const y = d2.getFullYear();
@@ -349,13 +355,17 @@ const parseFlexibleDate = (dateStr: any): string => {
     }
     
     const d = new Date(cleanStr);
-    if (!isNaN(d.getTime()) && d.getFullYear() > 1900) {
-      // Si el string no tiene hora, Date(string) asume UTC. 
-      // Para evitar que d.getDate() devuelva el día anterior, usamos los métodos UTC si el string parece ISO
-      const y = d.getUTCFullYear();
-      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(d.getUTCDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
+    if (!isNaN(d.getTime())) {
+      let yr = d.getFullYear();
+      if (yr < 100) yr += 2000;
+      if (yr > 1900) {
+        // Si el string no tiene hora, Date(string) asume UTC. 
+        // Para evitar que d.getDate() devuelva el día anterior, usamos los métodos UTC si el string parece ISO
+        const y = yr;
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
     }
     return '';
   } catch { return ''; }
@@ -1339,10 +1349,15 @@ const fetchAvailabilityFromSheetCSV = async (): Promise<AvailabilityRecord[]> =>
 const MONTH_NAMES_ES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 
 const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
-  // Indices based on user specification (Read ONLY up to col K / index 10):
-  // 0: LLAVE, 1: Fecha, 2: Centro de Distribución, 3: Sistema, 4: Detalle, 5: Placa,
-  // 6: Taller, 7: Fecha de Ingreso a Taller, 8: Fecha Estimada de Salida de Taller,
-  // 9: PLACAS (con CO), 10: CONTRATISTA
+  const parseNum = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    const str = String(val).trim();
+    if (!str || str.includes('#DIV/0!') || str.includes('#N/A') || str.includes('#VALOR!') || str.includes('#REF!')) return 0;
+    const clean = str.replace('%', '').replace(',', '.').trim();
+    const num = parseFloat(clean);
+    return isNaN(num) ? 0 : num;
+  };
+
   return rows.slice(1)
     .filter(row => row && (row[5] || row[9] || (row[1] && row[2]))) // Filter rows with Placa (col 5 or 9)
     .map((row, i): AvailabilityRecord => {
@@ -1360,6 +1375,16 @@ const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
         }
       }
 
+      // Columnas numéricas de la hoja DISPONILIDAD saneadas
+      const rawDias = parseNum(row[11]);
+      const diasIndisponible = rawDias < 0 ? 0 : Math.round(rawDias);
+      const totalVH = Math.max(0, Math.round(parseNum(row[12])));
+      const vehiculoIndisponible = Math.max(0, Math.round(parseNum(row[13])));
+      const vehiculosDisponibles = Math.max(0, Math.round(parseNum(row[14])));
+      const indisponibilidadPrc = parseNum(row[15]);
+      const disponibilidadPrc = parseNum(row[16]);
+      const vhsCd = Math.max(0, Math.round(parseNum(row[17])));
+
       return {
         id: `avail-${cleanSheetValue(row[0]) || 'row'}-${i}-${Date.now()}`,
         fecha: parsedDate, 
@@ -1373,6 +1398,13 @@ const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
         fechaEstimadaSalida: parseFlexibleDate(row[8]),
         placasKey: normalizePlate(cleanSheetValue(row[9])) || normalizedPlate,
         contratista: cleanSheetValue(row[10]).toUpperCase() || 'GENERAL',
+        diasIndisponible,
+        totalVH,
+        vehiculoIndisponible,
+        vehiculosDisponibles,
+        indisponibilidadPrc,
+        disponibilidadPrc,
+        vhsCd,
         mes: derivedMes,
         semana: derivedSemana
       };
