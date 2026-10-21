@@ -700,6 +700,33 @@ export interface NovedadFlt {
   links3?: string;       // col 21
 }
 
+export interface ForkliftPreventive {
+  id: string;
+  maquina: string;           // Idx 0: No MÁQUINA (ej. 861, 865, CP3)
+  cd: string;                // Idx 1: CD (Galapa, ...)
+  tipo: string;              // Idx 2: Tipo de Mantenimiento (250, 500, 750, 1000, 2000)
+  mes: string;               // Idx 3: MES ("enero", "febrero"...)
+  mesNumero: number;         // 1 a 12
+  mesClave?: string;         // YYYY-MM
+  anio: string;              // Idx 4: AÑO (2026)
+  semana: string;            // Idx 5: SEMANA
+  semanaNumero: number;
+  fecha: string;             // Idx 6: FECHA (dd/mm/yyyy)
+  fechaIso?: string;         // YYYY-MM-DD
+  proxHr?: string | number;  // Idx 7: PRÓX. MTTO PROGRAMADO [hr]
+  horometro?: string | number;// Idx 8: HORÓMETRO REGISTRADO EN PREVENTIVO
+  cumplimiento: '100%' | '0%' | string; // Idx 9: VALIDACIÓN CUMPLIMIENTO ("100%" = cumple, "0%" = no cumple)
+  esCumple: boolean;
+  meta?: string;             // Idx 10: % META
+  desviacion?: string | number; // Idx 11: DESVIACIÓN
+  planeadas?: string | number;  // Idx 12: # Rutinas Planeadas
+  ejecutadas?: string | number; // Idx 13: # Rutinas Ejecutadas
+  confiabilidad?: string;       // Idx 14: Confiabilidad del Preventivo
+  observacion?: string;         // Idx 15: Observacion
+  evidencia?: string;           // Idx 16: EVIDENCIAS
+}
+
+
 
 
 

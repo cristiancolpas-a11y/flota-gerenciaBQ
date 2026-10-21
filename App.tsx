@@ -1,7 +1,7 @@
 
             
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord, NoveltyReport, NovedadFlt } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, ForkliftPreventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord, NoveltyReport, NovedadFlt } from './types';
 import { VaradasModule } from './components/VaradasModule';
 import { SparePartsModule } from './components/SparePartsModule';
 import DocumentCard from './components/DocumentCard';
@@ -54,6 +54,7 @@ import { ForkliftAuditDashboard } from './components/ForkliftAuditDashboard';
 import { ForkliftClosureModule } from './components/ForkliftClosureModule';
 import { ForkliftStandardModule } from './components/ForkliftStandardModule';
 import { ForkliftChecklistNoveltiesModule } from './components/ForkliftChecklistNoveltiesModule';
+import { ForkliftPreventiveDashboard } from './components/ForkliftPreventiveDashboard';
 import { VehicleInventoryModule } from './components/VehicleInventoryModule';
 import ControlTowerModule from './components/ControlTowerModule';
 import FleetStandardModule from './components/FleetStandardModule';
@@ -113,6 +114,7 @@ import {
   fetchAuditMasterListFromSheet,
   fetchFleetBaseData,
   fetchForkliftFinesFromSheet,
+  fetchForkliftPreventivesFromSheet,
   fetchNovedadesFltFromSheet,
   submitVaradaToSheet,
   submitWashEvidenceUpdate,
@@ -137,7 +139,7 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas' | 'campanas';
-type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'estandar_flt' | 'auditoria_montacargas' | 'cierre_montacargas' | 'novedades_checklist_flt' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'preventivos_montacargas' | 'estandar_flt' | 'auditoria_montacargas' | 'cierre_montacargas' | 'novedades_checklist_flt' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
 
 const CATEGORY_CHUNKS = {
   doc: {
@@ -254,6 +256,7 @@ const App: React.FC = () => {
   const [auditMasterVehicles, setAuditMasterVehicles] = useState<AuditMasterVehicle[]>([]);
   const [varadas, setVaradas] = useState<VaradaRecord[]>([]);
   const [spareParts, setSpareParts] = useState<SparePartRecord[]>([]);
+  const [forkliftPreventives, setForkliftPreventives] = useState<ForkliftPreventive[]>([]);
 
   // Session tracking of local updates to prevent stale Google Sheets cache from reverting changes
   const localCierreUpdatesRef = useRef<Record<string, { estado: string; evidencia: string; verificacion: string }>>({});
@@ -660,6 +663,9 @@ const App: React.FC = () => {
       }
       case 'comparendos_montacargas':
         setForkliftFines(await fetchForkliftFinesFromSheet());
+        break;
+      case 'preventivos_montacargas':
+        setForkliftPreventives(await fetchForkliftPreventivesFromSheet());
         break;
       case 'novedades_checklist_flt':
         setNovedadesFltData(await fetchNovedadesFltFromSheet());
@@ -1768,6 +1774,15 @@ const App: React.FC = () => {
               <nav className="flex-grow space-y-4 overflow-y-auto custom-scrollbar pr-2">
                 {appMode === 'montacargas' ? (
                   <div className="space-y-1">
+                    <button 
+                      onClick={() => { 
+                        setActiveView('preventivos_montacargas'); 
+                        setIsSidebarOpen(false); 
+                      }} 
+                      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeView === 'preventivos_montacargas' ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Wrench size={18}/> PREVENTIVOS
+                    </button>
                     <button 
                       onClick={() => { 
                         setActiveView('estandar_flt'); 
@@ -3640,6 +3655,12 @@ const App: React.FC = () => {
           {activeView === 'comparendos_montacargas' && (
             <div className="max-w-7xl mx-auto pb-20">
               <ForkliftFinesModule data={forkliftFines} onRefresh={handleSyncData} />
+            </div>
+          )}
+
+          {activeView === 'preventivos_montacargas' && (
+            <div className="max-w-7xl mx-auto pb-20">
+              <ForkliftPreventiveDashboard data={forkliftPreventives} onRefresh={handleSyncData} />
             </div>
           )}
 

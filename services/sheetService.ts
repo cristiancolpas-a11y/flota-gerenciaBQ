@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, NoveltyReport, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord, ForkliftClosure, VehicleInventory, NovedadFlt } from '../types';
+import { Vehicle, Driver, Report, NoveltyReport, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, ForkliftPreventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord, ForkliftClosure, VehicleInventory, NovedadFlt } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
@@ -2833,6 +2833,173 @@ const processPreventiveRows = (rows: any[][]): Preventive[] => {
         cumplimientoProgramacion: 1,
         evidenceUrl: sanitizePreventiveCell(row[20]) || undefined,
         status: cumplimiento === 'CUMPLE' ? 'ok' : 'critical'
+      };
+    });
+};
+
+// ============================================================================
+// SERVICIO DE MANTENIMIENTO PREVENTIVO DE MONTACARGAS
+// ============================================================================
+export const FORKLIFT_PREVENTIVES_DOC_ID = '1rXyc08nqlB_w2z7TrZ9OXrdyLX4s13p5HseJVDoGvgQ';
+
+export const fetchForkliftPreventivesFromSheet = async (): Promise<ForkliftPreventive[]> => {
+  try {
+    const docId = FORKLIFT_PREVENTIVES_DOC_ID;
+    const exportUrl = `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=0${getCacheBuster()}`;
+    const resp = await fetch(exportUrl, { mode: 'cors', credentials: 'omit' });
+    const csv = await resp.text();
+    if (csv && !csv.includes('<!DOCTYPE html')) {
+      const parsed = Papa.parse(csv, { header: false, skipEmptyLines: 'greedy' });
+      const results = processForkliftPreventiveRows(parsed.data as any[][]);
+      if (results.length > 0) return results;
+    }
+
+    // Fallback GViz
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=0${getCacheBuster()}`;
+    const gvizResp = await fetch(gvizUrl, { mode: 'cors', credentials: 'omit' });
+    const gvizCsv = await gvizResp.text();
+    if (gvizCsv && !gvizCsv.includes('<!DOCTYPE html')) {
+      const parsedGviz = Papa.parse(gvizCsv, { header: false, skipEmptyLines: 'greedy' });
+      return processForkliftPreventiveRows(parsedGviz.data as any[][]);
+    }
+    return [];
+  } catch (error) {
+    console.error('Error al cargar preventivos de montacargas:', error);
+    return [];
+  }
+};
+
+const processForkliftPreventiveRows = (rows: any[][]): ForkliftPreventive[] => {
+  if (!rows || rows.length <= 1) return [];
+
+  return rows.slice(1)
+    .filter(row => {
+      if (!row || !Array.isArray(row)) return false;
+      const maquina = sanitizePreventiveCell(row[0]).trim();
+      const fecha = sanitizePreventiveCell(row[6]).trim();
+      // Filtrar filas sin No MÁQUINA (idx 0) o sin FECHA (idx 6)
+      if (!maquina || !fecha) return false;
+      if (maquina.toUpperCase().includes('MÁQUINA') || maquina.toUpperCase().includes('MAQUINA')) return false;
+      return true;
+    })
+    .map((row, i): ForkliftPreventive => {
+      const maquina = sanitizePreventiveCell(row[0]).trim();
+      const cdRaw = sanitizePreventiveCell(row[1]).trim();
+      let cd = cdRaw;
+      if (cdRaw.toLowerCase().includes('galapa')) cd = 'Galapa';
+      else if (cdRaw.toLowerCase().includes('arenosa')) cd = 'La Arenosa';
+      else if (!cd) cd = 'Galapa';
+
+      const tipoRaw = sanitizePreventiveCell(row[2]).trim();
+      const tipo = tipoRaw ? `${tipoRaw.replace(/\D/g, '') || tipoRaw} hr` : '—';
+
+      const rawMes = sanitizePreventiveCell(row[3]).trim();
+      const anio = sanitizePreventiveCell(row[4]).trim() || '2026';
+      const rawSemana = sanitizePreventiveCell(row[5]).trim();
+      const semNum = parseInt(rawSemana.replace(/\D/g, ''), 10) || 0;
+      const semana = rawSemana ? `Semana ${semNum || rawSemana}` : '—';
+
+      const rawFecha = sanitizePreventiveCell(row[6]).trim();
+      const proxHr = sanitizePreventiveCell(row[7]).trim() || '—';
+      const horometro = sanitizePreventiveCell(row[8]).trim() || '—';
+
+      // Cumplimiento: VALIDACIÓN CUMPLIMIENTO (idx 9)
+      // "100%" = cumple, "0%" = no cumple
+      const rawCumpl = sanitizePreventiveCell(row[9]).trim();
+      let cumplimiento = '';
+      let esCumple = false;
+      if (rawCumpl === '100%' || rawCumpl === '100' || rawCumpl === '1') {
+        cumplimiento = '100%';
+        esCumple = true;
+      } else if (rawCumpl === '0%' || rawCumpl === '0') {
+        cumplimiento = '0%';
+        esCumple = false;
+      }
+
+      const meta = sanitizePreventiveCell(row[10]).trim() || '—';
+      const desviacion = sanitizePreventiveCell(row[11]).trim() || '—';
+      const planeadas = sanitizePreventiveCell(row[12]).trim() || '—';
+      const ejecutadas = sanitizePreventiveCell(row[13]).trim() || '—';
+      const confiabilidad = sanitizePreventiveCell(row[14]).trim() || '—';
+      const observacion = sanitizePreventiveCell(row[15]).trim() || '—';
+      const evidencia = sanitizePreventiveCell(row[16]).trim();
+
+      // Normalizar fecha a dd/mm/yyyy
+      let fechaIso = '';
+      let fechaDisplay = '—';
+      if (rawFecha) {
+        const parts = rawFecha.split(/[/.-]/);
+        if (parts.length === 3) {
+          let day = 0, month = 0, year = 0;
+          if (parts[0].length === 4) {
+            year = parseInt(parts[0], 10);
+            month = parseInt(parts[1], 10);
+            day = parseInt(parts[2], 10);
+          } else {
+            day = parseInt(parts[0], 10);
+            month = parseInt(parts[1], 10);
+            year = parseInt(parts[2], 10);
+          }
+          if (year > 2000 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            const yStr = String(year);
+            const mStr = String(month).padStart(2, '0');
+            const dStr = String(day).padStart(2, '0');
+            fechaIso = `${yStr}-${mStr}-${dStr}`;
+            fechaDisplay = `${dStr}/${mStr}/${yStr}`;
+          }
+        }
+      }
+      if (!fechaDisplay || fechaDisplay === '—') {
+        fechaDisplay = rawFecha || '—';
+      }
+
+      // Mes cronológico normalizado desde idx 3
+      let mes = 'Sin Mes';
+      let mesNumero = 0;
+      let mesClave = '';
+      if (rawMes) {
+        const norm = normalizaMesTexto(rawMes);
+        const idx = PREVENTIVE_ORDEN_MESES.indexOf(norm);
+        if (idx !== -1) {
+          mesNumero = idx + 1;
+          mes = PREVENTIVE_MONTH_NAMES_ES[idx];
+          mesClave = `${anio}-${String(mesNumero).padStart(2, '0')}`;
+        } else {
+          mes = rawMes;
+        }
+      } else if (fechaIso) {
+        const m = parseInt(fechaIso.slice(5, 7), 10);
+        if (m >= 1 && m <= 12) {
+          mesNumero = m;
+          mes = PREVENTIVE_MONTH_NAMES_ES[m - 1];
+          mesClave = fechaIso.slice(0, 7);
+        }
+      }
+
+      return {
+        id: `prev-flt-${maquina}-${(fechaIso || rawFecha).replace(/[^a-zA-Z0-9]/g, '')}-${i}`,
+        maquina,
+        cd,
+        tipo,
+        mes,
+        mesNumero,
+        mesClave: mesClave || undefined,
+        anio,
+        semana,
+        semanaNumero: semNum,
+        fecha: fechaDisplay,
+        fechaIso: fechaIso || undefined,
+        proxHr,
+        horometro,
+        cumplimiento,
+        esCumple,
+        meta,
+        desviacion,
+        planeadas,
+        ejecutadas,
+        confiabilidad,
+        observacion,
+        evidencia: evidencia || undefined
       };
     });
 };
@@ -5753,6 +5920,7 @@ export const submitNovedadFltLink = async (payload: {
 
   return { success: true, link: finalLink };
 };
+
 
 
 
