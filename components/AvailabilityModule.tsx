@@ -20,11 +20,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  BarChart3
+  BarChart3,
+  Waves
 } from 'lucide-react';
 import { 
   BarChart, 
   Bar, 
+  AreaChart,
+  Area,
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -128,6 +131,19 @@ const MONTH_COLORS = [
   '#16A34A', '#65A30D', '#D97706', '#EA580C', '#DC2626', '#7C3AED'
 ];
 
+// Paleta de marca suave y profesional para el Streamgraph (como Power BI)
+const STREAM_PALETTE = [
+  '#7A1F2B', // Vinotinto
+  '#C9D1D9', // Gris claro suave
+  '#2E7D8A', // Teal / azul verdoso
+  '#3E5A78', // Azul medio
+  '#0D2B4E', // Azul oscuro
+  '#F2B705', // Dorado / mostaza
+  '#16A34A', // Verde corporativo
+  '#EA580C', // Naranja suave
+  '#64748B'  // Pizarra
+];
+
 const getCdColor = (cdName: string): string => {
   const norm = normCd(cdName);
   if (norm === 'GALAPA') return CD_COLORS['GALAPA'];
@@ -164,10 +180,11 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     excluirFinRentin: true,
   });
 
-  // Mode toggles for month breakdown in sub-charts
+  // Mode toggles for sub-charts
   const [cdViewMode, setCdViewMode] = useState<'consolidado' | 'por_mes'>('consolidado');
   const [contractorViewMode, setContractorViewMode] = useState<'consolidado' | 'por_mes'>('consolidado');
-  const [systemViewMode, setSystemViewMode] = useState<'consolidado' | 'por_mes'>('consolidado');
+  const [streamTimeMode, setStreamTimeMode] = useState<'semanal' | 'mensual'>('semanal');
+  const [streamStackType, setStreamStackType] = useState<'silhouette' | 'stacked'>('silhouette');
 
   // Table internal state
   const [tableSearchPlate, setTableSearchPlate] = useState<string>('');
@@ -704,50 +721,86 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     };
   }, [filteredInterventions]);
 
-  // F) Sistema Más Intervenido (Con División por Mes)
-  const systemInterventionsData = useMemo(() => {
-    const map: Record<string, number> = {};
-
+  // F) SISTEMAS MÁS INTERVENIDOS — STREAMGRAPH / Área Apilada Suavizada
+  const { streamData: systemStreamData, streamSystems, systemColorMap, totalStreamInterventions } = useMemo(() => {
+    // 1. Contar sistemas en los registros filtrados
+    const overallCounts: Record<string, number> = {};
+    let totalInterv = 0;
     filteredInterventions.forEach(r => {
       const s = (r.sistema || 'SIN ESPECIFICAR').toUpperCase().trim();
-      map[s] = (map[s] || 0) + 1;
+      overallCounts[s] = (overallCounts[s] || 0) + 1;
+      totalInterv++;
     });
 
-    return Object.entries(map)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  }, [filteredInterventions]);
+    const sortedSystems = Object.entries(overallCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([s]) => s);
 
-  // F.2) Desglose por Mes de Sistemas
-  const systemMonthlyBreakdown = useMemo(() => {
-    const topSystems = systemInterventionsData.slice(0, 5).map(s => s.name);
-    const monthsMap: Record<string, Record<string, number>> = {};
+    // Seleccionar los top 7 sistemas principales; agrupar el resto en OTROS
+    const topSystems = sortedSystems.slice(0, 7);
+    const hasOthers = sortedSystems.length > 7;
+    const finalSystems = hasOthers ? [...topSystems, 'OTROS'] : topSystems;
+
+    // Asignar colores de la paleta STREAM_PALETTE
+    const colorMap: Record<string, string> = {};
+    finalSystems.forEach((sys, i) => {
+      if (sys === 'OTROS') {
+        colorMap[sys] = '#94A3B8';
+      } else {
+        colorMap[sys] = STREAM_PALETTE[i % STREAM_PALETTE.length];
+      }
+    });
+
+    // 2. Agrupar por periodo (semanal o mensual)
+    const periodsMap: Record<string, any> = {};
 
     filteredInterventions.forEach(r => {
+      let periodKey = '';
+      let sortKey = 0;
+
+      if (streamTimeMode === 'mensual') {
+        const m = normMes(r.mes || getRecordMes(r));
+        if (!m) return;
+        periodKey = m;
+        const mIdx = MESES_FULL.indexOf(m);
+        sortKey = mIdx !== -1 ? mIdx : 999;
+      } else {
+        // semanal
+        const w = (r.semana || 'S1').toUpperCase().trim();
+        periodKey = w.startsWith('S') ? w : `S${w}`;
+        sortKey = parseInt(periodKey.replace(/\D/g, ''), 10) || 0;
+      }
+
+      if (!periodsMap[periodKey]) {
+        periodsMap[periodKey] = {
+          periodo: periodKey,
+          label: periodKey,
+          _sortKey: sortKey,
+          total: 0
+        };
+        finalSystems.forEach(s => {
+          periodsMap[periodKey][s] = 0;
+        });
+      }
+
       const s = (r.sistema || 'SIN ESPECIFICAR').toUpperCase().trim();
-      const m = normMes(r.mes || getRecordMes(r));
-      if (!m || !topSystems.includes(s)) return;
-
-      if (!monthsMap[m]) monthsMap[m] = {};
-      monthsMap[m][s] = (monthsMap[m][s] || 0) + 1;
+      if (topSystems.includes(s)) {
+        periodsMap[periodKey][s] = (periodsMap[periodKey][s] || 0) + 1;
+      } else if (hasOthers) {
+        periodsMap[periodKey]['OTROS'] = (periodsMap[periodKey]['OTROS'] || 0) + 1;
+      }
+      periodsMap[periodKey].total += 1;
     });
 
-    const rows = Object.keys(monthsMap).sort((a, b) => {
-      const idxA = MESES_FULL.indexOf(a);
-      const idxB = MESES_FULL.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      return a.localeCompare(b);
-    }).map(m => {
-      const row: any = { name: m, mes: m };
-      topSystems.forEach(s => {
-        row[s] = monthsMap[m][s] || 0;
-      });
-      return row;
-    });
+    const streamData = Object.values(periodsMap).sort((a: any, b: any) => a._sortKey - b._sortKey);
 
-    return { rows, systems: topSystems };
-  }, [filteredInterventions, systemInterventionsData]);
+    return {
+      streamData,
+      streamSystems: finalSystems,
+      systemColorMap: colorMap,
+      totalStreamInterventions: totalInterv
+    };
+  }, [filteredInterventions, streamTimeMode]);
 
   // G) Placa Más Intervenida (Vertical / Top 15, Respeta Filtro de Mes)
   const plateInterventionsData = useMemo(() => {
@@ -1261,96 +1314,122 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* 5. SEMANAL Y POR CD CON DESGLOSE POR MES (2 COLUMNAS)          */}
+      {/* 5. DISPONIBILIDAD SEMANAL (ANCHO COMPLETO)                     */}
       {/* ============================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Gráfica Semanal */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Layers size={16} className="text-[#0D2B4E]" />
-                Disponibilidad semanal
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                {filters.mes !== 'all' ? `Semanas de ${normMes(filters.mes)}` : 'Semanas del periodo. Haz clic para filtrar.'}
-              </p>
-            </div>
-            {filters.semana !== 'all' && (
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
-                {filters.semana}
-              </span>
-            )}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
+              <Layers size={18} className="text-[#0D2B4E]" />
+              Disponibilidad semanal
+            </h3>
+            <p className="text-xs text-slate-500">
+              {filters.mes !== 'all' ? `Semanas correspondientes a ${normMes(filters.mes)}` : 'Evolución semanal del periodo consolidado. Haz clic en una barra para filtrar.'}
+            </p>
           </div>
-
-          <div className="h-[270px] w-full pt-2">
-            {weeklyData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
-                Sin datos para este corte semanal
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={weeklyData} 
-                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
-                  onClick={(e: any) => {
-                    if (e && e.activePayload && e.activePayload.length > 0) {
-                      const item = e.activePayload[0].payload;
-                      toggleFilter('semana', item.name);
-                    }
-                  }}
+          {filters.semana !== 'all' && (
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 flex items-center gap-1.5">
+                Semana activa: {filters.semana}
+                <button 
+                  onClick={() => toggleFilter('semana', filters.semana)}
+                  className="text-slate-400 hover:text-slate-700 ml-1"
                 >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: PALETTE.grisTexto }} />
-                  <YAxis domain={[75, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
-                  <Tooltip 
-                    formatter={(val: any, _: any, p: any) => [
-                      `${val}% (${p.payload.mes || 'Semanas'})`, 
-                      '% Disponibilidad'
-                    ]}
-                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
-                  />
-                  <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
-                  <Bar dataKey="disponibilidad" radius={[5, 5, 0, 0]} maxBarSize={30} cursor="pointer">
-                    <LabelList 
-                      dataKey="disponibilidad" 
-                      position="top" 
-                      formatter={(v: any) => `${v}%`}
-                      style={{ fontSize: '9px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
-                    />
-                    {weeklyData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-week-${index}`} 
-                        fill={filters.semana === entry.name ? PALETTE.doradoActivo : PALETTE.azulClaro} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+                  <X size={12} />
+                </button>
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Comparativa por Centro de Distribución (CD) — Con opción de Desglose por Mes */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Building2 size={16} className="text-[#0D2B4E]" />
-                Disponibilidad por Centro (CD)
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                {filters.mes !== 'all' ? `Mes: ${normMes(filters.mes)}` : 'GALAPA vs LA ARENOSA'}
-              </p>
+        <div className="h-[340px] md:h-[370px] w-full pt-2">
+          {weeklyData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+              Sin datos para este corte semanal
             </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={weeklyData} 
+                margin={{ top: 20, right: 20, left: -5, bottom: 10 }}
+                onClick={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const item = e.activePayload[0].payload;
+                    toggleFilter('semana', item.name);
+                  }
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: PALETTE.grisTexto, fontWeight: 600 }} />
+                <YAxis domain={[75, 100]} tick={{ fontSize: 11, fill: PALETTE.grisTexto }} unit="%" />
+                <Tooltip 
+                  formatter={(val: any, _: any, p: any) => [
+                    `${val}% (${p.payload.mes || 'Semanas'})`, 
+                    '% Disponibilidad'
+                  ]}
+                  contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                />
+                <ReferenceLine 
+                  y={95} 
+                  stroke={PALETTE.verde} 
+                  strokeDasharray="4 4" 
+                  strokeWidth={2}
+                  label={{ value: 'Meta: 95%', position: 'right', fill: PALETTE.verde, fontSize: 11, fontWeight: 'bold' }}
+                />
+                <Bar dataKey="disponibilidad" radius={[6, 6, 0, 0]} maxBarSize={38} cursor="pointer">
+                  <LabelList 
+                    dataKey="disponibilidad" 
+                    position="top" 
+                    formatter={(v: any) => `${v}%`}
+                    style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                  />
+                  {weeklyData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-week-${index}`} 
+                      fill={filters.semana === entry.name ? PALETTE.doradoActivo : PALETTE.azulClaro} 
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* 6. DISPONIBILIDAD POR CENTRO (CD) (ANCHO COMPLETO)             */}
+      {/* ============================================================== */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
+              <Building2 size={18} className="text-[#0D2B4E]" />
+              Disponibilidad por Centro (CD)
+            </h3>
+            <p className="text-xs text-slate-500">
+              {filters.mes !== 'all' ? `Mes: ${normMes(filters.mes)} • GALAPA vs LA ARENOSA` : 'GALAPA vs LA ARENOSA • Haz clic en una barra para filtrar por CD'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {filters.cd !== 'all' && (
+              <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                CD: {normCd(filters.cd)}
+                <button 
+                  onClick={() => toggleFilter('cd', filters.cd)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
 
             {/* Toggle de Desglose Mensual (solo cuando no hay mes único filtrado) */}
             {filters.mes === 'all' && (
-              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
+              <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
                 <button
                   onClick={() => setCdViewMode('consolidado')}
-                  className={`px-2 py-0.5 rounded-md transition-all ${
+                  className={`px-3 py-1 rounded-md transition-all ${
                     cdViewMode === 'consolidado' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
@@ -1358,7 +1437,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 </button>
                 <button
                   onClick={() => setCdViewMode('por_mes')}
-                  className={`px-2 py-0.5 rounded-md transition-all ${
+                  className={`px-3 py-1 rounded-md transition-all ${
                     cdViewMode === 'por_mes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
@@ -1367,122 +1446,137 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               </div>
             )}
           </div>
-
-          <div className="h-[270px] w-full pt-2">
-            {filters.mes === 'all' && cdViewMode === 'por_mes' ? (
-              // Vista Desglosada por Mes para Galapa y La Arenosa
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={cdMonthlyBreakdown} 
-                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
-                  onClick={(e: any) => {
-                    if (e && e.activePayload && e.activePayload.length > 0) {
-                      const item = e.activePayload[0].payload;
-                      if (item && item.mes) {
-                        toggleFilter('mes', item.mes);
-                      }
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
-                  <Tooltip 
-                    formatter={(val: any, name: any) => [`${val}%`, name]}
-                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
-                  <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
-                  <Bar dataKey="GALAPA" name="GALAPA" fill="#0D2B4E" radius={[4, 4, 0, 0]} maxBarSize={16} cursor="pointer" minPointSize={4}>
-                    <LabelList 
-                      dataKey="GALAPA" 
-                      position="top" 
-                      formatter={(v: any) => v > 0 ? `${v}%` : '0%'}
-                      style={{ fontSize: '8px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
-                    />
-                  </Bar>
-                  <Bar dataKey="LA ARENOSA" name="LA ARENOSA" fill="#3E5A78" radius={[4, 4, 0, 0]} maxBarSize={16} cursor="pointer" minPointSize={4}>
-                    <LabelList 
-                      dataKey="LA ARENOSA" 
-                      position="top" 
-                      formatter={(v: any) => v > 0 ? `${v}%` : '0%'}
-                      style={{ fontSize: '8px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              // Vista Consolidada o Filtrada
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={cdData} 
-                  margin={{ top: 20, right: 30, left: 0, bottom: 10 }}
-                  onClick={(e: any) => {
-                    if (e && e.activePayload && e.activePayload.length > 0) {
-                      const item = e.activePayload[0].payload;
-                      toggleFilter('cd', item.name);
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: PALETTE.grisOscuro, fontWeight: 700 }} />
-                  <YAxis domain={[cdData.some(d => d.disponibilidad === 0) ? 0 : 70, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
-                  <Tooltip 
-                    formatter={(val: any, _: any, p: any) => [
-                      `${val}% (Flota prom: ${p.payload.avgFlota} vehíc.)`, 
-                      '% Disponibilidad'
-                    ]}
-                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
-                  />
-                  <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
-                  <Bar dataKey="disponibilidad" radius={[6, 6, 0, 0]} maxBarSize={55} cursor="pointer" minPointSize={6}>
-                    <LabelList 
-                      dataKey="disponibilidad" 
-                      position="top" 
-                      formatter={(v: any) => `${v}%`}
-                      style={{ fontSize: '11px', fontWeight: '800', fill: PALETTE.grisOscuro }} 
-                    />
-                    {cdData.map((entry, index) => {
-                      const isSelected = normCd(filters.cd) === normCd(entry.name);
-                      return (
-                        <Cell 
-                          key={`cell-cd-${index}`} 
-                          fill={isSelected ? PALETTE.doradoActivo : getCdColor(entry.name)} 
-                        />
-                      );
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
         </div>
 
+        <div className="h-[340px] md:h-[370px] w-full pt-2">
+          {filters.mes === 'all' && cdViewMode === 'por_mes' ? (
+            // Vista Desglosada por Mes para Galapa y La Arenosa
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={cdMonthlyBreakdown} 
+                margin={{ top: 20, right: 25, left: -5, bottom: 10 }}
+                onClick={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const item = e.activePayload[0].payload;
+                    if (item && item.mes) {
+                      toggleFilter('mes', item.mes);
+                    }
+                  }
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: PALETTE.grisTexto, fontWeight: 600 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: PALETTE.grisTexto }} unit="%" />
+                <Tooltip 
+                  formatter={(val: any, name: any) => [`${val}%`, name]}
+                  contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                />
+                <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '6px' }} />
+                <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="4 4" strokeWidth={1.5} />
+                <Bar dataKey="GALAPA" name="GALAPA" fill="#0D2B4E" radius={[6, 6, 0, 0]} maxBarSize={32} cursor="pointer" minPointSize={6}>
+                  <LabelList 
+                    dataKey="GALAPA" 
+                    position="top" 
+                    formatter={(v: any) => v > 0 ? `${v}%` : '0%'}
+                    style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                  />
+                </Bar>
+                <Bar dataKey="LA ARENOSA" name="LA ARENOSA" fill="#3E5A78" radius={[6, 6, 0, 0]} maxBarSize={32} cursor="pointer" minPointSize={6}>
+                  <LabelList 
+                    dataKey="LA ARENOSA" 
+                    position="top" 
+                    formatter={(v: any) => v > 0 ? `${v}%` : '0%'}
+                    style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            // Vista Consolidada o Filtrada
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={cdData} 
+                margin={{ top: 25, right: 35, left: 10, bottom: 15 }}
+                onClick={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const item = e.activePayload[0].payload;
+                    toggleFilter('cd', item.name);
+                  }
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                <XAxis dataKey="name" tick={{ fontSize: 13, fill: PALETTE.grisOscuro, fontWeight: 700 }} />
+                <YAxis domain={[cdData.some(d => d.disponibilidad === 0) ? 0 : 70, 100]} tick={{ fontSize: 11, fill: PALETTE.grisTexto }} unit="%" />
+                <Tooltip 
+                  formatter={(val: any, _: any, p: any) => [
+                    `${val}% (Flota prom: ${p.payload.avgFlota} vehíc.)`, 
+                    '% Disponibilidad'
+                  ]}
+                  contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                />
+                <ReferenceLine 
+                  y={95} 
+                  stroke={PALETTE.verde} 
+                  strokeDasharray="4 4" 
+                  strokeWidth={2}
+                  label={{ value: 'Meta: 95%', position: 'right', fill: PALETTE.verde, fontSize: 11, fontWeight: 'bold' }}
+                />
+                <Bar dataKey="disponibilidad" radius={[8, 8, 0, 0]} maxBarSize={90} cursor="pointer" minPointSize={8}>
+                  <LabelList 
+                    dataKey="disponibilidad" 
+                    position="top" 
+                    formatter={(v: any) => `${v}%`}
+                    style={{ fontSize: '13px', fontWeight: '800', fill: PALETTE.grisOscuro }} 
+                  />
+                  {cdData.map((entry, index) => {
+                    const isSelected = normCd(filters.cd) === normCd(entry.name);
+                    return (
+                      <Cell 
+                        key={`cell-cd-${index}`} 
+                        fill={isSelected ? PALETTE.doradoActivo : getCdColor(entry.name)} 
+                      />
+                    );
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
 
       {/* ============================================================== */}
-      {/* 6. CONTRATISTAS Y DÍAS INDISPONIBLES (2 COLUMNAS)              */}
+      {/* 7. DISPONIBILIDAD POR CONTRATISTA (ANCHO COMPLETO)             */}
       {/* ============================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Disponibilidad por Contratista — Con Opción de Desglose Mensual */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Briefcase size={16} className="text-[#0D2B4E]" />
-                Disponibilidad por contratista
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                {filters.mes !== 'all' ? `Mes: ${normMes(filters.mes)}` : '% Operativo y volumen indisponible'}
-              </p>
-            </div>
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
+              <Briefcase size={18} className="text-[#0D2B4E]" />
+              Disponibilidad por contratista
+            </h3>
+            <p className="text-xs text-slate-500">
+              {filters.mes !== 'all' ? `Mes: ${normMes(filters.mes)}` : '% Operativo y volumen indisponible por contratista • Haz clic para filtrar'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {filters.contratista !== 'all' && (
+              <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                Contratista: {filters.contratista}
+                <button 
+                  onClick={() => toggleFilter('contratista', filters.contratista)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            )}
 
             {filters.mes === 'all' && (
-              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
+              <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
                 <button
                   onClick={() => setContractorViewMode('consolidado')}
-                  className={`px-2 py-0.5 rounded-md transition-all ${
+                  className={`px-3 py-1 rounded-md transition-all ${
                     contractorViewMode === 'consolidado' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
@@ -1490,7 +1584,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 </button>
                 <button
                   onClick={() => setContractorViewMode('por_mes')}
-                  className={`px-2 py-0.5 rounded-md transition-all ${
+                  className={`px-3 py-1 rounded-md transition-all ${
                     contractorViewMode === 'por_mes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
@@ -1499,92 +1593,276 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               </div>
             )}
           </div>
+        </div>
 
-          <div className="h-[250px] w-full pt-2">
-            {filters.mes === 'all' && contractorViewMode === 'por_mes' ? (
-              // Vista Desglose Mensual por Contratista
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={contractorMonthlyBreakdown.rows} 
-                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
-                  onClick={(e: any) => {
-                    if (e && e.activePayload && e.activePayload.length > 0) {
-                      const item = e.activePayload[0].payload;
-                      if (item && item.mes) {
-                        toggleFilter('mes', item.mes);
-                      }
+        <div className="h-[350px] md:h-[390px] w-full pt-2">
+          {filters.mes === 'all' && contractorViewMode === 'por_mes' ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={contractorMonthlyBreakdown.rows} 
+                margin={{ top: 20, right: 20, left: -5, bottom: 10 }}
+                onClick={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const item = e.activePayload[0].payload;
+                    if (item && item.mes) {
+                      toggleFilter('mes', item.mes);
                     }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
-                  <YAxis domain={[80, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
-                  <Tooltip 
-                    formatter={(val: any, name: any) => [`${val}%`, name]}
-                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                  }
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                <XAxis dataKey="mes" tick={{ fontSize: 10, fill: PALETTE.grisTexto, fontWeight: 600 }} />
+                <YAxis domain={[80, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
+                <Tooltip 
+                  formatter={(val: any, name: any) => [`${val}%`, name]}
+                  contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                />
+                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
+                {contractorMonthlyBreakdown.contractors.map((c, i) => (
+                  <Bar 
+                    key={c} 
+                    dataKey={c} 
+                    name={c} 
+                    fill={MONTH_COLORS[i % MONTH_COLORS.length]} 
+                    radius={[4, 4, 0, 0]} 
+                    maxBarSize={18} 
                   />
-                  <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }} />
-                  {contractorMonthlyBreakdown.contractors.map((c, i) => (
-                    <Bar 
-                      key={c} 
-                      dataKey={c} 
-                      name={c} 
-                      fill={MONTH_COLORS[i % MONTH_COLORS.length]} 
-                      radius={[3, 3, 0, 0]} 
-                      maxBarSize={12} 
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={contractorData} 
+                layout="vertical" 
+                margin={{ top: 10, right: 40, left: 75, bottom: 10 }}
+                onClick={(e: any) => {
+                  if (e && e.activePayload && e.activePayload.length > 0) {
+                    const item = e.activePayload[0].payload;
+                    toggleFilter('contratista', item.name);
+                  }
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={PALETTE.fondoGris} />
+                <XAxis type="number" domain={[85, 100]} tick={{ fontSize: 11, fill: PALETTE.grisTexto }} unit="%" />
+                <YAxis 
+                  dataKey="name" 
+                  type="category" 
+                  tick={{ fontSize: 11, fill: PALETTE.grisOscuro, fontWeight: 700 }}
+                  width={140}
+                />
+                <Tooltip 
+                  formatter={(val: any, _: any, p: any) => [
+                    `${val}% (Indisponibles acum: ${p.payload.indisponibles})`, 
+                    '% Disponibilidad'
+                  ]}
+                  contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                />
+                <ReferenceLine x={95} stroke={PALETTE.verde} strokeDasharray="4 4" strokeWidth={1.5} />
+                <Bar dataKey="disponibilidad" radius={[0, 8, 8, 0]} maxBarSize={28} cursor="pointer">
+                  <LabelList 
+                    dataKey="disponibilidad" 
+                    position="right" 
+                    formatter={(v: any) => `${v}%`}
+                    style={{ fontSize: '11px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                  />
+                  {contractorData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-cont-${index}`} 
+                      fill={filters.contratista === entry.name ? PALETTE.doradoActivo : PALETTE.azulClaro} 
                     />
                   ))}
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              // Vista Consolidada o Filtrada
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={contractorData} 
-                  layout="vertical" 
-                  margin={{ top: 10, right: 35, left: 65, bottom: 10 }}
-                  onClick={(e: any) => {
-                    if (e && e.activePayload && e.activePayload.length > 0) {
-                      const item = e.activePayload[0].payload;
-                      toggleFilter('contratista', item.name);
-                    }
-                  }}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* 8. SISTEMAS MÁS INTERVENIDOS (STREAMGRAPH / ÁREA APILADA)      */}
+      {/* ============================================================== */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
+              <Waves size={18} className="text-[#7A1F2B]" />
+              Sistemas más intervenidos (Evolución temporal)
+            </h3>
+            <p className="text-xs text-slate-500">
+              Evolución {streamTimeMode === 'semanal' ? 'semanal' : 'mensual'} de intervenciones por componente mecánico — bandas de área suavizadas
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {filters.sistema !== 'all' && (
+              <span className="px-3 py-1 rounded-full bg-[#7A1F2B] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                Sistema: {filters.sistema}
+                <button 
+                  onClick={() => toggleFilter('sistema', filters.sistema)}
+                  className="text-white/80 hover:text-white"
                 >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={PALETTE.fondoGris} />
-                  <XAxis type="number" domain={[85, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    tick={{ fontSize: 10, fill: PALETTE.grisOscuro, fontWeight: 600 }}
-                    width={110}
-                  />
-                  <Tooltip 
-                    formatter={(val: any, _: any, p: any) => [
-                      `${val}% (Indisponibles acum: ${p.payload.indisponibles})`, 
-                      '% Disponibilidad'
-                    ]}
-                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
-                  />
-                  <Bar dataKey="disponibilidad" radius={[0, 6, 6, 0]} maxBarSize={24} cursor="pointer">
-                    <LabelList 
-                      dataKey="disponibilidad" 
-                      position="right" 
-                      formatter={(v: any) => `${v}%`}
-                      style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
-                    />
-                    {contractorData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-cont-${index}`} 
-                        fill={filters.contratista === entry.name ? PALETTE.doradoActivo : PALETTE.azulClaro} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                  <X size={12} />
+                </button>
+              </span>
             )}
+
+            {/* Agrupación temporal: Semanal vs Mensual */}
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
+              <button
+                onClick={() => setStreamTimeMode('semanal')}
+                className={`px-3 py-1 rounded-md transition-all ${
+                  streamTimeMode === 'semanal' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Semanal
+              </button>
+              <button
+                onClick={() => setStreamTimeMode('mensual')}
+                className={`px-3 py-1 rounded-md transition-all ${
+                  streamTimeMode === 'mensual' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Mensual
+              </button>
+            </div>
+
+            {/* Estilo Stream Centrado vs Área Apilada */}
+            <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
+              <button
+                onClick={() => setStreamStackType('silhouette')}
+                className={`px-3 py-1 rounded-md transition-all ${
+                  streamStackType === 'silhouette' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Streamgraph centrado fluido estilo Power BI"
+              >
+                Stream Centrado
+              </button>
+              <button
+                onClick={() => setStreamStackType('stacked')}
+                className={`px-3 py-1 rounded-md transition-all ${
+                  streamStackType === 'stacked' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Área apilada tradicional"
+              >
+                Área Apilada
+              </button>
+            </div>
           </div>
         </div>
 
+        {/* Gráfica AreaChart Streamgraph */}
+        <div className="h-[380px] md:h-[430px] w-full pt-2">
+          {systemStreamData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
+              Sin registros de intervenciones de sistemas para los filtros activos
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart 
+                data={systemStreamData} 
+                stackOffset={streamStackType === 'silhouette' ? 'silhouette' : undefined}
+                margin={{ top: 20, right: 30, left: 10, bottom: 15 }}
+              >
+                <defs>
+                  {streamSystems.map((sys) => {
+                    const color = systemColorMap[sys] || '#3E5A78';
+                    const id = `grad-sys-${sys.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                    return (
+                      <linearGradient key={id} id={id} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={color} stopOpacity={0.92}/>
+                        <stop offset="95%" stopColor={color} stopOpacity={0.72}/>
+                      </linearGradient>
+                    );
+                  })}
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                <XAxis 
+                  dataKey="periodo" 
+                  tick={{ fontSize: 11, fill: PALETTE.grisTexto, fontWeight: 600 }}
+                  axisLine={{ stroke: PALETTE.bordeSuave }}
+                />
+                <YAxis 
+                  tick={{ fontSize: 10, fill: PALETTE.grisTexto }} 
+                  axisLine={{ stroke: PALETTE.bordeSuave }}
+                  tickFormatter={(v) => Math.abs(v).toString()}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#0F172A', borderRadius: '12px', color: '#fff', fontSize: '11px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' }}
+                  formatter={(value: any, name: any) => [`${value} ingresos`, name]}
+                  labelFormatter={(label) => `${streamTimeMode === 'semanal' ? 'Semana' : 'Mes'}: ${label}`}
+                />
+                <Legend 
+                  wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                  onClick={(e: any) => {
+                    if (e && e.dataKey) {
+                      toggleFilter('sistema', e.dataKey);
+                    }
+                  }}
+                  formatter={(value) => (
+                    <span className={`cursor-pointer transition-opacity ${filters.sistema !== 'all' && filters.sistema !== value ? 'opacity-40' : 'font-bold'}`}>
+                      {value}
+                    </span>
+                  )}
+                />
+                {streamSystems.map((sys) => {
+                  const color = systemColorMap[sys] || '#3E5A78';
+                  const isSelected = filters.sistema === sys;
+                  const hasSysFilter = filters.sistema !== 'all';
+                  const gradId = `grad-sys-${sys.replace(/[^a-zA-Z0-9]/g, '_')}`;
+                  return (
+                    <Area
+                      key={sys}
+                      type="monotone"
+                      dataKey={sys}
+                      name={sys}
+                      stackId="1"
+                      stroke={color}
+                      strokeWidth={isSelected ? 3 : 1.5}
+                      fill={`url(#${gradId})`}
+                      fillOpacity={!hasSysFilter || isSelected ? 0.9 : 0.25}
+                      activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }}
+                      cursor="pointer"
+                      onClick={() => toggleFilter('sistema', sys)}
+                    />
+                  );
+                })}
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Botones de filtro rápido por sistema debajo del streamgraph */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">
+            Sistemas ({totalStreamInterventions} novedades):
+          </span>
+          {streamSystems.map((sys) => {
+            const color = systemColorMap[sys] || '#3E5A78';
+            const isSelected = filters.sistema === sys;
+            return (
+              <button
+                key={`btn-sys-${sys}`}
+                onClick={() => toggleFilter('sistema', sys)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  isSelected 
+                    ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-900 ring-offset-1' 
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                {sys}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* 9. DÍAS EN TALLER Y PLACAS MÁS INTERVENIDAS (2 COLUMNAS)       */}
+      {/* ============================================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
         {/* Días Indisponibles en Taller (Permanencia) */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center border-b border-slate-100 pb-3">
@@ -1647,7 +1925,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               </div>
             </div>
 
-            {/* Top 5 Placas con más días */}
+            {/* Top 6 Placas con más días */}
             <div className="space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Top placas en taller (días acum.)
@@ -1702,129 +1980,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           </div>
         </div>
 
-      </div>
-
-      {/* ============================================================== */}
-      {/* 7. ANÁLISIS DE INTERVENCIONES: SISTEMAS Y PLACAS (2 COLUMNAS)  */}
-      {/* ============================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Sistemas Más Intervenidos (Con Desglose por Mes) */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Wrench size={16} className="text-[#0D2B4E]" />
-                Sistemas más intervenidos
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                {filters.mes !== 'all' ? `Novedades en ${normMes(filters.mes)}` : 'Cantidad de novedades por componente / sistema'}
-              </p>
-            </div>
-
-            {filters.mes === 'all' && (
-              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
-                <button
-                  onClick={() => setSystemViewMode('consolidado')}
-                  className={`px-2 py-0.5 rounded-md transition-all ${
-                    systemViewMode === 'consolidado' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Consolidado
-                </button>
-                <button
-                  onClick={() => setSystemViewMode('por_mes')}
-                  className={`px-2 py-0.5 rounded-md transition-all ${
-                    systemViewMode === 'por_mes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Por Mes
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="h-[270px] w-full pt-2">
-            {filters.mes === 'all' && systemViewMode === 'por_mes' ? (
-              // Vista Desglose Mensual de Sistemas
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={systemMonthlyBreakdown.rows} 
-                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
-                  onClick={(e: any) => {
-                    if (e && e.activePayload && e.activePayload.length > 0) {
-                      const item = e.activePayload[0].payload;
-                      if (item && item.mes) {
-                        toggleFilter('mes', item.mes);
-                      }
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
-                  <YAxis tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
-                  <Tooltip 
-                    formatter={(val: any, name: any) => [`${val} intervenciones`, name]}
-                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }} />
-                  {systemMonthlyBreakdown.systems.map((s, idx) => (
-                    <Bar 
-                      key={s} 
-                      dataKey={s} 
-                      name={s} 
-                      fill={MONTH_COLORS[idx % MONTH_COLORS.length]} 
-                      stackId="a"
-                    />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              // Vista Consolidada o Filtrada
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={systemInterventionsData} 
-                  layout="vertical" 
-                  margin={{ top: 5, right: 35, left: 65, bottom: 5 }}
-                  onClick={(e: any) => {
-                    if (e && e.activePayload && e.activePayload.length > 0) {
-                      const item = e.activePayload[0].payload;
-                      toggleFilter('sistema', item.name);
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={PALETTE.fondoGris} />
-                  <XAxis type="number" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
-                    tick={{ fontSize: 10, fill: PALETTE.grisOscuro, fontWeight: 700 }}
-                    width={100}
-                  />
-                  <Tooltip 
-                    formatter={(val: any) => [`${val} intervenciones`, 'Cantidad']}
-                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
-                  />
-                  <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={22} cursor="pointer">
-                    <LabelList 
-                      dataKey="count" 
-                      position="right" 
-                      style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
-                    />
-                    {systemInterventionsData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-sys-${index}`} 
-                        fill={filters.sistema === entry.name ? PALETTE.doradoActivo : PALETTE.azulOscuro} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-        {/* Placas Más Intervenidas (Barras VERTICALES como solicitado) */}
+        {/* Placas Más Intervenidas (Barras VERTICALES Top 15) */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center border-b border-slate-100 pb-3">
             <div>
