@@ -93,13 +93,15 @@ export const getRecordMes = (r: { mes?: string; fecha?: string }): string => {
   return '';
 };
 
-// Brand Colors (Limpios, corporativos, suaves, sin neones)
-const PALETTE = {
+// Brand Colors (Esquema Azul y Dorado corporativo)
+export const PALETTE = {
   azulOscuro: '#0D2B4E',
   azulMedio: '#1E3A5F',
   azulClaro: '#3E5A78',
+  azulSuave: '#5B7A9E',
   dorado: '#E0A800',
-  doradoActivo: '#F59E0B',
+  doradoActivo: '#E0A800',
+  doradoSuave: '#F59E0B',
   verde: '#15803D',
   verdeBg: '#DCFCE7',
   rojo: '#DC2626',
@@ -119,10 +121,26 @@ export const normCd = (s?: any): string => {
   return u;
 };
 
+export const normSemana = (s?: any): string => {
+  if (!s) return '';
+  const str = String(s).toUpperCase().trim();
+  const digits = str.replace(/\D/g, '');
+  if (digits) {
+    return `S${parseInt(digits, 10)}`;
+  }
+  return str;
+};
+
+export const normalizePlate = (s?: any): string => {
+  if (!s) return '';
+  return String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+};
+
+// GALAPA = Azul Oscuro (#0D2B4E), LA ARENOSA = Dorado (#E0A800)
 const CD_COLORS: Record<string, string> = {
   'GALAPA': '#0D2B4E',
-  'LA ARENOSA': '#3E5A78',
-  'ARENOSA': '#3E5A78',
+  'LA ARENOSA': '#E0A800',
+  'ARENOSA': '#E0A800',
   'OTRO': '#64748B'
 };
 
@@ -131,17 +149,17 @@ const MONTH_COLORS = [
   '#16A34A', '#65A30D', '#D97706', '#EA580C', '#DC2626', '#7C3AED'
 ];
 
-// Paleta de marca suave y profesional para el Streamgraph (como Power BI)
+// Escala Azul + Dorado para el Streamgraph (Sistemas más intervenidos)
 const STREAM_PALETTE = [
-  '#7A1F2B', // Vinotinto
-  '#C9D1D9', // Gris claro suave
-  '#2E7D8A', // Teal / azul verdoso
-  '#3E5A78', // Azul medio
   '#0D2B4E', // Azul oscuro
-  '#F2B705', // Dorado / mostaza
-  '#16A34A', // Verde corporativo
-  '#EA580C', // Naranja suave
-  '#64748B'  // Pizarra
+  '#E0A800', // Dorado corporativo
+  '#1E3A5F', // Azul marino medio
+  '#F59E0B', // Dorado ámbar
+  '#3E5A78', // Azul pizarra
+  '#D97706', // Ocre / mostaza
+  '#5B7A9E', // Azul suave
+  '#B8860B', // Bronce / oro viejo
+  '#94A3B8'  // Pizarra neutro
 ];
 
 const getCdColor = (cdName: string): string => {
@@ -211,11 +229,21 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   // Helper to toggle any filter (Clicking again deselects to 'all')
   const toggleFilter = (key: keyof Omit<FilterState, 'excluirFinRentin'>, value: string) => {
     setFilters(prev => {
-      let isSame = prev[key] === value;
-      if (key === 'cd' && value !== 'all') {
+      let isSame = false;
+      if (key === 'cd') {
         isSame = normCd(prev.cd) === normCd(value);
-      } else if (key === 'mes' && value !== 'all') {
+      } else if (key === 'mes') {
         isSame = normMes(prev.mes) === normMes(value);
+      } else if (key === 'semana') {
+        isSame = normSemana(prev.semana) === normSemana(value);
+      } else if (key === 'contratista') {
+        isSame = (prev.contratista || '').toUpperCase().trim() === (value || '').toUpperCase().trim();
+      } else if (key === 'sistema') {
+        isSame = (prev.sistema || '').toUpperCase().trim() === (value || '').toUpperCase().trim();
+      } else if (key === 'placa') {
+        isSame = normalizePlate(prev.placa) === normalizePlate(value);
+      } else {
+        isSame = prev[key] === value;
       }
       return {
         ...prev,
@@ -285,8 +313,14 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
 
   const availableWeeks = useMemo(() => {
     const set = new Set<string>();
-    availabilityPct.forEach(r => { if (r.semana) set.add(r.semana.toUpperCase().trim()); });
-    availability.forEach(r => { if (r.semana) set.add(r.semana.toUpperCase().trim()); });
+    availabilityPct.forEach(r => { 
+      const s = normSemana(r.semana);
+      if (s) set.add(s); 
+    });
+    availability.forEach(r => { 
+      const s = normSemana(r.semana);
+      if (s) set.add(s); 
+    });
     return Array.from(set).filter(Boolean).sort((a, b) => {
       const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
       const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
@@ -318,7 +352,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   }, [availability]);
 
   // -------------------------------------------------------------
-  // 3. FILTERED DATASETS (Unified Filter State with normMes and normCd)
+  // 3. FILTERED DATASETS (Unified Filter State with normMes, normCd, normSemana)
   // -------------------------------------------------------------
   // A) Intervenciones crudas (DISPONILIDAD)
   const filteredInterventions = useMemo(() => {
@@ -332,13 +366,18 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         if (rMes !== normMes(filters.mes)) return false;
       }
 
-      if (filters.semana !== 'all' && r.semana && r.semana.toUpperCase().trim() !== filters.semana.toUpperCase().trim()) return false;
+      // Normalized week matching
+      if (filters.semana !== 'all') {
+        const rSem = normSemana(r.semana);
+        if (rSem !== normSemana(filters.semana)) return false;
+      }
+
       if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
       if (filters.sistema !== 'all' && (r.sistema || '').toUpperCase().trim() !== filters.sistema.toUpperCase().trim()) return false;
       if (filters.placa !== 'all') {
-        const pUpper = filters.placa.toUpperCase().trim();
-        const rPlaca = (r.placa || r.placasKey || '').toUpperCase().trim();
-        if (rPlaca !== pUpper) return false;
+        const pNorm = normalizePlate(filters.placa);
+        const rPlaca = normalizePlate(r.placa || r.placasKey || '');
+        if (rPlaca !== pNorm) return false;
       }
       return true;
     });
@@ -356,19 +395,35 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         if (rMes !== normMes(filters.mes)) return false;
       }
 
-      if (filters.semana !== 'all' && r.semana && r.semana.toUpperCase().trim() !== filters.semana.toUpperCase().trim()) return false;
+      // Normalized week matching
+      if (filters.semana !== 'all') {
+        const rSem = normSemana(r.semana);
+        if (rSem !== normSemana(filters.semana)) return false;
+      }
+
       if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
       
-      // If filtered by a specific plate or system, filter to days/CDs where that plate/system had interventions
+      // If filtered by a specific plate or system, filter to days where that plate/system had interventions
       if (filters.placa !== 'all' || filters.sistema !== 'all') {
-        const matchesIntervention = filteredInterventions.some(inv => 
-          inv.fecha === r.fecha && normCd(inv.cd) === normCd(r.cd)
+        const activeDates = new Set(
+          filteredInterventions
+            .map(inv => (inv.fecha ? inv.fecha.slice(0, 10) : ''))
+            .filter(Boolean)
         );
-        if (!matchesIntervention) return false;
+        const rDate = r.fecha ? r.fecha.slice(0, 10) : '';
+        if (activeDates.size > 0 && !activeDates.has(rDate)) {
+          return false;
+        }
       }
       return true;
     });
   }, [availabilityPct, filters, filteredInterventions]);
+
+  // A.1 Diagnóstico obligatorio (confirmar qué pasa en consola)
+  console.log('[DISPO] pct:', availabilityPct?.length, 'crudos:', availability?.length);
+  console.log('[DISPO] CDs pct:', [...new Set((availabilityPct||[]).map(r => (r.cd||'').toUpperCase().trim()))]);
+  console.log('[DISPO] filters:', filters);
+  console.log('[DISPO] filteredPct:', filteredPctRecords.length, 'filteredInterv:', filteredInterventions.length);
 
   // -------------------------------------------------------------
   // 4. KPIS CALCULATIONS (GROUP BY DAY, NEVER ROW-BY-ROW)
@@ -435,14 +490,21 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   }, [filteredPctRecords, filteredInterventions]);
 
   // -------------------------------------------------------------
-  // 5. CHART DATA PREPARATIONS
+  // 5. CHART DATA PREPARATIONS (With active gold highlight & blue base)
   // -------------------------------------------------------------
 
-  // A) Mensual (Fila dedicada a ancho completo, alta y espaciosa)
+  // A) Mensual (Mantiene todos los meses visibles para comparar; el activo se pinta en dorado)
   const monthlyData = useMemo(() => {
-    const map: Record<string, { total: number; disp: number }> = {};
+    const records = availabilityPct.filter(r => {
+      if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
+      if (filters.cd !== 'all' && normCd(r.cd) !== normCd(filters.cd)) return false;
+      if (filters.semana !== 'all' && normSemana(r.semana) !== normSemana(filters.semana)) return false;
+      if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
+      return true;
+    });
 
-    filteredPctRecords.forEach(r => {
+    const map: Record<string, { total: number; disp: number }> = {};
+    records.forEach(r => {
       const m = normMes(r.mes || getRecordMes(r));
       if (!m) return;
       if (!map[m]) map[m] = { total: 0, disp: 0 };
@@ -466,14 +528,21 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         disponibles: item.disp
       };
     });
-  }, [filteredPctRecords]);
+  }, [availabilityPct, filters.cd, filters.semana, filters.contratista, filters.excluirFinRentin]);
 
-  // B) Semanal (Sin gráfica diaria)
+  // B) Semanal (Muestra semanas del corte activo; la seleccionada se resalta en dorado)
   const weeklyData = useMemo(() => {
-    const map: Record<string, { total: number; disp: number; mes: string }> = {};
+    const records = availabilityPct.filter(r => {
+      if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
+      if (filters.cd !== 'all' && normCd(r.cd) !== normCd(filters.cd)) return false;
+      if (filters.mes !== 'all' && normMes(r.mes || getRecordMes(r)) !== normMes(filters.mes)) return false;
+      if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
+      return true;
+    });
 
-    filteredPctRecords.forEach(r => {
-      const w = r.semana || 'S1';
+    const map: Record<string, { total: number; disp: number; mes: string }> = {};
+    records.forEach(r => {
+      const w = normSemana(r.semana) || 'S1';
       const m = normMes(r.mes || getRecordMes(r));
       if (!map[w]) map[w] = { total: 0, disp: 0, mes: m };
       map[w].total += r.total || 0;
@@ -497,18 +566,26 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         disponibles: item.disp
       };
     });
-  }, [filteredPctRecords]);
+  }, [availabilityPct, filters.cd, filters.mes, filters.contratista, filters.excluirFinRentin]);
 
   // C) Centro de Distribución (GALAPA vs LA ARENOSA) — SIEMPRE AMBOS CD PRESENTES
   const cdData = useMemo(() => {
-    // Inicializar con ambos CD fijos para que nunca desaparezcan de la comparativa
+    const records = availabilityPct.filter(r => {
+      if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
+      if (filters.mes !== 'all' && normMes(r.mes || getRecordMes(r)) !== normMes(filters.mes)) return false;
+      if (filters.semana !== 'all' && normSemana(r.semana) !== normSemana(filters.semana)) return false;
+      if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
+      return true;
+    });
+
     const map: Record<string, { total: number; disp: number; dailyTotals: Record<string, number> }> = {
       'GALAPA': { total: 0, disp: 0, dailyTotals: {} },
       'LA ARENOSA': { total: 0, disp: 0, dailyTotals: {} }
     };
 
-    filteredPctRecords.forEach(r => {
-      const cd = normCd(r.cd) || 'OTRO';
+    records.forEach(r => {
+      const cd = normCd(r.cd);
+      if (!cd) return;
       if (!map[cd]) map[cd] = { total: 0, disp: 0, dailyTotals: {} };
       map[cd].total += r.total || 0;
       map[cd].disp += r.disponibles || 0;
@@ -518,14 +595,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     });
 
     const fixedOrder = ['GALAPA', 'LA ARENOSA'];
-    return Object.keys(map).sort((a, b) => {
-      const idxA = fixedOrder.indexOf(a);
-      const idxB = fixedOrder.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return a.localeCompare(b);
-    }).map(cd => {
+    return fixedOrder.map(cd => {
       const item = map[cd];
       const pct = item.total > 0 ? Number(((item.disp / item.total) * 100).toFixed(1)) : 0;
       const daysCount = Object.keys(item.dailyTotals).length || 1;
@@ -539,18 +609,19 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         disponibles: item.disp
       };
     });
-  }, [filteredPctRecords]);
-
-  // Diagnóstico rápido (consola) para depuración y verificación
-  console.log('PCT total:', availabilityPct.length);
-  console.log('CDs en PCT:', Array.from(new Set(availabilityPct.map(r => (r.cd||'').toUpperCase().trim()))));
-  console.log('filteredPct:', filteredPctRecords.length, 'cdData:', cdData);
+  }, [availabilityPct, filters.mes, filters.semana, filters.contratista, filters.excluirFinRentin]);
 
   // C.2) Desglose mensual de CD (Meses en X, Galapa vs La Arenosa)
   const cdMonthlyBreakdown = useMemo(() => {
+    const records = availabilityPct.filter(r => {
+      if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
+      if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
+      return true;
+    });
+
     const monthsMap: Record<string, { GALAPA: { disp: number; total: number }; ARENOSA: { disp: number; total: number } }> = {};
 
-    filteredPctRecords.forEach(r => {
+    records.forEach(r => {
       const m = normMes(r.mes || getRecordMes(r));
       if (!m) return;
       if (!monthsMap[m]) {
@@ -586,14 +657,22 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         'LA ARENOSA': pctA
       };
     });
-  }, [filteredPctRecords]);
+  }, [availabilityPct, filters.contratista, filters.excluirFinRentin]);
 
-  // D) Contratista (Con División por Mes)
+  // D) Contratista (Mantiene todos los contratistas para comparar; el activo se pinta en dorado)
   const contractorData = useMemo(() => {
+    const records = availabilityPct.filter(r => {
+      if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
+      if (filters.cd !== 'all' && normCd(r.cd) !== normCd(filters.cd)) return false;
+      if (filters.mes !== 'all' && normMes(r.mes || getRecordMes(r)) !== normMes(filters.mes)) return false;
+      if (filters.semana !== 'all' && normSemana(r.semana) !== normSemana(filters.semana)) return false;
+      return true;
+    });
+
     const map: Record<string, { total: number; disp: number; indisp: number }> = {};
 
-    filteredPctRecords.forEach(r => {
-      const c = (r.contratista || 'SIN ESPECIFICAR').trim();
+    records.forEach(r => {
+      const c = (r.contratista || 'SIN ESPECIFICAR').trim().toUpperCase();
       if (!map[c]) map[c] = { total: 0, disp: 0, indisp: 0 };
       map[c].total += r.total || 0;
       map[c].disp += r.disponibles || 0;
@@ -611,7 +690,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         total: item.total
       };
     }).sort((a, b) => b.disponibilidad - a.disponibilidad);
-  }, [filteredPctRecords]);
+  }, [availabilityPct, filters.cd, filters.mes, filters.semana, filters.excluirFinRentin]);
 
   // D.2) Desglose por Mes de Contratistas
   const contractorMonthlyBreakdown = useMemo(() => {
@@ -1279,10 +1358,10 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 />
                 <ReferenceLine 
                   y={95} 
-                  stroke={PALETTE.verde} 
+                  stroke={PALETTE.dorado} 
                   strokeDasharray="4 4" 
                   strokeWidth={2} 
-                  label={{ value: 'Meta: 95%', position: 'right', fill: PALETTE.verde, fontSize: 10, fontWeight: 'bold' }} 
+                  label={{ value: 'Meta: 95%', position: 'right', fill: '#B45309', fontSize: 10, fontWeight: 'bold' }} 
                 />
                 <Bar 
                   dataKey="disponibilidad" 
@@ -1298,11 +1377,11 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                     style={{ fontSize: '11px', fontWeight: '800', fill: PALETTE.grisOscuro }} 
                   />
                   {monthlyData.map((entry, index) => {
-                    const isSelected = normMes(filters.mes) === entry.name;
+                    const isSelected = normMes(filters.mes) === normMes(entry.name);
                     return (
                       <Cell 
                         key={`cell-month-${index}`} 
-                        fill={isSelected ? PALETTE.doradoActivo : PALETTE.azulOscuro} 
+                        fill={isSelected ? PALETTE.dorado : PALETTE.azulOscuro} 
                       />
                     );
                   })}
@@ -1329,11 +1408,11 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           </div>
           {filters.semana !== 'all' && (
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 flex items-center gap-1.5">
+              <span className="px-3 py-1 rounded-full bg-[#E0A800]/15 text-[#92400E] text-xs font-bold border border-[#E0A800]/30 flex items-center gap-1.5">
                 Semana activa: {filters.semana}
                 <button 
-                  onClick={() => toggleFilter('semana', filters.semana)}
-                  className="text-slate-400 hover:text-slate-700 ml-1"
+                  onClick={() => setFilterValue('semana', 'all')}
+                  className="text-amber-700 hover:text-amber-900 ml-1"
                 >
                   <X size={12} />
                 </button>
@@ -1371,10 +1450,10 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 />
                 <ReferenceLine 
                   y={95} 
-                  stroke={PALETTE.verde} 
+                  stroke={PALETTE.dorado} 
                   strokeDasharray="4 4" 
                   strokeWidth={2}
-                  label={{ value: 'Meta: 95%', position: 'right', fill: PALETTE.verde, fontSize: 11, fontWeight: 'bold' }}
+                  label={{ value: 'Meta: 95%', position: 'right', fill: '#B45309', fontSize: 11, fontWeight: 'bold' }}
                 />
                 <Bar dataKey="disponibilidad" radius={[6, 6, 0, 0]} maxBarSize={38} cursor="pointer">
                   <LabelList 
@@ -1383,12 +1462,15 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                     formatter={(v: any) => `${v}%`}
                     style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                   />
-                  {weeklyData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-week-${index}`} 
-                      fill={filters.semana === entry.name ? PALETTE.doradoActivo : PALETTE.azulClaro} 
-                    />
-                  ))}
+                  {weeklyData.map((entry, index) => {
+                    const isSelected = normSemana(filters.semana) === normSemana(entry.name);
+                    return (
+                      <Cell 
+                        key={`cell-week-${index}`} 
+                        fill={isSelected ? PALETTE.dorado : PALETTE.azulOscuro} 
+                      />
+                    );
+                  })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -1407,17 +1489,17 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               Disponibilidad por Centro (CD)
             </h3>
             <p className="text-xs text-slate-500">
-              {filters.mes !== 'all' ? `Mes: ${normMes(filters.mes)} • GALAPA vs LA ARENOSA` : 'GALAPA vs LA ARENOSA • Haz clic en una barra para filtrar por CD'}
+              {filters.mes !== 'all' ? `Mes: ${normMes(filters.mes)} • GALAPA (Azul) vs LA ARENOSA (Dorado)` : 'GALAPA (Azul) vs LA ARENOSA (Dorado) • Haz clic en una barra para filtrar'}
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             {filters.cd !== 'all' && (
-              <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+              <span className="px-3 py-1 rounded-full bg-[#0D2B4E] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
                 CD: {normCd(filters.cd)}
                 <button 
-                  onClick={() => toggleFilter('cd', filters.cd)}
-                  className="text-slate-400 hover:text-white"
+                  onClick={() => setFilterValue('cd', 'all')}
+                  className="text-slate-300 hover:text-white"
                 >
                   <X size={12} />
                 </button>
@@ -1472,8 +1554,20 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                   contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                 />
                 <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '6px' }} />
-                <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="4 4" strokeWidth={1.5} />
-                <Bar dataKey="GALAPA" name="GALAPA" fill="#0D2B4E" radius={[6, 6, 0, 0]} maxBarSize={32} cursor="pointer" minPointSize={6}>
+                <ReferenceLine y={95} stroke={PALETTE.dorado} strokeDasharray="4 4" strokeWidth={1.5} />
+                <Bar 
+                  dataKey="GALAPA" 
+                  name="GALAPA" 
+                  fill="#0D2B4E" 
+                  radius={[6, 6, 0, 0]} 
+                  maxBarSize={32} 
+                  cursor="pointer" 
+                  minPointSize={6}
+                  onClick={(e: any) => {
+                    e?.stopPropagation?.();
+                    toggleFilter('cd', 'GALAPA');
+                  }}
+                >
                   <LabelList 
                     dataKey="GALAPA" 
                     position="top" 
@@ -1481,7 +1575,19 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                     style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                   />
                 </Bar>
-                <Bar dataKey="LA ARENOSA" name="LA ARENOSA" fill="#3E5A78" radius={[6, 6, 0, 0]} maxBarSize={32} cursor="pointer" minPointSize={6}>
+                <Bar 
+                  dataKey="LA ARENOSA" 
+                  name="LA ARENOSA" 
+                  fill="#E0A800" 
+                  radius={[6, 6, 0, 0]} 
+                  maxBarSize={32} 
+                  cursor="pointer" 
+                  minPointSize={6}
+                  onClick={(e: any) => {
+                    e?.stopPropagation?.();
+                    toggleFilter('cd', 'LA ARENOSA');
+                  }}
+                >
                   <LabelList 
                     dataKey="LA ARENOSA" 
                     position="top" 
@@ -1516,10 +1622,10 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 />
                 <ReferenceLine 
                   y={95} 
-                  stroke={PALETTE.verde} 
+                  stroke={PALETTE.dorado} 
                   strokeDasharray="4 4" 
                   strokeWidth={2}
-                  label={{ value: 'Meta: 95%', position: 'right', fill: PALETTE.verde, fontSize: 11, fontWeight: 'bold' }}
+                  label={{ value: 'Meta: 95%', position: 'right', fill: '#B45309', fontSize: 11, fontWeight: 'bold' }}
                 />
                 <Bar dataKey="disponibilidad" radius={[8, 8, 0, 0]} maxBarSize={90} cursor="pointer" minPointSize={8}>
                   <LabelList 
@@ -1530,10 +1636,13 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                   />
                   {cdData.map((entry, index) => {
                     const isSelected = normCd(filters.cd) === normCd(entry.name);
+                    const isFiltered = filters.cd !== 'all';
+                    const baseColor = entry.name === 'GALAPA' ? PALETTE.azulOscuro : PALETTE.dorado;
+                    const cellColor = isFiltered ? (isSelected ? PALETTE.dorado : '#94A3B8') : baseColor;
                     return (
                       <Cell 
                         key={`cell-cd-${index}`} 
-                        fill={isSelected ? PALETTE.doradoActivo : getCdColor(entry.name)} 
+                        fill={cellColor} 
                       />
                     );
                   })}
@@ -1561,11 +1670,11 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
 
           <div className="flex items-center gap-2">
             {filters.contratista !== 'all' && (
-              <span className="px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+              <span className="px-3 py-1 rounded-full bg-[#E0A800]/15 text-[#92400E] text-xs font-bold border border-[#E0A800]/30 flex items-center gap-1.5 shadow-sm">
                 Contratista: {filters.contratista}
                 <button 
-                  onClick={() => toggleFilter('contratista', filters.contratista)}
-                  className="text-slate-400 hover:text-white"
+                  onClick={() => setFilterValue('contratista', 'all')}
+                  className="text-amber-700 hover:text-amber-900"
                 >
                   <X size={12} />
                 </button>
@@ -1623,9 +1732,13 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                     key={c} 
                     dataKey={c} 
                     name={c} 
-                    fill={MONTH_COLORS[i % MONTH_COLORS.length]} 
+                    fill={STREAM_PALETTE[i % STREAM_PALETTE.length]} 
                     radius={[4, 4, 0, 0]} 
                     maxBarSize={18} 
+                    onClick={(e: any) => {
+                      e?.stopPropagation?.();
+                      toggleFilter('contratista', c);
+                    }}
                   />
                 ))}
               </BarChart>
@@ -1658,7 +1771,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                   ]}
                   contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                 />
-                <ReferenceLine x={95} stroke={PALETTE.verde} strokeDasharray="4 4" strokeWidth={1.5} />
+                <ReferenceLine x={95} stroke={PALETTE.dorado} strokeDasharray="4 4" strokeWidth={1.5} />
                 <Bar dataKey="disponibilidad" radius={[0, 8, 8, 0]} maxBarSize={28} cursor="pointer">
                   <LabelList 
                     dataKey="disponibilidad" 
@@ -1666,12 +1779,15 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                     formatter={(v: any) => `${v}%`}
                     style={{ fontSize: '11px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                   />
-                  {contractorData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-cont-${index}`} 
-                      fill={filters.contratista === entry.name ? PALETTE.doradoActivo : PALETTE.azulClaro} 
-                    />
-                  ))}
+                  {contractorData.map((entry, index) => {
+                    const isSelected = filters.contratista.toUpperCase().trim() === entry.name.toUpperCase().trim();
+                    return (
+                      <Cell 
+                        key={`cell-cont-${index}`} 
+                        fill={isSelected ? PALETTE.dorado : PALETTE.azulOscuro} 
+                      />
+                    );
+                  })}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -1686,21 +1802,21 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
-              <Waves size={18} className="text-[#7A1F2B]" />
+              <Waves size={18} className="text-[#0D2B4E]" />
               Sistemas más intervenidos (Evolución temporal)
             </h3>
             <p className="text-xs text-slate-500">
-              Evolución {streamTimeMode === 'semanal' ? 'semanal' : 'mensual'} de intervenciones por componente mecánico — bandas de área suavizadas
+              Evolución {streamTimeMode === 'semanal' ? 'semanal' : 'mensual'} de intervenciones por componente mecánico — escala corporativa azul y dorado
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             {filters.sistema !== 'all' && (
-              <span className="px-3 py-1 rounded-full bg-[#7A1F2B] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
+              <span className="px-3 py-1 rounded-full bg-[#0D2B4E] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm">
                 Sistema: {filters.sistema}
                 <button 
-                  onClick={() => toggleFilter('sistema', filters.sistema)}
-                  className="text-white/80 hover:text-white"
+                  onClick={() => setFilterValue('sistema', 'all')}
+                  className="text-amber-400 hover:text-white"
                 >
                   <X size={12} />
                 </button>
@@ -1763,6 +1879,13 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 data={systemStreamData} 
                 stackOffset={streamStackType === 'silhouette' ? 'silhouette' : undefined}
                 margin={{ top: 20, right: 30, left: 10, bottom: 15 }}
+                onClick={(e: any) => {
+                  const p = e?.activePayload?.[0]?.payload;
+                  if (p?.periodo) {
+                    if (streamTimeMode === 'semanal') toggleFilter('semana', p.periodo);
+                    else toggleFilter('mes', p.periodo);
+                  }
+                }}
               >
                 <defs>
                   {streamSystems.map((sys) => {
@@ -1823,7 +1946,10 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                       fillOpacity={!hasSysFilter || isSelected ? 0.9 : 0.25}
                       activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }}
                       cursor="pointer"
-                      onClick={() => toggleFilter('sistema', sys)}
+                      onClick={(e: any) => {
+                        e?.stopPropagation?.();
+                        toggleFilter('sistema', sys);
+                      }}
                     />
                   );
                 })}
@@ -1846,7 +1972,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 onClick={() => toggleFilter('sistema', sys)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
                   isSelected 
-                    ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-900 ring-offset-1' 
+                    ? 'bg-slate-900 text-white shadow-sm ring-2 ring-amber-500 ring-offset-1' 
                     : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
                 }`}
               >
@@ -1906,19 +2032,25 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                       ]}
                       contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                     />
-                    <Bar dataKey="promedioDias" fill={PALETTE.azulOscuro} radius={[5, 5, 0, 0]} maxBarSize={40} cursor="pointer" minPointSize={4}>
+                    <Bar dataKey="promedioDias" radius={[5, 5, 0, 0]} maxBarSize={40} cursor="pointer" minPointSize={4}>
                       <LabelList 
                         dataKey="promedioDias" 
                         position="top" 
                         formatter={(v: any) => `${v} d`}
                         style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                       />
-                      {daysInShopStats.cdDaysList.map((entry, index) => (
-                        <Cell 
-                          key={`cell-cddays-${index}`} 
-                          fill={normCd(filters.cd) === normCd(entry.name) ? PALETTE.doradoActivo : getCdColor(entry.name)} 
-                        />
-                      ))}
+                      {daysInShopStats.cdDaysList.map((entry, index) => {
+                        const isSelected = normCd(filters.cd) === normCd(entry.name);
+                        const isFiltered = filters.cd !== 'all';
+                        const baseColor = entry.name === 'GALAPA' ? PALETTE.azulOscuro : PALETTE.dorado;
+                        const cellColor = isFiltered ? (isSelected ? PALETTE.dorado : '#94A3B8') : baseColor;
+                        return (
+                          <Cell 
+                            key={`cell-cddays-${index}`} 
+                            fill={cellColor} 
+                          />
+                        );
+                      })}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -1965,12 +2097,15 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                         formatter={(v: any) => `${v}d`}
                         style={{ fontSize: '9px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                       />
-                      {daysInShopStats.topPlatesDaysList.slice(0, 6).map((entry, index) => (
-                        <Cell 
-                          key={`cell-topdays-${index}`} 
-                          fill={filters.placa === entry.placa ? PALETTE.doradoActivo : PALETTE.azulClaro} 
-                        />
-                      ))}
+                      {daysInShopStats.topPlatesDaysList.slice(0, 6).map((entry, index) => {
+                        const isSelected = normalizePlate(filters.placa) === normalizePlate(entry.placa);
+                        return (
+                          <Cell 
+                            key={`cell-topdays-${index}`} 
+                            fill={isSelected ? PALETTE.dorado : PALETTE.azulOscuro} 
+                          />
+                        );
+                      })}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -1993,8 +2128,14 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               </p>
             </div>
             {filters.placa !== 'all' && (
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-900 text-white text-[10px] font-bold font-mono">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#E0A800]/15 text-[#92400E] text-[10px] font-bold font-mono border border-[#E0A800]/30 flex items-center gap-1.5">
                 {filters.placa}
+                <button 
+                  onClick={() => setFilterValue('placa', 'all')}
+                  className="text-amber-700 hover:text-amber-900"
+                >
+                  <X size={10} />
+                </button>
               </span>
             )}
           </div>
@@ -2036,12 +2177,15 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                       position="top" 
                       style={{ fontSize: '9px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                     />
-                    {plateInterventionsData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-plate-${index}`} 
-                        fill={filters.placa === entry.placa ? PALETTE.doradoActivo : PALETTE.azulClaro} 
-                      />
-                    ))}
+                    {plateInterventionsData.map((entry, index) => {
+                      const isSelected = normalizePlate(filters.placa) === normalizePlate(entry.placa);
+                      return (
+                        <Cell 
+                          key={`cell-plate-${index}`} 
+                          fill={isSelected ? PALETTE.dorado : PALETTE.azulOscuro} 
+                        />
+                      );
+                    })}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
