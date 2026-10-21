@@ -1315,15 +1315,27 @@ const processForkliftFineRows = (rows: any[][]): ForkliftFine[] => {
 };
 
 export const fetchAvailabilityFromSheet = async (): Promise<AvailabilityRecord[]> => {
+  // 1) Intentar CSV directo por GID (rápido, sin timeout ni corte de filas)
+  try {
+    const csvRecords = await fetchAvailabilityFromSheetCSV();
+    if (csvRecords && csvRecords.length > 0) {
+      return csvRecords;
+    }
+  } catch (e) {
+    console.warn("CSV DISPONILIDAD falló, intentando Apps Script:", e);
+  }
+
+  // 2) Fallback por Apps Script
   try {
     const rows = await fetchDataFromGAS(FLEET_AVAILABILITY_DOC_ID, 'DISPONILIDAD');
-    if (!rows || rows.length < 2) {
-      return fetchAvailabilityFromSheetCSV();
+    if (rows && rows.length >= 2) {
+      return processAvailabilityRows(rows);
     }
-    return processAvailabilityRows(rows);
   } catch (e) { 
-    return fetchAvailabilityFromSheetCSV(); 
+    console.warn("GAS DISPONILIDAD falló:", e);
   }
+
+  return [];
 };
 
 const fetchAvailabilityFromSheetCSV = async (): Promise<AvailabilityRecord[]> => {
@@ -1398,12 +1410,16 @@ const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
       const indisponibilidadPrc = parseNum(row[15]);
       const disponibilidadPrc = parseNum(row[16]);
       const vhsCd = Math.max(0, Math.round(parseNum(row[17])));
+      const rawCd = cleanSheetValue(row[2]).toUpperCase().trim();
+      let normCdVal = rawCd;
+      if (rawCd.includes('GALAPA')) normCdVal = 'GALAPA';
+      else if (rawCd.includes('ARENOSA')) normCdVal = 'LA ARENOSA';
 
       return {
         id: `avail-${cleanSheetValue(row[0]) || 'row'}-${i}-${Date.now()}`,
         fecha: parsedDate, 
-        cd: cleanSheetValue(row[2]).toUpperCase(),
-        cdOriginal: cleanSheetValue(row[2]).toUpperCase(),
+        cd: normCdVal,
+        cdOriginal: rawCd,
         sistema: cleanSheetValue(row[3]).toUpperCase() || 'GENERAL',
         detalle: cleanSheetValue(row[4]) || '',
         placa: normalizedPlate,
@@ -1461,12 +1477,17 @@ export const processAvailabilitySummaryRows = (rows: any[][]): AvailabilitySumma
         rawSemana = `S${rawSemana}`;
       }
 
+      const rawCd = cleanSheetValue(row[2]).toUpperCase().trim();
+      let normCdVal = rawCd;
+      if (rawCd.includes('GALAPA')) normCdVal = 'GALAPA';
+      else if (rawCd.includes('ARENOSA')) normCdVal = 'LA ARENOSA';
+
       return {
         id: `pct-${cleanSheetValue(row[0]) || 'row'}-${idx}-${Date.now()}`,
         llave: cleanSheetValue(row[0]),
         fecha: parsedDate,
-        cd: cleanSheetValue(row[2]).toUpperCase(),
-        contratista: cleanSheetValue(row[3]).toUpperCase(),
+        cd: normCdVal,
+        contratista: cleanSheetValue(row[3]).toUpperCase().trim(),
         indisponibles: Math.round(parseNum(row[4])),
         disponibles: Math.round(parseNum(row[5])),
         total: Math.round(parseNum(row[6])),
@@ -1480,17 +1501,7 @@ export const processAvailabilitySummaryRows = (rows: any[][]): AvailabilitySumma
 export const processAvailabilityPctRows = processAvailabilitySummaryRows;
 
 export const fetchAvailabilitySummaryFromSheet = async (): Promise<AvailabilitySummary[]> => {
-  // 1) Intentar por Apps Script (por nombre)
-  try {
-    const rows = await fetchDataFromGAS(FLEET_AVAILABILITY_DOC_ID, '%DISPONIBILIDAD');
-    if (rows && rows.length >= 2) {
-      return processAvailabilitySummaryRows(rows);
-    }
-  } catch (e) {
-    console.warn("GAS %DISPONIBILIDAD falló, intentando CSV por gid:", e);
-  }
-
-  // 2) Fallback CSV por gid (confiable - gid 1491438993)
+  // 1) Intentar CSV directo por GID (rápido, trae toda la hoja sin límites ni timeout)
   try {
     const url = `https://docs.google.com/spreadsheets/d/${FLEET_AVAILABILITY_DOC_ID}/export?format=csv&gid=1491438993${getCacheBuster()}`;
     const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
@@ -1499,11 +1510,22 @@ export const fetchAvailabilitySummaryFromSheet = async (): Promise<AvailabilityS
       const parsed = Papa.parse(csv, { skipEmptyLines: true });
       const rows = parsed.data as any[][];
       if (rows && rows.length >= 2) {
-        return processAvailabilitySummaryRows(rows);
+        const processed = processAvailabilitySummaryRows(rows);
+        if (processed.length > 0) return processed;
       }
     }
   } catch (e) {
-    console.warn("CSV %DISPONIBILIDAD por gid falló:", e);
+    console.warn("CSV %DISPONIBILIDAD por gid falló, intentando Apps Script:", e);
+  }
+
+  // 2) Fallback por Apps Script (por nombre)
+  try {
+    const rows = await fetchDataFromGAS(FLEET_AVAILABILITY_DOC_ID, '%DISPONIBILIDAD');
+    if (rows && rows.length >= 2) {
+      return processAvailabilitySummaryRows(rows);
+    }
+  } catch (e) {
+    console.warn("GAS %DISPONIBILIDAD falló:", e);
   }
 
   return [];

@@ -108,6 +108,14 @@ const PALETTE = {
   blanco: '#FFFFFF',
 };
 
+export const normCd = (s?: any): string => {
+  if (!s) return '';
+  const u = String(s).trim().toUpperCase();
+  if (u.includes('GALAPA')) return 'GALAPA';
+  if (u.includes('ARENOSA')) return 'LA ARENOSA';
+  return u;
+};
+
 const CD_COLORS: Record<string, string> = {
   'GALAPA': '#0D2B4E',
   'LA ARENOSA': '#3E5A78',
@@ -121,9 +129,9 @@ const MONTH_COLORS = [
 ];
 
 const getCdColor = (cdName: string): string => {
-  const norm = (cdName || '').toUpperCase().trim();
-  if (norm.includes('GALAPA')) return CD_COLORS['GALAPA'];
-  if (norm.includes('ARENOSA')) return CD_COLORS['LA ARENOSA'];
+  const norm = normCd(cdName);
+  if (norm === 'GALAPA') return CD_COLORS['GALAPA'];
+  if (norm === 'LA ARENOSA') return CD_COLORS['LA ARENOSA'];
   return CD_COLORS['OTRO'];
 };
 
@@ -174,12 +182,29 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     return norm.startsWith('FIN RENTIN');
   };
 
-  // Helper to toggle any filter (Clicking again deselects to 'all')
-  const toggleFilter = (key: keyof Omit<FilterState, 'excluirFinRentin'>, value: string) => {
+  // Helper to directly set any filter value (Used by dropdown selects)
+  const setFilterValue = (key: keyof Omit<FilterState, 'excluirFinRentin'>, value: string) => {
     setFilters(prev => ({
       ...prev,
-      [key]: prev[key] === value ? 'all' : value
+      [key]: value
     }));
+    setCurrentPage(1);
+  };
+
+  // Helper to toggle any filter (Clicking again deselects to 'all')
+  const toggleFilter = (key: keyof Omit<FilterState, 'excluirFinRentin'>, value: string) => {
+    setFilters(prev => {
+      let isSame = prev[key] === value;
+      if (key === 'cd' && value !== 'all') {
+        isSame = normCd(prev.cd) === normCd(value);
+      } else if (key === 'mes' && value !== 'all') {
+        isSame = normMes(prev.mes) === normMes(value);
+      }
+      return {
+        ...prev,
+        [key]: isSame ? 'all' : value
+      };
+    });
     setCurrentPage(1);
   };
 
@@ -211,10 +236,16 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   // 2. EXTRACT FILTER OPTIONS (Normalized from real data)
   // -------------------------------------------------------------
   const availableCds = useMemo(() => {
-    const set = new Set<string>();
-    availabilityPct.forEach(r => { if (r.cd) set.add(r.cd.toUpperCase().trim()); });
-    availability.forEach(r => { if (r.cd) set.add(r.cd.toUpperCase().trim()); });
-    return Array.from(set).filter(Boolean).sort();
+    const set = new Set<string>(['GALAPA', 'LA ARENOSA']);
+    availabilityPct.forEach(r => { const c = normCd(r.cd); if (c) set.add(c); });
+    availability.forEach(r => { const c = normCd(r.cd); if (c) set.add(c); });
+    const fixedOrder = ['GALAPA', 'LA ARENOSA'];
+    return Array.from(set).sort((a, b) => {
+      const idxA = fixedOrder.indexOf(a);
+      const idxB = fixedOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      return a.localeCompare(b);
+    });
   }, [availabilityPct, availability]);
 
   const availableMonths = useMemo(() => {
@@ -270,13 +301,13 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   }, [availability]);
 
   // -------------------------------------------------------------
-  // 3. FILTERED DATASETS (Unified Filter State with normMes)
+  // 3. FILTERED DATASETS (Unified Filter State with normMes and normCd)
   // -------------------------------------------------------------
   // A) Intervenciones crudas (DISPONILIDAD)
   const filteredInterventions = useMemo(() => {
     return availability.filter(r => {
       if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
-      if (filters.cd !== 'all' && r.cd.toUpperCase().trim() !== filters.cd.toUpperCase().trim()) return false;
+      if (filters.cd !== 'all' && normCd(r.cd) !== normCd(filters.cd)) return false;
       
       // Normalized month matching
       if (filters.mes !== 'all') {
@@ -300,7 +331,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   const filteredPctRecords = useMemo(() => {
     return availabilityPct.filter(r => {
       if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
-      if (filters.cd !== 'all' && r.cd.toUpperCase().trim() !== filters.cd.toUpperCase().trim()) return false;
+      if (filters.cd !== 'all' && normCd(r.cd) !== normCd(filters.cd)) return false;
       
       // Normalized month matching
       if (filters.mes !== 'all') {
@@ -314,7 +345,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       // If filtered by a specific plate or system, filter to days/CDs where that plate/system had interventions
       if (filters.placa !== 'all' || filters.sistema !== 'all') {
         const matchesIntervention = filteredInterventions.some(inv => 
-          inv.fecha === r.fecha && inv.cd.toUpperCase().trim() === r.cd.toUpperCase().trim()
+          inv.fecha === r.fecha && normCd(inv.cd) === normCd(r.cd)
         );
         if (!matchesIntervention) return false;
       }
@@ -451,12 +482,16 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     });
   }, [filteredPctRecords]);
 
-  // C) Centro de Distribución (GALAPA vs LA ARENOSA) — Con División por Mes
+  // C) Centro de Distribución (GALAPA vs LA ARENOSA) — SIEMPRE AMBOS CD PRESENTES
   const cdData = useMemo(() => {
-    const map: Record<string, { total: number; disp: number; dailyTotals: Record<string, number> }> = {};
+    // Inicializar con ambos CD fijos para que nunca desaparezcan de la comparativa
+    const map: Record<string, { total: number; disp: number; dailyTotals: Record<string, number> }> = {
+      'GALAPA': { total: 0, disp: 0, dailyTotals: {} },
+      'LA ARENOSA': { total: 0, disp: 0, dailyTotals: {} }
+    };
 
     filteredPctRecords.forEach(r => {
-      const cd = (r.cd || 'OTRO').toUpperCase().trim();
+      const cd = normCd(r.cd) || 'OTRO';
       if (!map[cd]) map[cd] = { total: 0, disp: 0, dailyTotals: {} };
       map[cd].total += r.total || 0;
       map[cd].disp += r.disponibles || 0;
@@ -465,11 +500,19 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       }
     });
 
-    return Object.keys(map).sort().map(cd => {
+    const fixedOrder = ['GALAPA', 'LA ARENOSA'];
+    return Object.keys(map).sort((a, b) => {
+      const idxA = fixedOrder.indexOf(a);
+      const idxB = fixedOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    }).map(cd => {
       const item = map[cd];
       const pct = item.total > 0 ? Number(((item.disp / item.total) * 100).toFixed(1)) : 0;
       const daysCount = Object.keys(item.dailyTotals).length || 1;
-      const avgFlotaCd = Math.round(item.total / daysCount);
+      const avgFlotaCd = item.total > 0 ? Math.round(item.total / daysCount) : 0;
       return {
         name: cd,
         cd,
@@ -480,6 +523,11 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       };
     });
   }, [filteredPctRecords]);
+
+  // Diagnóstico rápido (consola) para depuración y verificación
+  console.log('PCT total:', availabilityPct.length);
+  console.log('CDs en PCT:', Array.from(new Set(availabilityPct.map(r => (r.cd||'').toUpperCase().trim()))));
+  console.log('filteredPct:', filteredPctRecords.length, 'cdData:', cdData);
 
   // C.2) Desglose mensual de CD (Meses en X, Galapa vs La Arenosa)
   const cdMonthlyBreakdown = useMemo(() => {
@@ -494,11 +542,11 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           ARENOSA: { disp: 0, total: 0 }
         };
       }
-      const cdNorm = (r.cd || '').toUpperCase();
-      if (cdNorm.includes('GALAPA')) {
+      const cdNorm = normCd(r.cd);
+      if (cdNorm === 'GALAPA') {
         monthsMap[m].GALAPA.disp += r.disponibles || 0;
         monthsMap[m].GALAPA.total += r.total || 0;
-      } else if (cdNorm.includes('ARENOSA')) {
+      } else if (cdNorm === 'LA ARENOSA') {
         monthsMap[m].ARENOSA.disp += r.disponibles || 0;
         monthsMap[m].ARENOSA.total += r.total || 0;
       }
@@ -585,7 +633,10 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
 
   // E) Días Indisponibles (Salida - Ingreso de taller, sin negativos)
   const daysInShopStats = useMemo(() => {
-    const cdDaysMap: Record<string, { totalDays: number; count: number }> = {};
+    const cdDaysMap: Record<string, { totalDays: number; count: number }> = {
+      'GALAPA': { totalDays: 0, count: 0 },
+      'LA ARENOSA': { totalDays: 0, count: 0 }
+    };
     const plateDaysMap: Record<string, { totalDays: number; count: number; cd: string }> = {};
 
     filteredInterventions.forEach(r => {
@@ -601,8 +652,8 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         dias = r.diasIndisponible;
       }
 
-      // Por CD
-      const cd = (r.cd || 'OTRO').toUpperCase().trim();
+      // Por CD (Normalizado a GALAPA y LA ARENOSA)
+      const cd = normCd(r.cd) || 'OTRO';
       if (!cdDaysMap[cd]) cdDaysMap[cd] = { totalDays: 0, count: 0 };
       cdDaysMap[cd].totalDays += dias;
       cdDaysMap[cd].count += 1;
@@ -616,7 +667,15 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       }
     });
 
-    const cdDaysList = Object.keys(cdDaysMap).sort().map(cd => {
+    const fixedOrder = ['GALAPA', 'LA ARENOSA'];
+    const cdDaysList = Object.keys(cdDaysMap).sort((a, b) => {
+      const idxA = fixedOrder.indexOf(a);
+      const idxB = fixedOrder.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    }).map(cd => {
       const item = cdDaysMap[cd];
       const avg = item.count > 0 ? Number((item.totalDays / item.count).toFixed(1)) : 0;
       return {
@@ -852,8 +911,8 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           <div className="space-y-1">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Centro (CD)</label>
             <select
-              value={filters.cd}
-              onChange={e => toggleFilter('cd', e.target.value)}
+              value={normCd(filters.cd) || 'all'}
+              onChange={e => setFilterValue('cd', e.target.value)}
               className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
             >
               <option value="all">Todos los CD</option>
@@ -867,8 +926,8 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           <div className="space-y-1">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Mes</label>
             <select
-              value={filters.mes}
-              onChange={e => toggleFilter('mes', e.target.value)}
+              value={filters.mes === 'all' ? 'all' : normMes(filters.mes)}
+              onChange={e => setFilterValue('mes', e.target.value)}
               className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
             >
               <option value="all">Todos los meses</option>
@@ -883,7 +942,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Semana</label>
             <select
               value={filters.semana}
-              onChange={e => toggleFilter('semana', e.target.value)}
+              onChange={e => setFilterValue('semana', e.target.value)}
               className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
             >
               <option value="all">Todas las semanas</option>
@@ -898,7 +957,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Contratista</label>
             <select
               value={filters.contratista}
-              onChange={e => toggleFilter('contratista', e.target.value)}
+              onChange={e => setFilterValue('contratista', e.target.value)}
               className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
             >
               <option value="all">Todos los contratistas</option>
@@ -913,7 +972,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sistema</label>
             <select
               value={filters.sistema}
-              onChange={e => toggleFilter('sistema', e.target.value)}
+              onChange={e => setFilterValue('sistema', e.target.value)}
               className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none"
             >
               <option value="all">Todos los sistemas</option>
@@ -931,12 +990,12 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 type="text"
                 placeholder={filters.placa === 'all' ? "Escribir placa..." : filters.placa}
                 value={filters.placa === 'all' ? '' : filters.placa}
-                onChange={e => toggleFilter('placa', e.target.value ? e.target.value.toUpperCase() : 'all')}
+                onChange={e => setFilterValue('placa', e.target.value ? e.target.value.toUpperCase() : 'all')}
                 className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-[#0D2B4E] outline-none uppercase"
               />
               {filters.placa !== 'all' && (
                 <button
-                  onClick={() => toggleFilter('placa', 'all')}
+                  onClick={() => setFilterValue('placa', 'all')}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
                   <X size={12} />
@@ -953,38 +1012,38 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             <span className="text-[11px] font-semibold text-slate-400">Filtros aplicados:</span>
             {filters.cd !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
-                CD: {filters.cd}
-                <button onClick={() => toggleFilter('cd', 'all')}><X size={11} /></button>
+                CD: {normCd(filters.cd)}
+                <button onClick={() => setFilterValue('cd', 'all')}><X size={11} /></button>
               </span>
             )}
             {filters.mes !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 text-xs font-bold border border-amber-200">
                 Mes: {normMes(filters.mes)}
-                <button onClick={() => toggleFilter('mes', 'all')}><X size={11} /></button>
+                <button onClick={() => setFilterValue('mes', 'all')}><X size={11} /></button>
               </span>
             )}
             {filters.semana !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
                 Semana: {filters.semana}
-                <button onClick={() => toggleFilter('semana', 'all')}><X size={11} /></button>
+                <button onClick={() => setFilterValue('semana', 'all')}><X size={11} /></button>
               </span>
             )}
             {filters.contratista !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
                 Contratista: {filters.contratista}
-                <button onClick={() => toggleFilter('contratista', 'all')}><X size={11} /></button>
+                <button onClick={() => setFilterValue('contratista', 'all')}><X size={11} /></button>
               </span>
             )}
             {filters.sistema !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-900 text-xs font-semibold border border-blue-200">
                 Sistema: {filters.sistema}
-                <button onClick={() => toggleFilter('sistema', 'all')}><X size={11} /></button>
+                <button onClick={() => setFilterValue('sistema', 'all')}><X size={11} /></button>
               </span>
             )}
             {filters.placa !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900 text-white font-mono text-xs font-semibold">
                 Placa: {filters.placa}
-                <button onClick={() => toggleFilter('placa', 'all')}><X size={11} /></button>
+                <button onClick={() => setFilterValue('placa', 'all')}><X size={11} /></button>
               </span>
             )}
             {!hasActiveFilters && (
@@ -1313,29 +1372,40 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             {filters.mes === 'all' && cdViewMode === 'por_mes' ? (
               // Vista Desglosada por Mes para Galapa y La Arenosa
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={cdMonthlyBreakdown} margin={{ top: 20, right: 15, left: -10, bottom: 10 }}>
+                <BarChart 
+                  data={cdMonthlyBreakdown} 
+                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload.length > 0) {
+                      const item = e.activePayload[0].payload;
+                      if (item && item.mes) {
+                        toggleFilter('mes', item.mes);
+                      }
+                    }
+                  }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
                   <XAxis dataKey="mes" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
-                  <YAxis domain={[80, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
                   <Tooltip 
                     formatter={(val: any, name: any) => [`${val}%`, name]}
                     contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
                   <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
-                  <Bar dataKey="GALAPA" name="GALAPA" fill="#0D2B4E" radius={[4, 4, 0, 0]} maxBarSize={16}>
+                  <Bar dataKey="GALAPA" name="GALAPA" fill="#0D2B4E" radius={[4, 4, 0, 0]} maxBarSize={16} cursor="pointer" minPointSize={4}>
                     <LabelList 
                       dataKey="GALAPA" 
                       position="top" 
-                      formatter={(v: any) => v > 0 ? `${v}%` : ''}
+                      formatter={(v: any) => v > 0 ? `${v}%` : '0%'}
                       style={{ fontSize: '8px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                     />
                   </Bar>
-                  <Bar dataKey="LA ARENOSA" name="LA ARENOSA" fill="#3E5A78" radius={[4, 4, 0, 0]} maxBarSize={16}>
+                  <Bar dataKey="LA ARENOSA" name="LA ARENOSA" fill="#3E5A78" radius={[4, 4, 0, 0]} maxBarSize={16} cursor="pointer" minPointSize={4}>
                     <LabelList 
                       dataKey="LA ARENOSA" 
                       position="top" 
-                      formatter={(v: any) => v > 0 ? `${v}%` : ''}
+                      formatter={(v: any) => v > 0 ? `${v}%` : '0%'}
                       style={{ fontSize: '8px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                     />
                   </Bar>
@@ -1356,7 +1426,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: PALETTE.grisOscuro, fontWeight: 700 }} />
-                  <YAxis domain={[80, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
+                  <YAxis domain={[cdData.some(d => d.disponibilidad === 0) ? 0 : 70, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
                   <Tooltip 
                     formatter={(val: any, _: any, p: any) => [
                       `${val}% (Flota prom: ${p.payload.avgFlota} vehíc.)`, 
@@ -1365,7 +1435,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                     contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                   />
                   <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
-                  <Bar dataKey="disponibilidad" radius={[6, 6, 0, 0]} maxBarSize={55} cursor="pointer">
+                  <Bar dataKey="disponibilidad" radius={[6, 6, 0, 0]} maxBarSize={55} cursor="pointer" minPointSize={6}>
                     <LabelList 
                       dataKey="disponibilidad" 
                       position="top" 
@@ -1373,7 +1443,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                       style={{ fontSize: '11px', fontWeight: '800', fill: PALETTE.grisOscuro }} 
                     />
                     {cdData.map((entry, index) => {
-                      const isSelected = filters.cd === entry.name;
+                      const isSelected = normCd(filters.cd) === normCd(entry.name);
                       return (
                         <Cell 
                           key={`cell-cd-${index}`} 
@@ -1434,7 +1504,18 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             {filters.mes === 'all' && contractorViewMode === 'por_mes' ? (
               // Vista Desglose Mensual por Contratista
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={contractorMonthlyBreakdown.rows} margin={{ top: 20, right: 15, left: -10, bottom: 10 }}>
+                <BarChart 
+                  data={contractorMonthlyBreakdown.rows} 
+                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload.length > 0) {
+                      const item = e.activePayload[0].payload;
+                      if (item && item.mes) {
+                        toggleFilter('mes', item.mes);
+                      }
+                    }
+                  }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
                   <XAxis dataKey="mes" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
                   <YAxis domain={[80, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
@@ -1527,7 +1608,16 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               </span>
               <div className="h-[210px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={daysInShopStats.cdDaysList} margin={{ top: 20, right: 15, left: -15, bottom: 5 }}>
+                  <BarChart 
+                    data={daysInShopStats.cdDaysList} 
+                    margin={{ top: 20, right: 15, left: -15, bottom: 5 }}
+                    onClick={(e: any) => {
+                      if (e && e.activePayload && e.activePayload.length > 0) {
+                        const item = e.activePayload[0].payload;
+                        toggleFilter('cd', item.name);
+                      }
+                    }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: PALETTE.grisOscuro, fontWeight: 700 }} />
                     <YAxis tick={{ fontSize: 9, fill: PALETTE.grisTexto }} unit=" d" />
@@ -1538,7 +1628,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                       ]}
                       contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                     />
-                    <Bar dataKey="promedioDias" fill={PALETTE.azulOscuro} radius={[5, 5, 0, 0]} maxBarSize={40}>
+                    <Bar dataKey="promedioDias" fill={PALETTE.azulOscuro} radius={[5, 5, 0, 0]} maxBarSize={40} cursor="pointer" minPointSize={4}>
                       <LabelList 
                         dataKey="promedioDias" 
                         position="top" 
@@ -1548,7 +1638,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                       {daysInShopStats.cdDaysList.map((entry, index) => (
                         <Cell 
                           key={`cell-cddays-${index}`} 
-                          fill={filters.cd === entry.name ? PALETTE.doradoActivo : getCdColor(entry.name)} 
+                          fill={normCd(filters.cd) === normCd(entry.name) ? PALETTE.doradoActivo : getCdColor(entry.name)} 
                         />
                       ))}
                     </Bar>
@@ -1658,7 +1748,18 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             {filters.mes === 'all' && systemViewMode === 'por_mes' ? (
               // Vista Desglose Mensual de Sistemas
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={systemMonthlyBreakdown.rows} margin={{ top: 20, right: 15, left: -10, bottom: 10 }}>
+                <BarChart 
+                  data={systemMonthlyBreakdown.rows} 
+                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
+                  onClick={(e: any) => {
+                    if (e && e.activePayload && e.activePayload.length > 0) {
+                      const item = e.activePayload[0].payload;
+                      if (item && item.mes) {
+                        toggleFilter('mes', item.mes);
+                      }
+                    }
+                  }}
+                >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
                   <XAxis dataKey="mes" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
                   <YAxis tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
