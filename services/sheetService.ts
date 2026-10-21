@@ -2873,7 +2873,8 @@ const processForkliftPreventiveRows = (rows: any[][]): ForkliftPreventive[] => {
   if (!rows || rows.length <= 1) return [];
 
   return rows.slice(1)
-    .filter(row => {
+    .map((row, idx) => ({ row, rowIndex: idx + 2 }))
+    .filter(({ row }) => {
       if (!row || !Array.isArray(row)) return false;
       const maquina = sanitizePreventiveCell(row[0]).trim();
       const fecha = sanitizePreventiveCell(row[6]).trim();
@@ -2882,7 +2883,7 @@ const processForkliftPreventiveRows = (rows: any[][]): ForkliftPreventive[] => {
       if (maquina.toUpperCase().includes('MÁQUINA') || maquina.toUpperCase().includes('MAQUINA')) return false;
       return true;
     })
-    .map((row, i): ForkliftPreventive => {
+    .map(({ row, rowIndex }, i): ForkliftPreventive => {
       const maquina = sanitizePreventiveCell(row[0]).trim();
       const cdRaw = sanitizePreventiveCell(row[1]).trim();
       let cd = cdRaw;
@@ -2978,6 +2979,7 @@ const processForkliftPreventiveRows = (rows: any[][]): ForkliftPreventive[] => {
 
       return {
         id: `prev-flt-${maquina}-${(fechaIso || rawFecha).replace(/[^a-zA-Z0-9]/g, '')}-${i}`,
+        rowIndex,
         maquina,
         cd,
         tipo,
@@ -3002,6 +3004,72 @@ const processForkliftPreventiveRows = (rows: any[][]): ForkliftPreventive[] => {
         evidencia: evidencia || undefined
       };
     });
+};
+
+/**
+ * Registra o actualiza la evidencia fotográfica de un mantenimiento preventivo de montacargas
+ * en la columna Q (17, 1-based = EVIDENCIAS).
+ */
+export const submitForkliftPreventiveEvidence = async (payload: {
+  rowIndex?: number;
+  maquina: string;
+  fecha: string;
+  imageBase64?: string;
+  link?: string;
+}): Promise<{ success: boolean; link: string }> => {
+  let finalLink = (payload.link || '').trim();
+  const rawBase64 = payload.imageBase64 || (finalLink.startsWith('data:image') ? finalLink : '');
+
+  if (rawBase64) {
+    const fileName = `EVIDENCIA_PREVENTIVO_MTC_${(payload.maquina || 'MTC').replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}`;
+    try {
+      const driveUrl = await uploadImageToDrive(rawBase64, fileName);
+      if (driveUrl && driveUrl.startsWith('http')) {
+        finalLink = driveUrl;
+      }
+    } catch (e) {
+      console.warn('uploadImageToDrive client falló, intentando envío directo al Apps Script:', e);
+    }
+  }
+
+  if (!finalLink && rawBase64) {
+    finalLink = rawBase64;
+  }
+
+  const reqData = {
+    method: 'POST_PREVENTIVO_MONTACARGAS_EVIDENCIA',
+    data: {
+      docId: FORKLIFT_PREVENTIVES_DOC_ID,
+      sheetName: 'PREVENTIVOS',
+      rowIndex: payload.rowIndex,
+      maquina: payload.maquina,
+      fecha: payload.fecha,
+      link: finalLink,
+      evidencia: finalLink,
+      imageBase64: rawBase64 || undefined
+    }
+  };
+
+  try {
+    const scriptUrl = getGoogleScriptUrl() || DEFAULT_WORKING_SCRIPT_URL;
+    const result = await sendToGAS(reqData, scriptUrl, true);
+    if (result && typeof result === 'object') {
+      const returnedLink = (result as any).link || (result as any).url || (result as any).data;
+      if (returnedLink && typeof returnedLink === 'string' && returnedLink.startsWith('http')) {
+        finalLink = returnedLink;
+      }
+    }
+  } catch (err) {
+    console.warn('Fallback sin cors para evidencia de preventivo montacargas:', err);
+    try {
+      const scriptUrl = getGoogleScriptUrl() || DEFAULT_WORKING_SCRIPT_URL;
+      await sendToGAS(reqData, scriptUrl, false);
+    } catch (e) {
+      // Ignorar error de red si se transmitió
+    }
+  }
+
+  return { success: true, link: finalLink };
 };
 
 export const submitCorrectiveUpdateToSheet = async (data: any): Promise<{success: boolean, message?: string}> => { 

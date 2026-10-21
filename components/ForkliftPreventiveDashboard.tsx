@@ -1,14 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { ForkliftPreventive } from '../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   Line, ComposedChart, Legend, Cell, LabelList
 } from 'recharts';
 import { 
-  CheckCircle2, XCircle, Search, Filter, RotateCcw, 
+  CheckCircle2, XCircle, Search, RotateCcw, 
   Truck, Calendar, Layers, ChevronLeft, ChevronRight,
-  TrendingUp, FileSpreadsheet, ExternalLink, Clock, Gauge
+  TrendingUp, Download, Clock, Gauge, Camera, Upload, 
+  Image as ImageIcon, X, Loader2, Sparkles, AlertCircle, ExternalLink
 } from 'lucide-react';
+import { submitForkliftPreventiveEvidence } from '../services/sheetService';
+import { compressImageToBase64 } from '../utils';
 
 interface Props {
   data: ForkliftPreventive[];
@@ -40,6 +43,13 @@ const formatFechaCorta = (fechaVal?: string, isoVal?: string): string => {
 };
 
 export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }) => {
+  // Estado local para permitir actualización optimista al subir evidencias
+  const [localData, setLocalData] = useState<ForkliftPreventive[]>(data);
+
+  useEffect(() => {
+    setLocalData(data);
+  }, [data]);
+
   // ---------------------------------------------------------------------------
   // ESTADOS DE FILTRO (Multifiltro)
   // ---------------------------------------------------------------------------
@@ -51,82 +61,201 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
   const [filterCumplimiento, setFilterCumplimiento] = useState<string>('TODOS');
   const [searchMaquina, setSearchMaquina] = useState<string>('');
 
-  // Vista de top máquinas
-  const [topMaquinasLimit, setTopMaquinasLimit] = useState<number>(15);
+  // Límite para la gráfica de frecuencia por máquina (columnas verticales)
+  const [topMaquinasLimit, setTopMaquinasLimit] = useState<number | 'todas'>(15);
 
   // Paginación de la tabla
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 15;
 
+  // Estados de Evidencias (Modales)
+  const [uploadRecord, setUploadRecord] = useState<ForkliftPreventive | null>(null);
+  const [previewRecord, setPreviewRecord] = useState<ForkliftPreventive | null>(null);
+  const [selectedImageBase64, setSelectedImageBase64] = useState<string>('');
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Escucha de pegado (Ctrl+V) en ventana cuando el modal de subida esté abierto
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (!uploadRecord) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            try {
+              const compressed = await compressImageToBase64(file, 1600);
+              setSelectedImageBase64(compressed);
+              setUploadError(null);
+            } catch (err) {
+              setUploadError('Error al procesar la imagen pegada.');
+            }
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [uploadRecord]);
+
+  // Manejo de drag & drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith('image/')) {
+        try {
+          const compressed = await compressImageToBase64(file, 1600);
+          setSelectedImageBase64(compressed);
+          setUploadError(null);
+        } catch (err) {
+          setUploadError('Error al procesar el archivo arrastrado.');
+        }
+      } else {
+        setUploadError('Por favor arrastra únicamente un archivo de imagen.');
+      }
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressed = await compressImageToBase64(file, 1600);
+        setSelectedImageBase64(compressed);
+        setUploadError(null);
+      } catch (err) {
+        setUploadError('Error al procesar la imagen seleccionada.');
+      }
+    }
+  };
+
+  const handleSaveEvidence = async () => {
+    if (!uploadRecord || !selectedImageBase64) return;
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    const targetId = uploadRecord.id;
+    const oldEvidencia = uploadRecord.evidencia;
+
+    // Actualización optimista inmediata
+    setLocalData(prev => prev.map(item => {
+      if (item.id === targetId) {
+        return { ...item, evidencia: selectedImageBase64 };
+      }
+      return item;
+    }));
+
+    try {
+      const res = await submitForkliftPreventiveEvidence({
+        rowIndex: uploadRecord.rowIndex,
+        maquina: uploadRecord.maquina,
+        fecha: uploadRecord.fecha,
+        imageBase64: selectedImageBase64
+      });
+
+      if (res && res.link) {
+        setLocalData(prev => prev.map(item => {
+          if (item.id === targetId) {
+            return { ...item, evidencia: res.link };
+          }
+          return item;
+        }));
+      }
+
+      setUploadRecord(null);
+      setSelectedImageBase64('');
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      // Revertir optimismo en caso de error
+      setLocalData(prev => prev.map(item => {
+        if (item.id === targetId) {
+          return { ...item, evidencia: oldEvidencia };
+        }
+        return item;
+      }));
+      setUploadError(err?.message || 'Error al guardar la evidencia. Inténtalo nuevamente.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   // ---------------------------------------------------------------------------
-  // OPCIONES ÚNICAS PARA LOS SELECTORES (Datos reales de la hoja)
+  // OPCIONES DISPONIBLES EN FILTROS
   // ---------------------------------------------------------------------------
   const availableOptions = useMemo(() => {
     const cds = new Set<string>();
-    const meses = new Set<string>();
-    const semanasMap = new Map<string, number>();
+    const mesesMap = new Map<string, string>();
+    const semanas = new Set<string>();
     const tipos = new Set<string>();
     const maquinas = new Set<string>();
 
-    data.forEach(item => {
+    localData.forEach(item => {
       if (item.cd && item.cd !== '—') cds.add(item.cd);
-      if (item.mes && item.mes !== 'Sin Mes' && item.mes !== '—') meses.add(item.mes);
-      if (item.semana && item.semana !== '—') {
-        semanasMap.set(item.semana, item.semanaNumero || 0);
+      if (item.mes && item.mes !== '—' && item.mes !== 'Sin Mes') {
+        const norm = normalizaMes(item.mes);
+        if (!mesesMap.has(norm)) {
+          mesesMap.set(norm, item.mes);
+        }
       }
+      if (item.semana && item.semana !== '—') semanas.add(item.semana);
       if (item.tipo && item.tipo !== '—') tipos.add(item.tipo);
       if (item.maquina && item.maquina !== '—') maquinas.add(item.maquina);
     });
 
-    // Orden cronológico de meses (enero a diciembre)
-    const sortedMeses = Array.from(meses).sort((a, b) => {
-      const idxA = ORDEN_MESES.indexOf(normalizaMes(a));
-      const idxB = ORDEN_MESES.indexOf(normalizaMes(b));
-      return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
-    });
+    const mesesOrdenados = Array.from(mesesMap.entries())
+      .sort((a, b) => {
+        const idxA = ORDEN_MESES.indexOf(a[0]);
+        const idxB = ORDEN_MESES.indexOf(b[0]);
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+      })
+      .map(entry => entry[1]);
 
-    const sortedSemanas = Array.from(semanasMap.entries())
-      .sort((a, b) => a[1] - b[1])
-      .map(entry => entry[0]);
-
-    // Orden tipos por horas ascendente
-    const sortedTipos = Array.from(tipos).sort((a, b) => {
+    const semanasOrdenadas = Array.from(semanas).sort((a, b) => {
       const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
       const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
       return numA - numB;
     });
 
-    const sortedMaquinas = Array.from(maquinas).sort((a, b) => {
-      const numA = parseInt(a.replace(/\D/g, ''), 10);
-      const numB = parseInt(b.replace(/\D/g, ''), 10);
-      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-      return a.localeCompare(b);
+    const tiposOrdenados = Array.from(tipos).sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
     });
 
-    const sortedCds = Array.from(cds).sort();
+    const maquinasOrdenadas = Array.from(maquinas).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
     return {
-      cds: sortedCds,
-      meses: sortedMeses,
-      semanas: sortedSemanas,
-      tipos: sortedTipos,
-      maquinas: sortedMaquinas
+      cds: Array.from(cds).sort(),
+      meses: mesesOrdenados,
+      semanas: semanasOrdenadas,
+      tipos: tiposOrdenados,
+      maquinas: maquinasOrdenadas
     };
-  }, [data]);
+  }, [localData]);
 
-  // Contador de filtros activos
-  const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (filterCd !== 'TODOS') count++;
-    if (filterMes !== 'TODOS') count++;
-    if (filterSemana !== 'TODOS') count++;
-    if (filterTipo !== 'TODOS') count++;
-    if (filterMaquina !== 'TODOS') count++;
-    if (filterCumplimiento !== 'TODOS') count++;
-    if (searchMaquina.trim() !== '') count++;
-    return count;
-  }, [filterCd, filterMes, filterSemana, filterTipo, filterMaquina, filterCumplimiento, searchMaquina]);
-
+  // Limpieza general de filtros
   const handleResetFilters = () => {
     setFilterCd('TODOS');
     setFilterMes('TODOS');
@@ -138,7 +267,16 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
     setCurrentPage(1);
   };
 
-  // Helper para filtros cruzados al interactuar con las gráficas
+  const hasActiveFilters = 
+    filterCd !== 'TODOS' || 
+    filterMes !== 'TODOS' || 
+    filterSemana !== 'TODOS' || 
+    filterTipo !== 'TODOS' || 
+    filterMaquina !== 'TODOS' || 
+    filterCumplimiento !== 'TODOS' || 
+    searchMaquina.trim() !== '';
+
+  // Filtros cruzados interactivos desde gráficos
   const handleToggleFilter = (type: 'cd' | 'mes' | 'semana' | 'tipo' | 'maquina', value: string) => {
     setCurrentPage(1);
     switch (type) {
@@ -166,67 +304,90 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
   const filteredData = useMemo(() => {
     const cleanSearch = searchMaquina.trim().toUpperCase();
 
-    return data.filter(item => {
-      // Búsqueda por máquina
+    return localData.filter(item => {
       if (cleanSearch && !item.maquina.toUpperCase().includes(cleanSearch)) {
         return false;
       }
-      // Filtro CD
       if (filterCd !== 'TODOS' && item.cd !== filterCd) {
         return false;
       }
-      // Filtro Mes (normalizado)
       if (filterMes !== 'TODOS' && normalizaMes(item.mes) !== normalizaMes(filterMes)) {
         return false;
       }
-      // Filtro Semana
       if (filterSemana !== 'TODOS' && item.semana !== filterSemana) {
         return false;
       }
-      // Filtro Tipo
       if (filterTipo !== 'TODOS' && item.tipo !== filterTipo) {
         return false;
       }
-      // Filtro Máquina
       if (filterMaquina !== 'TODOS' && item.maquina !== filterMaquina) {
         return false;
       }
-      // Filtro Cumplimiento
       if (filterCumplimiento !== 'TODOS') {
         if (filterCumplimiento === '100%' && !item.esCumple) return false;
         if (filterCumplimiento === '0%' && item.esCumple) return false;
       }
       return true;
     });
-  }, [data, filterCd, filterMes, filterSemana, filterTipo, filterMaquina, filterCumplimiento, searchMaquina]);
+  }, [localData, filterCd, filterMes, filterSemana, filterTipo, filterMaquina, filterCumplimiento, searchMaquina]);
 
   // ---------------------------------------------------------------------------
-  // 3.1 CÁLCULO DE KPIS (VALIDACIÓN CUMPLIMIENTO: 100% CUMPLE vs 0% NO CUMPLE)
+  // 3.1 CÁLCULO DE KPIS
   // ---------------------------------------------------------------------------
   const kpis = useMemo(() => {
     const total = filteredData.length;
     let cumple = 0;
     let noCumple = 0;
+    let sumConfiabilidad = 0;
+    let countConfiabilidad = 0;
+    let sumDesviacion = 0;
+    let countDesviacion = 0;
+    let conEvidencia = 0;
 
     filteredData.forEach(item => {
       if (item.cumplimiento === '100%') cumple++;
       else if (item.cumplimiento === '0%') noCumple++;
+
+      if (item.confiabilidad && item.confiabilidad !== '—') {
+        const num = parseFloat(String(item.confiabilidad).replace('%', '').trim());
+        if (!isNaN(num)) {
+          sumConfiabilidad += num;
+          countConfiabilidad++;
+        }
+      }
+
+      if (item.desviacion && item.desviacion !== '—') {
+        const num = parseFloat(String(item.desviacion).replace(/[^\d.-]/g, ''));
+        if (!isNaN(num)) {
+          sumDesviacion += num;
+          countDesviacion++;
+        }
+      }
+
+      if (item.evidencia && item.evidencia.trim()) {
+        conEvidencia++;
+      }
     });
 
     const totalClasificado = cumple + noCumple;
-    const porcentaje = totalClasificado > 0 ? (cumple / totalClasificado) * 100 : 0;
+    const porcentaje = totalClasificado > 0 ? Math.round((cumple / totalClasificado) * 100) : 0;
+    const avgConfiabilidad = countConfiabilidad > 0 ? Math.round(sumConfiabilidad / countConfiabilidad) : 0;
+    const avgDesviacion = countDesviacion > 0 ? Math.round(sumDesviacion / countDesviacion) : 0;
 
     return {
       total,
       cumple,
       noCumple,
       porcentaje,
+      avgConfiabilidad,
+      avgDesviacion,
+      conEvidencia,
       sinClasificar: total - totalClasificado
     };
   }, [filteredData]);
 
   // ---------------------------------------------------------------------------
-  // 3.2 GRÁFICA MENSUAL (Agrupada por MES idx 3 en orden cronológico)
+  // 3.2 GRÁFICA MENSUAL (Enero a Diciembre cronológico)
   // ---------------------------------------------------------------------------
   const monthlyData = useMemo(() => {
     const map = new Map<string, { clave: string; mes: string; mesNumero: number; cumple: number; noCumple: number; total: number }>();
@@ -263,7 +424,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
   }, [filteredData]);
 
   // ---------------------------------------------------------------------------
-  // 3.3 GRÁFICA SEMANAL (Por Semana, orden numérico)
+  // 3.3 GRÁFICA SEMANAL
   // ---------------------------------------------------------------------------
   const weeklyData = useMemo(() => {
     const map = new Map<string, { semana: string; num: number; cumple: number; noCumple: number; total: number }>();
@@ -294,7 +455,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
   }, [filteredData]);
 
   // ---------------------------------------------------------------------------
-  // 3.4 REFERENCIA POR CD (Centro Logístico)
+  // 3.4 REFERENCIA POR CD
   // ---------------------------------------------------------------------------
   const cdData = useMemo(() => {
     const map = new Map<string, { cd: string; cumple: number; noCumple: number; total: number }>();
@@ -314,7 +475,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
       .sort((a, b) => b.total - a.total)
       .map(entry => {
         const totalCumpl = entry.cumple + entry.noCumple;
-        const pct = totalCumpl > 0 ? Number(((entry.cumple / totalCumpl) * 100).toFixed(1)) : 0;
+        const pct = totalCumpl > 0 ? Math.round((entry.cumple / totalCumpl) * 100) : 0;
         return {
           ...entry,
           porcentaje: pct
@@ -323,7 +484,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
   }, [filteredData]);
 
   // ---------------------------------------------------------------------------
-  // 3.5 GRÁFICA POR TIPO DE MANTENIMIENTO (250, 500, 750, 1000, 2000 hr)
+  // 3.5 POR TIPO DE MANTENIMIENTO (250, 500, 750, 1000, 2000 hr)
   // ---------------------------------------------------------------------------
   const typeData = useMemo(() => {
     const map = new Map<string, { tipo: string; numHours: number; cumple: number; noCumple: number; total: number }>();
@@ -354,18 +515,17 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
   }, [filteredData]);
 
   // ---------------------------------------------------------------------------
-  // 3.6 FRECUENCIA DE INGRESO POR MÁQUINA (Barras VERTICALES)
+  // 3.6 FRECUENCIA POR MÁQUINA (Barras VERTICALES)
   // ---------------------------------------------------------------------------
   const machinesData = useMemo(() => {
     const map = new Map<string, { maquina: string; count: number; cd: string; cumple: number; noCumple: number }>();
 
     filteredData.forEach(item => {
-      const m = item.maquina;
-      if (!m) return;
-      if (!map.has(m)) {
-        map.set(m, { maquina: m, count: 0, cd: item.cd || '—', cumple: 0, noCumple: 0 });
+      const maq = item.maquina || 'Sin Máquina';
+      if (!map.has(maq)) {
+        map.set(maq, { maquina: maq, count: 0, cd: item.cd || '—', cumple: 0, noCumple: 0 });
       }
-      const entry = map.get(m)!;
+      const entry = map.get(maq)!;
       entry.count++;
       if (item.esCumple) entry.cumple++;
       else entry.noCumple++;
@@ -374,41 +534,52 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [filteredData]);
 
-  const displayedMachinesData = useMemo(() => {
-    if (topMaquinasLimit === 0) return machinesData;
+  const displayedMachines = useMemo(() => {
+    if (topMaquinasLimit === 'todas') return machinesData;
     return machinesData.slice(0, topMaquinasLimit);
   }, [machinesData, topMaquinasLimit]);
 
   // ---------------------------------------------------------------------------
-  // 3.7 RESUMEN DE DESVIACIÓN Y CONFIABILIDAD
+  // 3.7 GRÁFICA DE CONFIABILIDAD DEL PREVENTIVO (Columna O = idx 14)
+  // Promedio mensual en orden cronológico enero → diciembre
   // ---------------------------------------------------------------------------
-  const metricsSummary = useMemo(() => {
-    let sumDesviacion = 0;
-    let countDesviacion = 0;
-    let sumConfiabilidad = 0;
-    let countConfiabilidad = 0;
+  const reliabilityMonthlyData = useMemo(() => {
+    const map = new Map<string, { clave: string; mes: string; mesNumero: number; sumConf: number; countConf: number; total: number }>();
 
     filteredData.forEach(item => {
-      if (item.desviacion && item.desviacion !== '—') {
-        const num = parseFloat(String(item.desviacion).replace(/[^\d.-]/g, ''));
-        if (!isNaN(num)) {
-          sumDesviacion += num;
-          countDesviacion++;
-        }
+      const raw = item.mes || '';
+      const norm = normalizaMes(raw);
+      const idxMes = ORDEN_MESES.indexOf(norm);
+      const mesNum = idxMes !== -1 ? idxMes + 1 : (item.mesNumero || 99);
+      const clave = String(mesNum).padStart(2, '0');
+      const mesLabel = idxMes !== -1 
+        ? (norm.charAt(0).toUpperCase() + norm.slice(1)) 
+        : (item.mes && item.mes !== 'Sin Mes' && item.mes !== '—' ? item.mes : '—');
+
+      if (!map.has(clave)) {
+        map.set(clave, { clave, mes: mesLabel, mesNumero: mesNum, sumConf: 0, countConf: 0, total: 0 });
       }
+      const entry = map.get(clave)!;
+      entry.total++;
+
       if (item.confiabilidad && item.confiabilidad !== '—') {
-        const num = parseFloat(String(item.confiabilidad).replace(/[^\d.-]/g, ''));
+        const num = parseFloat(String(item.confiabilidad).replace('%', '').trim());
         if (!isNaN(num)) {
-          sumConfiabilidad += num;
-          countConfiabilidad++;
+          entry.sumConf += num;
+          entry.countConf++;
         }
       }
     });
 
-    return {
-      avgDesviacion: countDesviacion > 0 ? (sumDesviacion / countDesviacion).toFixed(1) : '—',
-      avgConfiabilidad: countConfiabilidad > 0 ? Math.round(sumConfiabilidad / countConfiabilidad) : '—'
-    };
+    return Array.from(map.values())
+      .sort((a, b) => a.mesNumero - b.mesNumero)
+      .map(entry => {
+        const confPromedio = entry.countConf > 0 ? Math.round(entry.sumConf / entry.countConf) : 0;
+        return {
+          ...entry,
+          confiabilidad: confPromedio
+        };
+      });
   }, [filteredData]);
 
   // ---------------------------------------------------------------------------
@@ -434,7 +605,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
       'FECHA', 'PROX_MTTO_HR', 'HOROMETRO_REGISTRADO', 
       'VALIDACION_CUMPLIMIENTO', 'META', 'DESVIACION', 
       'RUTINAS_PLANEADAS', 'RUTINAS_EJECUTADAS', 'CONFIABILIDAD', 
-      'OBSERVACION', 'EVIDENCIA'
+      'OBSERVACION', 'EVIDENCIAS'
     ];
     const rows = filteredData.map(p => [
       p.maquina, p.cd, p.tipo, p.mes, p.anio, p.semana,
@@ -448,94 +619,79 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Preventivos_Montacargas_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `preventivos_montacargas_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B] p-4 md:p-8 space-y-6">
+    <div className="space-y-6">
 
       {/* --------------------------------------------------------------------- */}
-      {/* HEADER PRINCIPAL                                                      */}
+      {/* CABECERA PRINCIPAL                                                    */}
       {/* --------------------------------------------------------------------- */}
-      <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-[#1E293B] tracking-tight">
-            Mantenimientos Preventivos — Montacargas
-          </h1>
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#16A34A]" />
+            <h1 className="text-xl font-bold text-[#1E293B] tracking-tight">
+              Preventivos Montacargas
+            </h1>
+          </div>
+          <p className="text-xs text-[#64748B] mt-1">
+            Análisis de cumplimiento y confiabilidad de mantenimientos ejecutados
+          </p>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start md:self-center shrink-0">
+        <div className="flex items-center gap-2">
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#F8FAFC] border border-[#E2E8F0] hover:bg-slate-100 text-[#1E293B] transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-[#64748B]" />
+              <span>Sincronizar</span>
+            </button>
+          )}
+
           <button
             onClick={handleExportCSV}
             disabled={filteredData.length === 0}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white border border-[#E2E8F0] text-[#1E293B] hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
-            title="Exportar registros filtrados a CSV"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-[#2563EB] hover:bg-blue-700 disabled:opacity-50 text-white transition-colors cursor-pointer shadow-sm"
           >
-            <FileSpreadsheet className="w-4 h-4 text-[#16A34A]" />
+            <Download className="w-3.5 h-3.5" />
             <span>Exportar CSV</span>
           </button>
         </div>
       </div>
 
       {/* --------------------------------------------------------------------- */}
-      {/* 4. BARRA DE MULTIFILTRO                                              */}
+      {/* 4. BARRA DE MULTIFILTRO (SIEMPRE VISIBLE)                              */}
       {/* --------------------------------------------------------------------- */}
       <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-[#2563EB]" />
-            <h2 className="text-sm font-bold text-[#1E293B]">
+            <span className="text-xs font-bold text-[#1E293B] uppercase tracking-wider">
               Filtros de Análisis
-            </h2>
-            {activeFiltersCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-[#2563EB]">
-                {activeFiltersCount} activo{activeFiltersCount > 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-[#64748B]">
-              Mostrando <strong className="text-[#1E293B]">{filteredData.length}</strong> de <strong className="text-[#1E293B]">{data.length}</strong> preventivos ejecutados
             </span>
-
-            {activeFiltersCount > 0 && (
-              <button
-                onClick={handleResetFilters}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#DC2626] bg-rose-50 hover:bg-rose-100 transition-colors cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Limpiar filtros</span>
-              </button>
-            )}
+            <span className="text-xs font-medium text-[#64748B]">
+              (Mostrando {filteredData.length} de {localData.length} registros)
+            </span>
           </div>
+
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="inline-flex items-center gap-1.5 text-xs text-[#2563EB] hover:text-blue-800 font-semibold cursor-pointer self-start sm:self-auto"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Limpiar filtros</span>
+            </button>
+          )}
         </div>
 
-        {/* Rejilla de Filtros */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
-
-          {/* Búsqueda por máquina */}
-          <div>
-            <label className="block text-[11px] font-semibold text-[#64748B] mb-1 uppercase tracking-wider">
-              No Máquina
-            </label>
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchMaquina}
-                onChange={(e) => {
-                  setSearchMaquina(e.target.value);
-                  setCurrentPage(1);
-                }}
-                placeholder="Buscar máquina..."
-                className="w-full pl-8 pr-2.5 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-semibold placeholder:text-slate-400 focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors uppercase"
-              />
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
 
           {/* Filtro CD */}
           <div>
@@ -650,17 +806,40 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
               }}
               className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-medium focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors"
             >
-              <option value="TODOS">Todos</option>
-              <option value="100%">100% CUMPLE</option>
-              <option value="0%">0% NO CUMPLE</option>
+              <option value="TODOS">Todos los Estados</option>
+              <option value="100%">100% (Cumple)</option>
+              <option value="0%">0% (No Cumple)</option>
             </select>
           </div>
 
         </div>
+
+        {/* Búsqueda rápida por texto de máquina */}
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#64748B]" />
+          <input
+            type="text"
+            placeholder="Buscar por identificador de máquina (ej. 861, 865, CP3)..."
+            value={searchMaquina}
+            onChange={(e) => {
+              setSearchMaquina(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full pl-10 pr-4 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] font-medium focus:outline-none focus:border-[#2563EB] focus:bg-white transition-colors"
+          />
+          {searchMaquina && (
+            <button
+              onClick={() => setSearchMaquina('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
 
       {/* --------------------------------------------------------------------- */}
-      {/* 3.1 TARJETAS KPI (ARRIBA)                                             */}
+      {/* 3.1 TARJETAS KPI (4 TARJETAS)                                         */}
       {/* --------------------------------------------------------------------- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
@@ -683,7 +862,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
             </span>
           </div>
           <p className="text-xs text-[#64748B] mt-2">
-            {kpis.total > 0 ? ((kpis.cumple / kpis.total) * 100).toFixed(1) : 0}% de los preventivos filtrados
+            {kpis.total > 0 ? Math.round((kpis.cumple / kpis.total) * 100) : 0}% de los preventivos filtrados
           </p>
           <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
             <div 
@@ -712,7 +891,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
             </span>
           </div>
           <p className="text-xs text-[#64748B] mt-2">
-            {kpis.total > 0 ? ((kpis.noCumple / kpis.total) * 100).toFixed(1) : 0}% con desvío en criterio
+            {kpis.total > 0 ? Math.round((kpis.noCumple / kpis.total) * 100) : 0}% con desvío en criterio
           </p>
           <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
             <div 
@@ -738,7 +917,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
             <span className={`text-3xl font-black ${
               kpis.porcentaje >= 80 ? 'text-[#16A34A]' : (kpis.porcentaje >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]')
             }`}>
-              {kpis.porcentaje.toFixed(1)}%
+              {Math.round(kpis.porcentaje)}%
             </span>
             <span className="text-xs text-[#64748B]">
               efectividad
@@ -758,32 +937,32 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
           </div>
         </div>
 
-        {/* 4. TOTAL PREVENTIVOS */}
+        {/* 4. CONFIABILIDAD PROMEDIO (COLUMNA O) */}
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-[#64748B] uppercase tracking-wider">
-              Total Preventivos Ejecutados
+              Confiabilidad Promedio
             </span>
             <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#2563EB] flex items-center justify-center">
-              <Truck className="w-5 h-5" />
+              <Gauge className="w-5 h-5" />
             </div>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black text-[#1E293B]">
-              {kpis.total}
+              {kpis.avgConfiabilidad}%
             </span>
             <span className="text-xs text-[#64748B]">
-              registros
+              del preventivo
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-[#64748B] mt-2">
-            <span>Desviación media: <strong>{metricsSummary.avgDesviacion} hr</strong></span>
-            <span>Confiabilidad: <strong>{metricsSummary.avgConfiabilidad}%</strong></span>
+            <span>Total: <strong>{kpis.total} ejecuciones</strong></span>
+            <span>Fotos: <strong>{kpis.conEvidencia} cargadas</strong></span>
           </div>
           <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
             <div 
               className="bg-[#2563EB] h-1.5 rounded-full"
-              style={{ width: '100%' }}
+              style={{ width: `${Math.min(100, kpis.avgConfiabilidad)}%` }}
             />
           </div>
         </div>
@@ -791,7 +970,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
       </div>
 
       {/* --------------------------------------------------------------------- */}
-      {/* ESTADO VACÍO (Si tras filtros no hay registros)                       */}
+      {/* ESTADO VACÍO                                                          */}
       {/* --------------------------------------------------------------------- */}
       {filteredData.length === 0 ? (
         <div className="bg-white border border-[#E2E8F0] rounded-2xl p-12 text-center shadow-sm max-w-xl mx-auto my-8">
@@ -827,7 +1006,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
                     Cumplimiento Mensual
                   </h3>
                   <p className="text-xs text-[#64748B]">
-                    Evolución mes a mes del porcentaje y cantidad de preventivos (enero a diciembre)
+                    Evolución mes a mes (enero a diciembre) — clic en barra para filtrar
                   </p>
                 </div>
                 <Calendar className="w-5 h-5 text-[#2563EB]" />
@@ -876,8 +1055,8 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
                           return (
                             <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
                               <p className="font-bold text-[#1E293B] border-b border-slate-100 pb-1">{label}</p>
-                              <p className="text-[#16A34A] font-semibold">Cumplen: {item.cumple}</p>
-                              <p className="text-[#DC2626] font-semibold">No Cumplen: {item.noCumple}</p>
+                              <p className="text-[#16A34A] font-semibold">Cumplen (100%): {item.cumple}</p>
+                              <p className="text-[#DC2626] font-semibold">No Cumplen (0%): {item.noCumple}</p>
                               <p className="text-slate-500 font-medium">Total: {item.total}</p>
                               <p className="text-[#2563EB] font-bold pt-1 border-t border-slate-100">
                                 Cumplimiento: {item.porcentaje}%
@@ -942,7 +1121,7 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
                     Cumplimiento Semanal
                   </h3>
                   <p className="text-xs text-[#64748B]">
-                    Evolución por semana de ejecución en orden cronológico
+                    Evolución por semana de ejecución — clic en barra para filtrar
                   </p>
                 </div>
                 <Calendar className="w-5 h-5 text-[#2563EB]" />
@@ -1251,10 +1430,10 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
                     />
                     <Legend wrapperStyle={{ paddingTop: 8, fontSize: '11px' }} />
                     <Bar dataKey="cumple" name="Cumple" fill="#16A34A" radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="cumple" position="top" fill="#15803D" fontSize={10} fontWeight={600} formatter={(v: number) => v > 0 ? v : ''} />
+                      <LabelList dataKey="cumple" position="top" fill="#15803D" fontSize={11} fontWeight={700} formatter={(v: number) => v > 0 ? v : ''} />
                       {typeData.map((entry, index) => (
                         <Cell
-                          key={`type-cumple-${index}`}
+                          key={`t-cumple-${index}`}
                           cursor="pointer"
                           fill="#16A34A"
                           opacity={filterTipo !== 'TODOS' && filterTipo !== entry.tipo ? 0.35 : 1}
@@ -1265,10 +1444,10 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
                       ))}
                     </Bar>
                     <Bar dataKey="noCumple" name="No Cumple" fill="#DC2626" radius={[4, 4, 0, 0]}>
-                      <LabelList dataKey="noCumple" position="top" fill="#B91C1C" fontSize={10} fontWeight={600} formatter={(v: number) => v > 0 ? v : ''} />
+                      <LabelList dataKey="noCumple" position="top" fill="#B91C1C" fontSize={11} fontWeight={700} formatter={(v: number) => v > 0 ? v : ''} />
                       {typeData.map((entry, index) => (
                         <Cell
-                          key={`type-nocumple-${index}`}
+                          key={`t-nocumple-${index}`}
                           cursor="pointer"
                           fill="#DC2626"
                           opacity={filterTipo !== 'TODOS' && filterTipo !== entry.tipo ? 0.35 : 1}
@@ -1286,286 +1465,630 @@ export const ForkliftPreventiveDashboard: React.FC<Props> = ({ data, onRefresh }
           </div>
 
           {/* ----------------------------------------------------------------- */}
-          {/* 3.6 FRECUENCIA DE INGRESO POR MÁQUINA (Columnas VERTICALES)      */}
+          {/* 3.6 & 3.7 FRECUENCIA POR MÁQUINA Y CONFIABILIDAD MENSUAL          */}
           {/* ----------------------------------------------------------------- */}
-          <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-              <div>
-                <h3 className="text-base font-bold text-[#1E293B]">
-                  Frecuencia de Ingresos por Máquina
-                </h3>
-                <p className="text-xs text-[#64748B]">
-                  Cantidad de preventivos ejecutados por cada máquina (columnas verticales ordenadas de mayor a menor)
-                </p>
-              </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-              {/* Botones de selección de Top */}
-              <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl self-start sm:self-center">
-                <span className="text-[11px] font-semibold text-slate-500 px-2">Ver:</span>
-                {[10, 15, 20, 0].map(lim => (
+            {/* FRECUENCIA DE INGRESO POR MÁQUINA (BARRAS VERTICALES) */}
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-[#1E293B]">
+                    Frecuencia por Máquina
+                  </h3>
+                  <p className="text-xs text-[#64748B]">
+                    Cantidad de preventivos ejecutados por equipo (columnas verticales)
+                  </p>
+                </div>
+
+                {/* Selector de límite de máquinas */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl self-start sm:self-auto text-xs">
+                  {[10, 15, 20].map(lim => (
+                    <button
+                      key={lim}
+                      onClick={() => setTopMaquinasLimit(lim)}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        topMaquinasLimit === lim 
+                          ? 'bg-white text-[#2563EB] shadow-xs' 
+                          : 'text-[#64748B] hover:text-[#1E293B]'
+                      }`}
+                    >
+                      Top {lim}
+                    </button>
+                  ))}
                   <button
-                    key={lim}
-                    onClick={() => setTopMaquinasLimit(lim)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      topMaquinasLimit === lim 
+                    onClick={() => setTopMaquinasLimit('todas')}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                      topMaquinasLimit === 'todas' 
                         ? 'bg-white text-[#2563EB] shadow-xs' 
                         : 'text-[#64748B] hover:text-[#1E293B]'
                     }`}
                   >
-                    {lim === 0 ? 'Todas' : `Top ${lim}`}
+                    Todas ({machinesData.length})
                   </button>
-                ))}
+                </div>
+              </div>
+
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={displayedMachines} 
+                    margin={{ top: 20, right: 10, left: -20, bottom: 40 }}
+                    onClick={(e: any) => {
+                      if (e && e.activePayload && e.activePayload[0]) {
+                        const payload = e.activePayload[0].payload;
+                        if (payload?.maquina) handleToggleFilter('maquina', payload.maquina);
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis 
+                      dataKey="maquina" 
+                      tick={{ fill: '#64748B', fontSize: 10, fontWeight: 600 }}
+                      axisLine={{ stroke: '#E2E8F0' }}
+                      tickLine={false}
+                      angle={-45}
+                      textAnchor="end"
+                      interval={0}
+                    />
+                    <YAxis 
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip 
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const item = payload[0].payload;
+                          const pct = item.count > 0 ? Math.round((item.cumple / item.count) * 100) : 0;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
+                              <p className="font-bold text-[#1E293B] border-b border-slate-100 pb-1">Máquina: {label}</p>
+                              <p className="text-slate-600">Centro: {item.cd}</p>
+                              <p className="text-slate-800 font-bold">Preventivos totales: {item.count}</p>
+                              <p className="text-[#16A34A] font-semibold">Cumplidos (100%): {item.cumple}</p>
+                              <p className="text-[#DC2626] font-semibold">No Cumplidos (0%): {item.noCumple}</p>
+                              <p className="text-[#2563EB] font-bold pt-1 border-t border-slate-100">
+                                Efectividad: {pct}%
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar dataKey="count" name="Preventivos" fill="#2563EB" radius={[4, 4, 0, 0]}>
+                      <LabelList dataKey="count" position="top" fill="#1D4ED8" fontSize={10} fontWeight={700} />
+                      {displayedMachines.map((entry, index) => (
+                        <Cell
+                          key={`maq-col-${index}`}
+                          cursor="pointer"
+                          fill={filterMaquina === entry.maquina ? '#1D4ED8' : '#3B82F6'}
+                          opacity={filterMaquina !== 'TODOS' && filterMaquina !== entry.maquina ? 0.35 : 1}
+                          stroke={filterMaquina === entry.maquina ? '#1E3A8A' : undefined}
+                          strokeWidth={filterMaquina === entry.maquina ? 2 : 0}
+                          onClick={() => handleToggleFilter('maquina', entry.maquina)}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="h-80 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={displayedMachinesData}
-                  margin={{ top: 20, right: 15, left: -15, bottom: 45 }}
-                  onClick={(e: any) => {
-                    if (e && e.activePayload && e.activePayload[0]) {
-                      const payload = e.activePayload[0].payload;
-                      if (payload?.maquina) handleToggleFilter('maquina', payload.maquina);
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                  <XAxis 
-                    dataKey="maquina" 
-                    tick={{ fill: '#1E293B', fontSize: 10, fontWeight: 700 }}
-                    axisLine={{ stroke: '#E2E8F0' }}
-                    tickLine={false}
-                    angle={-45}
-                    textAnchor="end"
-                    interval={0}
-                  />
-                  <YAxis 
-                    tick={{ fill: '#64748B', fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    allowDecimals={false}
-                  />
-                  <Tooltip 
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        const item = payload[0].payload;
-                        return (
-                          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
-                            <p className="font-extrabold text-[#1E293B] border-b border-slate-100 pb-1">
-                              Máquina: {item.maquina}
-                            </p>
-                            <p className="text-slate-600">CD: <strong className="text-slate-800">{item.cd}</strong></p>
-                            <p className="text-[#2563EB] font-bold">Total Ingresos: {item.count}</p>
-                            <p className="text-[#16A34A] font-semibold">Cumplen: {item.cumple}</p>
-                            <p className="text-[#DC2626] font-semibold">No Cumplen: {item.noCumple}</p>
-                          </div>
-                        );
+            {/* 3.7 GRÁFICA DE CONFIABILIDAD DEL PREVENTIVO (COLUMNA O) */}
+            <div className="bg-white border border-[#E2E8F0] rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-[#1E293B]">
+                    Confiabilidad del Preventivo (Col. O)
+                  </h3>
+                  <p className="text-xs text-[#64748B]">
+                    Porcentaje de confiabilidad promedio mes a mes (enero a diciembre)
+                  </p>
+                </div>
+                <Gauge className="w-5 h-5 text-[#2563EB]" />
+              </div>
+
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={reliabilityMonthlyData}
+                    margin={{ top: 20, right: 20, left: -15, bottom: 40 }}
+                    onClick={(e: any) => {
+                      if (e && e.activePayload && e.activePayload[0]) {
+                        const payload = e.activePayload[0].payload;
+                        if (payload?.mes) handleToggleFilter('mes', payload.mes);
                       }
-                      return null;
                     }}
-                  />
-                  <Bar dataKey="count" name="Ingresos" fill="#2563EB" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="count" position="top" fill="#1E293B" fontSize={11} fontWeight={700} offset={6} />
-                    {displayedMachinesData.map((entry, index) => {
-                      const isActive = (filterMaquina !== 'TODOS' && filterMaquina === entry.maquina) || 
-                        (searchMaquina.trim() && searchMaquina.toUpperCase() === entry.maquina.toUpperCase());
-                      const hasActiveSelection = filterMaquina !== 'TODOS' || !!searchMaquina.trim();
-                      return (
-                        <Cell 
-                          key={`mach-cell-${index}`} 
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                    <XAxis 
+                      dataKey="mes" 
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={{ stroke: '#E2E8F0' }}
+                      tickLine={false}
+                      angle={-25}
+                      textAnchor="end"
+                    />
+                    <YAxis 
+                      domain={[0, 100]}
+                      unit="%"
+                      tick={{ fill: '#64748B', fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip 
+                      content={({ active, payload, label }) => {
+                        if (active && payload && payload.length) {
+                          const item = payload[0].payload;
+                          return (
+                            <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-lg text-xs space-y-1">
+                              <p className="font-bold text-[#1E293B] border-b border-slate-100 pb-1">{label}</p>
+                              <p className="text-slate-600">Total registros: {item.total}</p>
+                              <p className="text-[#2563EB] font-bold pt-1">
+                                Confiabilidad Promedio: {item.confiabilidad}%
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar dataKey="confiabilidad" name="Confiabilidad Promedio" fill="#0284C7" radius={[4, 4, 0, 0]}>
+                      <LabelList 
+                        dataKey="confiabilidad" 
+                        position="top" 
+                        fill="#0369A1" 
+                        fontSize={10} 
+                        fontWeight={700} 
+                        formatter={(v: number) => v > 0 ? `${v}%` : ''} 
+                      />
+                      {reliabilityMonthlyData.map((entry, index) => (
+                        <Cell
+                          key={`rel-m-${index}`}
                           cursor="pointer"
-                          fill={isActive ? '#1D4ED8' : (entry.count >= 4 ? '#2563EB' : (entry.count >= 3 ? '#3B82F6' : '#60A5FA'))}
-                          opacity={hasActiveSelection && !isActive ? 0.35 : 1}
-                          stroke={isActive ? '#1E293B' : undefined}
-                          strokeWidth={isActive ? 2 : 0}
-                          onClick={() => handleToggleFilter('maquina', entry.maquina)}
+                          fill={entry.confiabilidad >= 90 ? '#0284C7' : (entry.confiabilidad >= 75 ? '#0EA5E9' : '#38BDF8')}
+                          opacity={filterMes !== 'TODOS' && normalizaMes(filterMes) !== normalizaMes(entry.mes) ? 0.35 : 1}
+                          stroke={normalizaMes(filterMes) === normalizaMes(entry.mes) ? '#0C4A6E' : undefined}
+                          strokeWidth={normalizaMes(filterMes) === normalizaMes(entry.mes) ? 2 : 0}
+                          onClick={() => handleToggleFilter('mes', entry.mes)}
                         />
-                      );
-                    })}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
+
           </div>
 
           {/* ----------------------------------------------------------------- */}
-          {/* TABLA DE DETALLE DE PREVENTIVOS DE MONTACARGAS                     */}
+          {/* 5. TABLA DE DETALLE CON EVIDENCIAS                                */}
           {/* ----------------------------------------------------------------- */}
           <div className="bg-white border border-[#E2E8F0] rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-[#1E293B]">
                   Registro Detallado de Preventivos
                 </h3>
                 <p className="text-xs text-[#64748B]">
-                  Historial individual con horómetros, validación de cumplimiento y enlace a evidencias
+                  Registros ejecutados de la hoja PREVENTIVOS (página {currentPage} de {totalPages})
                 </p>
               </div>
 
-              <div className="text-xs text-[#64748B]">
-                Página <strong className="text-[#1E293B]">{currentPage}</strong> de <strong className="text-[#1E293B]">{totalPages}</strong>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[#64748B]">
+                  Mostrando {paginatedData.length} de {filteredData.length}
+                </span>
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse">
+              <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-[#F8FAFC] border-b border-slate-200 text-[#64748B] font-bold uppercase tracking-wider text-[10px]">
-                    <th className="py-3 px-4">No Máquina</th>
-                    <th className="py-3 px-4">CD</th>
-                    <th className="py-3 px-4">Tipo Mtto</th>
-                    <th className="py-3 px-4">Mes</th>
-                    <th className="py-3 px-4">Semana</th>
-                    <th className="py-3 px-4">Fecha Ejecución</th>
-                    <th className="py-3 px-4">Horóm. Prog.</th>
-                    <th className="py-3 px-4">Horóm. Reg.</th>
-                    <th className="py-3 px-4">Desviación</th>
-                    <th className="py-3 px-4 text-center">Cumplimiento</th>
-                    <th className="py-3 px-4">Confiabilidad</th>
-                    <th className="py-3 px-4">Observación</th>
-                    <th className="py-3 px-4 text-center">Evidencia</th>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-[#64748B] font-bold uppercase tracking-wider text-[10px]">
+                    <th className="py-3.5 px-4">Máquina</th>
+                    <th className="py-3.5 px-3">Centro</th>
+                    <th className="py-3.5 px-3">Tipo MTTO</th>
+                    <th className="py-3.5 px-3">Mes / Sem</th>
+                    <th className="py-3.5 px-3">Fecha</th>
+                    <th className="py-3.5 px-3 text-right">Horómetro Prog.</th>
+                    <th className="py-3.5 px-3 text-right">Horómetro Reg.</th>
+                    <th className="py-3.5 px-3 text-center">Cumplimiento (Col. J)</th>
+                    <th className="py-3.5 px-3 text-right">Desviación</th>
+                    <th className="py-3.5 px-3 text-center">Confiabilidad (Col. O)</th>
+                    <th className="py-3.5 px-4">Observación</th>
+                    <th className="py-3.5 px-4 text-center">Evidencia (Col. Q)</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {paginatedData.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-[#1E293B]">
-                        {row.maquina || '—'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md font-semibold text-[11px] bg-blue-50 text-blue-700 border border-blue-100">
-                          {row.cd || '—'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-medium text-slate-700">
-                        {row.tipo || '—'}
-                      </td>
-                      <td className="py-3 px-4 text-slate-700 capitalize">
-                        {row.mes || '—'}
-                      </td>
-                      <td className="py-3 px-4 text-slate-600">
-                        {row.semana || '—'}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-[#1E293B]">
-                        {formatFechaCorta(row.fecha, row.fechaIso)}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-600">
-                        {row.proxHr || '—'}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-semibold text-[#1E293B]">
-                        {row.horometro || '—'}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-600">
-                        {row.desviacion !== undefined && row.desviacion !== '' ? row.desviacion : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {row.cumplimiento === '100%' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-50 text-[#16A34A] border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3" />
-                            100% CUMPLE
-                          </span>
-                        ) : row.cumplimiento === '0%' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-50 text-[#DC2626] border border-rose-200">
-                            <XCircle className="w-3 h-3" />
-                            0% NO CUMPLE
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-mono">—</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-600">
-                        {row.confiabilidad || '—'}
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 max-w-[200px] truncate" title={String(row.observacion || '')}>
-                        {row.observacion && row.observacion !== '—' ? row.observacion : '—'}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        {row.evidencia ? (
-                          <a
-                            href={row.evidencia}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-[#2563EB] bg-blue-50 hover:bg-blue-100 border border-blue-100 transition-colors"
+                <tbody className="divide-y divide-slate-100 text-[#1E293B]">
+                  {paginatedData.map((item) => {
+                    const hasEvidencia = item.evidencia && item.evidencia.trim() !== '' && item.evidencia !== '—';
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        {/* No MÁQUINA */}
+                        <td className="py-3 px-4 font-bold text-[#1E293B]">
+                          <span 
+                            onClick={() => handleToggleFilter('maquina', item.maquina)}
+                            className="cursor-pointer hover:text-[#2563EB] hover:underline"
+                            title="Filtrar por esta máquina"
                           >
-                            <ExternalLink className="w-3 h-3" />
-                            <span>Ver</span>
-                          </a>
-                        ) : (
-                          <span className="text-slate-400 font-mono">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                            {item.maquina || '—'}
+                          </span>
+                        </td>
+
+                        {/* CD */}
+                        <td className="py-3 px-3 text-[#64748B]">
+                          {item.cd || '—'}
+                        </td>
+
+                        {/* Tipo de Mantenimiento */}
+                        <td className="py-3 px-3">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[11px]">
+                            {item.tipo || '—'}
+                          </span>
+                        </td>
+
+                        {/* Mes / Semana */}
+                        <td className="py-3 px-3 text-[#64748B]">
+                          <div className="font-medium text-[#1E293B]">{item.mes || '—'}</div>
+                          <div className="text-[10px] text-slate-400">{item.semana || '—'}</div>
+                        </td>
+
+                        {/* Fecha */}
+                        <td className="py-3 px-3 font-medium whitespace-nowrap text-[#64748B]">
+                          {formatFechaCorta(item.fecha, item.fechaIso)}
+                        </td>
+
+                        {/* Próximo Horómetro */}
+                        <td className="py-3 px-3 text-right text-[#64748B] font-mono text-[11px]">
+                          {item.proxHr || '—'}
+                        </td>
+
+                        {/* Horómetro Registrado */}
+                        <td className="py-3 px-3 text-right font-bold text-[#1E293B] font-mono text-[11px]">
+                          {item.horometro || '—'}
+                        </td>
+
+                        {/* Validación Cumplimiento */}
+                        <td className="py-3 px-3 text-center">
+                          {item.cumplimiento === '100%' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-[#16A34A] border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3" />
+                              100% CUMPLE
+                            </span>
+                          ) : item.cumplimiento === '0%' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-[#DC2626] border border-rose-200">
+                              <XCircle className="w-3 h-3" />
+                              0% NO CUMPLE
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-semibold">—</span>
+                          )}
+                        </td>
+
+                        {/* Desviación */}
+                        <td className="py-3 px-3 text-right text-[#64748B] font-mono text-[11px]">
+                          {item.desviacion !== '—' && item.desviacion ? `${item.desviacion} hr` : '—'}
+                        </td>
+
+                        {/* Confiabilidad (Columna O) */}
+                        <td className="py-3 px-3 text-center font-bold text-[#0284C7] font-mono text-[11px]">
+                          {item.confiabilidad ? (
+                            String(item.confiabilidad).includes('%') ? item.confiabilidad : `${item.confiabilidad}%`
+                          ) : '—'}
+                        </td>
+
+                        {/* Observación */}
+                        <td className="py-3 px-4 text-[#64748B] max-w-xs truncate" title={item.observacion}>
+                          {item.observacion || '—'}
+                        </td>
+
+                        {/* Evidencia (Columna Q) */}
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          {hasEvidencia ? (
+                            <button
+                              onClick={() => setPreviewRecord(item)}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-[#15803D] hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer"
+                              title="Ver evidencia fotográfica"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                              <span>Ver foto</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setUploadRecord(item);
+                                setSelectedImageBase64('');
+                                setUploadError(null);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-[#2563EB] hover:text-white border border-slate-200 transition-colors cursor-pointer"
+                              title="Registrar evidencia fotográfica"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              <span>Registrar</span>
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
-            {/* Paginador completo */}
-            <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#64748B]">
-              <span>
-                Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, filteredData.length)} de {filteredData.length} registros
-              </span>
+            {/* Paginación */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-[#64748B]">
+                <span>
+                  Página {currentPage} de {totalPages}
+                </span>
 
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => handlePageChange(1)}
-                  disabled={currentPage <= 1}
-                  className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 font-semibold cursor-pointer"
-                >
-                  Primero
-                </button>
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage <= 1}
-                  className="p-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
 
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
-                  .map((p, idx, arr) => {
-                    const prev = arr[idx - 1];
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum = currentPage;
+                    if (currentPage <= 3) pageNum = i + 1;
+                    else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                    else pageNum = currentPage - 2 + i;
+
+                    if (pageNum < 1 || pageNum > totalPages) return null;
+
                     return (
-                      <React.Fragment key={p}>
-                        {prev && p - prev > 1 && <span className="px-1 text-slate-400">...</span>}
-                        <button
-                          onClick={() => handlePageChange(p)}
-                          className={`w-7 h-7 rounded-lg font-bold text-xs transition-colors cursor-pointer ${
-                            currentPage === p 
-                              ? 'bg-[#2563EB] text-white shadow-xs' 
-                              : 'border border-slate-200 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      </React.Fragment>
+                      <button
+                        key={pageNum}
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          currentPage === pageNum 
+                            ? 'bg-[#2563EB] text-white' 
+                            : 'border border-slate-200 hover:bg-slate-50 text-[#1E293B]'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
                     );
                   })}
 
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage >= totalPages}
-                  className="p-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handlePageChange(totalPages)}
-                  disabled={currentPage >= totalPages}
-                  className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 font-semibold cursor-pointer"
-                >
-                  Último
-                </button>
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* MODAL PARA CARGAR EVIDENCIA (3.b.1)                                   */}
+      {/* --------------------------------------------------------------------- */}
+      {uploadRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl p-6 relative">
+            <button
+              onClick={() => {
+                if (!isUploading) {
+                  setUploadRecord(null);
+                  setSelectedImageBase64('');
+                  setUploadError(null);
+                }
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              disabled={isUploading}
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="mb-4">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-[#2563EB] uppercase tracking-wider">
+                Columna EVIDENCIAS (Q)
+              </span>
+              <h3 className="text-base font-bold text-[#1E293B] mt-1">
+                Registrar Evidencia de Preventivo
+              </h3>
+              <p className="text-xs text-[#64748B]">
+                Máquina: <strong>{uploadRecord.maquina}</strong> — Fecha: <strong>{formatFechaCorta(uploadRecord.fecha, uploadRecord.fechaIso)}</strong> — Tipo: <strong>{uploadRecord.tipo}</strong>
+              </p>
+            </div>
+
+            {/* Zona de Drop & Carga */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-2xl p-6 text-center transition-colors ${
+                isDragging 
+                  ? 'border-[#2563EB] bg-blue-50/50' 
+                  : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+              }`}
+            >
+              {selectedImageBase64 ? (
+                <div className="space-y-3">
+                  <div className="max-h-56 overflow-hidden rounded-xl border border-slate-200 mx-auto inline-block shadow-xs">
+                    <img 
+                      src={selectedImageBase64} 
+                      alt="Vista previa" 
+                      className="max-h-56 w-auto object-contain mx-auto"
+                    />
+                  </div>
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedImageBase64('')}
+                      disabled={isUploading}
+                      className="px-3 py-1 text-xs text-rose-600 hover:text-rose-700 font-semibold cursor-pointer"
+                    >
+                      Cambiar foto
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#2563EB] flex items-center justify-center mx-auto">
+                    <Upload className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-[#1E293B]">
+                      Arrastra y suelta aquí tu foto, o pégala con Ctrl+V
+                    </p>
+                    <p className="text-[11px] text-[#64748B] mt-0.5">
+                      JPG, PNG, WebP (se optimizará automáticamente a ~1600px)
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                    {/* Botón Galería */}
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50 text-[#1E293B] shadow-xs cursor-pointer"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5 text-[#2563EB]" />
+                      <span>Elegir archivo</span>
+                    </button>
+
+                    {/* Botón Cámara */}
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50 text-[#1E293B] shadow-xs cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-[#16A34A]" />
+                      <span>Tomar con cámara</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Inputs ocultos */}
+              <input 
+                ref={fileInputRef} 
+                type="file" 
+                accept="image/*" 
+                onChange={handleFileChange} 
+                className="hidden" 
+              />
+              <input 
+                ref={cameraInputRef} 
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                onChange={handleFileChange} 
+                className="hidden" 
+              />
+            </div>
+
+            {uploadError && (
+              <div className="mt-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{uploadError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 mt-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setUploadRecord(null);
+                  setSelectedImageBase64('');
+                  setUploadError(null);
+                }}
+                disabled={isUploading}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveEvidence}
+                disabled={!selectedImageBase64 || isUploading}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-[#2563EB] hover:bg-blue-700 disabled:opacity-50 text-white transition-colors cursor-pointer shadow-sm"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Guardando en Google Drive...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    <span>Guardar Evidencia</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* MODAL VISTA PREVIA DE EVIDENCIA                                       */}
+      {/* --------------------------------------------------------------------- */}
+      {previewRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-2xl w-full border border-slate-200 shadow-2xl p-6 relative">
+            <button
+              onClick={() => setPreviewRecord(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="mb-4">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-[#16A34A] uppercase tracking-wider">
+                Evidencia Fotográfica
+              </span>
+              <h3 className="text-base font-bold text-[#1E293B] mt-1">
+                Máquina {previewRecord.maquina}
+              </h3>
+              <p className="text-xs text-[#64748B]">
+                Fecha: {formatFechaCorta(previewRecord.fecha, previewRecord.fechaIso)} • Tipo: {previewRecord.tipo} • CD: {previewRecord.cd}
+              </p>
+            </div>
+
+            <div className="max-h-[65vh] overflow-auto rounded-xl border border-slate-200 bg-slate-950/5 flex items-center justify-center p-2">
+              <img 
+                src={previewRecord.evidencia} 
+                alt={`Evidencia ${previewRecord.maquina}`} 
+                className="max-h-[60vh] w-auto max-w-full object-contain rounded-lg"
+              />
+            </div>
+
+            <div className="flex items-center justify-between mt-4 text-xs text-[#64748B]">
+              <span>Horómetro registrado: <strong>{previewRecord.horometro}</strong></span>
+
+              {previewRecord.evidencia?.startsWith('http') && (
+                <a
+                  href={previewRecord.evidencia}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[#2563EB] hover:text-blue-800 font-semibold"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Abrir enlace original</span>
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
   );
 };
-
-export default ForkliftPreventiveDashboard;

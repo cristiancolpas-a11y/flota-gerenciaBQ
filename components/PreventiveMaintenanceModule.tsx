@@ -336,7 +336,7 @@ export const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate })
       .sort((a, b) => b.total - a.total)
       .map(entry => {
         const totalCumpl = entry.cumple + entry.noCumple;
-        const pct = totalCumpl > 0 ? Number(((entry.cumple / totalCumpl) * 100).toFixed(1)) : 0;
+        const pct = totalCumpl > 0 ? Math.round((entry.cumple / totalCumpl) * 100) : 0;
         return {
           ...entry,
           porcentaje: pct
@@ -365,7 +365,7 @@ export const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate })
       .sort((a, b) => a.rutina.localeCompare(b.rutina))
       .map(entry => {
         const totalCumpl = entry.cumple + entry.noCumple;
-        const pct = totalCumpl > 0 ? Number(((entry.cumple / totalCumpl) * 100).toFixed(1)) : 0;
+        const pct = totalCumpl > 0 ? Math.round((entry.cumple / totalCumpl) * 100) : 0;
         return {
           ...entry,
           porcentaje: pct
@@ -720,7 +720,7 @@ export const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate })
             </span>
           </div>
           <p className="text-xs text-[#64748B] mt-2">
-            {kpis.total > 0 ? ((kpis.cumple / kpis.total) * 100).toFixed(1) : 0}% de los preventivos filtrados
+            {kpis.total > 0 ? Math.round((kpis.cumple / kpis.total) * 100) : 0}% de los preventivos filtrados
           </p>
           <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
             <div 
@@ -749,7 +749,7 @@ export const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate })
             </span>
           </div>
           <p className="text-xs text-[#64748B] mt-2">
-            {kpis.total > 0 ? ((kpis.noCumple / kpis.total) * 100).toFixed(1) : 0}% con desvío en rango/criterio
+            {kpis.total > 0 ? Math.round((kpis.noCumple / kpis.total) * 100) : 0}% con desvío en rango/criterio
           </p>
           <div className="mt-3 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
             <div 
@@ -775,7 +775,7 @@ export const PreventiveMaintenanceModule: React.FC<Props> = ({ data, onUpdate })
             <span className={`text-3xl font-black ${
               kpis.porcentaje >= 80 ? 'text-[#16A34A]' : (kpis.porcentaje >= 60 ? 'text-[#F59E0B]' : 'text-[#DC2626]')
             }`}>
-              {kpis.porcentaje.toFixed(1)}%
+              {Math.round(kpis.porcentaje)}%
             </span>
             <span className="text-xs text-[#64748B]">
               efectividad

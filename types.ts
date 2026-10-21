@@ -702,6 +702,7 @@ export interface NovedadFlt {
 
 export interface ForkliftPreventive {
   id: string;
+  rowIndex?: number;         // 1-based row index in Google Sheet
   maquina: string;           // Idx 0: No MÁQUINA (ej. 861, 865, CP3)
   cd: string;                // Idx 1: CD (Galapa, ...)
   tipo: string;              // Idx 2: Tipo de Mantenimiento (250, 500, 750, 1000, 2000)
