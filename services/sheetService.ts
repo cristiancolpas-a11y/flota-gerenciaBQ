@@ -1347,6 +1347,18 @@ const fetchAvailabilityFromSheetCSV = async (): Promise<AvailabilityRecord[]> =>
 };
 
 const MONTH_NAMES_ES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+const MES_ABREV_MAP: Record<string, string> = {
+  ENE: 'ENERO', FEB: 'FEBRERO', MAR: 'MARZO', ABR: 'ABRIL', MAY: 'MAYO', JUN: 'JUNIO',
+  JUL: 'JULIO', AGO: 'AGOSTO', SEP: 'SEPTIEMBRE', SEPT: 'SEPTIEMBRE', OCT: 'OCTUBRE', NOV: 'NOVIEMBRE', DIC: 'DICIEMBRE'
+};
+
+const normMes = (s?: any): string => {
+  if (!s) return '';
+  const u = String(s).trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (MONTH_NAMES_ES.includes(u)) return u;
+  if (MES_ABREV_MAP[u]) return MES_ABREV_MAP[u];
+  return u;
+};
 
 const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
   const parseNum = (val: any): number => {
@@ -1365,6 +1377,7 @@ const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
       const normalizedPlate = normalizePlate(rawPlate);
       const parsedDate = parseFlexibleDate(row[1]);
 
+      const rawMes = cleanSheetValue(row[19]);
       let derivedMes = '';
       let derivedSemana = '';
       if (parsedDate) {
@@ -1374,6 +1387,7 @@ const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
           derivedSemana = `S${getWeekNumber(dObj)}`;
         }
       }
+      const finalMes = normMes(rawMes) || derivedMes;
 
       // Columnas numéricas de la hoja DISPONILIDAD saneadas
       const rawDias = parseNum(row[11]);
@@ -1405,7 +1419,7 @@ const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
         indisponibilidadPrc,
         disponibilidadPrc,
         vhsCd,
-        mes: derivedMes,
+        mes: finalMes,
         semana: derivedSemana
       };
     });

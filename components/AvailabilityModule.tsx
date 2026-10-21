@@ -20,7 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  ShieldAlert
+  BarChart3
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -31,8 +31,6 @@ import {
   Tooltip, 
   ResponsiveContainer, 
   Cell,
-  LineChart, 
-  Line, 
   Legend, 
   ReferenceLine, 
   LabelList 
@@ -45,6 +43,52 @@ interface AvailabilityDashboardProps {
   onRefresh?: () => Promise<void> | void;
   loading?: boolean;
 }
+
+// -------------------------------------------------------------
+// MONTH NORMALIZATION (Fix: ENE -> ENERO, OCT -> OCTUBRE)
+// -------------------------------------------------------------
+export const MESES_FULL = [
+  'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 
+  'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+];
+
+export const MES_ABREV: Record<string, string> = {
+  ENE: 'ENERO',
+  FEB: 'FEBRERO',
+  MAR: 'MARZO',
+  ABR: 'ABRIL',
+  MAY: 'MAYO',
+  JUN: 'JUNIO',
+  JUL: 'JULIO',
+  AGO: 'AGOSTO',
+  SEP: 'SEPTIEMBRE',
+  SEPT: 'SEPTIEMBRE',
+  OCT: 'OCTUBRE',
+  NOV: 'NOVIEMBRE',
+  DIC: 'DICIEMBRE'
+};
+
+export const normMes = (s?: any): string => {
+  if (!s) return '';
+  const u = String(s).trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (MESES_FULL.includes(u)) return u;
+  if (MES_ABREV[u]) return MES_ABREV[u];
+  return u;
+};
+
+export const getRecordMes = (r: { mes?: string; fecha?: string }): string => {
+  if (r.mes) {
+    const n = normMes(r.mes);
+    if (n) return n;
+  }
+  if (r.fecha) {
+    const d = new Date(r.fecha.includes('T') ? r.fecha : r.fecha + 'T12:00:00');
+    if (!isNaN(d.getTime())) {
+      return MESES_FULL[d.getMonth()];
+    }
+  }
+  return '';
+};
 
 // Brand Colors (Limpios, corporativos, suaves, sin neones)
 const PALETTE = {
@@ -71,6 +115,11 @@ const CD_COLORS: Record<string, string> = {
   'OTRO': '#64748B'
 };
 
+const MONTH_COLORS = [
+  '#0D2B4E', '#1E3A5F', '#3E5A78', '#2563EB', '#0284C7', '#0D9488',
+  '#16A34A', '#65A30D', '#D97706', '#EA580C', '#DC2626', '#7C3AED'
+];
+
 const getCdColor = (cdName: string): string => {
   const norm = (cdName || '').toUpperCase().trim();
   if (norm.includes('GALAPA')) return CD_COLORS['GALAPA'];
@@ -82,7 +131,6 @@ interface FilterState {
   cd: string;            // 'all' | 'GALAPA' | 'LA ARENOSA'
   mes: string;           // 'all' | 'ENERO' ...
   semana: string;        // 'all' | 'S1' ...
-  dia: string;           // 'all' | 'YYYY-MM-DD'
   contratista: string;   // 'all' | string
   sistema: string;       // 'all' | string
   placa: string;         // 'all' | string
@@ -96,18 +144,22 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   loading = false
 }) => {
   // -------------------------------------------------------------
-  // 1. UNIFIED FILTER STATE (Supports Top Bar + Cross-Filtering)
+  // 1. UNIFIED FILTER STATE (Top Bar + Cross-Filtering Sync)
   // -------------------------------------------------------------
   const [filters, setFilters] = useState<FilterState>({
     cd: 'all',
     mes: 'all',
     semana: 'all',
-    dia: 'all',
     contratista: 'all',
     sistema: 'all',
     placa: 'all',
     excluirFinRentin: true,
   });
+
+  // Mode toggles for month breakdown in sub-charts
+  const [cdViewMode, setCdViewMode] = useState<'consolidado' | 'por_mes'>('consolidado');
+  const [contractorViewMode, setContractorViewMode] = useState<'consolidado' | 'por_mes'>('consolidado');
+  const [systemViewMode, setSystemViewMode] = useState<'consolidado' | 'por_mes'>('consolidado');
 
   // Table internal state
   const [tableSearchPlate, setTableSearchPlate] = useState<string>('');
@@ -136,7 +188,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       cd: 'all',
       mes: 'all',
       semana: 'all',
-      dia: 'all',
       contratista: 'all',
       sistema: 'all',
       placa: 'all',
@@ -150,7 +201,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     filters.cd !== 'all' || 
     filters.mes !== 'all' || 
     filters.semana !== 'all' || 
-    filters.dia !== 'all' || 
     filters.contratista !== 'all' || 
     filters.sistema !== 'all' || 
     filters.placa !== 'all' || 
@@ -158,7 +208,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     !!tableSearchPlate;
 
   // -------------------------------------------------------------
-  // 2. EXTRACT FILTER OPTIONS (from real data)
+  // 2. EXTRACT FILTER OPTIONS (Normalized from real data)
   // -------------------------------------------------------------
   const availableCds = useMemo(() => {
     const set = new Set<string>();
@@ -168,13 +218,18 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   }, [availabilityPct, availability]);
 
   const availableMonths = useMemo(() => {
-    const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
     const set = new Set<string>();
-    availabilityPct.forEach(r => { if (r.mes) set.add(r.mes.toUpperCase().trim()); });
-    availability.forEach(r => { if (r.mes) set.add(r.mes.toUpperCase().trim()); });
-    return Array.from(set).filter(Boolean).sort((a, b) => {
-      const idxA = monthOrder.indexOf(a);
-      const idxB = monthOrder.indexOf(b);
+    availabilityPct.forEach(r => { 
+      const m = normMes(r.mes || getRecordMes(r));
+      if (m) set.add(m); 
+    });
+    availability.forEach(r => { 
+      const m = normMes(r.mes || getRecordMes(r));
+      if (m) set.add(m); 
+    });
+    return Array.from(set).sort((a, b) => {
+      const idxA = MESES_FULL.indexOf(a);
+      const idxB = MESES_FULL.indexOf(b);
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
       return a.localeCompare(b);
     });
@@ -215,16 +270,21 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   }, [availability]);
 
   // -------------------------------------------------------------
-  // 3. FILTERED DATASETS (Derived with Unified Filter State)
+  // 3. FILTERED DATASETS (Unified Filter State with normMes)
   // -------------------------------------------------------------
   // A) Intervenciones crudas (DISPONILIDAD)
   const filteredInterventions = useMemo(() => {
     return availability.filter(r => {
       if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
       if (filters.cd !== 'all' && r.cd.toUpperCase().trim() !== filters.cd.toUpperCase().trim()) return false;
-      if (filters.mes !== 'all' && r.mes && r.mes.toUpperCase().trim() !== filters.mes.toUpperCase().trim()) return false;
+      
+      // Normalized month matching
+      if (filters.mes !== 'all') {
+        const rMes = normMes(r.mes || getRecordMes(r));
+        if (rMes !== normMes(filters.mes)) return false;
+      }
+
       if (filters.semana !== 'all' && r.semana && r.semana.toUpperCase().trim() !== filters.semana.toUpperCase().trim()) return false;
-      if (filters.dia !== 'all' && r.fecha !== filters.dia) return false;
       if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
       if (filters.sistema !== 'all' && (r.sistema || '').toUpperCase().trim() !== filters.sistema.toUpperCase().trim()) return false;
       if (filters.placa !== 'all') {
@@ -241,12 +301,17 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     return availabilityPct.filter(r => {
       if (filters.excluirFinRentin && isFinRentin(r.contratista)) return false;
       if (filters.cd !== 'all' && r.cd.toUpperCase().trim() !== filters.cd.toUpperCase().trim()) return false;
-      if (filters.mes !== 'all' && r.mes && r.mes.toUpperCase().trim() !== filters.mes.toUpperCase().trim()) return false;
+      
+      // Normalized month matching
+      if (filters.mes !== 'all') {
+        const rMes = normMes(r.mes || getRecordMes(r));
+        if (rMes !== normMes(filters.mes)) return false;
+      }
+
       if (filters.semana !== 'all' && r.semana && r.semana.toUpperCase().trim() !== filters.semana.toUpperCase().trim()) return false;
-      if (filters.dia !== 'all' && r.fecha !== filters.dia) return false;
       if (filters.contratista !== 'all' && (r.contratista || '').toUpperCase().trim() !== filters.contratista.toUpperCase().trim()) return false;
       
-      // If filtered by a specific plate or system, filter to days where that plate/system had an intervention
+      // If filtered by a specific plate or system, filter to days/CDs where that plate/system had interventions
       if (filters.placa !== 'all' || filters.sistema !== 'all') {
         const matchesIntervention = filteredInterventions.some(inv => 
           inv.fecha === r.fecha && inv.cd.toUpperCase().trim() === r.cd.toUpperCase().trim()
@@ -325,21 +390,21 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   // 5. CHART DATA PREPARATIONS
   // -------------------------------------------------------------
 
-  // A) Mensual (Fila dedicada independiente)
+  // A) Mensual (Fila dedicada a ancho completo, alta y espaciosa)
   const monthlyData = useMemo(() => {
-    const monthOrder = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
     const map: Record<string, { total: number; disp: number }> = {};
 
     filteredPctRecords.forEach(r => {
-      const m = r.mes || 'OTRO';
+      const m = normMes(r.mes || getRecordMes(r));
+      if (!m) return;
       if (!map[m]) map[m] = { total: 0, disp: 0 };
       map[m].total += r.total || 0;
       map[m].disp += r.disponibles || 0;
     });
 
     return Object.keys(map).sort((a, b) => {
-      const idxA = monthOrder.indexOf(a);
-      const idxB = monthOrder.indexOf(b);
+      const idxA = MESES_FULL.indexOf(a);
+      const idxB = MESES_FULL.indexOf(b);
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
       return a.localeCompare(b);
     }).map(m => {
@@ -355,15 +420,17 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     });
   }, [filteredPctRecords]);
 
-  // B) Semanal
+  // B) Semanal (Sin gráfica diaria)
   const weeklyData = useMemo(() => {
-    const map: Record<string, { total: number; disp: number }> = {};
+    const map: Record<string, { total: number; disp: number; mes: string }> = {};
 
     filteredPctRecords.forEach(r => {
       const w = r.semana || 'S1';
-      if (!map[w]) map[w] = { total: 0, disp: 0 };
+      const m = normMes(r.mes || getRecordMes(r));
+      if (!map[w]) map[w] = { total: 0, disp: 0, mes: m };
       map[w].total += r.total || 0;
       map[w].disp += r.disponibles || 0;
+      if (!map[w].mes && m) map[w].mes = m;
     });
 
     return Object.keys(map).sort((a, b) => {
@@ -377,42 +444,14 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
         name: w,
         label: w,
         disponibilidad: pct,
+        mes: item.mes || '',
         total: item.total,
         disponibles: item.disp
       };
     });
   }, [filteredPctRecords]);
 
-  // C) Diaria
-  const dailyData = useMemo(() => {
-    const map: Record<string, { total: number; disp: number }> = {};
-
-    filteredPctRecords.forEach(r => {
-      if (!r.fecha) return;
-      if (!map[r.fecha]) map[r.fecha] = { total: 0, disp: 0 };
-      map[r.fecha].total += r.total || 0;
-      map[r.fecha].disp += r.disponibles || 0;
-    });
-
-    const dates = Object.keys(map).sort();
-    // Tomar los últimos 35 días para mantener legibilidad visual
-    const displayDates = dates.length > 35 ? dates.slice(-35) : dates;
-
-    return displayDates.map(f => {
-      const item = map[f];
-      const pct = item.total > 0 ? Number(((item.disp / item.total) * 100).toFixed(1)) : 0;
-      return {
-        name: f,
-        label: f.substring(5), // MM-DD
-        fecha: f,
-        disponibilidad: pct,
-        total: item.total,
-        disponibles: item.disp
-      };
-    });
-  }, [filteredPctRecords]);
-
-  // D) Centro de Distribución (GALAPA vs LA ARENOSA)
+  // C) Centro de Distribución (GALAPA vs LA ARENOSA) — Con División por Mes
   const cdData = useMemo(() => {
     const map: Record<string, { total: number; disp: number; dailyTotals: Record<string, number> }> = {};
 
@@ -442,7 +481,49 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     });
   }, [filteredPctRecords]);
 
-  // E) Por Contratista
+  // C.2) Desglose mensual de CD (Meses en X, Galapa vs La Arenosa)
+  const cdMonthlyBreakdown = useMemo(() => {
+    const monthsMap: Record<string, { GALAPA: { disp: number; total: number }; ARENOSA: { disp: number; total: number } }> = {};
+
+    filteredPctRecords.forEach(r => {
+      const m = normMes(r.mes || getRecordMes(r));
+      if (!m) return;
+      if (!monthsMap[m]) {
+        monthsMap[m] = {
+          GALAPA: { disp: 0, total: 0 },
+          ARENOSA: { disp: 0, total: 0 }
+        };
+      }
+      const cdNorm = (r.cd || '').toUpperCase();
+      if (cdNorm.includes('GALAPA')) {
+        monthsMap[m].GALAPA.disp += r.disponibles || 0;
+        monthsMap[m].GALAPA.total += r.total || 0;
+      } else if (cdNorm.includes('ARENOSA')) {
+        monthsMap[m].ARENOSA.disp += r.disponibles || 0;
+        monthsMap[m].ARENOSA.total += r.total || 0;
+      }
+    });
+
+    return Object.keys(monthsMap).sort((a, b) => {
+      const idxA = MESES_FULL.indexOf(a);
+      const idxB = MESES_FULL.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      return a.localeCompare(b);
+    }).map(m => {
+      const g = monthsMap[m].GALAPA;
+      const a = monthsMap[m].ARENOSA;
+      const pctG = g.total > 0 ? Number(((g.disp / g.total) * 100).toFixed(1)) : 0;
+      const pctA = a.total > 0 ? Number(((a.disp / a.total) * 100).toFixed(1)) : 0;
+      return {
+        name: m,
+        mes: m,
+        GALAPA: pctG,
+        'LA ARENOSA': pctA
+      };
+    });
+  }, [filteredPctRecords]);
+
+  // D) Contratista (Con División por Mes)
   const contractorData = useMemo(() => {
     const map: Record<string, { total: number; disp: number; indisp: number }> = {};
 
@@ -467,7 +548,42 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     }).sort((a, b) => b.disponibilidad - a.disponibilidad);
   }, [filteredPctRecords]);
 
-  // F) Días Indisponibles (Salida - Ingreso de taller, sin negativos)
+  // D.2) Desglose por Mes de Contratistas
+  const contractorMonthlyBreakdown = useMemo(() => {
+    const monthsMap: Record<string, Record<string, { disp: number; total: number }>> = {};
+    const contractorsSet = new Set<string>();
+
+    filteredPctRecords.forEach(r => {
+      const m = normMes(r.mes || getRecordMes(r));
+      const c = (r.contratista || 'SIN ESPECIFICAR').trim();
+      if (!m || !c) return;
+      contractorsSet.add(c);
+      if (!monthsMap[m]) monthsMap[m] = {};
+      if (!monthsMap[m][c]) monthsMap[m][c] = { disp: 0, total: 0 };
+      monthsMap[m][c].disp += r.disponibles || 0;
+      monthsMap[m][c].total += r.total || 0;
+    });
+
+    const activeContractors = Array.from(contractorsSet);
+
+    const rows = Object.keys(monthsMap).sort((a, b) => {
+      const idxA = MESES_FULL.indexOf(a);
+      const idxB = MESES_FULL.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      return a.localeCompare(b);
+    }).map(m => {
+      const row: any = { name: m, mes: m };
+      activeContractors.forEach(c => {
+        const item = monthsMap[m][c];
+        row[c] = item && item.total > 0 ? Number(((item.disp / item.total) * 100).toFixed(1)) : null;
+      });
+      return row;
+    });
+
+    return { rows, contractors: activeContractors };
+  }, [filteredPctRecords]);
+
+  // E) Días Indisponibles (Salida - Ingreso de taller, sin negativos)
   const daysInShopStats = useMemo(() => {
     const cdDaysMap: Record<string, { totalDays: number; count: number }> = {};
     const plateDaysMap: Record<string, { totalDays: number; count: number; cd: string }> = {};
@@ -529,7 +645,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     };
   }, [filteredInterventions]);
 
-  // G) Sistema Más Intervenido
+  // F) Sistema Más Intervenido (Con División por Mes)
   const systemInterventionsData = useMemo(() => {
     const map: Record<string, number> = {};
 
@@ -544,7 +660,37 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       .slice(0, 8);
   }, [filteredInterventions]);
 
-  // H) Placa Más Intervenida (Vertical / Top 15-20)
+  // F.2) Desglose por Mes de Sistemas
+  const systemMonthlyBreakdown = useMemo(() => {
+    const topSystems = systemInterventionsData.slice(0, 5).map(s => s.name);
+    const monthsMap: Record<string, Record<string, number>> = {};
+
+    filteredInterventions.forEach(r => {
+      const s = (r.sistema || 'SIN ESPECIFICAR').toUpperCase().trim();
+      const m = normMes(r.mes || getRecordMes(r));
+      if (!m || !topSystems.includes(s)) return;
+
+      if (!monthsMap[m]) monthsMap[m] = {};
+      monthsMap[m][s] = (monthsMap[m][s] || 0) + 1;
+    });
+
+    const rows = Object.keys(monthsMap).sort((a, b) => {
+      const idxA = MESES_FULL.indexOf(a);
+      const idxB = MESES_FULL.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      return a.localeCompare(b);
+    }).map(m => {
+      const row: any = { name: m, mes: m };
+      topSystems.forEach(s => {
+        row[s] = monthsMap[m][s] || 0;
+      });
+      return row;
+    });
+
+    return { rows, systems: topSystems };
+  }, [filteredInterventions, systemInterventionsData]);
+
+  // G) Placa Más Intervenida (Vertical / Top 15, Respeta Filtro de Mes)
   const plateInterventionsData = useMemo(() => {
     const map: Record<string, { count: number; cd: string }> = {};
 
@@ -660,15 +806,15 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* 2. MULTIFILTER BAR (Visible, Cruzada con las Gráficas)         */}
+      {/* 2. MULTIFILTER BAR (Visible, Normalizado con normMes)           */}
       {/* ============================================================== */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
             <Filter size={15} className="text-[#0D2B4E]" />
-            <span>Filtros y filtros cruzados interactivos</span>
+            <span>Filtros interactivos sincronizados</span>
             <span className="text-[11px] font-normal text-slate-400">
-              (Hacer clic en cualquier gráfica para filtrar)
+              (Hacer clic en cualquier barra o elemento para filtrar)
             </span>
           </div>
 
@@ -717,7 +863,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             </select>
           </div>
 
-          {/* Mes */}
+          {/* Mes (Normalizado a ENERO, FEBRERO...) */}
           <div className="space-y-1">
             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Mes</label>
             <select
@@ -812,8 +958,8 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               </span>
             )}
             {filters.mes !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
-                Mes: {filters.mes}
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 text-xs font-bold border border-amber-200">
+                Mes: {normMes(filters.mes)}
                 <button onClick={() => toggleFilter('mes', 'all')}><X size={11} /></button>
               </span>
             )}
@@ -823,12 +969,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 <button onClick={() => toggleFilter('semana', 'all')}><X size={11} /></button>
               </span>
             )}
-            {filters.dia !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
-                Día: {filters.dia}
-                <button onClick={() => toggleFilter('dia', 'all')}><X size={11} /></button>
-              </span>
-            )}
             {filters.contratista !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
                 Contratista: {filters.contratista}
@@ -836,19 +976,19 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               </span>
             )}
             {filters.sistema !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 text-xs font-semibold border border-amber-200">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-900 text-xs font-semibold border border-blue-200">
                 Sistema: {filters.sistema}
                 <button onClick={() => toggleFilter('sistema', 'all')}><X size={11} /></button>
               </span>
             )}
             {filters.placa !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-900 font-mono text-xs font-semibold border border-blue-200">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-900 text-white font-mono text-xs font-semibold">
                 Placa: {filters.placa}
                 <button onClick={() => toggleFilter('placa', 'all')}><X size={11} /></button>
               </span>
             )}
             {!hasActiveFilters && (
-              <span className="text-slate-400 text-xs">Sin filtros (Mostrando consolidado general)</span>
+              <span className="text-slate-400 text-xs">Sin filtros (Consolidado general)</span>
             )}
           </div>
 
@@ -959,27 +1099,39 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* 4. GRÁFICA MENSUAL (APARTE, EN SU PROPIA SECCIÓN)              */}
+      {/* 4. GRÁFICA MENSUAL (APARTE, EN SU PROPIA SECCIÓN, MÁS AMPLIA)  */}
       {/* ============================================================== */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <Calendar size={18} className="text-[#0D2B4E]" />
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Calendar size={20} className="text-[#0D2B4E]" />
               Evolución mensual de % disponibilidad
             </h3>
             <p className="text-xs text-slate-500">
-              Consolidado mes a mes. Haz clic en una barra para filtrar el dashboard por ese mes.
+              Desglose mes a mes a lo ancho completo. Haz clic en cualquier mes para filtrar todo el dashboard.
             </p>
           </div>
-          {filters.mes !== 'all' && (
-            <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200">
-              Mes seleccionado: {filters.mes}
+          {filters.mes !== 'all' ? (
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold border border-amber-300">
+                Filtro activo: {normMes(filters.mes)}
+              </span>
+              <button
+                onClick={() => toggleFilter('mes', 'all')}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800 underline"
+              >
+                Ver todos
+              </button>
+            </div>
+          ) : (
+            <span className="text-xs font-medium text-slate-400">
+              Mostrando los 12 meses
             </span>
           )}
         </div>
 
-        <div className="h-[280px] w-full pt-2">
+        <div className="h-[360px] md:h-[400px] w-full pt-2">
           {monthlyData.length === 0 ? (
             <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
               No hay datos para el rango o filtros seleccionados
@@ -988,7 +1140,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
                 data={monthlyData} 
-                margin={{ top: 25, right: 20, left: 0, bottom: 15 }}
+                margin={{ top: 25, right: 25, left: 0, bottom: 20 }}
                 onClick={(e: any) => {
                   if (e && e.activePayload && e.activePayload.length > 0) {
                     const item = e.activePayload[0].payload;
@@ -999,7 +1151,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
                 <XAxis 
                   dataKey="label" 
-                  tick={{ fontSize: 11, fill: PALETTE.grisTexto, fontWeight: 600 }}
+                  tick={{ fontSize: 11, fill: PALETTE.grisOscuro, fontWeight: 700 }}
                   axisLine={{ stroke: PALETTE.bordeSuave }}
                 />
                 <YAxis 
@@ -1023,18 +1175,18 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 <Bar 
                   dataKey="disponibilidad" 
                   name="% Disponibilidad"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={48}
+                  radius={[8, 8, 0, 0]}
+                  maxBarSize={54}
                   cursor="pointer"
                 >
                   <LabelList 
                     dataKey="disponibilidad" 
                     position="top" 
                     formatter={(v: any) => `${v}%`}
-                    style={{ fontSize: '11px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                    style={{ fontSize: '11px', fontWeight: '800', fill: PALETTE.grisOscuro }} 
                   />
                   {monthlyData.map((entry, index) => {
-                    const isSelected = filters.mes === entry.name;
+                    const isSelected = normMes(filters.mes) === entry.name;
                     return (
                       <Cell 
                         key={`cell-month-${index}`} 
@@ -1050,7 +1202,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* 5. GRÁFICAS TEMPORALES: SEMANAL Y DIARIA JUNTAS (2 COLUMNAS)   */}
+      {/* 5. SEMANAL Y POR CD CON DESGLOSE POR MES (2 COLUMNAS)          */}
       {/* ============================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -1062,7 +1214,9 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 <Layers size={16} className="text-[#0D2B4E]" />
                 Disponibilidad semanal
               </h3>
-              <p className="text-[11px] text-slate-500">Haz clic en una semana para filtrar</p>
+              <p className="text-[11px] text-slate-500">
+                {filters.mes !== 'all' ? `Semanas de ${normMes(filters.mes)}` : 'Semanas del periodo. Haz clic para filtrar.'}
+              </p>
             </div>
             {filters.semana !== 'all' && (
               <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
@@ -1071,7 +1225,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             )}
           </div>
 
-          <div className="h-[250px] w-full pt-2">
+          <div className="h-[270px] w-full pt-2">
             {weeklyData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
                 Sin datos para este corte semanal
@@ -1092,7 +1246,10 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                   <XAxis dataKey="label" tick={{ fontSize: 10, fill: PALETTE.grisTexto }} />
                   <YAxis domain={[75, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
                   <Tooltip 
-                    formatter={(val: any) => [`${val}%`, '% Disponibilidad']}
+                    formatter={(val: any, _: any, p: any) => [
+                      `${val}% (${p.payload.mes || 'Semanas'})`, 
+                      '% Disponibilidad'
+                    ]}
                     contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                   />
                   <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
@@ -1116,94 +1273,76 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           </div>
         </div>
 
-        {/* Gráfica Diaria */}
+        {/* Comparativa por Centro de Distribución (CD) — Con opción de Desglose por Mes */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Clock size={16} className="text-[#0D2B4E]" />
-                Disponibilidad diaria (últimos 35 días)
-              </h3>
-              <p className="text-[11px] text-slate-500">Haz clic en un día para ver detalle de ese día</p>
-            </div>
-            {filters.dia !== 'all' && (
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
-                {filters.dia}
-              </span>
-            )}
-          </div>
-
-          <div className="h-[250px] w-full pt-2">
-            {dailyData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
-                Sin datos diarios para este corte
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart 
-                  data={dailyData} 
-                  margin={{ top: 20, right: 15, left: -10, bottom: 10 }}
-                  onClick={(e: any) => {
-                    if (e && e.activePayload && e.activePayload.length > 0) {
-                      const item = e.activePayload[0].payload;
-                      toggleFilter('dia', item.fecha);
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
-                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
-                  <YAxis domain={[75, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
-                  <Tooltip 
-                    formatter={(val: any) => [`${val}%`, '% Disponibilidad']}
-                    labelFormatter={(l) => `Fecha: ${l}`}
-                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
-                  />
-                  <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
-                  <Line 
-                    type="monotone" 
-                    dataKey="disponibilidad" 
-                    stroke={PALETTE.azulMedio} 
-                    strokeWidth={2.5}
-                    dot={{ r: 3, fill: PALETTE.dorado }}
-                    activeDot={{ r: 6 }}
-                    cursor="pointer"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      {/* ============================================================== */}
-      {/* 6. GRÁFICAS: POR CD Y POR CONTRATISTA (2 COLUMNAS)             */}
-      {/* ============================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Comparativa por Centro de Distribución (CD) */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Building2 size={16} className="text-[#0D2B4E]" />
-                Disponibilidad por Centro de Distribución (CD)
+                Disponibilidad por Centro (CD)
               </h3>
-              <p className="text-[11px] text-slate-500">Comparativa GALAPA vs LA ARENOSA</p>
+              <p className="text-[11px] text-slate-500">
+                {filters.mes !== 'all' ? `Mes: ${normMes(filters.mes)}` : 'GALAPA vs LA ARENOSA'}
+              </p>
             </div>
-            {filters.cd !== 'all' && (
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
-                {filters.cd}
-              </span>
+
+            {/* Toggle de Desglose Mensual (solo cuando no hay mes único filtrado) */}
+            {filters.mes === 'all' && (
+              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
+                <button
+                  onClick={() => setCdViewMode('consolidado')}
+                  className={`px-2 py-0.5 rounded-md transition-all ${
+                    cdViewMode === 'consolidado' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Consolidado
+                </button>
+                <button
+                  onClick={() => setCdViewMode('por_mes')}
+                  className={`px-2 py-0.5 rounded-md transition-all ${
+                    cdViewMode === 'por_mes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Por Mes
+                </button>
+              </div>
             )}
           </div>
 
-          <div className="h-[240px] w-full pt-2">
-            {cdData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
-                Sin datos por CD
-              </div>
+          <div className="h-[270px] w-full pt-2">
+            {filters.mes === 'all' && cdViewMode === 'por_mes' ? (
+              // Vista Desglosada por Mes para Galapa y La Arenosa
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={cdMonthlyBreakdown} margin={{ top: 20, right: 15, left: -10, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
+                  <YAxis domain={[80, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
+                  <Tooltip 
+                    formatter={(val: any, name: any) => [`${val}%`, name]}
+                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
+                  <ReferenceLine y={95} stroke={PALETTE.verde} strokeDasharray="3 3" />
+                  <Bar dataKey="GALAPA" name="GALAPA" fill="#0D2B4E" radius={[4, 4, 0, 0]} maxBarSize={16}>
+                    <LabelList 
+                      dataKey="GALAPA" 
+                      position="top" 
+                      formatter={(v: any) => v > 0 ? `${v}%` : ''}
+                      style={{ fontSize: '8px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                    />
+                  </Bar>
+                  <Bar dataKey="LA ARENOSA" name="LA ARENOSA" fill="#3E5A78" radius={[4, 4, 0, 0]} maxBarSize={16}>
+                    <LabelList 
+                      dataKey="LA ARENOSA" 
+                      position="top" 
+                      formatter={(v: any) => v > 0 ? `${v}%` : ''}
+                      style={{ fontSize: '8px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
+              // Vista Consolidada o Filtrada
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart 
                   data={cdData} 
@@ -1249,34 +1388,80 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           </div>
         </div>
 
-        {/* Disponibilidad por Contratista */}
+      </div>
+
+      {/* ============================================================== */}
+      {/* 6. CONTRATISTAS Y DÍAS INDISPONIBLES (2 COLUMNAS)              */}
+      {/* ============================================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Disponibilidad por Contratista — Con Opción de Desglose Mensual */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Briefcase size={16} className="text-[#0D2B4E]" />
                 Disponibilidad por contratista
               </h3>
-              <p className="text-[11px] text-slate-500">% Operativo y vehículos indisponibles</p>
+              <p className="text-[11px] text-slate-500">
+                {filters.mes !== 'all' ? `Mes: ${normMes(filters.mes)}` : '% Operativo y volumen indisponible'}
+              </p>
             </div>
-            {filters.contratista !== 'all' && (
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
-                {filters.contratista}
-              </span>
+
+            {filters.mes === 'all' && (
+              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
+                <button
+                  onClick={() => setContractorViewMode('consolidado')}
+                  className={`px-2 py-0.5 rounded-md transition-all ${
+                    contractorViewMode === 'consolidado' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Consolidado
+                </button>
+                <button
+                  onClick={() => setContractorViewMode('por_mes')}
+                  className={`px-2 py-0.5 rounded-md transition-all ${
+                    contractorViewMode === 'por_mes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Por Mes
+                </button>
+              </div>
             )}
           </div>
 
-          <div className="h-[240px] w-full pt-2">
-            {contractorData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
-                Sin datos de contratistas
-              </div>
+          <div className="h-[250px] w-full pt-2">
+            {filters.mes === 'all' && contractorViewMode === 'por_mes' ? (
+              // Vista Desglose Mensual por Contratista
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={contractorMonthlyBreakdown.rows} margin={{ top: 20, right: 15, left: -10, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
+                  <YAxis domain={[80, 100]} tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit="%" />
+                  <Tooltip 
+                    formatter={(val: any, name: any) => [`${val}%`, name]}
+                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }} />
+                  {contractorMonthlyBreakdown.contractors.map((c, i) => (
+                    <Bar 
+                      key={c} 
+                      dataKey={c} 
+                      name={c} 
+                      fill={MONTH_COLORS[i % MONTH_COLORS.length]} 
+                      radius={[3, 3, 0, 0]} 
+                      maxBarSize={12} 
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
+              // Vista Consolidada o Filtrada
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart 
                   data={contractorData} 
                   layout="vertical" 
-                  margin={{ top: 10, right: 35, left: 60, bottom: 10 }}
+                  margin={{ top: 10, right: 35, left: 65, bottom: 10 }}
                   onClick={(e: any) => {
                     if (e && e.activePayload && e.activePayload.length > 0) {
                       const item = e.activePayload[0].payload;
@@ -1319,54 +1504,45 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           </div>
         </div>
 
-      </div>
-
-      {/* ============================================================== */}
-      {/* 7. DÍAS INDISPONIBLES EN TALLER (SALIDA - INGRESO)              */}
-      {/* ============================================================== */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Clock size={16} className="text-[#0D2B4E]" />
-              Permanencia y días indisponibles en taller
-            </h3>
-            <p className="text-xs text-slate-500">
-              Calculado como (Fecha estimada de salida) − (Fecha de ingreso), excluyendo valores negativos
-            </p>
+        {/* Días Indisponibles en Taller (Permanencia) */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Clock size={16} className="text-[#0D2B4E]" />
+                Días de permanencia en taller
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                (Fecha Salida) − (Fecha Ingreso) en días, excluyendo negativos
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
-          
-          {/* Promedio de días por CD */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Días promedio de permanencia por CD
-            </h4>
-            <div className="h-[220px] w-full">
-              {daysInShopStats.cdDaysList.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
-                  Sin datos de permanencia
-                </div>
-              ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            
+            {/* Promedio por CD */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Promedio por CD
+              </span>
+              <div className="h-[210px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={daysInShopStats.cdDaysList} margin={{ top: 20, right: 30, left: -10, bottom: 10 }}>
+                  <BarChart data={daysInShopStats.cdDaysList} margin={{ top: 20, right: 15, left: -15, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: PALETTE.grisOscuro, fontWeight: 700 }} />
-                    <YAxis tick={{ fontSize: 10, fill: PALETTE.grisTexto }} unit=" d" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: PALETTE.grisOscuro, fontWeight: 700 }} />
+                    <YAxis tick={{ fontSize: 9, fill: PALETTE.grisTexto }} unit=" d" />
                     <Tooltip 
                       formatter={(val: any, _: any, p: any) => [
-                        `${val} días prom. (${p.payload.totalDias} días en ${p.payload.intervenciones} intervenciones)`, 
+                        `${val} días prom. (${p.payload.totalDias} d en ${p.payload.intervenciones} ingresos)`, 
                         'Permanencia'
                       ]}
                       contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                     />
-                    <Bar dataKey="promedioDias" fill={PALETTE.azulOscuro} radius={[6, 6, 0, 0]} maxBarSize={45}>
+                    <Bar dataKey="promedioDias" fill={PALETTE.azulOscuro} radius={[5, 5, 0, 0]} maxBarSize={40}>
                       <LabelList 
                         dataKey="promedioDias" 
                         position="top" 
-                        formatter={(v: any) => `${v} días`}
+                        formatter={(v: any) => `${v} d`}
                         style={{ fontSize: '10px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                       />
                       {daysInShopStats.cdDaysList.map((entry, index) => (
@@ -1378,26 +1554,20 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              )}
+              </div>
             </div>
-          </div>
 
-          {/* Top Placas con más días acumulados */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Top 10 placas con más días acumulados en taller
-            </h4>
-            <div className="h-[220px] w-full">
-              {daysInShopStats.topPlatesDaysList.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
-                  Sin datos de placas
-                </div>
-              ) : (
+            {/* Top 5 Placas con más días */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Top placas en taller (días acum.)
+              </span>
+              <div className="h-[210px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart 
-                    data={daysInShopStats.topPlatesDaysList} 
+                    data={daysInShopStats.topPlatesDaysList.slice(0, 6)} 
                     layout="vertical" 
-                    margin={{ top: 5, right: 40, left: 35, bottom: 5 }}
+                    margin={{ top: 5, right: 25, left: 30, bottom: 5 }}
                     onClick={(e: any) => {
                       if (e && e.activePayload && e.activePayload.length > 0) {
                         const item = e.activePayload[0].payload;
@@ -1410,24 +1580,24 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                     <YAxis 
                       dataKey="placa" 
                       type="category" 
-                      tick={{ fontSize: 10, fill: PALETTE.grisOscuro, fontWeight: 700, fontFamily: 'monospace' }}
-                      width={60}
+                      tick={{ fontSize: 9, fill: PALETTE.grisOscuro, fontWeight: 700, fontFamily: 'monospace' }}
+                      width={55}
                     />
                     <Tooltip 
                       formatter={(val: any, _: any, p: any) => [
                         `${val} días acumulados (${p.payload.intervenciones} ingresos • ${p.payload.cd})`, 
-                        'Días en taller'
+                        'Días taller'
                       ]}
                       contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
                     />
-                    <Bar dataKey="diasAcumulados" radius={[0, 6, 6, 0]} maxBarSize={18} cursor="pointer">
+                    <Bar dataKey="diasAcumulados" radius={[0, 5, 5, 0]} maxBarSize={16} cursor="pointer">
                       <LabelList 
                         dataKey="diasAcumulados" 
                         position="right" 
-                        formatter={(v: any) => `${v} d`}
+                        formatter={(v: any) => `${v}d`}
                         style={{ fontSize: '9px', fontWeight: '700', fill: PALETTE.grisOscuro }} 
                       />
-                      {daysInShopStats.topPlatesDaysList.map((entry, index) => (
+                      {daysInShopStats.topPlatesDaysList.slice(0, 6).map((entry, index) => (
                         <Cell 
                           key={`cell-topdays-${index}`} 
                           fill={filters.placa === entry.placa ? PALETTE.doradoActivo : PALETTE.azulClaro} 
@@ -1436,46 +1606,85 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              )}
+              </div>
             </div>
-          </div>
 
+          </div>
         </div>
+
       </div>
 
       {/* ============================================================== */}
-      {/* 8. ANÁLISIS DE INTERVENCIONES: SISTEMA Y PLACAS (2 COLUMNAS)   */}
+      {/* 7. ANÁLISIS DE INTERVENCIONES: SISTEMAS Y PLACAS (2 COLUMNAS)  */}
       {/* ============================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Sistema Más Intervenido */}
+        {/* Sistemas Más Intervenidos (Con Desglose por Mes) */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Wrench size={16} className="text-[#0D2B4E]" />
                 Sistemas más intervenidos
               </h3>
-              <p className="text-[11px] text-slate-500">Cantidad de novedades por componente / sistema</p>
+              <p className="text-[11px] text-slate-500">
+                {filters.mes !== 'all' ? `Novedades en ${normMes(filters.mes)}` : 'Cantidad de novedades por componente / sistema'}
+              </p>
             </div>
-            {filters.sistema !== 'all' && (
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200">
-                {filters.sistema}
-              </span>
+
+            {filters.mes === 'all' && (
+              <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-[10px] font-bold">
+                <button
+                  onClick={() => setSystemViewMode('consolidado')}
+                  className={`px-2 py-0.5 rounded-md transition-all ${
+                    systemViewMode === 'consolidado' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Consolidado
+                </button>
+                <button
+                  onClick={() => setSystemViewMode('por_mes')}
+                  className={`px-2 py-0.5 rounded-md transition-all ${
+                    systemViewMode === 'por_mes' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Por Mes
+                </button>
+              </div>
             )}
           </div>
 
-          <div className="h-[250px] w-full pt-2">
-            {systemInterventionsData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
-                Sin datos de sistemas
-              </div>
+          <div className="h-[270px] w-full pt-2">
+            {filters.mes === 'all' && systemViewMode === 'por_mes' ? (
+              // Vista Desglose Mensual de Sistemas
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={systemMonthlyBreakdown.rows} margin={{ top: 20, right: 15, left: -10, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={PALETTE.fondoGris} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
+                  <YAxis tick={{ fontSize: 9, fill: PALETTE.grisTexto }} />
+                  <Tooltip 
+                    formatter={(val: any, name: any) => [`${val} intervenciones`, name]}
+                    contentStyle={{ backgroundColor: '#0F172A', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }} />
+                  {systemMonthlyBreakdown.systems.map((s, idx) => (
+                    <Bar 
+                      key={s} 
+                      dataKey={s} 
+                      name={s} 
+                      fill={MONTH_COLORS[idx % MONTH_COLORS.length]} 
+                      stackId="a"
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
             ) : (
+              // Vista Consolidada o Filtrada
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart 
                   data={systemInterventionsData} 
                   layout="vertical" 
-                  margin={{ top: 5, right: 35, left: 60, bottom: 5 }}
+                  margin={{ top: 5, right: 35, left: 65, bottom: 5 }}
                   onClick={(e: any) => {
                     if (e && e.activePayload && e.activePayload.length > 0) {
                       const item = e.activePayload[0].payload;
@@ -1522,19 +1731,21 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
                 <Truck size={16} className="text-[#0D2B4E]" />
                 Placas más intervenidas (Top 15)
               </h3>
-              <p className="text-[11px] text-slate-500">Vehículos con mayor recurrencia de ingresos a taller</p>
+              <p className="text-[11px] text-slate-500">
+                {filters.mes !== 'all' ? `Ingresos en ${normMes(filters.mes)}` : 'Vehículos con mayor recurrencia de ingresos a taller'}
+              </p>
             </div>
             {filters.placa !== 'all' && (
-              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-[10px] font-bold border border-slate-200 font-mono">
+              <span className="px-2.5 py-0.5 rounded-full bg-slate-900 text-white text-[10px] font-bold font-mono">
                 {filters.placa}
               </span>
             )}
           </div>
 
-          <div className="h-[250px] w-full pt-2">
+          <div className="h-[270px] w-full pt-2">
             {plateInterventionsData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl">
-                Sin datos de placas
+                Sin datos de placas para los filtros actuales
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -1584,7 +1795,7 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* 9. TABLA DETALLADA DE INTERVENCIONES                           */}
+      {/* 8. TABLA DETALLADA DE INTERVENCIONES                           */}
       {/* ============================================================== */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         
