@@ -1555,7 +1555,7 @@ const App: React.FC = () => {
       ) : appMode === 'talleres' ? (
         <WorkshopModule onBack={() => setAppMode('root_menu')} vehicles={vehicles} />
       ) : appMode === 'rutinas' ? (
-        <div className="flex-grow bg-[#f8fafc] p-8 overflow-y-auto h-screen">
+        <div className="flex-grow bg-[#f8fafc] p-8 min-h-screen">
           {routineSubMode === 'menu' ? (
             <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in duration-300">
               {/* Back button */}
@@ -1753,7 +1753,7 @@ const App: React.FC = () => {
                   onClick={() => setIsSidebarOpen(false)}
                 />
               )}
-              <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#0f172a] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform xl:relative xl:translate-x-0`}>
+              <aside className={`fixed inset-y-0 left-0 z-50 w-72 shrink-0 bg-[#0f172a] transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform xl:sticky xl:top-0 xl:h-screen xl:translate-x-0`}>
             <div className="p-8 flex flex-col h-full space-y-2">
               <div className="mb-10 flex items-center justify-between">
                  <div className="flex items-center gap-3">
@@ -1902,9 +1902,9 @@ const App: React.FC = () => {
             </>
           )}
 
-      <main className="flex-grow flex flex-col h-screen overflow-hidden pb-16 xl:pb-0">
+      <main className="flex-grow flex flex-col min-h-screen pb-16 xl:pb-0">
         {/* HEADER */}
-        <header className="bg-white border-b p-3 md:p-4 flex justify-between items-center shrink-0 shadow-sm z-10">
+        <header className="bg-white border-b p-3 md:p-4 flex justify-between items-center sticky top-0 shadow-sm z-20">
           <div className="flex items-center gap-2 md:gap-4 flex-grow">
             <button onClick={() => setIsSidebarOpen(true)} className="xl:hidden p-2 text-slate-600"><Menu/></button>
             <button 
@@ -1985,7 +1985,7 @@ const App: React.FC = () => {
         </nav>
 
         {/* CONTENT AREA */}
-        <div className="flex-grow p-3 md:p-8 overflow-y-auto bg-[#F0F4FF] custom-scrollbar">
+        <div className="flex-grow p-3 md:p-8 bg-[#F0F4FF]">
           
           {activeView === 'categories_dashboard' && (
             <div className="max-w-7xl mx-auto space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
