@@ -1599,7 +1599,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
-                key={`monthly-barchart-${filterKey}`}
                 data={monthlyData} 
                 margin={{ top: 25, right: 25, left: -5, bottom: 20 }}
                 onClick={(e: any) => {
@@ -1715,7 +1714,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
-                key={`weekly-barchart-${filterKey}`}
                 data={weeklyData} 
                 margin={{ top: 25, right: 20, left: -5, bottom: 10 }}
                 onClick={(e: any) => {
@@ -1835,7 +1833,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           {cdViewMode === 'por_mes' ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
-                key={`cd-monthly-chart-${filterKey}`}
                 data={cdMonthlyBreakdown} 
                 margin={{ top: 25, right: 25, left: -5, bottom: 10 }}
                 onClick={(e: any) => {
@@ -1907,7 +1904,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
-                key={`cd-consolidated-chart-${filterKey}`}
                 data={cdData} 
                 margin={{ top: 25, right: 35, left: 10, bottom: 15 }}
                 onClick={(e: any) => {
@@ -2028,7 +2024,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           {contractorViewMode === 'por_mes' ? (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
-                key={`contractor-monthly-chart-${filterKey}`}
                 data={contractorMonthlyBreakdown.rows} 
                 margin={{ top: 20, right: 20, left: -5, bottom: 10 }}
                 onClick={(e: any) => {
@@ -2071,7 +2066,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart 
-                key={`contractor-consolidated-chart-${filterKey}`}
                 data={contractorData} 
                 layout="vertical" 
                 margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
@@ -2217,7 +2211,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart 
-                key={`stream-chart-${filterKey}-${streamTimeMode}-${streamStackType}`}
                 data={systemStreamData} 
                 stackOffset={streamStackType === 'silhouette' ? 'silhouette' : undefined}
                 margin={{ top: 20, right: 30, left: 10, bottom: 15 }}
@@ -2362,7 +2355,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               <div className="h-[210px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart 
-                    key={`cddays-chart-${filterKey}`}
                     data={daysInShopStats.cdDaysList} 
                     margin={{ top: 20, right: 15, left: -15, bottom: 5 }}
                     onClick={(e: any) => {
@@ -2425,7 +2417,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
               <div className="h-[210px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart 
-                    key={`topdays-chart-${filterKey}`}
                     data={daysInShopStats.topPlatesDaysList.slice(0, 6)} 
                     layout="vertical" 
                     margin={{ top: 5, right: 30, left: 30, bottom: 5 }}
@@ -2524,7 +2515,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart 
-                  key={`plates-chart-${filterKey}`}
                   data={plateInterventionsData} 
                   margin={{ top: 20, right: 10, left: -15, bottom: 25 }}
                   onClick={(e: any) => {
