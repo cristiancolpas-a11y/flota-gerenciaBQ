@@ -669,12 +669,14 @@ export interface VehicleInventory {
   fotoTrasera: string;
   carretillas: number;
   conos: number;
-  novedad: string;
-  fotoNovedad1: string;
-  fotoNovedad2: string;
-  fotoNovedad3: string;
-  fotoNovedad4: string;
-  observacion: string;
+  fotoEstriboIzq: string;   // NUEVA (idx 9)
+  fotoEstriboDer: string;   // NUEVA (idx 10)
+  fotoNovedad1: string;     // idx 11
+  fotoNovedad2: string;     // idx 12
+  fotoNovedad3: string;     // idx 13
+  observacion: string;      // idx 14
+  estadoTacos: string;      // NUEVA (idx 16)
+  tacos: string;            // NUEVA (idx 17)
 }
 
 export interface NovedadFlt {

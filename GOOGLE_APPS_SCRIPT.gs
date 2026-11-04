@@ -1976,27 +1976,31 @@ function doPost(e) {
         var imgLatIzq = sImg(d.fotoLateralIzq, "INV_LAT_IZQ_" + placa);
         var imgLatDer = sImg(d.fotoLateralDer, "INV_LAT_DER_" + placa);
         var imgTrasera = sImg(d.fotoTrasera, "INV_TRAS_" + placa);
+        var imgEstriboIzq = sImg(d.fotoEstriboIzq, "INV_EST_IZQ_" + placa);
+        var imgEstriboDer = sImg(d.fotoEstriboDer, "INV_EST_DER_" + placa);
         var imgNov1 = sImg(d.fotoNovedad1, "INV_NOV1_" + placa);
         var imgNov2 = sImg(d.fotoNovedad2, "INV_NOV2_" + placa);
         var imgNov3 = sImg(d.fotoNovedad3, "INV_NOV3_" + placa);
-        var imgNov4 = sImg(d.fotoNovedad4, "INV_NOV4_" + placa);
 
         var rowDataInv = [
-          fechaIngreso,                        // Col A: FECHA
-          placa,                               // Col B: PLACA
-          inspectorNombre,                     // Col C: INSPECTOR
-          imgFrontal || "",                    // Col D: FOTO FRONTAL
-          imgLatIzq || "",                     // Col E: FOTO LATERAL IZQUIERDA
-          imgLatDer || "",                     // Col F: FOTO LATERAL DERECHA
-          imgTrasera || "",                    // Col G: FOTO TRASERA
-          Number(d.carretillas) || 0,          // Col H: CARRETILLAS
-          Number(d.conos) || 0,                // Col I: CONOS
-          d.novedad || "",                     // Col J: NOVEDAD
-          imgNov1 || "",                       // Col K: FOTO NOVEDAD 1
-          imgNov2 || "",                       // Col L: FOTO NOVEDAD 2
-          imgNov3 || "",                       // Col M: FOTO NOVEDAD 3
-          imgNov4 || "",                       // Col N: FOTO NOVEDAD 4
-          d.observacion || ""                  // Col O: OBSERVACIONES
+          fechaIngreso,                        // Col A (idx 0): FECHA
+          placa,                               // Col B (idx 1): PLACA
+          inspectorNombre,                     // Col C (idx 2): NOMBRE (inspector)
+          imgFrontal || "",                    // Col D (idx 3): Foto Frontal
+          imgLatIzq || "",                     // Col E (idx 4): Foto Lateral Izq.
+          imgLatDer || "",                     // Col F (idx 5): Foto Lateral Der.
+          imgTrasera || "",                    // Col G (idx 6): Foto Trasera
+          Number(d.carretillas) || 0,          // Col H (idx 7): carretilla
+          Number(d.conos) || 0,                // Col I (idx 8): conos
+          imgEstriboIzq || "",                 // Col J (idx 9): estribo Izq. (foto)
+          imgEstriboDer || "",                 // Col K (idx 10): estribo Der. (foto)
+          imgNov1 || "",                       // Col L (idx 11): novedad1 (foto)
+          imgNov2 || "",                       // Col M (idx 12): novedad2 (foto)
+          imgNov3 || "",                       // Col N (idx 13): novedad3 (foto)
+          d.observacion || "",                 // Col O (idx 14): observacion
+          "",                                  // Col P (idx 15): (vacía)
+          d.estadoTacos || "",                 // Col Q (idx 16): ESTADO TACOS
+          d.tacos || ""                        // Col R (idx 17): TACOS
         ];
 
         s.appendRow(rowDataInv);

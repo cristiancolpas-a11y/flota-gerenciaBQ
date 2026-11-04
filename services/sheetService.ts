@@ -5962,12 +5962,14 @@ export const fetchVehicleInventoryFromSheet = async (): Promise<VehicleInventory
         fotoTrasera: cleanSheetValue(r[6]),
         carretillas: Number(cleanSheetValue(r[7])) || 0,
         conos: Number(cleanSheetValue(r[8])) || 0,
-        novedad: cleanSheetValue(r[9]),
-        fotoNovedad1: cleanSheetValue(r[10]),
-        fotoNovedad2: cleanSheetValue(r[11]),
-        fotoNovedad3: cleanSheetValue(r[12]),
-        fotoNovedad4: cleanSheetValue(r[13]),
-        observacion: cleanSheetValue(r[14]),
+        fotoEstriboIzq: cleanSheetValue(r[9]),    // NUEVA (idx 9)
+        fotoEstriboDer: cleanSheetValue(r[10]),   // NUEVA (idx 10)
+        fotoNovedad1: cleanSheetValue(r[11]),     // corrido (idx 11)
+        fotoNovedad2: cleanSheetValue(r[12]),     // idx 12
+        fotoNovedad3: cleanSheetValue(r[13]),     // idx 13
+        observacion: cleanSheetValue(r[14]),      // idx 14
+        estadoTacos: cleanSheetValue(r[16]),      // NUEVA (idx 16)
+        tacos: cleanSheetValue(r[17]),            // NUEVA (idx 17)
       }));
 
   try {
