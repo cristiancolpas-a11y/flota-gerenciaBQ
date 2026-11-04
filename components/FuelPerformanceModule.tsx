@@ -3,7 +3,7 @@ import { FuelPerformance } from '../types';
 import { 
   Search, Filter, Fuel, AlertTriangle, ArrowUpDown, ArrowUp, ArrowDown,
   ChevronLeft, ChevronRight, Download, RefreshCw, AlertCircle,
-  Building2, Calendar, Truck, DollarSign, Gauge, X, Layers
+  Building2, Calendar, Truck, DollarSign, Gauge, X, Layers, Briefcase, Users, BarChart3
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -139,6 +139,9 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
 
   // Gráfica de Ranking
   const [rankingView, setRankingView] = useState<RankingView>('peores');
+
+  // Métrica seleccionada para la gráfica complementaria por contratista
+  const [contratistaMetric, setContratistaMetric] = useState<'galones' | 'costo' | 'vehiculos'>('galones');
 
   // Listas únicas para filtros
   const cdOptions = useMemo(() => {
@@ -377,6 +380,43 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
       costoFormatted: formatShortCurrency(costo)
     })).sort((a, b) => b.costo - a.costo);
   }, [filteredData]);
+
+  // Gráfica: Rendimiento promedio por contratista (proveedor)
+  // En esta hoja el contratista es NOMBRE PROVEEDOR (UC/OL) = campo proveedor
+  // Promedio calculado exactamente como en Excel: solo registros con rendimiento > 0 (ignora ceros/vacíos)
+  const proveedorChartData = useMemo(() => {
+    const map: Record<string, { sumRend: number; nRend: number; km: number; gal: number; costo: number; placas: Set<string> }> = {};
+    filteredData.forEach(r => {
+      const prov = (r.proveedor || '').trim() || 'Sin proveedor';
+      if (!map[prov]) map[prov] = { sumRend: 0, nRend: 0, km: 0, gal: 0, costo: 0, placas: new Set() };
+      if (r.rendimiento && r.rendimiento > 0) { 
+        map[prov].sumRend += r.rendimiento; 
+        map[prov].nRend++; 
+      }
+      map[prov].km += r.kmRecorridos || 0;
+      map[prov].gal += r.galones || 0;
+      map[prov].costo += r.totalCostos || 0;
+      if (r.placa) map[prov].placas.add(r.placa);
+    });
+    return Object.keys(map).map(prov => {
+      const m = map[prov];
+      const rendimiento = m.nRend > 0 ? Number((m.sumRend / m.nRend).toFixed(2)) : 0;
+      return {
+        name: prov,
+        rendimiento,  // promedio ignorando ceros
+        km: m.km,
+        galones: Number(m.gal.toFixed(1)),
+        costo: m.costo,
+        vehiculos: m.placas.size,
+        vehiculosConDato: m.nRend
+      };
+    }).sort((a, b) => b.rendimiento - a.rendimiento); // mejor rendimiento primero
+  }, [filteredData]);
+
+  // Datos ordenados para la métrica complementaria por contratista (galones, costo, vehiculos)
+  const proveedorMetricChartData = useMemo(() => {
+    return [...proveedorChartData].sort((a, b) => (b[contratistaMetric] || 0) - (a[contratistaMetric] || 0));
+  }, [proveedorChartData, contratistaMetric]);
 
   // Exportar a CSV
   const handleExportCSV = () => {
@@ -979,7 +1019,251 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
             </div>
           </div>
 
-          {/* Gráfica 3: Evolución Mensual (cálculo Excel: solo rendimiento > 0) */}
+          {/* Gráfica 3: Rendimiento Promedio por Contratista (cálculo Excel: solo rendimiento > 0) */}
+          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-[#0D2B4E] flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-[#0D2B4E]" />
+                  Rendimiento Promedio por Contratista (km/gal)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Promedio por empresa de transporte (solo registros con rendimiento &gt; 0, criterio Excel)
+                </p>
+              </div>
+
+              {selectedProveedor && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#0D2B4E] text-white shadow-2xs self-start sm:self-auto">
+                  <span className="truncate max-w-[150px]">{selectedProveedor}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedProveedor('');
+                    }}
+                    className="hover:text-amber-300 p-0.5"
+                    title="Quitar filtro de contratista"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {proveedorChartData.length === 0 ? (
+              <div className="h-[320px] flex items-center justify-center text-xs text-slate-400">
+                No hay datos de contratistas para mostrar con los filtros seleccionados.
+              </div>
+            ) : (
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={proveedorChartData}
+                    margin={{ top: 25, right: 20, left: 0, bottom: 45 }}
+                    onClick={(e: any) => {
+                      const p = e?.activePayload?.[0]?.payload;
+                      if (p?.name) {
+                        setSelectedProveedor(prev => prev === p.name ? '' : p.name);
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10, fill: '#1E293B', fontWeight: 600 }}
+                      interval={0}
+                      angle={-20}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis
+                      domain={[0, (dataMax: number) => Math.max(Math.ceil(dataMax + 2), 16)]}
+                      tick={{ fontSize: 10, fill: '#64748B' }}
+                      unit=" km/gal"
+                    />
+                    <Tooltip
+                      formatter={(v: any, _name, item: any) => [
+                        `${Number(v).toFixed(2)} km/gal (${item?.payload?.vehiculosConDato || 0} vh con dato de ${item?.payload?.vehiculos || 0} flota)`,
+                        'Rendimiento Promedio'
+                      ]}
+                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#CBD5E1', borderRadius: '8px', fontSize: '12px' }}
+                    />
+                    <ReferenceLine
+                      y={META_RENDIMIENTO.medio}
+                      stroke="#F2B705"
+                      strokeDasharray="4 4"
+                      label={{ value: `Meta Mín: ${META_RENDIMIENTO.medio}`, position: 'right', fill: '#B45309', fontSize: 10 }}
+                    />
+                    <ReferenceLine
+                      y={META_RENDIMIENTO.bueno}
+                      stroke="#16A34A"
+                      strokeDasharray="4 4"
+                      label={{ value: `Meta: ${META_RENDIMIENTO.bueno}`, position: 'right', fill: '#15803D', fontSize: 10 }}
+                    />
+                    <Bar
+                      dataKey="rendimiento"
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={60}
+                      className="cursor-pointer"
+                    >
+                      {proveedorChartData.map((d, i) => (
+                        <Cell
+                          key={`prov-cell-${i}`}
+                          fill={getRendimientoStatus(d.rendimiento).color}
+                          opacity={!selectedProveedor || selectedProveedor.toUpperCase() === d.name.toUpperCase() ? 1 : 0.4}
+                        />
+                      ))}
+                      <LabelList
+                        dataKey="rendimiento"
+                        position="top"
+                        style={{ fontSize: 11, fontWeight: 700, fill: '#0D2B4E' }}
+                        formatter={(v: any) => `${Number(v).toFixed(2)}`}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            <div className="mt-2 text-[11px] text-slate-500 flex items-center justify-between border-t border-slate-100 pt-2">
+              <span>* Clic en una barra para filtrar el módulo por contratista</span>
+              <span className="font-semibold text-slate-700">{proveedorChartData.length} contratistas</span>
+            </div>
+          </div>
+
+          {/* Gráfica 4: Consumo, Costo y Flota por Contratista */}
+          <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-[#0D2B4E] flex items-center gap-2">
+                  <Users className="w-4 h-4 text-[#0D2B4E]" />
+                  {contratistaMetric === 'galones' && 'Galones Consumidos por Contratista'}
+                  {contratistaMetric === 'costo' && 'Costo de Combustible por Contratista'}
+                  {contratistaMetric === 'vehiculos' && 'Flota de Vehículos por Contratista'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {contratistaMetric === 'galones' && 'Total de galones abastecidos por empresa transportadora'}
+                  {contratistaMetric === 'costo' && 'Gasto acumulado en pesos colombianos ($ COP)'}
+                  {contratistaMetric === 'vehiculos' && 'Cantidad de vehículos con consumo registrado'}
+                </p>
+              </div>
+
+              {/* Selector de Métrica */}
+              <div className="inline-flex p-1 bg-slate-100 rounded-lg text-xs font-medium self-start sm:self-auto">
+                <button
+                  onClick={() => setContratistaMetric('galones')}
+                  className={`px-2.5 py-1 rounded-md transition ${
+                    contratistaMetric === 'galones'
+                      ? 'bg-[#0D2B4E] text-white shadow-2xs font-semibold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Galones
+                </button>
+                <button
+                  onClick={() => setContratistaMetric('costo')}
+                  className={`px-2.5 py-1 rounded-md transition ${
+                    contratistaMetric === 'costo'
+                      ? 'bg-[#0D2B4E] text-white shadow-2xs font-semibold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Costo ($)
+                </button>
+                <button
+                  onClick={() => setContratistaMetric('vehiculos')}
+                  className={`px-2.5 py-1 rounded-md transition ${
+                    contratistaMetric === 'vehiculos'
+                      ? 'bg-[#0D2B4E] text-white shadow-2xs font-semibold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Vehículos
+                </button>
+              </div>
+            </div>
+
+            {proveedorMetricChartData.length === 0 ? (
+              <div className="h-[320px] flex items-center justify-center text-xs text-slate-400">
+                No hay datos para mostrar con los filtros actuales.
+              </div>
+            ) : (
+              <div className="h-[320px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={proveedorMetricChartData}
+                    margin={{ top: 25, right: 20, left: 10, bottom: 45 }}
+                    onClick={(e: any) => {
+                      const p = e?.activePayload?.[0]?.payload;
+                      if (p?.name) {
+                        setSelectedProveedor(prev => prev === p.name ? '' : p.name);
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 10, fill: '#1E293B', fontWeight: 600 }}
+                      interval={0}
+                      angle={-20}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: '#64748B' }}
+                      tickFormatter={(v) => {
+                        if (contratistaMetric === 'costo') return formatShortCurrency(v);
+                        if (contratistaMetric === 'galones') return `${formatNumber(v, 0)} GL`;
+                        return `${v}`;
+                      }}
+                    />
+                    <Tooltip
+                      formatter={(v: any) => {
+                        if (contratistaMetric === 'costo') return [formatCurrency(Number(v)), 'Costo Total'];
+                        if (contratistaMetric === 'galones') return [`${formatNumber(Number(v), 1)} GL`, 'Galones Consumidos'];
+                        return [`${v} vehículos`, 'Flota'];
+                      }}
+                      contentStyle={{ backgroundColor: '#ffffff', borderColor: '#CBD5E1', borderRadius: '8px', fontSize: '12px' }}
+                    />
+                    <Bar
+                      dataKey={contratistaMetric}
+                      fill={contratistaMetric === 'costo' ? '#0284C7' : contratistaMetric === 'vehiculos' ? '#6366F1' : '#0D2B4E'}
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={60}
+                      className="cursor-pointer"
+                    >
+                      {proveedorMetricChartData.map((d, i) => (
+                        <Cell
+                          key={`prov-metric-cell-${i}`}
+                          opacity={!selectedProveedor || selectedProveedor.toUpperCase() === d.name.toUpperCase() ? 1 : 0.4}
+                        />
+                      ))}
+                      <LabelList
+                        dataKey={contratistaMetric}
+                        position="top"
+                        style={{ fontSize: 11, fontWeight: 700, fill: '#0D2B4E' }}
+                        formatter={(v: any) => {
+                          if (contratistaMetric === 'costo') return formatShortCurrency(Number(v));
+                          if (contratistaMetric === 'galones') return `${formatNumber(Number(v), 0)}`;
+                          return `${v}`;
+                        }}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            <div className="mt-2 text-[11px] text-slate-500 flex items-center justify-between border-t border-slate-100 pt-2">
+              <span>* Clic en una barra para filtrar por contratista</span>
+              <span className="font-semibold text-slate-700">
+                {contratistaMetric === 'costo' && `Total: ${formatCurrency(stats.totalCost)}`}
+                {contratistaMetric === 'galones' && `Total: ${formatNumber(stats.totalGal, 1)} GL`}
+                {contratistaMetric === 'vehiculos' && `${proveedorMetricChartData.reduce((acc, c) => acc + c.vehiculos, 0)} vehículos con consumo`}
+              </span>
+            </div>
+          </div>
+
+          {/* Gráfica 5: Evolución Mensual (cálculo Excel: solo rendimiento > 0) */}
           <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
             <div className="mb-4">
               <h3 className="text-sm font-bold text-[#0D2B4E] flex items-center gap-2">
@@ -1049,7 +1333,7 @@ const FuelPerformanceModule: React.FC<FuelPerformanceModuleProps> = ({
             </div>
           </div>
 
-          {/* Gráfica 4: Costo Total por CD */}
+          {/* Gráfica 6: Costo Total por CD */}
           <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
             <div className="mb-4">
               <h3 className="text-sm font-bold text-[#0D2B4E] flex items-center gap-2">

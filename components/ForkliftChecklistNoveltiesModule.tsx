@@ -293,7 +293,10 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
       (i.links3 && i.links3.trim().length > 0)
     ).length;
     const sinEvidencia = total - conEvidencia;
-    const criticos = filteredItems.filter(i => String(i.criticidad) === '1').length;
+    const criticos = filteredItems.filter(i => {
+      const raw = String(i.criticidad || '').trim().toUpperCase();
+      return raw === '1' || raw === '1.0' || raw.includes('CRITIC') || raw.includes('ALTA') || raw.startsWith('1');
+    }).length;
     const pctCerrados = total > 0 ? Math.round((cerrados / total) * 100) : 0;
 
     return { total, abiertos, cerrados, conEvidencia, sinEvidencia, criticos, pctCerrados };
@@ -332,12 +335,14 @@ export const ForkliftChecklistNoveltiesModule: React.FC<ForkliftChecklistNovelti
   const chartCriticidadData = useMemo(() => {
     const critCounts: Record<string, number> = { '1': 0, '2': 0, '3': 0 };
     filteredItems.forEach(i => {
-      const c = String(i.criticidad || '3').trim();
-      if (critCounts[c] !== undefined) {
-        critCounts[c] += 1;
-      } else {
-        critCounts['3'] += 1;
+      const raw = String(i.criticidad || '').trim().toUpperCase();
+      let c = '3';
+      if (raw === '1' || raw === '1.0' || raw.includes('CRITIC') || raw.includes('ALTA') || raw.startsWith('1')) {
+        c = '1';
+      } else if (raw === '2' || raw === '2.0' || raw.includes('MEDIA') || raw.startsWith('2')) {
+        c = '2';
       }
+      critCounts[c] += 1;
     });
 
     return [

@@ -4,11 +4,11 @@ import { RoutineForm_1 } from './RoutineForm_1';
 import { RoutineForm_2 } from './RoutineForm_2';
 import { RoutineForm_3 } from './RoutineForm_3';
 import { RoutineForm_4 } from './RoutineForm_4';
-import { getRoutinesDocId, setRoutinesDocId } from '../services/sheetService';
+import { getRoutinesDocId, setRoutinesDocId, fetchRoutineExecutionsFromSheet } from '../services/sheetService';
 import { 
   CheckCircle2, XCircle, AlertTriangle, Calendar, Clock, Truck, User, Plus, Search, 
   FileText, Sparkles, ShieldAlert, Gauge, TrendingUp, ClipboardCheck, Activity, 
-  ChevronRight, Trash2, Download, Check, RefreshCw, Layers, ClipboardList, Info, Trash
+  ChevronRight, Trash2, Download, Check, RefreshCw, Layers, ClipboardList, Info, Trash, Loader2, ExternalLink
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -49,10 +49,12 @@ export interface RoutineExecution {
   score: number; // percentage of OK items (excluding NA)
   hasFailures: boolean;
   notes?: string;
-  signatureUrl?: string; // Base64 signature
-  evidenceUrl?: string;  // Base64 evidence photo
+  signatureUrl?: string; // Base64 signature or URL
+  evidenceUrl?: string;  // Base64 evidence photo or URL
   cd?: string;
   contractor?: string;
+  taller?: string;
+  frecuencia?: string;
 }
 
 export interface ScheduledRoutine {
@@ -239,6 +241,7 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
   // --- STATE ---
   const [activeTab, setActiveTab] = useState<'exec' | 'history'>('exec');
   const [executions, setExecutions] = useState<RoutineExecution[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
   const [schedules, setSchedules] = useState<ScheduledRoutine[]>([]);
   
   // Execution Form State
@@ -286,101 +289,39 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
     setRoutinesDocId(sheetIdInput);
     setSaveFeedback('¡ID de hoja guardado correctamente en almacenamiento local!');
     setTimeout(() => setSaveFeedback(''), 4000);
+    loadRealExecutions();
   };
 
-  // --- INITIAL SEED DATA AND LOAD ---
-  useEffect(() => {
-    // Load executions
-    const storedExecs = localStorage.getItem('routine_executions');
-    if (storedExecs) {
-      try {
-        setExecutions(JSON.parse(storedExecs));
-      } catch (e) {
-        console.error("Error parsing routine executions", e);
-      }
-    } else {
-      // Seed initial executions for rich dashboard view
-      const mockExecs: RoutineExecution[] = [
-        {
-          id: 'mock-1',
-          date: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString().split('T')[0], // Today
-          plate: vehicles[0]?.plate || 'COLGU476',
-          driverId: drivers[0]?.id || 'D-01',
-          driverName: drivers[0]?.name || 'Juan Carlos Pérez',
-          templateId: ROUTINE_TEMPLATES[0].id,
-          templateName: ROUTINE_TEMPLATES[0].name,
-          mileage: (vehicles[0]?.currentMileage || 12000) - 15,
-          score: 100,
-          hasFailures: false,
-          notes: 'Inspección sin novedades. Todo al día.',
-          cd: vehicles[0]?.cd || 'LA ARENOSA',
-          contractor: vehicles[0]?.contractor || 'LOGISTICOS.CO',
-          responses: ROUTINE_TEMPLATES[0].items.map(item => ({ itemId: item.id, status: 'OK' }))
-        },
-        {
-          id: 'mock-2',
-          date: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString().split('T')[0], // Yesterday
-          plate: vehicles[1]?.plate || 'COLGU444',
-          driverId: drivers[1]?.id || 'D-02',
-          driverName: drivers[1]?.name || 'Andres Martinez',
-          templateId: ROUTINE_TEMPLATES[0].id,
-          templateName: ROUTINE_TEMPLATES[0].name,
-          mileage: (vehicles[1]?.currentMileage || 33900) - 25,
-          score: 80,
-          hasFailures: true,
-          notes: 'Nivel del refrigerante cerca del límite inferior, se requiere rellenar líquido.',
-          cd: vehicles[1]?.cd || 'LA ARENOSA',
-          contractor: vehicles[1]?.contractor || 'TEV',
-          responses: ROUTINE_TEMPLATES[0].items.map((item, idx) => {
-            if (idx === 2) {
-              return { itemId: item.id, status: 'FAIL', noveltyDescription: 'Líquido de refrigerante en nivel mínimo.' };
-            }
-            return { itemId: item.id, status: 'OK' };
-          })
-        },
-        {
-          id: 'mock-3',
-          date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString().split('T')[0], // 3 days ago
-          plate: vehicles[2]?.plate || 'COLGU383',
-          driverId: drivers[2]?.id || 'D-03',
-          driverName: drivers[2]?.name || 'Carlos Gomez',
-          templateId: ROUTINE_TEMPLATES[0].id,
-          templateName: ROUTINE_TEMPLATES[0].name,
-          mileage: (vehicles[2]?.currentMileage || 9500) - 100,
-          score: 100,
-          hasFailures: false,
-          notes: 'Filtros y mangueras óptimas, sin ruidos anormales.',
-          cd: vehicles[2]?.cd || 'LA ARENOSA',
-          contractor: vehicles[2]?.contractor || 'LOGISTICOS.CO',
-          responses: ROUTINE_TEMPLATES[0].items.map(item => ({ itemId: item.id, status: 'OK' }))
-        },
-        {
-          id: 'mock-4',
-          date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString().split('T')[0], // 4 days ago
-          plate: vehicles[3]?.plate || 'COLGU448',
-          driverId: drivers[3]?.id || 'D-04',
-          driverName: drivers[3]?.name || 'José Rodriguez',
-          templateId: ROUTINE_TEMPLATES[0].id,
-          templateName: ROUTINE_TEMPLATES[0].name,
-          mileage: (vehicles[3]?.currentMileage || 21500) - 80,
-          score: 90,
-          hasFailures: true,
-          notes: 'Falta ajustar la tensión de las fajas y correas de accesorios.',
-          cd: vehicles[3]?.cd || 'LA ARENOSA',
-          contractor: vehicles[3]?.contractor || 'LOGISTICOS.CO',
-          responses: ROUTINE_TEMPLATES[0].items.map((item, idx) => {
-            if (idx === 3) {
-              return { itemId: item.id, status: 'FAIL', noveltyDescription: 'Correa de accesorios ligeramente floja.' };
-            }
-            return { itemId: item.id, status: 'OK' };
-          })
-        }
-      ];
-      setExecutions(mockExecs);
-      localStorage.setItem('routine_executions', JSON.stringify(mockExecs));
+  const loadRealExecutions = async () => {
+    setLoadingHistory(true);
+    try {
+      const data = await fetchRoutineExecutionsFromSheet();
+      setExecutions(data || []);
+    } catch (err) {
+      console.error("Error al cargar historial real de rutinas:", err);
+      setExecutions([]);
+    } finally {
+      setLoadingHistory(false);
     }
+  };
 
-    // Load schedules
+  // --- INITIAL LOAD FROM REAL SHEETS (NO MOCK, NO LOCALSTORAGE) ---
+  useEffect(() => {
+    let activo = true;
+    setLoadingHistory(true);
+    fetchRoutineExecutionsFromSheet()
+      .then(data => {
+        if (activo) setExecutions(data || []);
+      })
+      .catch((err) => {
+        console.error("Error al obtener ejecuciones de hojas:", err);
+        if (activo) setExecutions([]);
+      })
+      .finally(() => {
+        if (activo) setLoadingHistory(false);
+      });
+
+    // Load schedules from storage
     const storedScheds = localStorage.getItem('routine_schedules');
     if (storedScheds) {
       try {
@@ -393,7 +334,7 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
       const mockScheds: ScheduledRoutine[] = vehicles.slice(0, 5).map((v, idx) => {
         const currentTemplate = ROUTINE_TEMPLATES[0];
         const freqs: Array<ScheduledRoutine['frequency']> = ['Diario', 'Semanal', 'Semanal', 'Mensual', 'Quincenal'];
-        const daysAhead = idx === 0 ? -1 : idx === 1 ? 0 : idx * 2; // Create some vencido / próximo
+        const daysAhead = idx === 0 ? -1 : idx === 1 ? 0 : idx * 2;
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + daysAhead);
         
@@ -416,6 +357,10 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
       setSchedules(mockScheds);
       localStorage.setItem('routine_schedules', JSON.stringify(mockScheds));
     }
+
+    return () => {
+      activo = false;
+    };
   }, [vehicles, drivers]);
 
   // Set default form values once vehicles/drivers are loaded
@@ -636,9 +581,14 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
 
   // --- SUCCESS CALLBACK FOR INDEPENDENT FORMS ---
   const handleRoutineFormSuccess = (newExecution: RoutineExecution) => {
-    const updatedExecs = [newExecution, ...executions];
-    setExecutions(updatedExecs);
-    localStorage.setItem('routine_executions', JSON.stringify(updatedExecs));
+    setExecutions(prev => [newExecution, ...prev.filter(e => e.id !== newExecution.id)]);
+
+    // Re-fetch from sheets to ensure complete real-time synchronization
+    fetchRoutineExecutionsFromSheet()
+      .then(data => {
+        if (data && data.length > 0) setExecutions(data);
+      })
+      .catch((err) => console.warn('Error sincronizando historial con hoja:', err));
 
     // Report failures to "Novedades"
     if (newExecution.hasFailures && onReportNovelty) {
@@ -747,9 +697,12 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
     };
 
     // Update state
-    const updatedExecs = [newExecution, ...executions];
-    setExecutions(updatedExecs);
-    localStorage.setItem('routine_executions', JSON.stringify(updatedExecs));
+    setExecutions(prev => [newExecution, ...prev.filter(e => e.id !== newExecution.id)]);
+    fetchRoutineExecutionsFromSheet()
+      .then(data => {
+        if (data && data.length > 0) setExecutions(data);
+      })
+      .catch((err) => console.warn('Error sincronizando historial con hoja:', err));
 
     // Handle reporting failures to the core "Novedades" module
     if (hasFailures && autoReportNovelties && onReportNovelty) {
@@ -990,23 +943,120 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
       {activeTab === 'history' && (
         <div className="bg-white border border-slate-100 rounded-[2.5rem] p-6 shadow-sm space-y-6 animate-in fade-in duration-300">
           
-          {/* Filters Bar */}
+          {/* Header & Sync Bar */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-6">
             <div className="space-y-1">
-              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Historial de Controles</h3>
-              <p className="text-slate-400 text-xs font-medium">Búsqueda y visualización de rutinas cargadas en esta sesión local.</p>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  En Vivo • 4 Hojas Conectadas
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">Doc: {sheetIdInput.slice(0, 10)}...</span>
+              </div>
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                Historial Real de Controles Preventivos
+              </h3>
+              <p className="text-slate-500 text-xs font-medium">
+                Lectura directa y consolidada de las hojas <strong className="text-slate-700">RUTINA 1, RUTINA 2, RUTINA 3 y RUTINA 4</strong>.
+              </p>
             </div>
 
-            {/* Clear history option */}
-            {executions.length > 0 && (
+            <div className="flex items-center gap-2">
               <button 
-                onClick={handleClearHistory}
-                className="px-3 py-1.5 text-[9px] bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg font-black uppercase tracking-widest transition-all flex items-center gap-1"
+                onClick={loadRealExecutions}
+                disabled={loadingHistory}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm active:scale-95"
               >
-                <Trash2 size={12} /> Vaciar Historial
+                <RefreshCw size={14} className={loadingHistory ? 'animate-spin' : ''} />
+                {loadingHistory ? 'Sincronizando...' : 'Sincronizar Hojas'}
               </button>
-            )}
+            </div>
           </div>
+
+          {/* Real Metrics & Dashboard Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            {/* Total executions */}
+            <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Ejecuciones</p>
+                <p className="text-2xl font-black text-slate-900 mt-1">{executions.length}</p>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">En las 4 hojas de rutinas</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                <ClipboardCheck size={24} />
+              </div>
+            </div>
+
+            {/* Average compliance */}
+            <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Cumplimiento Promedio</p>
+                <p className={`text-2xl font-black mt-1 ${
+                  stats.avgScore >= 95 ? 'text-emerald-600' :
+                  stats.avgScore >= 80 ? 'text-amber-600' : 'text-rose-600'
+                }`}>
+                  {stats.avgScore}%
+                </p>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">Calificación promedio</p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+                <Gauge size={24} />
+              </div>
+            </div>
+
+            {/* Quality & Failures */}
+            <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Condición Técnica</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-lg font-black text-emerald-600">{stats.cleanExecs} OK</span>
+                  <span className="text-slate-300 font-light">/</span>
+                  <span className="text-lg font-black text-rose-600">{stats.withFails} Falla{stats.withFails === 1 ? '' : 's'}</span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                  {stats.totalExecs > 0 ? Math.round((stats.cleanExecs / stats.totalExecs) * 100) : 0}% sin anomalías
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+                <Activity size={24} />
+              </div>
+            </div>
+
+            {/* Routine Types Breakdown */}
+            <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Desglose por Hoja</p>
+              <div className="grid grid-cols-4 gap-1.5 mt-2">
+                <div className="bg-white border border-slate-200/80 rounded-xl p-1.5 text-center shadow-xs">
+                  <p className="text-[9px] font-bold text-slate-400">R1</p>
+                  <p className="text-xs font-black text-slate-800">{executions.filter(e => e.templateId === 'rutina_1').length}</p>
+                </div>
+                <div className="bg-white border border-slate-200/80 rounded-xl p-1.5 text-center shadow-xs">
+                  <p className="text-[9px] font-bold text-slate-400">R2</p>
+                  <p className="text-xs font-black text-slate-800">{executions.filter(e => e.templateId === 'rutina_2').length}</p>
+                </div>
+                <div className="bg-white border border-slate-200/80 rounded-xl p-1.5 text-center shadow-xs">
+                  <p className="text-[9px] font-bold text-slate-400">R3</p>
+                  <p className="text-xs font-black text-slate-800">{executions.filter(e => e.templateId === 'rutina_3').length}</p>
+                </div>
+                <div className="bg-white border border-slate-200/80 rounded-xl p-1.5 text-center shadow-xs">
+                  <p className="text-[9px] font-bold text-slate-400">R4</p>
+                  <p className="text-xs font-black text-slate-800">{executions.filter(e => e.templateId === 'rutina_4').length}</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Loading indicator banner */}
+          {loadingHistory && (
+            <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4 flex items-center justify-center gap-3 text-indigo-700 animate-pulse">
+              <Loader2 size={18} className="animate-spin text-indigo-600" />
+              <span className="text-xs font-black uppercase tracking-wider">
+                Consultando RUTINA 1, RUTINA 2, RUTINA 3 y RUTINA 4 en Google Sheets...
+              </span>
+            </div>
+          )}
 
           {/* History Filters Layout */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1017,8 +1067,8 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
                 type="text"
                 value={historySearch}
                 onChange={(e) => setHistorySearch(e.target.value)}
-                placeholder="Buscar por placa, conductor..."
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none pl-10 focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="Buscar placa, taller, CD, notas..."
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none pl-10 focus:ring-2 focus:ring-indigo-500/20 text-slate-800"
               />
               <Search className="absolute left-3.5 top-3.5 text-slate-400" size={16} />
             </div>
@@ -1027,42 +1077,43 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
             <select
               value={historyTemplateFilter}
               onChange={(e) => setHistoryTemplateFilter(e.target.value)}
-              className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"
+              className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none text-slate-800"
             >
-              <option value="all">Todas las rutinas</option>
-              {ROUTINE_TEMPLATES.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
+              <option value="all">Todas las rutinas (R1, R2, R3, R4)</option>
+              <option value="rutina_1">RUTINA 1</option>
+              <option value="rutina_2">RUTINA 2</option>
+              <option value="rutina_3">RUTINA 3</option>
+              <option value="rutina_4">RUTINA 4</option>
             </select>
 
             {/* Filter Status */}
             <select
               value={historyStatusFilter}
               onChange={(e) => setHistoryStatusFilter(e.target.value as any)}
-              className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"
+              className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none text-slate-800"
             >
-              <option value="all">Cualquier estado</option>
+              <option value="all">Cualquier condición</option>
               <option value="perfect">Sin fallas (100% OK)</option>
               <option value="with_fails">Con fallas reportadas</option>
             </select>
 
             <div className="flex items-center justify-end">
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                Mostrando {filteredHistory.length} de {executions.length} registros
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                Mostrando {filteredHistory.length} de {executions.length} registros reales
               </span>
             </div>
           </div>
 
           {/* History List or Table */}
           {filteredHistory.length > 0 ? (
-            <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-inner">
+            <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       <th className="p-4">Fecha</th>
                       <th className="p-4">Vehículo</th>
-                      <th className="p-4">Conductor</th>
+                      <th className="p-4">Taller / Responsable</th>
                       <th className="p-4">Rutina</th>
                       <th className="p-4">Kilometraje</th>
                       <th className="p-4 text-center">Cumplimiento</th>
@@ -1073,19 +1124,40 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
                   <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
                     {filteredHistory.map(exec => (
                       <tr key={exec.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-4 text-slate-500">{exec.date}</td>
+                        <td className="p-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">{exec.date}</td>
                         <td className="p-4">
                           <span className="bg-slate-900 text-white px-2 py-0.5 rounded font-mono font-black text-[11px] tracking-tight">
                             {exec.plate}
                           </span>
+                          {exec.cd && (
+                            <span className="block text-[10px] text-slate-400 font-medium mt-0.5 truncate max-w-[120px]">
+                              {exec.cd}
+                            </span>
+                          )}
                         </td>
-                        <td className="p-4 text-slate-900">{exec.driverName}</td>
-                        <td className="p-4 text-slate-500 font-medium">{exec.templateName}</td>
-                        <td className="p-4 text-slate-800 font-mono">{exec.mileage?.toLocaleString()} KM</td>
+                        <td className="p-4">
+                          <p className="text-slate-900 font-bold">{exec.taller || exec.driverName || 'Taller Asignado'}</p>
+                          {exec.contractor && (
+                            <p className="text-[10px] text-slate-400 font-medium truncate max-w-[150px]">{exec.contractor}</p>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+                            {exec.templateName}
+                          </span>
+                          {exec.frecuencia && (
+                            <span className="block text-[10px] text-slate-400 font-mono mt-0.5">
+                              {exec.frecuencia}
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4 text-slate-800 font-mono whitespace-nowrap">
+                          {exec.mileage > 0 ? `${exec.mileage.toLocaleString()} KM` : '—'}
+                        </td>
                         <td className="p-4 text-center">
                           <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${
-                            exec.score === 100 ? 'bg-emerald-50 text-emerald-700' :
-                            exec.score > 75 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                            exec.score === 100 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                            exec.score > 75 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
                             {exec.score}%
                           </span>
@@ -1105,6 +1177,7 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
                           <button
                             onClick={() => setSelectedDetailExecution(exec)}
                             className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-900 transition-all"
+                            title="Ver detalle completo"
                           >
                             <ChevronRight size={16} />
                           </button>
@@ -1116,10 +1189,27 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
               </div>
             </div>
           ) : (
-            <div className="text-center p-20 border border-dashed border-slate-200 rounded-3xl">
-              <ClipboardCheck size={48} className="mx-auto text-slate-300 mb-4" />
-              <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No se encontraron rutinas registradas</p>
-              <p className="text-xs text-slate-400/80 mt-1 font-medium">Pruebe registrando una nueva rutina o verifique sus filtros.</p>
+            <div className="text-center p-16 border border-dashed border-slate-200 rounded-3xl bg-slate-50/30">
+              <ClipboardCheck size={44} className="mx-auto text-slate-300 mb-3" />
+              <p className="text-sm font-black text-slate-700 uppercase tracking-wider">
+                {executions.length === 0 
+                  ? 'No hay ejecuciones registradas en las hojas de Google'
+                  : 'No hay registros que coincidan con los filtros aplicados'}
+              </p>
+              <p className="text-xs text-slate-400 mt-1 font-medium max-w-md mx-auto">
+                {executions.length === 0
+                  ? 'Las 4 hojas (RUTINA 1, RUTINA 2, RUTINA 3, RUTINA 4) fueron consultadas en tiempo real. Registre una nueva rutina para visualizarla aquí.'
+                  : 'Pruebe ajustando el buscador de texto o los filtros de tipo de rutina y condición técnica.'}
+              </p>
+              {executions.length === 0 && (
+                <button
+                  onClick={loadRealExecutions}
+                  className="mt-4 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-all inline-flex items-center gap-2"
+                >
+                  <RefreshCw size={12} className={loadingHistory ? 'animate-spin' : ''} />
+                  Reintentar Consulta
+                </button>
+              )}
             </div>
           )}
 
@@ -1135,10 +1225,31 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
             <div className="flex justify-between items-start border-b border-slate-100 pb-4">
               <div>
                 <span className="text-[9px] bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full font-black uppercase tracking-wider">
-                  Detalle de Inspección
+                  Detalle de Inspección en Hoja
                 </span>
                 <h4 className="text-lg font-black text-slate-900 uppercase mt-1.5">{selectedDetailExecution.templateName}</h4>
-                <p className="text-xs text-slate-400 font-medium">{selectedDetailExecution.date} • Resp: {selectedDetailExecution.driverName}</p>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Fecha: {selectedDetailExecution.date} • Taller: <strong className="text-slate-800">{selectedDetailExecution.taller || selectedDetailExecution.driverName || 'No especificado'}</strong>
+                </p>
+                {(selectedDetailExecution.cd || selectedDetailExecution.contractor || selectedDetailExecution.frecuencia) && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {selectedDetailExecution.cd && (
+                      <span className="text-[9px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                        CD: {selectedDetailExecution.cd}
+                      </span>
+                    )}
+                    {selectedDetailExecution.frecuencia && (
+                      <span className="text-[9px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                        Freq: {selectedDetailExecution.frecuencia}
+                      </span>
+                    )}
+                    {selectedDetailExecution.contractor && (
+                      <span className="text-[9px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md">
+                        Contratista: {selectedDetailExecution.contractor}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <button 
                 onClick={() => setSelectedDetailExecution(null)}
@@ -1163,7 +1274,9 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
               </div>
               <div>
                 <p className="text-slate-400 text-[9px] font-black uppercase tracking-wider">Kilometraje</p>
-                <p className="text-sm font-black text-slate-800 mt-1.5">{selectedDetailExecution.mileage?.toLocaleString()} KM</p>
+                <p className="text-sm font-black text-slate-800 mt-1.5">
+                  {selectedDetailExecution.mileage > 0 ? `${selectedDetailExecution.mileage.toLocaleString()} KM` : 'No reg.'}
+                </p>
               </div>
               <div>
                 <p className="text-slate-400 text-[9px] font-black uppercase tracking-wider">Condición</p>
@@ -1181,36 +1294,43 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
             <div className="space-y-2">
               <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Resultado por puntos de control:</h5>
               <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl bg-white max-h-56 overflow-y-auto custom-scrollbar">
-                {selectedDetailExecution.responses.map((resp, idx) => {
-                  const templateObj = ROUTINE_TEMPLATES.find(t => t.id === selectedDetailExecution.templateId);
-                  const itemObj = templateObj?.items.find(i => i.id === resp.itemId);
-                  
-                  return (
-                    <div key={resp.itemId} className="p-3 flex items-center justify-between text-xs font-bold gap-3 hover:bg-slate-50/50">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-medium text-slate-400">{idx + 1}.</span>
-                        <div className="space-y-0.5">
-                          <p className="text-slate-800">{itemObj?.name || 'Punto de control'}</p>
-                          {resp.noveltyDescription && (
-                            <p className="text-[10px] text-rose-500 italic font-medium">Anomalía: {resp.noveltyDescription}</p>
+                {selectedDetailExecution.responses && selectedDetailExecution.responses.length > 0 ? (
+                  selectedDetailExecution.responses.map((resp, idx) => {
+                    const templateObj = ROUTINE_TEMPLATES.find(t => t.id === selectedDetailExecution.templateId);
+                    const itemObj = templateObj?.items.find(i => i.id === resp.itemId);
+                    const displayName = itemObj?.name || resp.itemId.replace(/_/g, ' ').toUpperCase();
+                    
+                    return (
+                      <div key={resp.itemId || idx} className="p-3 flex items-center justify-between text-xs font-bold gap-3 hover:bg-slate-50/50">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-medium text-slate-400">{idx + 1}.</span>
+                          <div className="space-y-0.5">
+                            <p className="text-slate-800">{displayName}</p>
+                            {resp.noveltyDescription && (
+                              <p className="text-[10px] text-rose-500 italic font-medium">Anomalía: {resp.noveltyDescription}</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          {resp.status === 'OK' && (
+                            <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold">CUMPLE</span>
+                          )}
+                          {resp.status === 'FAIL' && (
+                            <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded text-[10px] font-bold">FALLA</span>
+                          )}
+                          {resp.status === 'NA' && (
+                            <span className="text-slate-500 bg-slate-50 px-2 py-0.5 rounded text-[10px] font-bold">N/A</span>
                           )}
                         </div>
                       </div>
-
-                      <div>
-                        {resp.status === 'OK' && (
-                          <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold">CUMPLE</span>
-                        )}
-                        {resp.status === 'FAIL' && (
-                          <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded text-[10px] font-bold">FALLA</span>
-                        )}
-                        {resp.status === 'NA' && (
-                          <span className="text-slate-500 bg-slate-50 px-2 py-0.5 rounded text-[10px] font-bold">N/A</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                ) : (
+                  <div className="p-4 text-center text-slate-400 text-xs font-medium">
+                    Inspección registrada con cumplimiento global del {selectedDetailExecution.score}%.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1229,8 +1349,19 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
               <div>
                 <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-1">Foto Evidencia</span>
                 {selectedDetailExecution.evidenceUrl ? (
-                  <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-100 h-24 flex items-center justify-center">
-                    <img src={selectedDetailExecution.evidenceUrl} alt="Evidencia" className="w-full h-full object-cover" />
+                  <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-100 p-2 flex flex-col items-center justify-center gap-1.5 min-h-[96px]">
+                    {selectedDetailExecution.evidenceUrl.startsWith('data:image') ? (
+                      <img src={selectedDetailExecution.evidenceUrl} alt="Evidencia" className="max-h-24 object-cover rounded-lg" />
+                    ) : (
+                      <a
+                        href={selectedDetailExecution.evidenceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-indigo-100 shadow-xs hover:bg-indigo-50 transition-all"
+                      >
+                        <ExternalLink size={12} /> Ver en Google Drive
+                      </a>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 h-24 flex items-center justify-center text-slate-300 text-[10px] font-bold uppercase tracking-wider">
@@ -1241,10 +1372,21 @@ export const RutinasModule: React.FC<RutinasModuleProps> = ({
 
               {/* Signature */}
               <div>
-                <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-1">Firma Chofer</span>
+                <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-1">Firma Chofer / Taller</span>
                 {selectedDetailExecution.signatureUrl ? (
-                  <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-100 h-24 flex items-center justify-center p-2">
-                    <img src={selectedDetailExecution.signatureUrl} alt="Firma" className="max-h-full max-w-full object-contain" />
+                  <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-100 p-2 flex flex-col items-center justify-center gap-1.5 min-h-[96px]">
+                    {selectedDetailExecution.signatureUrl.startsWith('data:image') ? (
+                      <img src={selectedDetailExecution.signatureUrl} alt="Firma" className="max-h-24 object-contain rounded-lg" />
+                    ) : (
+                      <a
+                        href={selectedDetailExecution.signatureUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-indigo-100 shadow-xs hover:bg-indigo-50 transition-all"
+                      >
+                        <ExternalLink size={12} /> Ver Firma en Drive
+                      </a>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 h-24 flex items-center justify-center text-slate-300 text-[10px] font-bold uppercase tracking-wider">

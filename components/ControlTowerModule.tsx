@@ -28,12 +28,64 @@ const COLORS = {
   NEUTRAL: '#94a3b8'    // Slate
 };
 
+export const normalizeCriticality = (raw: any): '1' | '2' | '3' | '0' | string => {
+  if (raw === null || raw === undefined) return '0';
+  const s = String(raw).trim();
+  if (!s) return '0';
+  const upper = s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  
+  if (upper === '1' || upper === '1.0' || upper.startsWith('1 ') || upper.startsWith('1-') || upper.startsWith('1 -') || 
+      upper.includes('ALTA') || upper.includes('CRITIC') || upper.includes('URGENT')) {
+    return '1';
+  }
+  if (upper === '2' || upper === '2.0' || upper.startsWith('2 ') || upper.startsWith('2-') || upper.startsWith('2 -') || 
+      upper.includes('MEDIA') || upper.includes('MEDIO')) {
+    return '2';
+  }
+  if (upper === '3' || upper === '3.0' || upper.startsWith('3 ') || upper.startsWith('3-') || upper.startsWith('3 -') || 
+      upper.includes('BAJA') || upper.includes('BAJO') || upper.includes('LEVE')) {
+    return '3';
+  }
+  if (upper === '0' || upper === '0.0' || upper.includes('NINGUN') || upper.includes('INFORMATIV') || upper.includes('RUTIN')) {
+    return '0';
+  }
+  return s;
+};
+
+export const getCriticalityLabel = (crit: any): string => {
+  const norm = normalizeCriticality(crit);
+  if (norm === '1') return '1 - Crítica';
+  if (norm === '2') return '2 - Media';
+  if (norm === '3') return '3 - Baja';
+  if (norm === '0') return '0 - Sin Criticidad';
+  return String(crit);
+};
+
+export const isCriticalityMatch = (itemCrit: any, filterCrit: string): boolean => {
+  if (!filterCrit || filterCrit === 'ALL') return true;
+  const normItem = normalizeCriticality(itemCrit);
+  const normFilter = normalizeCriticality(filterCrit);
+  return normItem === normFilter || String(itemCrit).trim().toUpperCase() === filterCrit.trim().toUpperCase();
+};
+
 const CRITICIDAD_COLORS: Record<string, string> = {
   '1': COLORS.CRITICAL,
+  '1 - Crítica': COLORS.CRITICAL,
+  '1 - CRÍTICA': COLORS.CRITICAL,
+  '1 - CRITICA': COLORS.CRITICAL,
   '2': COLORS.HIGH,
+  '2 - Media': COLORS.HIGH,
+  '2 - MEDIA': COLORS.HIGH,
   '3': COLORS.MEDIUM,
+  '3 - Baja': COLORS.MEDIUM,
+  '3 - BAJA': COLORS.MEDIUM,
   '4': COLORS.LOW,
+  '0': COLORS.NEUTRAL,
+  '0 - Sin Criticidad': COLORS.NEUTRAL,
   'ALTA': COLORS.CRITICAL,
+  'CRITICA': COLORS.CRITICAL,
+  'CRÍTICA': COLORS.CRITICAL,
+  'URGENTE': COLORS.CRITICAL,
   'MEDIA': COLORS.HIGH,
   'BAJA': COLORS.LOW
 };
@@ -244,7 +296,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       const matchMonth = filters.month === 'ALL' || item.month === filters.month;
       const matchWeek = filters.week === 'ALL' || item.week === filters.week;
       const matchStatus = filters.status === 'ALL' || item.status === filters.status;
-      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchCriticality = isCriticalityMatch(item.criticality, filters.criticality);
       const matchSystem = filters.system === 'ALL' || item.system === filters.system;
       const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
       const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
@@ -317,7 +369,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       const matchCd = filters.cd === 'ALL' || item.cd === filters.cd;
       const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
       const matchStatus = filters.status === 'ALL' || item.status === filters.status;
-      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchCriticality = isCriticalityMatch(item.criticality, filters.criticality);
       const matchSystem = filters.system === 'ALL' || item.system === filters.system;
       const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
       const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
@@ -352,7 +404,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       const matchMonth = filters.month === 'ALL' || item.month === filters.month;
       const matchWeek = filters.week === 'ALL' || item.week === filters.week;
       const matchStatus = filters.status === 'ALL' || item.status === filters.status;
-      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchCriticality = isCriticalityMatch(item.criticality, filters.criticality);
       const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
       const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
       const matchSearch = !filters.search || 
@@ -369,7 +421,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       const matchMonth = filters.month === 'ALL' || item.month === filters.month;
       const matchWeek = filters.week === 'ALL' || item.week === filters.week;
       const matchStatus = filters.status === 'ALL' || item.status === filters.status;
-      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchCriticality = isCriticalityMatch(item.criticality, filters.criticality);
       const matchSystem = filters.system === 'ALL' || item.system === filters.system;
       const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
       const matchSearch = !filters.search || 
@@ -386,7 +438,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       const matchMonth = filters.month === 'ALL' || item.month === filters.month;
       const matchWeek = filters.week === 'ALL' || item.week === filters.week;
       const matchStatus = filters.status === 'ALL' || item.status === filters.status;
-      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchCriticality = isCriticalityMatch(item.criticality, filters.criticality);
       const matchSystem = filters.system === 'ALL' || item.system === filters.system;
       const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
       const matchSearch = !filters.search || 
@@ -402,7 +454,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
       const matchMonth = filters.month === 'ALL' || item.month === filters.month;
       const matchWeek = filters.week === 'ALL' || item.week === filters.week;
-      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchCriticality = isCriticalityMatch(item.criticality, filters.criticality);
       const matchSystem = filters.system === 'ALL' || item.system === filters.system;
       const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
       const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
@@ -419,7 +471,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       const matchContractor = filters.contractor === 'ALL' || item.contractor === filters.contractor;
       const matchStatus = filters.status === 'ALL' || item.status === filters.status;
       const matchWeek = filters.week === 'ALL' || item.week === filters.week;
-      const matchCriticality = filters.criticality === 'ALL' || item.criticality === filters.criticality;
+      const matchCriticality = isCriticalityMatch(item.criticality, filters.criticality);
       const matchSystem = filters.system === 'ALL' || item.system === filters.system;
       const matchBrand = filters.brand === 'ALL' || item.brand === filters.brand;
       const matchPlate = filters.plate === 'ALL' || item.plate === filters.plate;
@@ -431,16 +483,20 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
   }, [dataWithVehicles, filters]);
 
   // Unique values for filters
-  const filterOptions = useMemo(() => ({
-    cds: Array.from(new Set(data.map(item => item.cd))).filter(Boolean).sort(),
-    contractors: Array.from(new Set(data.map(item => item.contractor))).filter(Boolean).sort(),
-    months: Array.from(new Set(data.map(item => item.month))).filter(Boolean).sort(),
-    weeks: Array.from(new Set(data.map(item => item.week))).filter(Boolean).sort(),
-    statuses: Array.from(new Set(data.map(item => item.status))).filter(Boolean).sort(),
-    criticalities: Array.from(new Set(data.map(item => item.criticality))).filter(Boolean).sort(),
-    systems: Array.from(new Set(data.map(item => item.system))).filter(Boolean).sort(),
-    plates: Array.from(new Set(data.map(item => item.plate))).filter(Boolean).sort(),
-  }), [data]);
+  const filterOptions = useMemo(() => {
+    const rawCritSet = new Set(data.map(item => normalizeCriticality(item.criticality)));
+    const critsOrdered = ['1', '2', '3', '0'].filter(c => rawCritSet.has(c));
+    return {
+      cds: Array.from(new Set(data.map(item => item.cd))).filter(Boolean).sort(),
+      contractors: Array.from(new Set(data.map(item => item.contractor))).filter(Boolean).sort(),
+      months: Array.from(new Set(data.map(item => item.month))).filter(Boolean).sort(),
+      weeks: Array.from(new Set(data.map(item => item.week))).filter(Boolean).sort(),
+      statuses: Array.from(new Set(data.map(item => item.status))).filter(Boolean).sort(),
+      criticalities: critsOrdered.length > 0 ? critsOrdered : ['1', '2', '3', '0'],
+      systems: Array.from(new Set(data.map(item => item.system))).filter(Boolean).sort(),
+      plates: Array.from(new Set(data.map(item => item.plate))).filter(Boolean).sort(),
+    };
+  }, [data]);
 
   // KPIs
   const kpis = useMemo(() => {
@@ -455,7 +511,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
     
     // SLAs overdue (daysToClose < 0 logic)
     const overdue = filteredData.filter(item => item.status.toUpperCase() !== 'CERRADO' && item.daysToClose < 0).length;
-    const criticalPlates = Array.from(new Set(filteredData.filter(item => item.criticality === '1' || item.criticality?.toUpperCase() === 'URGENTE').map(item => item.plate))).length;
+    const criticalPlates = Array.from(new Set(filteredData.filter(item => normalizeCriticality(item.criticality) === '1').map(item => item.plate))).length;
 
     return { total, open, closed, avgClosureTime, complianceRate, overdue, criticalPlates };
   }, [filteredData]);
@@ -476,14 +532,36 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
       percentage: t.total > 0 ? (t.closed / t.total) * 100 : 0
     }));
 
-    // Criticality
-    const criticalityMap: Record<string, { name: string, value: number }> = {};
+    // Criticality counts
+    const critCounts: Record<string, number> = {
+      '1': 0, // Crítica
+      '2': 0, // Media
+      '3': 0, // Baja
+      '0': 0  // Sin Criticidad
+    };
+    const otherMap: Record<string, number> = {};
+
     criticalityFilteredData.forEach(item => {
-      const crit = item.criticality || 'SIN INFO';
-      if (!criticalityMap[crit]) criticalityMap[crit] = { name: crit, value: 0 };
-      criticalityMap[crit].value++;
+      const norm = normalizeCriticality(item.criticality);
+      if (critCounts[norm] !== undefined) {
+        critCounts[norm]++;
+      } else {
+        otherMap[norm] = (otherMap[norm] || 0) + 1;
+      }
     });
-    const criticality = Object.values(criticalityMap);
+
+    const criticality: { name: string; code: string; value: number; color: string }[] = [
+      { name: '1 - Crítica', code: '1', value: critCounts['1'], color: COLORS.CRITICAL },
+      { name: '2 - Media', code: '2', value: critCounts['2'], color: COLORS.HIGH },
+      { name: '3 - Baja', code: '3', value: critCounts['3'], color: COLORS.LOW },
+      ...(critCounts['0'] > 0 ? [{ name: '0 - Sin Criticidad', code: '0', value: critCounts['0'], color: COLORS.NEUTRAL }] : []),
+      ...Object.entries(otherMap).map(([key, val]) => ({
+        name: key,
+        code: key,
+        value: val,
+        color: COLORS.SECONDARY
+      }))
+    ].filter(entry => entry.value > 0);
 
     // Systems
     const systemMap: Record<string, { name: string, count: number }> = {};
@@ -679,6 +757,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
           label="CRITICIDAD" 
           value={filters.criticality} 
           options={filterOptions.criticalities} 
+          formatOption={getCriticalityLabel}
           onChange={(v) => setFilters(f => ({ ...f, criticality: v }))} 
         />
         <FilterSelect 
@@ -804,7 +883,7 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
             )}
             {filters.criticality !== 'ALL' && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full text-[8.5px] font-black uppercase tracking-wider">
-                CRITICIDAD: {filters.criticality}
+                CRITICIDAD: {getCriticalityLabel(filters.criticality)}
                 <button 
                   onClick={() => setFilters(f => ({ ...f, criticality: 'ALL' }))} 
                   className="hover:bg-rose-500/25 p-0.5 rounded-full transition-colors cursor-pointer"
@@ -1006,46 +1085,94 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
         </div>
 
         {/* Criticality Chart */}
-        <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-xl">
-          <h3 className="font-semibold text-lg mb-6 flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-rose-400" />
-            Distribución Criticidad
-          </h3>
-          <div className="h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie 
-                  data={chartsData.criticality} 
-                  cx="50%" 
-                  cy="50%" 
-                  innerRadius={50} 
-                  outerRadius={80} 
-                  paddingAngle={5} 
-                  dataKey="value"
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                  labelLine={{ stroke: '#475569', strokeWidth: 1 }}
-                  onClick={(data) => {
-                    if (data && data.name) {
-                      setFilters(f => ({ ...f, criticality: f.criticality === data.name ? 'ALL' : data.name }));
-                    }
-                  }}
+        <div className="bg-slate-800/40 p-6 rounded-2xl border border-slate-700/50 backdrop-blur-xl flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-400" />
+                Distribución Criticidad
+              </h3>
+              {filters.criticality !== 'ALL' && (
+                <button 
+                  onClick={() => setFilters(f => ({ ...f, criticality: 'ALL' }))}
+                  className="text-[10px] text-slate-400 hover:text-white bg-slate-700/40 px-2 py-0.5 rounded transition-all cursor-pointer"
                 >
-                  {chartsData.criticality.map((entry, index) => {
-                    const isSelected = filters.criticality === 'ALL' || filters.criticality === entry.name;
-                    return (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={CRITICIDAD_COLORS[entry.name] || COLORS.PRIMARY} 
-                        opacity={isSelected ? 1 : 0.3}
-                        className="cursor-pointer"
-                      />
-                    );
-                  })}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
+                  Limpiar filtro
+                </button>
+              )}
+            </div>
+            <div className="h-[210px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie 
+                    data={chartsData.criticality} 
+                    cx="50%" 
+                    cy="50%" 
+                    innerRadius={50} 
+                    outerRadius={75} 
+                    paddingAngle={4} 
+                    dataKey="value"
+                    label={({ name, percent }) => `${name.split(' - ')[0]}: ${(percent * 100).toFixed(1)}%`}
+                    labelLine={{ stroke: '#475569', strokeWidth: 1 }}
+                    onClick={(data: any) => {
+                      const targetCode = data?.payload?.code || data?.code || data?.payload?.name || data?.name;
+                      if (targetCode) {
+                        setFilters(f => ({ 
+                          ...f, 
+                          criticality: isCriticalityMatch(targetCode, f.criticality) && f.criticality !== 'ALL' ? 'ALL' : targetCode 
+                        }));
+                      }
+                    }}
+                  >
+                    {chartsData.criticality.map((entry, index) => {
+                      const isSelected = filters.criticality === 'ALL' || isCriticalityMatch(entry.code || entry.name, filters.criticality);
+                      return (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.color || CRITICIDAD_COLORS[entry.name] || CRITICIDAD_COLORS[entry.code] || COLORS.PRIMARY} 
+                          opacity={isSelected ? 1 : 0.25}
+                          className="cursor-pointer transition-opacity duration-200"
+                        />
+                      );
+                    })}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }} />
+                  <Legend verticalAlign="bottom" height={32}/>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Quick interactive filter chips for Criticality */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 pt-3 border-t border-slate-700/40">
+            {chartsData.criticality.map((crit) => {
+              const active = isCriticalityMatch(crit.code, filters.criticality);
+              return (
+                <button
+                  key={crit.code}
+                  type="button"
+                  onClick={() => setFilters(f => ({ 
+                    ...f, 
+                    criticality: isCriticalityMatch(crit.code, f.criticality) && f.criticality !== 'ALL' ? 'ALL' : crit.code 
+                  }))}
+                  className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
+                    active 
+                      ? 'bg-slate-700/80 border-blue-500 ring-1 ring-blue-500 shadow-md' 
+                      : 'bg-slate-900/40 border-slate-700/50 hover:bg-slate-800/60 opacity-80 hover:opacity-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-[11px] font-bold" style={{ color: crit.color }}>
+                    <span className="truncate">{crit.name}</span>
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-base font-extrabold text-white">{crit.value.toLocaleString()}</span>
+                    <span className="text-[10px] text-slate-400 font-semibold">
+                      ({((crit.value / (chartsData.criticality.reduce((a, b) => a + b.value, 0) || 1)) * 100).toFixed(1)}%)
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -1479,14 +1606,14 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div 
-                      className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs"
+                      className="inline-flex items-center justify-center px-2.5 py-1 rounded-full font-bold text-xs"
                       style={{ 
                         backgroundColor: `${CRITICIDAD_COLORS[item.criticality] || COLORS.NEUTRAL}20`,
                         color: CRITICIDAD_COLORS[item.criticality] || COLORS.NEUTRAL,
                         border: `1px solid ${CRITICIDAD_COLORS[item.criticality] || COLORS.NEUTRAL}40`
                       }}
                     >
-                      {item.criticality}
+                      {getCriticalityLabel(item.criticality)}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -1947,7 +2074,13 @@ const ControlTowerModule: React.FC<ControlTowerModuleProps> = ({ data, vehicles 
 };
 
 // Helper Components
-const FilterSelect = ({ label, value, options, onChange }: { label: string, value: string, options: string[], onChange: (v: string) => void }) => (
+const FilterSelect = ({ label, value, options, formatOption, onChange }: { 
+  label: string; 
+  value: string; 
+  options: string[]; 
+  formatOption?: (opt: string) => string;
+  onChange: (v: string) => void; 
+}) => (
   <div className="flex flex-col gap-1.5">
     <label className="text-[10px] uppercase tracking-wider text-slate-500 font-bold ml-1">{label}</label>
     <div className="relative group">
@@ -1957,7 +2090,11 @@ const FilterSelect = ({ label, value, options, onChange }: { label: string, valu
         className="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg px-3 py-2 text-sm appearance-none focus:outline-none focus:border-blue-500/50 hover:bg-slate-900 transition-all cursor-pointer"
       >
         <option value="ALL">TODOS</option>
-        {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        {options.map(opt => (
+          <option key={opt} value={opt}>
+            {formatOption ? formatOption(opt) : opt}
+          </option>
+        ))}
       </select>
       <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none transition-transform group-hover:scale-110" />
     </div>

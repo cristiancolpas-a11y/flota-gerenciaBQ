@@ -3403,7 +3403,7 @@ export const getMockControlTowerRecords = (): ControlTowerRecord[] => {
   const plates = ["EST123", "TTT456", "XYZ789", "WQR321", "ABC789", "KJH123", "POB987", "MNH567"];
   const sources = ["Pre-operacional", "Torre de Control", "Inspección de Ruta", "Reporte Operador"];
   const statusList = ["Pendiente", "Cerrado", "En Proceso", "Cerrado"];
-  const criticalities = ["Alta", "Media", "Baja", "Media"];
+  const criticalities = ["1", "2", "3", "1", "2", "3"];
 
   return Array.from({ length: 12 }).map((_, i) => {
     const contractor = contractors[i % contractors.length];
@@ -3466,7 +3466,7 @@ const processControlTowerRows = (rows: any[][]): ControlTowerRecord[] => {
   let idxReporte = header.findIndex(h => h.includes('reporte') || h.includes('novedad') || h.includes('item'));
   let idxSistema = header.findIndex(h => h.includes('sistema'));
   let idxEstado = header.findIndex(h => h.includes('estado'));
-  let idxCriticidad = header.findIndex(h => h.includes('criticidad'));
+  let idxCriticidad = header.findIndex(h => h.includes('critic') || h.includes('prioridad'));
   let idxFechaSolucion = header.findIndex(h => h.includes('fecha') && h.includes('soluci'));
   let idxDiasCierre = header.findIndex(h => h.includes('días de cierre') || h.includes('dias de cierre'));
   let idxDiasParaCierre = header.findIndex(h => h.includes('para cierre'));
@@ -3521,6 +3521,21 @@ const processControlTowerRows = (rows: any[][]): ControlTowerRecord[] => {
     const rawSistema = cleanSheetValue(row[idxSistema]);
     const rawEstado = cleanSheetValue(row[idxEstado]);
     const rawCriticidad = cleanSheetValue(row[idxCriticidad]);
+    let normCriticidad = '0';
+    if (rawCriticidad) {
+      const uCrit = rawCriticidad.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      if (uCrit === '1' || uCrit === '1.0' || uCrit.startsWith('1 ') || uCrit.startsWith('1-') || uCrit.startsWith('1 -') || uCrit.includes('ALTA') || uCrit.includes('CRITIC') || uCrit.includes('URGENT')) {
+        normCriticidad = '1';
+      } else if (uCrit === '2' || uCrit === '2.0' || uCrit.startsWith('2 ') || uCrit.startsWith('2-') || uCrit.startsWith('2 -') || uCrit.includes('MEDIA') || uCrit.includes('MEDIO')) {
+        normCriticidad = '2';
+      } else if (uCrit === '3' || uCrit === '3.0' || uCrit.startsWith('3 ') || uCrit.startsWith('3-') || uCrit.startsWith('3 -') || uCrit.includes('BAJA') || uCrit.includes('BAJO') || uCrit.includes('LEVE')) {
+        normCriticidad = '3';
+      } else if (uCrit === '0' || uCrit === '0.0' || uCrit.includes('NINGUN') || uCrit.includes('INFORMATIV') || uCrit.includes('RUTIN')) {
+        normCriticidad = '0';
+      } else {
+        normCriticidad = rawCriticidad;
+      }
+    }
     const rawFechaSolucion = cleanSheetValue(row[idxFechaSolucion]);
     const rawDiasCierre = parseFloat(cleanSheetValue(row[idxDiasCierre])) || 0;
     const rawDiasParaCierre = parseFloat(cleanSheetValue(row[idxDiasParaCierre])) || 0;
@@ -3558,7 +3573,7 @@ const processControlTowerRows = (rows: any[][]): ControlTowerRecord[] => {
       novelty: rawReporte,
       system: rawSistema || 'General',
       status: rawEstado || (isClosed ? 'Cerrado' : 'Pendiente'),
-      criticality: rawCriticidad || 'Media',
+      criticality: normCriticidad,
       solutionDate: rawFechaSolucion ? parseFlexibleDate(rawFechaSolucion) : (isClosed ? parseFlexibleDate(rawFecha) : ''),
       closureDays: rawDiasCierre,
       daysToClose: rawDiasParaCierre,
@@ -3597,6 +3612,7 @@ const fetchControlTowerFromSheetCSV = async (): Promise<ControlTowerRecord[]> =>
   try {
     const docId = getControlTowerDocId();
     const urls = [
+      '/control_tower_raw.csv',
       `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`,
       `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${CONTROL_TOWER_GID}${getCacheBuster()}`,
       `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&sheet=${encodeURIComponent('Cierre de Novedades')}${getCacheBuster()}`,
@@ -3954,6 +3970,141 @@ export const submitRoutineToSheet = async (execution: any): Promise<boolean> => 
     console.log("GAS - Rutina transmitida a Apps Script.");
     return true;
   }
+};
+
+export const ROUTINE_SHEETS = ['RUTINA 1', 'RUTINA 2', 'RUTINA 3', 'RUTINA 4'];
+
+export const fetchRoutineExecutionsFromSheet = async (): Promise<any[]> => {
+  const docId = getRoutinesDocId();
+  const scriptUrl = ROUTINES_SCRIPT_URL;
+  const all: any[] = [];
+
+  await Promise.all(ROUTINE_SHEETS.map(async (sheetName, idx) => {
+    let rows: any[][] | null = null;
+    // 1) Apps Script (doGet action=get_rutina)
+    try {
+      const url = `${scriptUrl}?action=get_rutina&sheet=${encodeURIComponent(sheetName)}&docId=${docId}${getCacheBuster()}`;
+      const resp = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow' });
+      const txt = await resp.text();
+      if (txt && !txt.includes('<!DOCTYPE html')) {
+        const json = JSON.parse(txt);
+        if (json.status === 'success' && Array.isArray(json.data)) rows = json.data;
+      }
+    } catch (e) { /* intenta CSV */ }
+
+    // 2) Fallback CSV por nombre de hoja
+    if (!rows) {
+      try {
+        const url = `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}${getCacheBuster()}`;
+        const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
+        const csv = await resp.text();
+        if (csv && !csv.includes('<!DOCTYPE html')) {
+          rows = (Papa.parse(csv, { skipEmptyLines: true }).data as any[][]);
+        }
+      } catch (e) { /* nada */ }
+    }
+
+    if (rows && rows.length >= 2) {
+      const headers = rows[0].map(h => cleanSheetValue(h).toLowerCase());
+      const findCol = (regex: RegExp, fallbackIdx: number) => {
+        const i = headers.findIndex(h => regex.test(h));
+        return i !== -1 ? i : fallbackIdx;
+      };
+
+      const idIdx = findCol(/^id/i, 0);
+      const dateIdx = findCol(/^fecha/i, 1);
+      const plateIdx = findCol(/placa/i, 2);
+      const tallerIdx = findCol(/taller|responsable/i, 3);
+      const kmIdx = findCol(/kilometr|km/i, 4);
+      const freqIdx = findCol(/frecuen/i, 5);
+      const cdIdx = findCol(/centro|distribuc|\bcd\b/i, 6);
+      const contIdx = findCol(/contratista|empresa/i, 7);
+      const scoreIdx = findCol(/cumplimiento|calificaci|puntaje|score/i, 8);
+      const failsIdx = findCol(/falla/i, 9);
+      const notesIdx = findCol(/observacion/i, 10);
+      const evIdx = findCol(/evidencia|foto/i, -1);
+      const sigIdx = findCol(/firma/i, -1);
+
+      rows.slice(1).forEach(r => {
+        const id = cleanSheetValue(r[idIdx !== -1 ? idIdx : 0]);
+        const placa = cleanSheetValue(r[plateIdx !== -1 ? plateIdx : 2]);
+        if (!placa || placa.toUpperCase() === 'PLACA') return; // descartar vacíos/encabezado
+
+        // Mapear items de inspección individuales si existen
+        const responses: Array<{ itemId: string; status: 'OK' | 'FAIL' | 'NA'; noveltyDescription?: string }> = [];
+        let okCount = 0;
+        let ratedCount = 0;
+        let hasItemFailures = false;
+
+        for (let c = 0; c < r.length; c++) {
+          if (c === idIdx || c === dateIdx || c === plateIdx || c === tallerIdx || 
+              c === kmIdx || c === freqIdx || c === cdIdx || c === contIdx || 
+              c === scoreIdx || c === failsIdx || c === notesIdx || c === evIdx || c === sigIdx) {
+            continue;
+          }
+          const val = cleanSheetValue(r[c]).toUpperCase();
+          if (val === 'OK' || val === 'FAIL' || val === 'NA') {
+            const rawHeader = cleanSheetValue(rows[0][c]) || `Punto ${c + 1}`;
+            if (rawHeader.toUpperCase().startsWith('URL_') || rawHeader.toUpperCase().includes('ENLACE')) continue;
+            responses.push({
+              itemId: rawHeader.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+              status: val as 'OK' | 'FAIL' | 'NA',
+              noveltyDescription: val === 'FAIL' ? 'Falla reportada en inspección' : undefined
+            });
+            if (val !== 'NA') {
+              ratedCount++;
+              if (val === 'OK') okCount++;
+              if (val === 'FAIL') hasItemFailures = true;
+            }
+          }
+        }
+
+        // Parsear score/cumplimiento
+        const rawCumpl = cleanSheetValue(r[scoreIdx !== -1 ? scoreIdx : 8]).replace('%', '').trim();
+        let numScore = parseFloat(rawCumpl) || 0;
+        if (numScore > 0 && numScore <= 1) {
+          numScore = Math.round(numScore * 100);
+        } else if (numScore > 1) {
+          numScore = Math.round(numScore);
+        } else if (ratedCount > 0) {
+          numScore = Math.round((okCount / ratedCount) * 100);
+        } else {
+          numScore = 100;
+        }
+
+        const failsVal = cleanSheetValue(r[failsIdx !== -1 ? failsIdx : 9]).toUpperCase();
+        const hasFailures = failsVal === 'SI' || failsVal === 'YES' || failsVal === 'TRUE' || hasItemFailures;
+        const tallerVal = cleanSheetValue(r[tallerIdx !== -1 ? tallerIdx : 3]);
+
+        const evUrl = evIdx !== -1 && cleanSheetValue(r[evIdx]).startsWith('http') ? cleanSheetValue(r[evIdx]) : undefined;
+        const sigUrl = sigIdx !== -1 && cleanSheetValue(r[sigIdx]).startsWith('http') ? cleanSheetValue(r[sigIdx]) : undefined;
+
+        all.push({
+          id: id || `rut-${sheetName}-${placa}-${Date.now()}`,
+          date: parseFlexibleDate(r[dateIdx !== -1 ? dateIdx : 1]) || cleanSheetValue(r[dateIdx !== -1 ? dateIdx : 1]),
+          plate: normalizePlate(placa),
+          taller: tallerVal,
+          driverId: tallerVal,
+          driverName: tallerVal || 'Taller Asignado',
+          mileage: parseInt(cleanSheetValue(r[kmIdx !== -1 ? kmIdx : 4]).replace(/[^0-9]/g, '')) || 0,
+          frecuencia: cleanSheetValue(r[freqIdx !== -1 ? freqIdx : 5]) || '5.000 km',
+          cd: cleanSheetValue(r[cdIdx !== -1 ? cdIdx : 6]),
+          contractor: cleanSheetValue(r[contIdx !== -1 ? contIdx : 7]),
+          score: numScore,
+          hasFailures,
+          notes: cleanSheetValue(r[notesIdx !== -1 ? notesIdx : 10]),
+          templateId: `rutina_${idx + 1}`,
+          templateName: ROUTINE_SHEETS[idx],
+          responses,
+          evidenceUrl: evUrl,
+          signatureUrl: sigUrl,
+        });
+      });
+    }
+  }));
+
+  // ordenar por fecha desc
+  return all.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 };
 
 export const fetchAuditRecordsFromSheet = async (): Promise<AuditRecord[]> => {

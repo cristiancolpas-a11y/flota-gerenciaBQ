@@ -6,8 +6,6 @@ import { VaradasModule } from './components/VaradasModule';
 import { SparePartsModule } from './components/SparePartsModule';
 import DocumentCard from './components/DocumentCard';
 import DocumentViewer from './components/DocumentViewer';
-import DriverStats from './components/DriverStats';
-import DriverCard from './components/DriverCard';
 import FineStats from './components/FineStats';
 import MonthlyReport from './components/MonthlyReport';
 import FineCard from './components/FineCard';
@@ -139,7 +137,7 @@ import {
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas' | 'campanas';
-type ActiveView = 'categories_dashboard' | 'vehiculos' | 'conductores' | 'comparendos' | 'comparendos_montacargas' | 'preventivos_montacargas' | 'estandar_flt' | 'auditoria_montacargas' | 'cierre_montacargas' | 'novedades_checklist_flt' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'comparendos' | 'comparendos_montacargas' | 'preventivos_montacargas' | 'estandar_flt' | 'auditoria_montacargas' | 'cierre_montacargas' | 'novedades_checklist_flt' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
 
 const CATEGORY_CHUNKS = {
   doc: {
@@ -149,7 +147,6 @@ const CATEGORY_CHUNKS = {
     items: [
       { id: 'indicadoresOperativos', label: 'Tablero de Indicadores', icon: Activity },
       { id: 'novedades', label: 'Reporte de Novedades', icon: ClipboardList },
-      { id: 'conductores', label: 'Conductores', icon: Users },
       { id: 'vehiculos', label: 'Vehículos', icon: Truck },
       { id: 'comparendos', label: 'Comparendos', icon: Gavel },
       { id: 'checklist', label: 'Check List', icon: ClipboardList },
@@ -215,7 +212,6 @@ const App: React.FC = () => {
   
   const [reportViewMode, setReportViewMode] = useState<'grid' | 'table'>('grid');
   const [vehicleViewMode, setVehicleViewMode] = useState<'grid' | 'table'>('grid');
-  const [driverViewMode, setDriverViewMode] = useState<'grid' | 'table'>('grid');
   
   // Data States
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -311,9 +307,6 @@ const App: React.FC = () => {
 
   // Vehicle Filters
   const [vehicleDocFilter, setVehicleDocFilter] = useState<'all' | 'soat' | 'rtm' | 'plc' | 'ext'>('all');
-
-  // Driver Filters
-  const [driverDocFilter, setDriverDocFilter] = useState<'all' | 'license' | 'defensive' | 'medical'>('all');
 
   // Auth State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -1371,34 +1364,6 @@ const App: React.FC = () => {
     });
   }, [vehicles, filterCd, filterContractor, searchTerm, vehicleDocFilter]);
 
-  const statsDrivers = useMemo(() => {
-    const filtered = drivers.filter(d => 
-      (filterCd === 'all' || d.cd === filterCd) && 
-      (filterContractor === 'all' || d.contractor === filterContractor) &&
-      d.name.toUpperCase().includes(searchTerm.toUpperCase())
-    );
-    return {
-      total: filtered.length,
-      licenseWarning: filtered.filter(d => d.license.status !== 'active').length,
-      defensiveWarning: filtered.filter(d => d.defensiveDriving.status !== 'active').length,
-      medicalWarning: filtered.filter(d => d.medicalExam.status !== 'active').length
-    };
-  }, [drivers, filterCd, filterContractor, searchTerm]);
-
-  const filteredDrivers = useMemo(() => {
-    return drivers.filter(d => {
-      const matchCd = filterCd === 'all' || d.cd === filterCd;
-      const matchContractor = filterContractor === 'all' || d.contractor === filterContractor;
-      const matchSearch = d.name.toUpperCase().includes(searchTerm.toUpperCase());
-      const matchDoc = driverDocFilter === 'all' || 
-        (driverDocFilter === 'license' && d.license.status !== 'active') ||
-        (driverDocFilter === 'defensive' && d.defensiveDriving.status !== 'active') ||
-        (driverDocFilter === 'medical' && d.medicalExam.status !== 'active');
-      
-      return matchCd && matchContractor && matchSearch && matchDoc;
-    });
-  }, [drivers, filterCd, filterContractor, searchTerm, driverDocFilter]);
-
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
       {isSyncing && (
@@ -2037,7 +2002,7 @@ const App: React.FC = () => {
                           DOCUMENTACIÓN
                         </h3>
                         <p className="text-slate-500 group-hover:text-white/80 text-xs font-medium leading-relaxed max-w-sm">
-                          Gestione tableros operativos, disponibilidad general, conductores, vehículos, comparendos y check lists de control.
+                          Gestione tableros operativos, disponibilidad general, vehículos, comparendos y check lists de control.
                         </p>
                       </div>
                     </button>
@@ -2346,98 +2311,6 @@ const App: React.FC = () => {
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {activeView === 'conductores' && (
-            <div className="max-w-7xl mx-auto space-y-6">
-               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                 <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-3">
-                   <Users size={24} className="text-indigo-600" /> Directorio de Conductores
-                 </h2>
-                 <div className="flex bg-white p-1 rounded-xl border border-slate-100 shadow-sm">
-                   <button 
-                     onClick={() => setDriverViewMode('grid')}
-                     className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${driverViewMode === 'grid' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-                   >
-                     <div className="flex items-center gap-2">
-                       <LayoutGrid size={12} /> Cuadrícula
-                     </div>
-                   </button>
-                   <button 
-                     onClick={() => setDriverViewMode('table')}
-                     className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${driverViewMode === 'table' ? 'bg-[#0f172a] text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}
-                   >
-                     <div className="flex items-center gap-2">
-                       <ListFilter size={12} /> Tabla
-                     </div>
-                   </button>
-                 </div>
-               </div>
-               
-               <DriverStats 
-                 total={statsDrivers.total}
-                 licenseWarning={statsDrivers.licenseWarning}
-                 defensiveWarning={statsDrivers.defensiveWarning}
-                 medicalWarning={statsDrivers.medicalWarning}
-                 onFilter={setDriverDocFilter}
-                 activeFilter={driverDocFilter}
-               />
-
-               {driverViewMode === 'table' ? (
-                 <div className="bg-white rounded-[2rem] border border-slate-200 shadow-lg overflow-hidden">
-                   <div className="overflow-x-auto">
-                     <table className="w-full text-left border-collapse">
-                       <thead>
-                         <tr className="bg-slate-50 border-b border-slate-200 text-[8px] uppercase tracking-widest text-slate-500 font-black">
-                           <th className="p-4">Nombre</th>
-                           <th className="p-4">CD</th>
-                           <th className="p-4">Contratista</th>
-                           <th className="p-4">Licencia</th>
-                           <th className="p-4">Manejo Def.</th>
-                           <th className="p-4">Ex. Médico</th>
-                         </tr>
-                       </thead>
-                       <tbody className="divide-y divide-slate-100 text-[10px] font-medium text-slate-700">
-                         {filteredDrivers.map(d => (
-                           <tr key={d.id} className="hover:bg-slate-50 transition-colors">
-                             <td className="p-4 font-black uppercase">{d.name}</td>
-                             <td className="p-4 font-black uppercase text-slate-400">{d.cd}</td>
-                             <td className="p-4 font-black uppercase text-slate-600">{d.contractor}</td>
-                             <td className="p-4">
-                               <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
-                                 d.license.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
-                               }`}>
-                                 {d.license.expiryDate}
-                               </span>
-                             </td>
-                             <td className="p-4">
-                               <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
-                                 d.defensiveDriving.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
-                               }`}>
-                                 {d.defensiveDriving.expiryDate}
-                               </span>
-                             </td>
-                             <td className="p-4">
-                               <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${
-                                 d.medicalExam.status === 'active' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
-                               }`}>
-                                 {d.medicalExam.expiryDate}
-                               </span>
-                             </td>
-                           </tr>
-                         ))}
-                       </tbody>
-                     </table>
-                   </div>
-                 </div>
-               ) : (
-                 <div className="grid grid-cols-1 gap-6">
-                  {filteredDrivers.map(d => (
-                    <DriverCard key={d.id} driver={d} onViewDoc={(url, t) => setViewDoc({url, title: t})} />
-                  ))}
-                 </div>
-               )}
             </div>
           )}
 

@@ -73,18 +73,16 @@ const Dashboard: React.FC<DashboardProps> = ({
     const soat = vehicles.filter(v => v.soat.status !== 'active').length;
     const rtm = vehicles.filter(v => v.rtm.status !== 'active').length;
     const ext = vehicles.filter(v => v.extinguisher.status !== 'active').length;
-    const license = drivers.filter(d => d.license.status !== 'active').length;
     return [
       { name: 'SOAT', value: soat },
       { name: 'RTM', value: rtm },
-      { name: 'Extintor', value: ext },
-      { name: 'Licencia', value: license }
+      { name: 'Extintor', value: ext }
     ];
-  }, [vehicles, drivers]);
+  }, [vehicles]);
 
   const stats = [
     { label: 'Total Vehículos', value: vehicles.length, icon: <Truck className="text-indigo-600" />, color: 'bg-indigo-50', view: 'vehiculos' },
-    { label: 'Conductores Activos', value: drivers.length, icon: <Users className="text-emerald-600" />, color: 'bg-emerald-50', view: 'conductores' },
+    { label: 'Calibraciones Flota', value: calibrations.length, icon: <Disc className="text-emerald-600" />, color: 'bg-emerald-50', view: 'calibraciones' },
     { label: 'Comparendos Pendientes', value: fines.filter(f => f.status === 'PENDIENTE').length, icon: <Gavel className="text-rose-600" />, color: 'bg-rose-50', view: 'comparendos' },
     { label: 'Novedades Abiertas', value: reports.filter(r => (r.status as any) === 'ABIERTO' || (r.status as any) === 'PENDIENTES').length, icon: <ClipboardList className="text-amber-600" />, color: 'bg-amber-50', view: 'novedades' },
   ];
