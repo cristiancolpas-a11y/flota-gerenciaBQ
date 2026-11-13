@@ -6006,12 +6006,45 @@ export const fetchVehicleInventoryFromSheet = async (): Promise<VehicleInventory
 };
 
 export const submitVehicleInventory = async (data: any): Promise<boolean> => {
+  const cleanPlate = (data.plate || data.placa || '').toString().toUpperCase().trim();
+  const cleanInspector = (data.inspector || data.nombre || '').toString().trim();
+  const cleanDate = (data.fecha || '').toString().trim();
+  const generatedId = data.id || `${cleanDate.replace(/[^0-9]/g, '')}_${cleanPlate}_${Date.now()}`;
+
   const payload = {
     method: 'POST_INVENTARIO',
     data: { 
       ...data, 
       docId: INVENTORY_DOC_ID, 
-      sheetName: 'INVENTARIO DIARIO' 
+      sheetName: 'INVENTARIO DIARIO',
+      // Alias bidireccionales garantizados para compatibilidad con cualquier versión del backend
+      id: generatedId,
+      plate: cleanPlate,
+      placa: cleanPlate,
+      inspector: cleanInspector,
+      nombre: cleanInspector,
+      carretillas: Number(data.carretillas || data.carretilla) || 0,
+      carretilla: Number(data.carretillas || data.carretilla) || 0,
+      conos: Number(data.conos || data.cono) || 0,
+      cono: Number(data.conos || data.cono) || 0,
+      fotoFrontal: data.fotoFrontal || data.frontal || '',
+      fotoLateralIzq: data.fotoLateralIzq || data.lateralIzq || data.lateral_izq || '',
+      fotoLateralDer: data.fotoLateralDer || data.lateralDer || data.lateral_der || '',
+      fotoTrasera: data.fotoTrasera || data.trasera || '',
+      fotoEstriboIzq: data.fotoEstriboIzq || data.estriboIzq || '',
+      estriboIzq: data.fotoEstriboIzq || data.estriboIzq || '',
+      fotoEstriboDer: data.fotoEstriboDer || data.estriboDer || '',
+      estriboDer: data.fotoEstriboDer || data.estriboDer || '',
+      fotoNovedad1: data.fotoNovedad1 || data.novedad1 || '',
+      novedad1: data.fotoNovedad1 || data.novedad1 || '',
+      fotoNovedad2: data.fotoNovedad2 || data.novedad2 || '',
+      novedad2: data.fotoNovedad2 || data.novedad2 || '',
+      fotoNovedad3: data.fotoNovedad3 || data.novedad3 || '',
+      novedad3: data.fotoNovedad3 || data.novedad3 || '',
+      observacion: data.observacion || data.observaciones || '',
+      estadoTacos: data.estadoTacos || data.estado_tacos || '',
+      tacos: data.tacos || data.fotoTacos || '',
+      fotoTacos: data.tacos || data.fotoTacos || ''
     }
   };
   try {

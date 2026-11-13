@@ -1945,67 +1945,102 @@ function doPost(e) {
         return output("success", url);
       }
       else if (m === 'POST_INVENTARIO') {
-        var targetDocId = cleanId(d.docId || ID_HOJA);
+        var INVENTARIO_FALLBACK_DOC_ID = '1lRQGdS6aNJnDCPpkieWj-EEb3RAbp1-zY7uWVt-7UQU';
+        var targetDocId = cleanId(d.docId || INVENTARIO_FALLBACK_DOC_ID);
         var ssInv = SpreadsheetApp.openById(targetDocId);
         var s = getSheetByGid(ssInv, "849297780") || findSheetCaseInsensitive(ssInv, "INVENTARIO DIARIO") || ssInv.getSheetByName("INVENTARIO DIARIO") || getS(ssInv, "INVENTARIO DIARIO");
         
-        var placa = (d.plate || "").toString().toUpperCase().trim();
-        var fechaIngreso = d.fecha || today();
-        var inspectorNombre = (d.inspector || "").toString().trim();
+        // Soporte bidireccional de nombres de campo (placa / plate, nombre / inspector)
+        var placa = (d.plate || d.placa || "").toString().toUpperCase().trim();
+        var inspectorNombre = (d.nombre || d.inspector || "").toString().trim();
+        
+        // Formato de fecha en hoja: preferir siempre dd/MM/yyyy
+        var fechaRaw = d.fecha || today();
+        var fechaIngreso = fechaRaw;
+        if (/^\d{4}-\d{2}-\d{2}/.test(fechaRaw)) {
+          var fParts = fechaRaw.split("T")[0].split("-");
+          fechaIngreso = fParts[2] + "/" + fParts[1] + "/" + fParts[0];
+        }
 
-        // Control Anti-Duplicados: Verificar si ya existe un registro reciente para la misma placa, fecha e inspector
+        // Función para normalizar fechas para la verificación de duplicados (YYYY-MM-DD)
+        function normDateStr(val) {
+          if (!val) return "";
+          if (val instanceof Date) {
+            return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
+          }
+          var sStr = val.toString().trim();
+          if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(sStr)) {
+            var parts = sStr.split("/");
+            return parts[2] + "-" + (parts[1].length < 2 ? "0" + parts[1] : parts[1]) + "-" + (parts[0].length < 2 ? "0" + parts[0] : parts[0]);
+          }
+          if (/^\d{4}-\d{2}-\d{2}/.test(sStr)) {
+            return sStr.substring(0, 10);
+          }
+          return sStr;
+        }
+
+        // Control Anti-Duplicados: Solo si placa existe y no se especifica d.force
         var lastRow = s.getLastRow();
-        if (lastRow > 1) {
-          var checkRowsCount = Math.min(5, lastRow - 1);
+        if (lastRow > 1 && placa && !d.force) {
+          var checkRowsCount = Math.min(10, lastRow - 1);
           var recentRows = s.getRange(lastRow - checkRowsCount + 1, 1, checkRowsCount, 3).getValues();
+          var normIngreso = normDateStr(fechaIngreso);
+
           for (var rIdx = recentRows.length - 1; rIdx >= 0; rIdx--) {
-            var rowFecha = recentRows[rIdx][0] instanceof Date 
-              ? Utilities.formatDate(recentRows[rIdx][0], Session.getScriptTimeZone(), "yyyy-MM-dd") 
-              : String(recentRows[rIdx][0] || "").substring(0, 10);
+            var rowFechaNorm = normDateStr(recentRows[rIdx][0]);
             var rowPlaca = String(recentRows[rIdx][1] || "").toUpperCase().trim();
             var rowInspector = String(recentRows[rIdx][2] || "").trim();
             
-            if (rowPlaca === placa && rowFecha === fechaIngreso && rowInspector === inspectorNombre) {
+            // Si la placa y la fecha normalizada coinciden
+            if (rowPlaca === placa && rowFechaNorm === normIngreso) {
+              // Si el inspector fue registrado y difiere sensiblemente, se permite registrar (ej. cambio de turno)
+              if (inspectorNombre && rowInspector && inspectorNombre.toLowerCase() !== rowInspector.toLowerCase()) {
+                continue;
+              }
               if (lock.hasLock()) lock.releaseLock();
-              return output("success", "Registro existente verificado para la placa " + placa + " (duplicado prevenido).");
+              return output("success", "Inventario ya registrado para " + placa + " (duplicado evitado).");
             }
           }
         }
 
-        var imgFrontal = sImg(d.fotoFrontal, "INV_FRONT_" + placa);
-        var imgLatIzq = sImg(d.fotoLateralIzq, "INV_LAT_IZQ_" + placa);
-        var imgLatDer = sImg(d.fotoLateralDer, "INV_LAT_DER_" + placa);
-        var imgTrasera = sImg(d.fotoTrasera, "INV_TRAS_" + placa);
-        var imgEstriboIzq = sImg(d.fotoEstriboIzq, "INV_EST_IZQ_" + placa);
-        var imgEstriboDer = sImg(d.fotoEstriboDer, "INV_EST_DER_" + placa);
-        var imgNov1 = sImg(d.fotoNovedad1, "INV_NOV1_" + placa);
-        var imgNov2 = sImg(d.fotoNovedad2, "INV_NOV2_" + placa);
-        var imgNov3 = sImg(d.fotoNovedad3, "INV_NOV3_" + placa);
+        // Fotos principales y estribos (soporta tanto fotoEstriboIzq como estriboIzq)
+        var imgFrontal = sImg(d.fotoFrontal || d.frontal, "INV_FRONT_" + placa);
+        var imgLatIzq = sImg(d.fotoLateralIzq || d.lateralIzq || d.lateral_izq, "INV_LAT_IZQ_" + placa);
+        var imgLatDer = sImg(d.fotoLateralDer || d.lateralDer || d.lateral_der, "INV_LAT_DER_" + placa);
+        var imgTrasera = sImg(d.fotoTrasera || d.trasera, "INV_TRAS_" + placa);
+        var imgEstriboIzq = sImg(d.fotoEstriboIzq || d.estriboIzq || d.estribo_izq, "INV_EST_IZQ_" + placa);
+        var imgEstriboDer = sImg(d.fotoEstriboDer || d.estriboDer || d.estribo_der, "INV_EST_DER_" + placa);
+        var imgNov1 = sImg(d.fotoNovedad1 || d.novedad1, "INV_NOV1_" + placa);
+        var imgNov2 = sImg(d.fotoNovedad2 || d.novedad2, "INV_NOV2_" + placa);
+        var imgNov3 = sImg(d.fotoNovedad3 || d.novedad3, "INV_NOV3_" + placa);
+
+        // ID único del registro para Col P
+        var recordId = d.id || (placa ? (fechaIngreso.replace(/\//g, '') + "_" + placa + "_" + Date.now()) : "");
 
         var rowDataInv = [
-          fechaIngreso,                        // Col A (idx 0): FECHA
-          placa,                               // Col B (idx 1): PLACA
-          inspectorNombre,                     // Col C (idx 2): NOMBRE (inspector)
-          imgFrontal || "",                    // Col D (idx 3): Foto Frontal
-          imgLatIzq || "",                     // Col E (idx 4): Foto Lateral Izq.
-          imgLatDer || "",                     // Col F (idx 5): Foto Lateral Der.
-          imgTrasera || "",                    // Col G (idx 6): Foto Trasera
-          Number(d.carretillas) || 0,          // Col H (idx 7): carretilla
-          Number(d.conos) || 0,                // Col I (idx 8): conos
-          imgEstriboIzq || "",                 // Col J (idx 9): estribo Izq. (foto)
-          imgEstriboDer || "",                 // Col K (idx 10): estribo Der. (foto)
-          imgNov1 || "",                       // Col L (idx 11): novedad1 (foto)
-          imgNov2 || "",                       // Col M (idx 12): novedad2 (foto)
-          imgNov3 || "",                       // Col N (idx 13): novedad3 (foto)
-          d.observacion || "",                 // Col O (idx 14): observacion
-          "",                                  // Col P (idx 15): (vacía)
-          d.estadoTacos || "",                 // Col Q (idx 16): ESTADO TACOS
-          d.tacos || ""                        // Col R (idx 17): TACOS
+          fechaIngreso,                                // Col A (idx 0): FECHA (dd/MM/yyyy)
+          placa,                                       // Col B (idx 1): PLACA
+          inspectorNombre,                             // Col C (idx 2): NOMBRE (inspector)
+          imgFrontal || "",                            // Col D (idx 3): Foto Frontal
+          imgLatIzq || "",                             // Col E (idx 4): Foto Lateral Izq.
+          imgLatDer || "",                             // Col F (idx 5): Foto Lateral Der.
+          imgTrasera || "",                            // Col G (idx 6): Foto Trasera
+          Number(d.carretillas || d.carretilla) || 0,  // Col H (idx 7): carretilla
+          Number(d.conos || d.cono) || 0,              // Col I (idx 8): conos
+          imgEstriboIzq || "",                         // Col J (idx 9): estribo Izq. (foto)
+          imgEstriboDer || "",                         // Col K (idx 10): estribo Der. (foto)
+          imgNov1 || "",                               // Col L (idx 11): novedad1 (foto)
+          imgNov2 || "",                               // Col M (idx 12): novedad2 (foto)
+          imgNov3 || "",                               // Col N (idx 13): novedad3 (foto)
+          d.observacion || d.observaciones || "",      // Col O (idx 14): observacion
+          recordId,                                    // Col P (idx 15): ID / Timestamp del registro
+          d.estadoTacos || d.estado_tacos || "",       // Col Q (idx 16): ESTADO TACOS
+          d.tacos || d.fotoTacos || ""                 // Col R (idx 17): TACOS
         ];
 
         s.appendRow(rowDataInv);
         if (lock.hasLock()) lock.releaseLock();
-        return output("success", "Inventario registrado exitosamente para la placa " + placa);
+        return output("success", "Inventario registrado para la placa " + placa);
       }
       else {
         if (lock.hasLock()) lock.releaseLock();
