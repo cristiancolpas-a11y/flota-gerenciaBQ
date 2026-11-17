@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { WashReport } from '../types';
 import { formatDate, getDriveDirectLink } from '../utils';
-import { Droplets, Calendar, Hash, MapPin, Eye, Camera, X } from 'lucide-react';
+import { Droplets, Calendar, Hash, MapPin, Eye, Camera, X, History } from 'lucide-react';
 import PhotoDropZone from './PhotoDropZone';
 
 interface WashCardProps {
   report: WashReport;
   onViewDoc: (url: string | string[] | {url: string, label?: string}[], title: string) => void;
   onUploadEvidence?: (report: WashReport, file: File) => void;
+  onViewHistory?: (plate: string) => void;
 }
 
 export const washNeedsEvidence = (w: WashReport): boolean => {
@@ -15,7 +16,7 @@ export const washNeedsEvidence = (w: WashReport): boolean => {
   return !ev || !ev.startsWith('http');
 };
 
-const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc, onUploadEvidence }) => {
+const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc, onUploadEvidence, onViewHistory }) => {
   const needsEvidence = washNeedsEvidence(report);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
@@ -69,6 +70,16 @@ const WashCard: React.FC<WashCardProps> = ({ report, onViewDoc, onUploadEvidence
           <div className="flex items-center justify-between px-2">
             <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">SOPORTE VISUAL DE LIMPIEZA</h4>
             <div className="flex gap-2">
+              {onViewHistory && (
+                <button
+                  type="button"
+                  onClick={() => onViewHistory(report.plate)}
+                  className="p-2 bg-slate-50 text-slate-600 rounded-xl hover:bg-[#0D2B4E] hover:text-white transition-all flex items-center gap-1.5 cursor-pointer"
+                  title={`Ver historial de lavados de ${report.plate}`}
+                >
+                  <History size={14} /> <span className="text-[8px] font-black">HISTORIAL</span>
+                </button>
+              )}
               {!needsEvidence && (
                 <button 
                   onClick={() => onViewDoc(report.evidenceUrl, `Evidencia ${report.plate}`)}

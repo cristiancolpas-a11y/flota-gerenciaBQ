@@ -22,6 +22,7 @@ import WashCard from './components/WashCard';
 import WashStats from './components/WashStats';
 import WashForm from './components/WashForm';
 import WashMonthlyStatus from './components/WashMonthlyStatus';
+import WashHistoryTimeline, { WashPlateTimelineModal } from './components/WashHistoryTimeline';
 import CleaningForm from './components/CleaningForm';
 import CleaningCalendar from './components/CleaningCalendar';
 import CalibrationCard from './components/CalibrationCard';
@@ -290,8 +291,9 @@ const App: React.FC = () => {
   const [closingCleaning, setClosingCleaning] = useState<WashReport | null>(null);
   const [workshopViewMode, setWorkshopViewMode] = useState<'list' | 'calendar'>('calendar');
   const [calibrationViewMode, setCalibrationViewMode] = useState<'seguimiento' | 'calendar' | 'list' | 'visual'>('seguimiento');
-  const [washViewMode, setWashViewMode] = useState<'seguimiento' | 'list' | 'calendar'>('seguimiento');
+  const [washViewMode, setWashViewMode] = useState<'seguimiento' | 'timeline' | 'list' | 'calendar'>('seguimiento');
   const [washPreselectedPlate, setWashPreselectedPlate] = useState<string | null>(null);
+  const [washHistoryPlate, setWashHistoryPlate] = useState<string | null>(null);
   const [washStatusFilter, setWashStatusFilter] = useState<'all' | 'PENDIENTE' | 'REALIZADO'>('all');
   const [cleaningViewMode, setCleaningViewMode] = useState<'list' | 'calendar'>('calendar');
 
@@ -2829,22 +2831,28 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-1">
+                    <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-1 flex-wrap">
                       <button 
                         onClick={() => setWashViewMode('seguimiento')}
-                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${washViewMode === 'seguimiento' ? 'bg-[#0D2B4E] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 cursor-pointer ${washViewMode === 'seguimiento' ? 'bg-[#0D2B4E] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
                       >
                         Estatus Flota
                       </button>
                       <button 
+                        onClick={() => setWashViewMode('timeline')}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 cursor-pointer ${washViewMode === 'timeline' ? 'bg-[#0D2B4E] text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                      >
+                        Historial por Placa
+                      </button>
+                      <button 
                         onClick={() => setWashViewMode('calendar')}
-                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${washViewMode === 'calendar' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 cursor-pointer ${washViewMode === 'calendar' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
                       >
                         Cronograma
                       </button>
                       <button 
                         onClick={() => setWashViewMode('list')}
-                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${washViewMode === 'list' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
+                        className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap shrink-0 cursor-pointer ${washViewMode === 'list' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-50'}`}
                       >
                         Lista
                       </button>
@@ -2924,6 +2932,26 @@ const App: React.FC = () => {
                      setWashPreselectedPlate(null);
                      setShowWashForm(true);
                    }}
+                   onViewHistory={(plate) => setWashHistoryPlate(plate)}
+                 />
+               ) : washViewMode === 'timeline' ? (
+                 <WashHistoryTimeline
+                   vehicles={vehicles}
+                   washReports={washReports}
+                   selectedYear={selectedYear}
+                   onYearChange={setSelectedYear}
+                   filterCd={filterCd}
+                   filterContractor={filterContractor}
+                   onFilterCdChange={setFilterCd}
+                   onFilterContractorChange={setFilterContractor}
+                   uniqueCds={uniqueCds}
+                   uniqueContractors={uniqueContractors}
+                   onViewDoc={(url, t) => setViewDoc({url, title: t})}
+                   onRegisterWashForPlate={(plate) => {
+                     setWashPreselectedPlate(plate);
+                     setShowWashForm(true);
+                   }}
+                   onUploadEvidence={handleUploadWashEvidence}
                  />
                ) : washViewMode === 'calendar' ? (
                  <>
@@ -3029,6 +3057,7 @@ const App: React.FC = () => {
                             report={r} 
                             onViewDoc={(url, t) => setViewDoc({url, title: t})} 
                             onUploadEvidence={handleUploadWashEvidence}
+                            onViewHistory={(plate) => setWashHistoryPlate(plate)}
                           />
                         ))
                       }
@@ -4053,6 +4082,22 @@ const App: React.FC = () => {
               alert("No se pudo guardar el lavado. Intenta de nuevo.");
             }
           }} 
+        />
+      )}
+      {washHistoryPlate && (
+        <WashPlateTimelineModal
+          plate={washHistoryPlate}
+          vehicles={vehicles}
+          washReports={washReports}
+          selectedYear={selectedYear}
+          onYearChange={setSelectedYear}
+          onClose={() => setWashHistoryPlate(null)}
+          onViewDoc={(url, t) => setViewDoc({url, title: t})}
+          onRegisterWashForPlate={(plate) => {
+            setWashPreselectedPlate(plate);
+            setShowWashForm(true);
+          }}
+          onUploadEvidence={handleUploadWashEvidence}
         />
       )}
       {showCleaningForm && (

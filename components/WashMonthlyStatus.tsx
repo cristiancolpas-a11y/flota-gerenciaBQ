@@ -21,7 +21,8 @@ import {
   ArrowUpDown,
   Sparkles,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  History
 } from 'lucide-react';
 
 interface WashMonthlyStatusProps {
@@ -40,6 +41,7 @@ interface WashMonthlyStatusProps {
   uniqueCds: string[];
   uniqueContractors: string[];
   onOpenWashForm?: () => void;
+  onViewHistory?: (plate: string) => void;
 }
 
 export interface VehicleWashStatusItem {
@@ -77,7 +79,8 @@ const WashMonthlyStatus: React.FC<WashMonthlyStatusProps> = ({
   onFilterContractorChange,
   uniqueCds,
   uniqueContractors,
-  onOpenWashForm
+  onOpenWashForm,
+  onViewHistory
 }) => {
   // Filtros internos
   const [searchTerm, setSearchTerm] = useState('');
@@ -710,7 +713,7 @@ const WashMonthlyStatus: React.FC<WashMonthlyStatusProps> = ({
                         {isWashed ? (
                           <button 
                             onClick={() => handleOpenEvidence(item)}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-[#0D2B4E] text-slate-700 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95"
+                            className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-[#0D2B4E] text-slate-700 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
                             title="Ver evidencia fotográfica"
                           >
                             <Eye size={13} />
@@ -720,13 +723,23 @@ const WashMonthlyStatus: React.FC<WashMonthlyStatusProps> = ({
                           onRegisterWashForPlate && (
                             <button 
                               onClick={() => onRegisterWashForPlate(item.plate)}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-[#DC2626] hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm shadow-rose-600/20 active:scale-95"
+                              className="flex items-center gap-1 px-3 py-1.5 bg-[#DC2626] hover:bg-rose-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm shadow-rose-600/20 active:scale-95 whitespace-nowrap"
                               title="Registrar lavado para esta placa"
                             >
                               <Plus size={13} />
                               <span>Registrar</span>
                             </button>
                           )
+                        )}
+                        {onViewHistory && (
+                          <button
+                            onClick={() => onViewHistory(item.plate)}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-cyan-600 text-slate-700 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm active:scale-95 whitespace-nowrap"
+                            title={`Ver línea de tiempo e historial de lavados de ${item.plate}`}
+                          >
+                            <History size={13} />
+                            <span>Historial</span>
+                          </button>
                         )}
                       </div>
                     </td>

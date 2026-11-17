@@ -1442,9 +1442,9 @@ const processAvailabilityRows = (rows: any[][]): AvailabilityRecord[] => {
 };
 
 export const processAvailabilitySummaryRows = (rows: any[][]): AvailabilitySummary[] => {
-  // 0: LLAVE, 1: FECHA, 2: CD, 3: CONTRATISTA, 4: VH INDISPONIBLES, 5: VHS DISPONIBLES, 6: TOTAL VH, 7: %PROMEDIO, 8: SEMANA
+  // 0: LLAVE, 1: MES, 2: AÑO, 3: FECHA 1, 4: CD 1, 5: CONTRATISTA 1, 6: VH INDISPONIBLES 1, 7: VHS DISPONIBLES 1, 8: TOTAL VH 1, 9: %PROMEDIO 1, 10: SEMANA
   return rows.slice(1)
-    .filter(row => row && (row[1] || row[2]))
+    .filter(row => row && (row[3] || row[4]) && !String(row[3] || '').toUpperCase().includes('FECHA'))
     .map((row, idx): AvailabilitySummary => {
       const parseNum = (val: any) => {
         if (!val) return 0;
@@ -1454,17 +1454,21 @@ export const processAvailabilitySummaryRows = (rows: any[][]): AvailabilitySumma
         return parseFloat(clean) || 0;
       };
 
-      const parsedDate = parseFlexibleDate(row[1]);
-      let rawPromedio = parseNum(row[7]);
+      const parsedDate = parseFlexibleDate(row[3]);
+      const rawPromedio = parseNum(row[9]);
       // If decimal (e.g. 0.9696 or 0.85), convert to percentage 0-100%
       let promedioPct = rawPromedio;
       if (rawPromedio > 0 && rawPromedio <= 1.0) {
         promedioPct = rawPromedio * 100;
       }
 
-      let rawSemana = cleanSheetValue(row[8]);
+      const rawMes = cleanSheetValue(row[1]).toUpperCase().trim();
+      const rawAnio = cleanSheetValue(row[2]).trim();
+      let rawSemana = cleanSheetValue(row[10]);
       let derivedMes = '';
+      let derivedAnio = '';
       if (parsedDate) {
+        derivedAnio = parsedDate.slice(0, 4);
         const dObj = new Date(parsedDate + 'T12:00:00');
         if (!isNaN(dObj.getTime())) {
           derivedMes = MONTH_NAMES_ES[dObj.getMonth()];
@@ -1477,7 +1481,7 @@ export const processAvailabilitySummaryRows = (rows: any[][]): AvailabilitySumma
         rawSemana = `S${rawSemana}`;
       }
 
-      const rawCd = cleanSheetValue(row[2]).toUpperCase().trim();
+      const rawCd = cleanSheetValue(row[4]).toUpperCase().trim();
       let normCdVal = rawCd;
       if (rawCd.includes('GALAPA')) normCdVal = 'GALAPA';
       else if (rawCd.includes('ARENOSA')) normCdVal = 'LA ARENOSA';
@@ -1485,15 +1489,16 @@ export const processAvailabilitySummaryRows = (rows: any[][]): AvailabilitySumma
       return {
         id: `pct-${cleanSheetValue(row[0]) || 'row'}-${idx}-${Date.now()}`,
         llave: cleanSheetValue(row[0]),
+        mes: rawMes || derivedMes,
+        anio: rawAnio || derivedAnio,
         fecha: parsedDate,
         cd: normCdVal,
-        contratista: cleanSheetValue(row[3]).toUpperCase().trim(),
-        indisponibles: Math.round(parseNum(row[4])),
-        disponibles: Math.round(parseNum(row[5])),
-        total: Math.round(parseNum(row[6])),
+        contratista: cleanSheetValue(row[5]).toUpperCase().trim(),
+        indisponibles: Math.round(parseNum(row[6])),
+        disponibles: Math.round(parseNum(row[7])),
+        total: Math.round(parseNum(row[8])),
         promedio: Number(promedioPct.toFixed(2)),
-        semana: rawSemana ? rawSemana.toUpperCase() : 'S1',
-        mes: derivedMes
+        semana: rawSemana ? rawSemana.toUpperCase() : 'S1'
       };
     });
 };

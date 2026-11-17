@@ -294,15 +294,16 @@ export interface AvailabilityRecord {
 export interface AvailabilityPctRecord {
   id?: string;
   llave?: string;              // Col 0 (A)
-  fecha: string;               // Col 1 (B)
-  cd: string;                  // Col 2 (C)
-  contratista: string;         // Col 3 (D)
-  indisponibles: number;       // Col 4 (E)
-  disponibles: number;         // Col 5 (F)
-  total: number;               // Col 6 (G)
-  promedio: number;            // Col 7 (H) % Promedio (0-100)
-  semana: string;              // Col 8 (I)
-  mes?: string;
+  mes?: string;                // Col 1 (B)
+  anio?: string;               // Col 2 (C)
+  fecha: string;               // Col 3 (D)
+  cd: string;                  // Col 4 (E)
+  contratista: string;         // Col 5 (F)
+  indisponibles: number;       // Col 6 (G)
+  disponibles: number;         // Col 7 (H)
+  total: number;               // Col 8 (I)
+  promedio: number;            // Col 9 (J) % Promedio (0-100)
+  semana: string;              // Col 10 (K)
 }
 
 export type AvailabilitySummary = AvailabilityPctRecord;
