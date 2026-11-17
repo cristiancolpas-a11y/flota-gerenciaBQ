@@ -21,7 +21,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Waves,
   Sparkles,
   Info,
   Check
@@ -29,8 +28,6 @@ import {
 import { 
   BarChart, 
   Bar, 
-  AreaChart,
-  Area,
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -216,8 +213,6 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
   // Sub-chart view modes
   const [cdViewMode, setCdViewMode] = useState<'consolidado' | 'por_mes'>('consolidado');
   const [contractorViewMode, setContractorViewMode] = useState<'consolidado' | 'por_mes'>('consolidado');
-  const [streamTimeMode, setStreamTimeMode] = useState<'semanal' | 'mensual'>('semanal');
-  const [streamStackType, setStreamStackType] = useState<'stacked' | 'silhouette'>('stacked');
 
   // Tabla detalle: búsqueda interna, orden y paginación
   const [tableSearchPlate, setTableSearchPlate] = useState<string>('');
@@ -833,87 +828,30 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
     return { rows, contractors: activeContractors };
   }, [availabilityPct, filters, clavesSistemaPlaca]);
 
-  // E) SISTEMAS MÁS INTERVENIDOS (STREAMGRAPH / ÁREA APILADA SUAVIZADA)
+  // E) SISTEMAS MÁS INTERVENIDOS (RANKING DE BARRAS HORIZONTALES)
   // Aplica TODOS los filtros (CD, Mes, Semana, Contratista, Placa) ignorando SOLO Sistema
-  const { streamData: systemStreamData, streamSystems, systemColorMap, totalStreamInterventions } = useMemo(() => {
-    const baseInterventions = (availability || []).filter(item => intervencionPasa(item, { ignoreSistema: true }));
-
-    const overallCounts: Record<string, number> = {};
-    let totalInterv = 0;
-    baseInterventions.forEach(r => {
+  const { sistemaRankingData, totalSistemaInterventions } = useMemo(() => {
+    const base = (availability || []).filter(item => intervencionPasa(item, { ignoreSistema: true }));
+    const map: Record<string, number> = {};
+    base.forEach(r => {
       const s = (r.sistema || 'SIN ESPECIFICAR').toUpperCase().trim();
-      overallCounts[s] = (overallCounts[s] || 0) + 1;
-      totalInterv++;
+      map[s] = (map[s] || 0) + 1;
     });
-
-    const sortedSystems = Object.entries(overallCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([s]) => s);
-
-    // Seleccionar los top 7 sistemas principales; agrupar el resto en OTROS garantizando sin duplicados
-    const nonOtherSystems = sortedSystems.filter(s => s !== 'OTROS');
-    const topSystems = nonOtherSystems.slice(0, 7);
-    const hasOthers = sortedSystems.includes('OTROS') || nonOtherSystems.length > 7;
-    const finalSystems = Array.from(new Set(hasOthers ? [...topSystems, 'OTROS'] : topSystems));
-
-    const colorMap: Record<string, string> = {};
-    finalSystems.forEach((sys, i) => {
-      if (sys === 'OTROS') {
-        colorMap[sys] = '#94A3B8';
-      } else {
-        colorMap[sys] = STREAM_PALETTE[i % STREAM_PALETTE.length];
-      }
-    });
-
-    // Agrupar por periodo (semanal o mensual)
-    const periodsMap: Record<string, any> = {};
-
-    baseInterventions.forEach(r => {
-      let periodKey = '';
-      let sortKey = 0;
-
-      if (streamTimeMode === 'mensual') {
-        const m = normMes(r.mes || getRecordMes(r));
-        if (!m) return;
-        periodKey = m;
-        const mIdx = MESES_FULL.indexOf(m);
-        sortKey = mIdx !== -1 ? mIdx : 999;
-      } else {
-        const w = normSemana(r.semana) || 'S1';
-        periodKey = w;
-        sortKey = parseInt(periodKey.replace(/\D/g, ''), 10) || 0;
-      }
-
-      if (!periodsMap[periodKey]) {
-        periodsMap[periodKey] = {
-          periodo: periodKey,
-          label: periodKey,
-          _sortKey: sortKey,
-          total: 0
-        };
-        finalSystems.forEach(s => {
-          periodsMap[periodKey][s] = 0;
-        });
-      }
-
-      const s = (r.sistema || 'SIN ESPECIFICAR').toUpperCase().trim();
-      if (topSystems.includes(s)) {
-        periodsMap[periodKey][s] = (periodsMap[periodKey][s] || 0) + 1;
-      } else if (hasOthers) {
-        periodsMap[periodKey]['OTROS'] = (periodsMap[periodKey]['OTROS'] || 0) + 1;
-      }
-      periodsMap[periodKey].total += 1;
-    });
-
-    const streamData = Object.values(periodsMap).sort((a: any, b: any) => a._sortKey - b._sortKey);
+    const total = Object.values(map).reduce((a, b) => a + b, 0);
+    const safeTotal = total || 1;
+    const ranking = Object.entries(map)
+      .map(([sistema, count]) => ({
+        sistema,
+        count,
+        pct: Number(((count / safeTotal) * 100).toFixed(1)),
+      }))
+      .sort((a, b) => b.count - a.count);
 
     return {
-      streamData,
-      streamSystems: finalSystems,
-      systemColorMap: colorMap,
-      totalStreamInterventions: totalInterv
+      sistemaRankingData: ranking,
+      totalSistemaInterventions: total,
     };
-  }, [availability, filters, streamTimeMode]);
+  }, [availability, filters, clavesSistemaPlaca]);
 
   // F) DÍAS EN TALLER (PERMANENCIA)
   const daysInShopStats = useMemo(() => {
@@ -2129,197 +2067,85 @@ export const AvailabilityModule: React.FC<AvailabilityDashboardProps> = ({
       </motion.div>
 
       {/* ============================================================== */}
-      {/* 8. SISTEMAS MÁS INTERVENIDOS (STREAMGRAPH / ÁREA APILADA)      */}
+      {/* 8. SISTEMAS MÁS INTERVENIDOS (RANKING DE BARRAS HORIZONTALES)  */}
       {/* ============================================================== */}
       <motion.div 
         layout
-        className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5"
+        className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4"
       >
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-sm md:text-base font-bold text-slate-900 flex items-center gap-2">
-              <Waves size={18} className="text-[#0D2B4E]" />
-              Sistemas más intervenidos (Evolución temporal)
+            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-1">
+              <Wrench size={18} className="text-[#0D2B4E]" />
+              Sistemas más intervenidos
             </h3>
             <p className="text-xs text-slate-500">
-              Evolución {streamTimeMode === 'semanal' ? 'semanal' : 'mensual'} por componente mecánico. Responde en vivo a CD, contratista o mes.
+              Cantidad de novedades por sistema (clic para filtrar) · {totalSistemaInterventions} novedades analizadas
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {filterSistema !== 'TODOS' && (
-              <span className="px-3 py-1 rounded-full bg-[#0D2B4E] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs">
-                <Check size={12} /> Sistema: {filterSistema}
-                <button 
-                  onClick={() => setFilterSistema('TODOS')}
-                  className="text-amber-400 hover:text-white ml-1 cursor-pointer font-black"
-                >
-                  ×
-                </button>
-              </span>
-            )}
-
-            {/* Agrupación temporal: Semanal vs Mensual */}
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
-              <button
-                onClick={() => setStreamTimeMode('semanal')}
-                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                  streamTimeMode === 'semanal' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                }`}
+          {filterSistema !== 'TODOS' && (
+            <span className="px-3 py-1 rounded-full bg-[#0D2B4E] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs">
+              <Check size={12} /> Sistema: {filterSistema}
+              <button 
+                onClick={() => setFilterSistema('TODOS')}
+                className="text-amber-400 hover:text-white ml-1 cursor-pointer font-black"
               >
-                Semanal
+                ×
               </button>
-              <button
-                onClick={() => setStreamTimeMode('mensual')}
-                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                  streamTimeMode === 'mensual' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Mensual
-              </button>
-            </div>
-
-            {/* Estilo Área Apilada vs Silhouette */}
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
-              <button
-                onClick={() => setStreamStackType('stacked')}
-                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                  streamStackType === 'stacked' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Área Apilada
-              </button>
-              <button
-                onClick={() => setStreamStackType('silhouette')}
-                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                  streamStackType === 'silhouette' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                Stream Centrado
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Gráfica AreaChart Streamgraph */}
-        <div className="h-[380px] md:h-[430px] w-full pt-2">
-          {systemStreamData.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl p-8 gap-2">
-              <Waves size={32} className="text-slate-300" />
-              <span>Sin registros de intervenciones de sistemas para la selección actual</span>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart 
-                data={systemStreamData} 
-                stackOffset={streamStackType === 'silhouette' ? 'silhouette' : undefined}
-                margin={{ top: 20, right: 30, left: 10, bottom: 15 }}
-                onClick={(e: any) => {
-                  const p = e?.activePayload?.[0]?.payload;
-                  if (p?.periodo) {
-                    if (streamTimeMode === 'semanal') handleToggleFilter('semana', p.periodo);
-                    else handleToggleFilter('mes', p.periodo);
-                  }
-                }}
-              >
-                <defs>
-                  {streamSystems.map((sys, idx) => {
-                    const color = systemColorMap[sys] || '#3E5A78';
-                    const id = `grad-sys-${sys.replace(/[^a-zA-Z0-9]/g, '_')}-${idx}`;
-                    return (
-                      <linearGradient key={`grad-${sys}-${idx}`} id={id} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={color} stopOpacity={0.92}/>
-                        <stop offset="95%" stopColor={color} stopOpacity={0.72}/>
-                      </linearGradient>
-                    );
-                  })}
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                <XAxis 
-                  dataKey="periodo" 
-                  tick={{ fontSize: 11, fill: PALETTE.grisTexto, fontWeight: 700 }}
-                  axisLine={{ stroke: PALETTE.bordeSuave }}
-                />
-                <YAxis 
-                  tick={{ fontSize: 10, fill: PALETTE.grisTexto }} 
-                  axisLine={{ stroke: PALETTE.bordeSuave }}
-                  tickFormatter={(v) => Math.abs(v).toString()}
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#0F172A', borderRadius: '12px', color: '#fff', fontSize: '11px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' }}
-                  formatter={(value: any, name: any) => [`${value} ingresos`, name]}
-                  labelFormatter={(label) => `${streamTimeMode === 'semanal' ? 'Semana' : 'Mes'}: ${label}`}
-                />
-                <Legend 
-                  wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
-                  onClick={(e: any) => {
-                    if (e && e.dataKey) {
-                      handleToggleFilter('sistema', e.dataKey);
-                    }
-                  }}
-                  formatter={(value) => (
-                    <span className={`cursor-pointer transition-all ${filterSistema !== 'TODOS' && filterSistema !== value ? 'opacity-35' : 'font-extrabold text-slate-900'}`}>
-                      {value}
-                    </span>
-                  )}
-                />
-                {streamSystems.map((sys, idx) => {
-                  const color = systemColorMap[sys] || '#3E5A78';
-                  const isSelected = filterSistema === sys;
-                  const hasSysFilter = filterSistema !== 'TODOS';
-                  const gradId = `grad-sys-${sys.replace(/[^a-zA-Z0-9]/g, '_')}-${idx}`;
-                  return (
-                    <Area
-                      key={`area-sys-${sys}-${idx}`}
-                      type="monotone"
-                      dataKey={sys}
-                      name={sys}
-                      stackId="1"
-                      stroke={color}
-                      strokeWidth={isSelected ? 3.5 : 1.5}
-                      fill={`url(#${gradId})`}
-                      fillOpacity={!hasSysFilter || isSelected ? 0.92 : 0.2}
-                      activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }}
-                      cursor="pointer"
-                      isAnimationActive={true}
-                      animationDuration={750}
-                      animationEasing="ease-out"
-                      onClick={(e: any) => {
-                        e?.stopPropagation?.();
-                        handleToggleFilter('sistema', sys);
-                      }}
-                    />
-                  );
-                })}
-              </AreaChart>
-            </ResponsiveContainer>
+            </span>
           )}
         </div>
 
-        {/* Botones de filtro rápido interactivo por sistema */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">
-            Componentes ({totalStreamInterventions} fallas analizadas):
-          </span>
-          {streamSystems.map((sys, idx) => {
-            const color = systemColorMap[sys] || '#3E5A78';
-            const isSelected = filterSistema === sys;
-            return (
-              <button
-                key={`btn-sys-${sys}-${idx}`}
-                onClick={() => handleToggleFilter('sistema', sys)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  isSelected 
-                    ? 'bg-[#0D2B4E] text-white shadow-sm ring-2 ring-amber-500 ring-offset-1 font-bold' 
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
-                }`}
+        <div className="w-full pt-1">
+          {sistemaRankingData.length === 0 ? (
+            <div className="h-[280px] flex flex-col items-center justify-center text-slate-400 text-xs font-medium border border-dashed border-slate-200 rounded-xl p-8 gap-2">
+              <Wrench size={32} className="text-slate-300" />
+              <span>Sin registros de intervenciones de sistemas para la selección actual</span>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(280, sistemaRankingData.length * 38)}>
+              <BarChart
+                data={sistemaRankingData}
+                layout="vertical"
+                margin={{ top: 5, right: 55, left: 10, bottom: 5 }}
+                onClick={(e: any) => {
+                  const p = e?.activePayload?.[0]?.payload;
+                  if (p?.sistema) {
+                    setFilterSistema((filters.sistema || '').toUpperCase().trim() === p.sistema ? 'all' : p.sistema);
+                  }
+                }}
               >
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                <span>{sys}</span>
-                {isSelected && <Check size={12} className="ml-0.5 text-amber-400" />}
-              </button>
-            );
-          })}
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#64748B' }} />
+                <YAxis
+                  type="category"
+                  dataKey="sistema"
+                  width={140}
+                  tick={{ fontSize: 11, fill: '#1E293B', fontWeight: 600 }}
+                />
+                <Tooltip
+                  formatter={(v: any, _n: any, p: any) => [`${v} novedades (${p?.payload?.pct ?? 0}%)`, p?.payload?.sistema ?? '']}
+                  contentStyle={{ borderRadius: 10, fontSize: 12, border: '1px solid #E2E8F0' }}
+                />
+                <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={28} cursor="pointer">
+                  {sistemaRankingData.map((d, i) => (
+                    <Cell
+                      key={`cell-sys-${d.sistema}-${i}`}
+                      fill={(filters.sistema || '').toUpperCase().trim() === d.sistema ? '#E0A800' : '#0D2B4E'}
+                      className="transition-colors duration-200 hover:opacity-85"
+                    />
+                  ))}
+                  <LabelList
+                    dataKey="count"
+                    position="right"
+                    style={{ fontSize: 12, fontWeight: 700, fill: '#1E293B' }}
+                    formatter={(v: any) => `${v}`}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </motion.div>
 
