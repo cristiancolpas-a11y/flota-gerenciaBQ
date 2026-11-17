@@ -18,7 +18,8 @@ const WORKSHOPS = [
   'TODOFIBRAS',
   'CAMION COLOMBIA',
   'ELECTRONIC SYSTEM',
-  'COUNTRY TRUCK'
+  'COUNTRY TRUCK',
+  'ROINCOR'
 ];
 
 export const WorkshopForm: React.FC<WorkshopFormProps> = ({ isOpen, onClose, onSuccess, defaultWorkshop, vehicles }) => {

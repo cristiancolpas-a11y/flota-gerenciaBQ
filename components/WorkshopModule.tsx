@@ -31,8 +31,15 @@ const WORKSHOPS = [
   { id: 'TODOFIBRAS', name: 'TODOFIBRAS', icon: PenTool, color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
   { id: 'CAMION COLOMBIA', name: 'CAMION COLOMBIA', icon: Map, color: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
   { id: 'ELECTRONIC SYSTEM', name: 'ELECTRONIC SYSTEM', icon: Cpu, color: 'text-cyan-500', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
-  { id: 'COUNTRY TRUCK', name: 'COUNTRY TRUCK', icon: ShieldAlert, color: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/20' }
+  { id: 'COUNTRY TRUCK', name: 'COUNTRY TRUCK', icon: ShieldAlert, color: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/20' },
+  { id: 'ROINCOR', name: 'ROINCOR', icon: Wrench, color: 'text-indigo-500', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20' }
 ];
+
+const matchesWorkshop = (recordWorkshop: string, workshopId: string) => {
+  const normRecord = (recordWorkshop || '').toUpperCase().trim();
+  const normId = workshopId.toUpperCase().trim();
+  return normRecord === normId || (normId === 'ROINCOR' && normRecord.includes('ROINCOR'));
+};
 
 const WorkshopModule: React.FC<WorkshopModuleProps> = ({ onBack, vehicles }) => {
   const [activeWorkshop, setActiveWorkshop] = useState<string | null>(null);
@@ -62,7 +69,7 @@ const WorkshopModule: React.FC<WorkshopModuleProps> = ({ onBack, vehicles }) => 
   }, []);
 
   const filteredRecords = records.filter(record => {
-    if (activeWorkshop && record.workshopName !== activeWorkshop) return false;
+    if (activeWorkshop && !matchesWorkshop(record.workshopName, activeWorkshop)) return false;
     
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
@@ -89,7 +96,7 @@ const WorkshopModule: React.FC<WorkshopModuleProps> = ({ onBack, vehicles }) => 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {WORKSHOPS.map((workshop) => {
         const Icon = workshop.icon;
-        const workshopRecords = records.filter(r => r.workshopName === workshop.id);
+        const workshopRecords = records.filter(r => matchesWorkshop(r.workshopName, workshop.id));
         const activeCount = workshopRecords.filter(r => r.status.toUpperCase() !== 'FINALIZADO').length;
 
         return (
