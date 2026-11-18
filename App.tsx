@@ -65,7 +65,6 @@ import { VclModule } from './components/VclModule';
 import SustainabilityModule from './components/SustainabilityModule';
 import RutinasModule from './components/RutinasModule';
 import { CampaignsModule } from './components/CampaignsModule';
-import FleetLoader from './components/FleetLoader';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -205,7 +204,6 @@ const App: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<'root' | 'doc' | 'gestion' | 'otros'>('root');
   const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | 'otros' | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCd, setFilterCd] = useState('all');
@@ -765,10 +763,7 @@ const App: React.FC = () => {
         if (active) setIsSyncing(false);
       }
     };
-    const minTiempo = new Promise<void>(resolve => setTimeout(resolve, 2500));
-    Promise.all([loadBase(), minTiempo]).finally(() => {
-      if (active) setInitialLoading(false);
-    });
+    loadBase();
     return () => {
       active = false;
     };
@@ -1378,8 +1373,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
-      <FleetLoader show={initialLoading} />
-      {isSyncing && !initialLoading && (
+      {isSyncing && (
         <div className="fixed bottom-6 right-6 bg-slate-900 border border-slate-700 text-slate-300 px-4 py-3 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 animate-bounce">
           <Loader2 size={16} className="text-indigo-400 animate-spin" />
           <span className="text-[10px] font-black uppercase tracking-widest">Sincronizando...</span>
