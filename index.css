@@ -40,6 +40,24 @@ body {
     animation: shake 0.2s ease-in-out 0s 2;
 }
 
+@keyframes fleetProgress {
+    0% { transform: translateX(-100%); width: 45%; }
+    50% { transform: translateX(65%); width: 60%; }
+    100% { transform: translateX(220%); width: 45%; }
+}
+
+.fleet-loader-bar {
+    width: 45%;
+    animation: fleetProgress 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fleet-loader-bar {
+        width: 100%;
+        animation: none;
+    }
+}
+
 /* Custom Scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
     width: 8px;

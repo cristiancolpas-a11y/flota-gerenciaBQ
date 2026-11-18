@@ -65,6 +65,7 @@ import { VclModule } from './components/VclModule';
 import SustainabilityModule from './components/SustainabilityModule';
 import RutinasModule from './components/RutinasModule';
 import { CampaignsModule } from './components/CampaignsModule';
+import FleetLoader from './components/FleetLoader';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, Legend, ReferenceLine, LabelList
@@ -204,6 +205,7 @@ const App: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<'root' | 'doc' | 'gestion' | 'otros'>('root');
   const [expandedSection, setExpandedSection] = useState<'doc' | 'gestion' | 'otros' | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCd, setFilterCd] = useState('all');
@@ -746,6 +748,7 @@ const App: React.FC = () => {
 
   // Efecto A — carga base (solo una vez)
   useEffect(() => {
+    let active = true;
     const loadBase = async () => {
       setIsSyncing(true);
       try {
@@ -753,15 +756,22 @@ const App: React.FC = () => {
           fetchVehiclesFromSheet(),
           fetchDriversFromSheet()
         ]);
+        if (!active) return;
         setVehicles(v);
         setDrivers(d);
       } catch (e) {
         console.warn("Error cargando datos base:", e);
       } finally {
-        setIsSyncing(false);
+        if (active) setIsSyncing(false);
       }
     };
-    loadBase();
+    const minTiempo = new Promise<void>(resolve => setTimeout(resolve, 2500));
+    Promise.all([loadBase(), minTiempo]).finally(() => {
+      if (active) setInitialLoading(false);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Efecto B — carga por sección (cada vez que cambia activeView, si no está cargada)
@@ -1368,7 +1378,8 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex">
-      {isSyncing && (
+      <FleetLoader show={initialLoading} />
+      {isSyncing && !initialLoading && (
         <div className="fixed bottom-6 right-6 bg-slate-900 border border-slate-700 text-slate-300 px-4 py-3 rounded-2xl shadow-2xl z-[100] flex items-center gap-3 animate-bounce">
           <Loader2 size={16} className="text-indigo-400 animate-spin" />
           <span className="text-[10px] font-black uppercase tracking-widest">Sincronizando...</span>
@@ -1376,94 +1387,151 @@ const App: React.FC = () => {
       )}
       
       {appMode === 'root_menu' ? (
-        <div className="flex-grow bg-[#0f172a] flex flex-col items-center justify-center p-8 relative overflow-hidden">
-          {/* Background Elements */}
-          <div className="absolute top-0 left-0 w-full h-full">
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px]"></div>
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-amber-600/10 rounded-full blur-[120px]"></div>
-          </div>
+        <div className="flex-grow min-h-screen bg-[#071121] flex flex-col justify-between relative overflow-hidden font-['Plus_Jakarta_Sans',sans-serif]">
+          {/* Video directo al fondo del Sistema de Gestión */}
+          <video
+            src="/camion-flota.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            aria-hidden="true"
+            ref={(el) => {
+              if (el) {
+                el.muted = true;
+                el.play().catch(() => {});
+              }
+            }}
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+          />
 
-          {/* Floating Settings Button */}
-          <div className="absolute top-8 right-8 z-50">
-            <button 
+          {/* Scrim editorial equilibrado: deja visible el camión y garantiza contraste en encabezado y tarjetas */}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#071121] via-[#071121]/45 to-[#071121]/80 pointer-events-none" />
+
+          {/* Barra superior limpia */}
+          <header className="relative z-20 w-full max-w-7xl mx-auto px-6 sm:px-10 pt-6 pb-4 flex items-center justify-between gap-8">
+            <div className="flex items-center gap-3 text-white whitespace-nowrap shrink-0">
+              <span className="text-base sm:text-lg font-bold tracking-tight">Flota Barranquilla</span>
+              <span aria-hidden="true" className="text-white/30">·</span>
+              <span className="text-xs sm:text-sm font-medium text-slate-300">Gestión Operativa</span>
+            </div>
+
+            <button
               onClick={() => setShowGlobalSettings(true)}
-              className="p-4 bg-white/5 border border-white/10 text-slate-300 hover:text-white rounded-2xl flex items-center gap-2 hover:bg-white/10 hover:border-indigo-500/50 transition-all font-black uppercase tracking-wider text-[10px]"
+              className="px-4 py-2 rounded-lg bg-[#0A1628]/75 backdrop-blur-md border border-white/15 text-slate-200 hover:text-white hover:bg-[#11243E]/90 hover:border-white/30 transition-colors flex items-center gap-2 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
               title="Ajustes de Integración con Google Sheets"
             >
-              <Settings size={16} className="animate-spin-slow text-indigo-400" />
+              <Settings size={14} className="text-[#FBBF24]" />
               <span>Configuración Google</span>
             </button>
-          </div>
+          </header>
 
-          {/* Central Logo Area */}
-          <div className="relative z-10 flex flex-col items-center text-center mb-16">
-            <div className="w-48 h-48 bg-white rounded-[3rem] shadow-2xl flex items-center justify-center mb-10 relative group">
-              <div className="absolute inset-0 bg-indigo-500/5 rounded-[3rem] scale-110 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative">
-                <LayoutGrid size={80} className="text-slate-800" />
-                <div className="absolute -bottom-2 -right-2 bg-indigo-600 p-3 rounded-2xl shadow-lg border-4 border-white">
-                  <Settings size={28} className="text-white animate-spin-slow" />
-                </div>
-              </div>
+          {/* Contenido principal anclado en la parte inferior para lucir el video */}
+          <main className="relative z-10 w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pb-10 sm:pb-14 pt-16 flex flex-col gap-10">
+            <div className="max-w-2xl space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#FBBF24]">
+                Centro de Control · Activos y Operación
+              </p>
+              <h1 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight leading-[1.08] drop-shadow-md">
+                Sistema de Gestión
+              </h1>
+              <p className="text-sm sm:text-base text-slate-200/90 leading-relaxed max-w-xl">
+                Supervisión centralizada de flota vehicular, talleres aliados, rutinas de inspección y campañas operativas.
+              </p>
             </div>
-            <h1 className="text-5xl font-black text-white uppercase tracking-[0.2em] mb-4">SISTEMA DE GESTIÓN</h1>
-            <p className="text-indigo-400 font-black text-sm uppercase tracking-[0.5em] opacity-80">CONTROL CENTRALIZADO DE ACTIVOS</p>
-          </div>
 
-          {/* Root Menu Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 w-full max-w-7xl relative z-10">
-            <button 
-              onClick={handleFlotaAccess}
-              className="group bg-white/5 hover:bg-indigo-600/20 border border-white/10 hover:border-indigo-500/50 p-10 rounded-[3rem] transition-all duration-500 flex items-center gap-8 shadow-2xl hover:-translate-y-2"
-            >
-              <div className="w-20 h-20 bg-indigo-600/20 rounded-[1.5rem] flex items-center justify-center text-indigo-400 shadow-xl shadow-indigo-600/10 group-hover:scale-110 transition-transform border border-indigo-500/30">
-                <Truck size={36} />
-              </div>
-              <div className="text-left">
-                <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">FLOTA BARRANQUILLA</h3>
-                <p className="text-indigo-400/60 text-[10px] font-bold uppercase tracking-widest">Gestión de vehículos y equipos</p>
-              </div>
-            </button>
+            {/* Grid de 4 Tarjetas Horizontales (Acabado Mate Pulido) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {/* TARJETA 1: FLOTA BARRANQUILLA (Índigo / Periwinkle) */}
+              <button
+                type="button"
+                onClick={handleFlotaAccess}
+                className="group relative text-left flex items-center gap-4 sm:gap-5 bg-[#161D2E]/90 backdrop-blur-md hover:bg-[#1A2236] border border-white/[0.08] hover:border-[#7C8BFF]/40 rounded-[26px] px-5 py-6 shadow-[0_14px_30px_-12px_rgba(2,6,17,0.75),inset_0_1px_0_0_rgba(255,255,255,0.08)] hover:shadow-[0_20px_38px_-12px_rgba(2,6,17,0.9),inset_0_1px_0_0_rgba(255,255,255,0.14)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#7C8BFF]/60"
+              >
+                <div className="relative z-10 w-11 h-24 rounded-full bg-[#1E2442] border border-[#39447A] flex items-center justify-center shrink-0 group-hover:border-[#7C8BFF]/70 transition-colors">
+                  <Truck size={20} strokeWidth={1.9} className="text-[#7C8BFF]" />
+                </div>
 
-            <button 
-              onClick={() => setAppMode('talleres')}
-              className="group bg-white/5 hover:bg-amber-600/20 border border-white/10 hover:border-amber-500/50 p-10 rounded-[3rem] transition-all duration-500 flex items-center gap-8 shadow-2xl hover:-translate-y-2"
-            >
-              <div className="w-20 h-20 bg-amber-600/20 rounded-[1.5rem] flex items-center justify-center text-amber-400 shadow-xl shadow-amber-600/10 group-hover:scale-110 transition-transform border border-amber-500/30">
-                <Wrench size={36} />
-              </div>
-              <div className="text-left">
-                <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">TALLERES</h3>
-                <p className="text-amber-400/60 text-[10px] font-bold uppercase tracking-widest">Control de mantenimiento y servicios</p>
-              </div>
-            </button>
+                <div className="relative z-10 flex-1 min-w-0 pr-2">
+                  <h2 className="text-lg xl:text-[19px] font-extrabold text-white tracking-[0.06em] uppercase leading-[1.15]">
+                    Flota<br />Barranquilla
+                  </h2>
+                  <p className="mt-2 text-[10.5px] font-bold text-[#7884CC] tracking-[0.08em] uppercase leading-[1.35]">
+                    Gestión de vehículos y equipos
+                  </p>
+                </div>
 
-            <button 
-              onClick={() => { setAppMode('rutinas'); setRoutineSubMode('menu'); }}
-              className="group bg-white/5 hover:bg-emerald-600/20 border border-white/10 hover:border-emerald-500/50 p-10 rounded-[3rem] transition-all duration-500 flex items-center gap-8 shadow-2xl hover:-translate-y-2"
-            >
-              <div className="w-20 h-20 bg-emerald-600/20 rounded-[1.5rem] flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-600/10 group-hover:scale-110 transition-transform border border-emerald-500/30">
-                <ClipboardCheck size={36} />
-              </div>
-              <div className="text-left">
-                <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">RUTINAS</h3>
-                <p className="text-emerald-400/60 text-[10px] font-bold uppercase tracking-widest">Ejecución y control de inspecciones</p>
-              </div>
-            </button>
+                <ChevronRight size={16} strokeWidth={2.2} className="relative z-10 text-[#7C8BFF] opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
+              </button>
 
-            <button 
-              onClick={() => setAppMode('campanas')}
-              className="group bg-white/5 hover:bg-violet-600/20 border border-white/10 hover:border-violet-500/50 p-10 rounded-[3rem] transition-all duration-500 flex items-center gap-8 shadow-2xl hover:-translate-y-2"
-            >
-              <div className="w-20 h-20 bg-violet-600/20 rounded-[1.5rem] flex items-center justify-center text-violet-400 shadow-xl shadow-violet-600/10 group-hover:scale-110 transition-transform border border-violet-500/30">
-                <Sparkles size={36} />
-              </div>
-              <div className="text-left">
-                <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-1">CAMPAÑAS</h3>
-                <p className="text-violet-400/60 text-[10px] font-bold uppercase tracking-widest">Auditoría de activos críticos</p>
-              </div>
-            </button>
-          </div>
+              {/* TARJETA 2: TALLERES (Ámbar / Oro Técnico) */}
+              <button
+                type="button"
+                onClick={() => setAppMode('talleres')}
+                className="group relative text-left flex items-center gap-4 sm:gap-5 bg-[#161D2E]/90 backdrop-blur-md hover:bg-[#1A2236] border border-white/[0.08] hover:border-[#F5A623]/40 rounded-[26px] px-5 py-6 shadow-[0_14px_30px_-12px_rgba(2,6,17,0.75),inset_0_1px_0_0_rgba(255,255,255,0.08)] hover:shadow-[0_20px_38px_-12px_rgba(2,6,17,0.9),inset_0_1px_0_0_rgba(255,255,255,0.14)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#F5A623]/60"
+              >
+                <div className="relative z-10 w-11 h-24 rounded-full bg-[#2B231D] border border-[#5C4326] flex items-center justify-center shrink-0 group-hover:border-[#F5A623]/70 transition-colors">
+                  <Wrench size={20} strokeWidth={1.9} className="text-[#F5A623]" />
+                </div>
+
+                <div className="relative z-10 flex-1 min-w-0 pr-2">
+                  <h2 className="text-lg xl:text-[19px] font-extrabold text-white tracking-[0.06em] uppercase leading-[1.15]">
+                    Talleres
+                  </h2>
+                  <p className="mt-2 text-[10.5px] font-bold text-[#C48A3B] tracking-[0.08em] uppercase leading-[1.35]">
+                    Control de mantenimiento y servicios
+                  </p>
+                </div>
+
+                <ChevronRight size={16} strokeWidth={2.2} className="relative z-10 text-[#F5A623] opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
+              </button>
+
+              {/* TARJETA 3: RUTINAS (Esmeralda / Menta Operativo) */}
+              <button
+                type="button"
+                onClick={() => { setAppMode('rutinas'); setRoutineSubMode('menu'); }}
+                className="group relative text-left flex items-center gap-4 sm:gap-5 bg-[#161D2E]/90 backdrop-blur-md hover:bg-[#1A2236] border border-white/[0.08] hover:border-[#10D67A]/40 rounded-[26px] px-5 py-6 shadow-[0_14px_30px_-12px_rgba(2,6,17,0.75),inset_0_1px_0_0_rgba(255,255,255,0.08)] hover:shadow-[0_20px_38px_-12px_rgba(2,6,17,0.9),inset_0_1px_0_0_rgba(255,255,255,0.14)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#10D67A]/60"
+              >
+                <div className="relative z-10 w-11 h-24 rounded-full bg-[#132B26] border border-[#1E5446] flex items-center justify-center shrink-0 group-hover:border-[#10D67A]/70 transition-colors">
+                  <ClipboardCheck size={20} strokeWidth={1.9} className="text-[#10D67A]" />
+                </div>
+
+                <div className="relative z-10 flex-1 min-w-0 pr-2">
+                  <h2 className="text-lg xl:text-[19px] font-extrabold text-white tracking-[0.06em] uppercase leading-[1.15]">
+                    Rutinas
+                  </h2>
+                  <p className="mt-2 text-[10.5px] font-bold text-[#1EA866] tracking-[0.08em] uppercase leading-[1.35]">
+                    Ejecución y control de inspecciones
+                  </p>
+                </div>
+
+                <ChevronRight size={16} strokeWidth={2.2} className="relative z-10 text-[#10D67A] opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
+              </button>
+
+              {/* TARJETA 4: CAMPAÑAS (Violeta / Púrpura con ícono técnico de auditoría) */}
+              <button
+                type="button"
+                onClick={() => setAppMode('campanas')}
+                className="group relative text-left flex items-center gap-4 sm:gap-5 bg-[#161D2E]/90 backdrop-blur-md hover:bg-[#1A2236] border border-white/[0.08] hover:border-[#9D6BFF]/40 rounded-[26px] px-5 py-6 shadow-[0_14px_30px_-12px_rgba(2,6,17,0.75),inset_0_1px_0_0_rgba(255,255,255,0.08)] hover:shadow-[0_20px_38px_-12px_rgba(2,6,17,0.9),inset_0_1px_0_0_rgba(255,255,255,0.14)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#9D6BFF]/60"
+              >
+                <div className="relative z-10 w-11 h-24 rounded-full bg-[#251D3B] border border-[#4B367A] flex items-center justify-center shrink-0 group-hover:border-[#9D6BFF]/70 transition-colors">
+                  <ShieldCheck size={20} strokeWidth={1.9} className="text-[#9D6BFF]" />
+                </div>
+
+                <div className="relative z-10 flex-1 min-w-0 pr-2">
+                  <h2 className="text-lg xl:text-[19px] font-extrabold text-white tracking-[0.06em] uppercase leading-[1.15]">
+                    Campañas
+                  </h2>
+                  <p className="mt-2 text-[10.5px] font-bold text-[#8B68CC] tracking-[0.08em] uppercase leading-[1.35]">
+                    Auditoría de activos críticos
+                  </p>
+                </div>
+
+                <ChevronRight size={16} strokeWidth={2.2} className="relative z-10 text-[#9D6BFF] opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all shrink-0" />
+              </button>
+            </div>
+          </main>
         </div>
       ) : appMode === 'flota_menu' ? (
         <div className="flex-grow bg-[#0f172a] flex flex-col items-center justify-center p-8 relative overflow-hidden">
