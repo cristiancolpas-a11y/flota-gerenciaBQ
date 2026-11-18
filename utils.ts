@@ -125,6 +125,29 @@ export const getDriveDirectLink = (url: string): string => {
   return cleanUrl;
 };
 
+// Devuelve un link que ABRE el archivo de Drive (imagen, PDF o documento) a tamaño completo.
+// NO usa thumbnail. Si la evidencia trae varios links separados por coma, usa el PRIMERO.
+// Para Google Docs/Sheets/Slides respeta su propio link.
+export const getDriveOpenLink = (url: string): string => {
+  if (!url || typeof url !== 'string') return '';
+  // La evidencia puede traer varios links separados por coma: tomar el primero válido.
+  const first = url.split(',').map(s => s.trim()).filter(Boolean)[0] || '';
+  const u = first.trim();
+  if (!u) return '';
+  if (u.startsWith('data:')) return u;
+  if (!u.includes('drive.google.com') && !u.includes('docs.google.com')) return u;
+
+  // Google Docs/Sheets/Slides: devolver tal cual (no son archivos de Drive genéricos)
+  if (/docs\.google\.com\/(document|spreadsheets|presentation)\//.test(u)) return u;
+
+  // Extraer el ID del archivo de Drive y reconstruir un link que ABRE el archivo
+  const m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || u.match(/\/d\/([a-zA-Z0-9_-]+)/) || u.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) {
+    return `https://drive.google.com/file/d/${m[1]}/view`;
+  }
+  return u; // si no se reconoce, devolver el original (no romperlo)
+};
+
 export const isImageLink = (url: string): boolean => {
   if (!url) return false;
   return url.startsWith('data:image') || url.includes('drive.google.com') || /\.(jpeg|jpg|gif|png|webp|bmp)$/i.test(url);

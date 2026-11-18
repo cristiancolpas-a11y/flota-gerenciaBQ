@@ -52,7 +52,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { submitAuditUpdateToSheet, submitFleetCierreUpdateToSheet, uploadImageToDrive } from "../services/sheetService";
-import { getDriveDirectLink, createMosaic, compressImage } from "../utils";
+import { getDriveDirectLink, getDriveOpenLink, createMosaic, compressImage } from "../utils";
 import { FleetSeguimientoTab } from "./FleetSeguimientoTab";
 
 interface FleetStandardModuleProps {
@@ -4213,7 +4213,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
 
                                 {r.evidence.trim().startsWith("http") && (
                                   <a
-                                    href={getDriveDirectLink(r.evidence)}
+                                    href={getDriveOpenLink(r.evidence)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="px-3 py-2 bg-blue-600/20 text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-md flex items-center gap-1.5 font-black text-xs"
@@ -4544,7 +4544,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                       </button>
                       {selectedNovelty.evidence.trim().startsWith("http") && (
                         <a
-                          href={getDriveDirectLink(selectedNovelty.evidence)}
+                          href={getDriveOpenLink(selectedNovelty.evidence)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 transition-all"
@@ -4778,7 +4778,7 @@ const FleetStandardModule: React.FC<FleetStandardModuleProps> = ({
                           />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                             <a
-                              href={isUrl ? img : directLink}
+                              href={isUrl ? getDriveOpenLink(img) : directLink}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="px-4 py-2 bg-white/20 backdrop-blur-md text-white rounded-xl hover:bg-indigo-600 transition-all shadow-xl border border-white/20 flex items-center gap-2 text-xs font-bold"
