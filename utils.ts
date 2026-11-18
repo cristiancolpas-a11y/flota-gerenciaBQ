@@ -130,15 +130,18 @@ export const getDriveDirectLink = (url: string): string => {
 // Para Google Docs/Sheets/Slides respeta su propio link.
 export const getDriveOpenLink = (url: string): string => {
   if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('data:')) return trimmed;
   // La evidencia puede traer varios links separados por coma: tomar el primero válido.
-  const first = url.split(',').map(s => s.trim()).filter(Boolean)[0] || '';
+  const first = trimmed.split(',').map(s => s.trim()).filter(Boolean)[0] || '';
   const u = first.trim();
   if (!u) return '';
   if (u.startsWith('data:')) return u;
   if (!u.includes('drive.google.com') && !u.includes('docs.google.com')) return u;
 
-  // Google Docs/Sheets/Slides: devolver tal cual (no son archivos de Drive genéricos)
-  if (/docs\.google\.com\/(document|spreadsheets|presentation)\//.test(u)) return u;
+  // Google Docs/Sheets/Slides/Forms: devolver tal cual (no son archivos de Drive genéricos)
+  if (/docs\.google\.com\/(document|spreadsheets|presentation|forms)\//.test(u)) return u;
 
   // Extraer el ID del archivo de Drive y reconstruir un link que ABRE el archivo
   const m = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || u.match(/\/d\/([a-zA-Z0-9_-]+)/) || u.match(/[?&]id=([a-zA-Z0-9_-]+)/);

@@ -1410,15 +1410,6 @@ const App: React.FC = () => {
               <span aria-hidden="true" className="text-white/30">·</span>
               <span className="text-xs sm:text-sm font-medium text-slate-300">Gestión Operativa</span>
             </div>
-
-            <button
-              onClick={() => setShowGlobalSettings(true)}
-              className="px-4 py-2 rounded-lg bg-[#0A1628]/75 backdrop-blur-md border border-white/15 text-slate-200 hover:text-white hover:bg-[#11243E]/90 hover:border-white/30 transition-colors flex items-center gap-2 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer"
-              title="Ajustes de Integración con Google Sheets"
-            >
-              <Settings size={14} className="text-[#FBBF24]" />
-              <span>Configuración Google</span>
-            </button>
           </header>
 
           {/* Contenido principal anclado en la parte inferior para lucir el video */}
