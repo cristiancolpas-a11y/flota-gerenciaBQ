@@ -1399,7 +1399,7 @@ const App: React.FC = () => {
         <div className="flex-grow min-h-screen bg-[#071121] flex flex-col justify-between relative overflow-hidden font-['Plus_Jakarta_Sans',sans-serif]">
           {/* Video directo al fondo del Sistema de Gestión */}
           <video
-            src="/camion-flota.mp4"
+            src="/assets/aistudio/gemini_generated_video_20ef19f4_69631618.mp4"
             autoPlay
             muted
             loop
