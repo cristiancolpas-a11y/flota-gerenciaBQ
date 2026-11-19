@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { Vehicle, Driver, Report, NoveltyReport, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, ForkliftPreventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord, ForkliftClosure, VehicleInventory, NovedadFlt } from '../types';
+import { Vehicle, Driver, Report, NoveltyReport, MileageLog, Calibration, CalibrationSemaforo, TirePressures, WashReport, Fine, ForkliftFine, Preventive, ForkliftPreventive, AvailabilityRecord, AvailabilityPctRecord, AvailabilitySummary, FleetComposition, OperationalIndicator, WorkshopRecord, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, FleetStandardAudit, WorkshopActivityRecord, FleetCierreRecord, FleetSeguimientoRecord, VaradaRecord, SparePartRecord, ForkliftClosure, VehicleInventory, NovedadFlt, AdherenciaRecord, MatrizPolivalenciaRecord } from '../types';
 import { calculateStatus, normalizePlate, normalizeStr, getDaysDiff } from '../utils';
 
 export const DEFAULT_WORKING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybbhQJ2o9Xs1fHtqbfG_zopNhCF39tTwwJX6lYGRzTAKoaY4euN2aAjPk4LKObyb-3nw/exec';
@@ -6247,6 +6247,167 @@ export const submitNovedadFltLink = async (payload: {
 
   return { success: true, link: finalLink };
 };
+
+// ============================================================================
+// ADHERENCIA DE CONDUCTORES (Spreadsheet 1gY_8kBDlazsrbclwduu7R2x_8aVfP1kk5N767Hit2YU)
+// ============================================================================
+export const ADHERENCIA_DOC_ID = '1gY_8kBDlazsrbclwduu7R2x_8aVfP1kk5N767Hit2YU';
+export const ADHERENCIA_ADH_GID = '810757237';
+export const ADHERENCIA_MATRIZ_GID = '0';
+
+const normNombreAdherencia = (s?: string): string =>
+  (s || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const parseAdherenciaDate = (raw: string): { fechaIso: string; fechaLabel: string } => {
+  const s = (raw || '').trim();
+  if (!s) return { fechaIso: '', fechaLabel: '' };
+
+  // dd/mm/yyyy o d/m/yyyy (también admite '-' como separador)
+  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (dmy) {
+    const day = parseInt(dmy[1], 10);
+    const month = parseInt(dmy[2], 10);
+    let year = parseInt(dmy[3], 10);
+    if (year < 100) year += 2000;
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const dd = String(day).padStart(2, '0');
+      const mm = String(month).padStart(2, '0');
+      return {
+        fechaIso: `${year}-${mm}-${dd}`,
+        fechaLabel: `${dd}/${mm}/${year}`
+      };
+    }
+  }
+
+  // yyyy-mm-dd
+  const ymd = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (ymd) {
+    const year = parseInt(ymd[1], 10);
+    const month = parseInt(ymd[2], 10);
+    const day = parseInt(ymd[3], 10);
+    const dd = String(day).padStart(2, '0');
+    const mm = String(month).padStart(2, '0');
+    return {
+      fechaIso: `${year}-${mm}-${dd}`,
+      fechaLabel: `${dd}/${mm}/${year}`
+    };
+  }
+
+  return { fechaIso: s, fechaLabel: s };
+};
+
+const fetchCsvRowsByGid = async (docId: string, gid: string): Promise<any[][]> => {
+  const urls = [
+    `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${gid}${getCacheBuster()}`,
+    `https://docs.google.com/spreadsheets/d/${docId}/gviz/tq?tqx=out:csv&gid=${gid}${getCacheBuster()}`
+  ];
+
+  for (const url of urls) {
+    try {
+      const resp = await fetch(url, { mode: 'cors', credentials: 'omit' });
+      if (!resp.ok) continue;
+      const csvText = await resp.text();
+      if (!csvText || csvText.includes('<!DOCTYPE html')) continue;
+      const parsed = Papa.parse(csvText, { header: false, skipEmptyLines: 'greedy' });
+      const rows = (parsed.data as any[][]) || [];
+      if (rows.length > 0) return rows;
+    } catch (e) {
+      // Intentar siguiente fallback
+    }
+  }
+  return [];
+};
+
+export const fetchAdherenciaFromSheet = async (): Promise<AdherenciaRecord[]> => {
+  try {
+    const rows = await fetchCsvRowsByGid(ADHERENCIA_DOC_ID, ADHERENCIA_ADH_GID);
+    if (!rows || rows.length < 2) return [];
+
+    // ADH!A2:G -> 0:MES, 1:Fecha, 2:Placa, 3:Conductor, 4:(vacía), 5:LLAVE, 6:ESTADO
+    return rows
+      .slice(1)
+      .filter(row => {
+        if (!row) return false;
+        const placa = normalizePlate(cleanSheetValue(row[2]));
+        const fecha = cleanSheetValue(row[1]);
+        return Boolean(placa && fecha);
+      })
+      .map((row, idx): AdherenciaRecord => {
+        const mes = normNombreAdherencia(cleanSheetValue(row[0]));
+        const fechaRaw = cleanSheetValue(row[1]);
+        const { fechaIso, fechaLabel } = parseAdherenciaDate(fechaRaw);
+        const placa = normalizePlate(cleanSheetValue(row[2]));
+        const conductorRaw = cleanSheetValue(row[3]).replace(/\s+/g, ' ').trim();
+        const conductorNorm = normNombreAdherencia(conductorRaw);
+        const llave = cleanSheetValue(row[5]);
+        const estadoRaw = cleanSheetValue(row[6]);
+        const estado: '1' | '0' = estadoRaw === '1' ? '1' : '0';
+
+        return {
+          id: `adh-cond-${idx}-${llave || `${fechaIso}-${placa}`}`,
+          mes,
+          fecha: fechaRaw,
+          fechaIso,
+          fechaLabel,
+          placa,
+          conductor: conductorRaw,
+          conductorNorm,
+          llave,
+          estado,
+          adhiere: estado === '1'
+        };
+      });
+  } catch (e) {
+    console.error('Error fetching Adherencia (ADH):', e);
+    return [];
+  }
+};
+
+export const fetchMatrizPolivalenciaFromSheet = async (): Promise<MatrizPolivalenciaRecord[]> => {
+  try {
+    const rows = await fetchCsvRowsByGid(ADHERENCIA_DOC_ID, ADHERENCIA_MATRIZ_GID);
+    if (!rows || rows.length < 2) return [];
+
+    // MATRIZ_POLIVALENCIA!A2:G -> 0:llave, 1:MES, 2:FECHA, 3:PLACA, 4:CONDUCTOR, 5:documentos, 6:LLAVE
+    return rows
+      .slice(1)
+      .filter(row => row && normalizePlate(cleanSheetValue(row[3])))
+      .map((row, idx): MatrizPolivalenciaRecord => {
+        const conductorRaw = cleanSheetValue(row[4]).replace(/\s+/g, ' ').trim();
+        return {
+          id: `matriz-${idx}-${cleanSheetValue(row[0]) || idx}`,
+          llave: cleanSheetValue(row[0]),
+          mes: normNombreAdherencia(cleanSheetValue(row[1])),
+          fecha: cleanSheetValue(row[2]),
+          placa: normalizePlate(cleanSheetValue(row[3])),
+          conductor: conductorRaw,
+          conductorNorm: normNombreAdherencia(conductorRaw),
+          documento: cleanSheetValue(row[5]),
+          llaveNombre: cleanSheetValue(row[6])
+        };
+      });
+  } catch (e) {
+    console.error('Error fetching MATRIZ_POLIVALENCIA:', e);
+    return [];
+  }
+};
+
+export const fetchAdherenciaBundle = async (): Promise<{
+  adh: AdherenciaRecord[];
+  matriz: MatrizPolivalenciaRecord[];
+}> => {
+  const [adh, matriz] = await Promise.all([
+    fetchAdherenciaFromSheet(),
+    fetchMatrizPolivalenciaFromSheet()
+  ]);
+  return { adh, matriz };
+};
+
 
 
 

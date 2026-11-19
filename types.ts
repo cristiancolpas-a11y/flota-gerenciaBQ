@@ -730,6 +730,32 @@ export interface ForkliftPreventive {
   evidencia?: string;           // Idx 16: EVIDENCIAS
 }
 
+export interface AdherenciaRecord {
+  id: string;
+  mes: string;            // Col 0 (A): MES
+  fecha: string;          // Col 1 (B): Fecha original
+  fechaIso: string;       // YYYY-MM-DD normalizado
+  fechaLabel: string;     // DD/MM/YYYY normalizado
+  placa: string;          // Col 2 (C): Placa normalizada
+  conductor: string;      // Col 3 (D): Conductor que manejó (vacío si no diligenciado)
+  conductorNorm: string;  // Nombre normalizado (sin tildes, mayúsculas, espacios colapsados)
+  llave: string;          // Col 5 (F): LLAVE
+  estado: '1' | '0';      // Col 6 (G): ESTADO ("1" adhiere, "0" no adhiere)
+  adhiere: boolean;       // estado === '1'
+}
+
+export interface MatrizPolivalenciaRecord {
+  id: string;
+  llave: string;          // Col 0 (A)
+  mes: string;            // Col 1 (B)
+  fecha: string;          // Col 2 (C)
+  placa: string;          // Col 3 (D)
+  conductor: string;      // Col 4 (E): Conductor asignado oficial
+  conductorNorm: string;
+  documento: string;      // Col 5 (F)
+  llaveNombre: string;    // Col 6 (G)
+}
+
 
 
 

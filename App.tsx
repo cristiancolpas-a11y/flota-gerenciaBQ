@@ -1,7 +1,7 @@
 
             
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, ForkliftPreventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord, NoveltyReport, NovedadFlt } from './types';
+import { Vehicle, Driver, Report, MileageLog, Calibration, WashReport, Fine, ForkliftFine, Preventive, ForkliftPreventive, AvailabilityRecord, FleetComposition, OperationalIndicator, CheckList, FuelPerformance, PlateAdherence, Corrective, UnavailabilityRecord, OperatorRecord, ControlTowerRecord, AuditRecord, AuditMasterVehicle, FleetListRecord, AvailabilitySummary, FleetStandardAudit, FleetCierreRecord, VaradaRecord, SparePartRecord, NoveltyReport, NovedadFlt, AdherenciaRecord, MatrizPolivalenciaRecord } from './types';
 import { VaradasModule } from './components/VaradasModule';
 import { SparePartsModule } from './components/SparePartsModule';
 import DocumentCard from './components/DocumentCard';
@@ -45,6 +45,7 @@ import OperationalDashboard from './components/OperationalDashboard';
 import CheckListModule from './components/CheckListModule';
 import FuelPerformanceModule from './components/FuelPerformanceModule';
 import PlateAdherenceModule from './components/PlateAdherenceModule';
+import AdherenciaModule from './components/AdherenciaModule';
 import CorrectivesModule from './components/CorrectivesModule';
 import UnavailabilityModule from './components/UnavailabilityModule';
 import OperatorsModule from './components/OperatorsModule';
@@ -98,6 +99,8 @@ import {
   fetchCheckListFromSheet,
   fetchFuelPerformanceFromSheet,
   fetchPlateAdherenceFromSheet,
+  fetchAdherenciaFromSheet,
+  fetchMatrizPolivalenciaFromSheet,
   fetchCorrectivesFromSheet,
   fetchUnavailabilityFromSheet,
   fetchOperatorsFromSheet,
@@ -134,11 +137,11 @@ import {
   RefreshCw, Users, Truck, Search, Shield, ShieldCheck, Gavel, Menu, LogOut, Loader2, 
   Building2, ListFilter, CalendarDays, ClipboardList, Sparkles, Droplets, 
   Disc, Store, Gauge, Plus, History, Filter, Hash, Calendar, Clock, MapPin,
-  UserCircle, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, Check, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame, FileSpreadsheet, Download, Boxes, Package, Camera
+  UserCircle, UserCheck, LayoutGrid, Settings, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Wrench, Lock, X, Check, TrendingUp, Activity, Fuel, ClipboardCheck, Link as LinkIcon, AlertTriangle, Zap, Flame, FileSpreadsheet, Download, Boxes, Package, Camera
 } from 'lucide-react';
 
 type AppMode = 'root_menu' | 'flota_menu' | 'camiones' | 'montacargas' | 'talleres' | 'rutinas' | 'campanas';
-type ActiveView = 'categories_dashboard' | 'vehiculos' | 'comparendos' | 'comparendos_montacargas' | 'preventivos_montacargas' | 'estandar_flt' | 'auditoria_montacargas' | 'cierre_montacargas' | 'novedades_checklist_flt' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
+type ActiveView = 'categories_dashboard' | 'vehiculos' | 'comparendos' | 'comparendos_montacargas' | 'preventivos_montacargas' | 'estandar_flt' | 'auditoria_montacargas' | 'cierre_montacargas' | 'novedades_checklist_flt' | 'inventario_diario' | 'kilometrajes' | 'novedades' | 'cierre_novedades' | 'fives' | 'lavados' | 'limpieza' | 'calibraciones' | 'visitas' | 'disponibilidad' | 'indicadoresDisponibilidad' | 'indicadoresOperativos' | 'checklist' | 'rendimiento' | 'adherencia' | 'adherencia_conductores' | 'correctivos' | 'indisponibilidad' | 'operadores' | 'torre_preventivos' | 'estandar_flota' | 'auditoria_calidad_seguridad' | 'mttr' | 'vcl' | 'sostenibilidad' | 'rutinas' | 'varadas' | 'repuestos';
 
 const CATEGORY_CHUNKS = {
   doc: {
@@ -177,6 +180,7 @@ const CATEGORY_CHUNKS = {
       { id: 'disponibilidad', label: 'Disponibilidad de Flota', icon: Activity },
       { id: 'rendimiento', label: 'Rendimiento de Combustible', icon: Fuel },
       { id: 'adherencia', label: 'ADH DE PLACAS', icon: ClipboardCheck },
+      { id: 'adherencia_conductores', label: 'Adherencia', icon: UserCheck },
       { id: 'mttr', label: 'MTTR / MTBR', icon: Wrench },
     ]
   },
@@ -241,6 +245,8 @@ const App: React.FC = () => {
   const [checkLists, setCheckLists] = useState<CheckList[]>([]);
   const [fuelPerformanceData, setFuelPerformanceData] = useState<FuelPerformance[]>([]);
   const [plateAdherenceData, setPlateAdherenceData] = useState<PlateAdherence[]>([]);
+  const [adhRecords, setAdhRecords] = useState<AdherenciaRecord[]>([]);
+  const [matrizRecords, setMatrizRecords] = useState<MatrizPolivalenciaRecord[]>([]);
   const [correctives, setCorrectives] = useState<Corrective[]>([]);
   const [unavailabilityRecords, setUnavailabilityRecords] = useState<UnavailabilityRecord[]>([]);
   const [operators, setOperators] = useState<OperatorRecord[]>([]);
@@ -587,6 +593,15 @@ const App: React.FC = () => {
       case 'adherencia':
         setPlateAdherenceData(await fetchPlateAdherenceFromSheet());
         break;
+      case 'adherencia_conductores': {
+        const [adh, mat] = await Promise.all([
+          fetchAdherenciaFromSheet(),
+          fetchMatrizPolivalenciaFromSheet()
+        ]);
+        setAdhRecords(adh);
+        setMatrizRecords(mat);
+        break;
+      }
       case 'correctivos':
         setCorrectives(await fetchCorrectivesFromSheet());
         break;
@@ -2209,6 +2224,15 @@ const App: React.FC = () => {
 
           {activeView === 'adherencia' && (
             <PlateAdherenceModule data={plateAdherenceData} />
+          )}
+
+          {activeView === 'adherencia_conductores' && (
+            <AdherenciaModule
+              adhRecords={adhRecords}
+              matrizRecords={matrizRecords}
+              onRefresh={handleSyncData}
+              loading={isSyncing}
+            />
           )}
 
           {activeView === 'indicadoresDisponibilidad' && (
